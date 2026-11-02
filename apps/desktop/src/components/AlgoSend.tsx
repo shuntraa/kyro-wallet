@@ -32,7 +32,7 @@ export function AlgoNoteField({ value, onChange, dest, destLoading }: { value: s
         <label htmlFor="algo-note" className="eyebrow">
           {t('algo.note')} <span className="font-normal normal-case tracking-normal text-mute">{t('algo.noteHint')}</span>
         </label>
-        <span className={cn('text-[11px]', tooLong ? 'text-down' : 'text-faint')}>
+        <span className={cn('text-[12px]', tooLong ? 'text-down' : 'text-faint')}>
           {t('algo.noteBytes', { bytes, max: ALGO_MAX_NOTE })}
         </span>
       </div>
@@ -50,7 +50,7 @@ export function AlgoNoteField({ value, onChange, dest, destLoading }: { value: s
       {tooLong && <span className="text-[12px] text-down">{t('algo.noteTooLong')}</span>}
       {value.trim() !== '' && !tooLong && <span className="text-[12px] text-mute">{t('algo.notePublic')}</span>}
       {destLoading && (
-        <span className="flex items-center gap-1.5 text-[11px] text-mute">
+        <span className="flex items-center gap-1.5 text-[12px] text-mute">
           <Spinner /> {t('algo.readingDest')}
         </span>
       )}
@@ -98,7 +98,7 @@ export function AlgoSummaryView({ u, algoPrice, currency }: { u: AlgoUnsigned; a
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('algo.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('algo.title')}</span>
-        <span className="text-[11px] text-mute">{t('algo.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('algo.decodedByVault')}</span>
       </div>
       {s.asset && <Line k={t('algo.lToken')} v={t('algo.lTokenValue', { symbol: s.asset.symbol, id: s.asset.assetId, decimals: s.asset.decimals })} />}
       {s.asset?.optIn && <Line k={t('algo.lOptIn')} v={t('algo.lOptInValue', { symbol: s.asset.symbol })} warn />}

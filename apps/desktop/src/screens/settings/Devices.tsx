@@ -146,7 +146,7 @@ function ThpPairings() {
         <div key={p.key} className="flex items-center justify-between gap-3 rounded-box border border-line bg-raised px-4 py-2.5">
           <span className="flex min-w-0 flex-col">
             <span className="text-[13px] font-semibold">{p.model === 'T3W1' ? 'Trezor Safe 7' : p.model}</span>
-            <span className="truncate font-mono text-[11px] text-mute">
+            <span className="truncate font-mono text-[12px] text-mute">
               {t('settings.thpKey', { key: `${p.key.slice(0, 12)}…${p.key.slice(-6)}`, date: fmtDate(p.added * 1000, { day: '2-digit', month: '2-digit', year: 'numeric' }) })}
             </span>
           </span>

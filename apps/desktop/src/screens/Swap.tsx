@@ -423,7 +423,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const canInvert = !cross || canSwapFrom(buyChain, network);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
         <div className="flex items-center gap-4">
           <h1 className="screen-title">{t('swap.title')}</h1>

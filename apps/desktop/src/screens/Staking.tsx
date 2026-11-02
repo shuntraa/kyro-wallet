@@ -80,12 +80,9 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const tab: 'home' | StakeChain = chain ?? 'home';
   const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron };
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-6 pb-5 scroll-thin">
-      <header className="flex items-end justify-between gap-4 border-b border-line pb-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="screen-title">{t('staking.title')}</h1>
-          <span className="text-[13px] text-mute">{t('staking.subtitle')}</span>
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
+      <header className="flex items-end justify-between gap-4">
+        <h1 className="screen-title">{t('staking.title')}</h1>
         {tab !== 'home' && !activeHw && <AccountPicker family={tab} />}
         <Segmented
           label={t('staking.chain')}
@@ -181,28 +178,10 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
           </div>
         ))}
       </div>
-      <Card className="flex flex-col gap-2 border-l-2 border-l-ice/70 px-5 py-4">
-        <span className="flex items-center gap-2 text-[14px] font-medium">
-          <IconShield size={16} className="text-ice" /> {t('staking.risks')}
-        </span>
-        <p className="m-0 text-[13px] leading-[1.6] text-text2">{rt('staking.risksBody', bold)}</p>
-      </Card>
-      <Card className="flex flex-col px-5 py-2">
-        {[
-          ['Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash', t('staking.otherUtxoNo')],
-          ['XRP Ledger', t('staking.otherXrp')],
-          ['NEAR', t('staking.otherNear')],
-          ['Algorand', t('staking.otherAlgo')],
-          ['TON', t('staking.otherTon')],
-          ['Stellar', t('staking.otherXlm')],
-          [t('staking.otherEvmName'), t('staking.otherEvm')],
-        ].map(([k, v]) => (
-          <div key={k} className="flex min-h-11 items-center justify-between gap-4 border-b border-line py-2 text-[13px] last:border-b-0">
-            <span className="font-medium text-text2">{k}</span>
-            <span className="text-right text-mute">{v}</span>
-          </div>
-        ))}
-      </Card>
+      <p className="m-0 flex items-start gap-2.5 px-1 text-[13.5px] leading-[1.55] text-mute">
+        <IconShield size={16} className="mt-0.5 shrink-0 text-ice" />
+        <span>{rt('staking.risksBody', bold)}</span>
+      </p>
     </>
   );
 }
@@ -456,7 +435,7 @@ function ValidatorRow({ v, selected, onSelect }: { v: SolValidator; selected: bo
         <span className="truncate font-medium">
           {v.name ?? t('staking.noName')} {v.name && <span className="font-normal text-faint">{t('staking.declared')}</span>}
         </span>
-        <span className="truncate font-mono text-[11px] text-faint">{shortAddress(v.voteAccount, 8, 6)}</span>
+        <span className="truncate font-mono text-[12px] text-faint">{shortAddress(v.voteAccount, 8, 6)}</span>
       </span>
       <span className="flex shrink-0 flex-wrap justify-end gap-1">
         {solValidatorBadges(v).map((b) => (
@@ -670,7 +649,7 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
                     {s.validator.name ?? t('staking.noName')} {s.validator.name && <span className="text-faint">{t('staking.declared')}</span>}{t('staking.validatorCommission', { pct: pc(s.validator.commission) })}
                     {s.validator.delinquent && <span className="text-down">{t('staking.delinquentSuffix')}</span>}
                   </span>
-                  <span className="font-mono text-[11px] text-faint">{t('staking.validatorVote', { vote: shortAddress(s.validator.voteAccount, 8, 6), stake: fmtStake(s.validator.activatedStake, 9, 'SOL') })}</span>
+                  <span className="font-mono text-[12px] text-faint">{t('staking.validatorVote', { vote: shortAddress(s.validator.voteAccount, 8, 6), stake: fmtStake(s.validator.activatedStake, 9, 'SOL') })}</span>
                 </span>
               }
               {...(s.warnings.length ? { tone: 'warn' as const } : {})}
@@ -766,7 +745,7 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
                   <span className="truncate font-semibold">
                     {p.ticker ?? '—'} <span className="font-normal text-text2">{p.name ?? ''}</span> <span className="font-normal text-faint">{t('staking.declared')}</span>
                   </span>
-                  <span className="truncate text-[11px] text-faint">{t('staking.poolCost', { cost: amt(p.fixedCost, ADA), delegators: p.liveDelegators ?? '—' })}</span>
+                  <span className="truncate text-[12px] text-faint">{t('staking.poolCost', { cost: amt(p.fixedCost, ADA), delegators: p.liveDelegators ?? '—' })}</span>
                 </span>
                 <span className="flex shrink-0 flex-wrap justify-end gap-1">
                   {adaPoolBadges(p).map((b) => (
@@ -831,7 +810,7 @@ function AdaStaking() {
       <Card className="flex flex-col">
         <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
           <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourDelegation', { network: networkLabel('ada', network) })}</span>
-          <span className="font-mono text-[11px] text-faint">{shortAddress(s.stakeAddress, 12, 6)}</span>
+          <span className="font-mono text-[12px] text-faint">{shortAddress(s.stakeAddress, 12, 6)}</span>
         </div>
         <dl className="m-0 flex flex-col px-5 py-1 text-[13px]">
           <Row k={t('staking.stakeKey')} v={s.registered ? <Badge tone="up">{t('staking.registered')}</Badge> : <Badge>{t('staking.notRegistered')}</Badge>} />
@@ -1041,7 +1020,7 @@ function TronStaking() {
                     <span className="truncate font-semibold">
                       {w?.url ?? shortAddress(v.address)} <span className="font-normal text-faint">{t('staking.declared')}</span>
                     </span>
-                    <span className="text-[11px] text-faint">{w ? t('staking.rank', { rank: w.rank }) : shortAddress(v.address)}</span>
+                    <span className="text-[12px] text-faint">{w ? t('staking.rank', { rank: w.rank }) : shortAddress(v.address)}</span>
                   </span>
                   <span className="flex items-center gap-2">
                     {w && tronWitnessBadges(w).filter((b) => b.tone === 'down').map((b) => <Badge key={b.text} tone={b.tone}>{b.text}</Badge>)}
@@ -1055,7 +1034,7 @@ function TronStaking() {
             <span className="flex flex-col">
               <span className="text-mute">{t('staking.voteRewards')}</span>
               <span className="font-semibold">{h(amt(a.reward, TRX))}</span>
-              {a.nextClaimTime > now && <span className="text-[11px] text-faint">{t('staking.claimableIn', { duration: fmtDuration((a.nextClaimTime - now) / 1000) })}</span>}
+              {a.nextClaimTime > now && <span className="text-[12px] text-faint">{t('staking.claimableIn', { duration: fmtDuration((a.nextClaimTime - now) / 1000) })}</span>}
             </span>
             <Button size="sm" variant="ice" disabled={!claimable} title={claimable ? undefined : BigInt(a.reward) === 0n ? t('staking.noReward') : t('staking.oneClaimPer24h')} onClick={() => setOp('claim')}>
               {t('staking.claim')}
@@ -1082,7 +1061,7 @@ function TronStaking() {
               <div key={`${u.expireTime}-${i}`} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
                 <span className="flex flex-col">
                   <span className="font-semibold">{h(amt(u.amount, TRX))}</span>
-                  <span className="text-[11px] text-faint">{u.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth')}</span>
+                  <span className="text-[12px] text-faint">{u.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth')}</span>
                 </span>
                 {u.expireTime <= now ? <Badge tone="up">{t('staking.withdrawable')}</Badge> : <span className="text-mute">{t('staking.availableOn', { when: getLanguage() === 'fr' ? fmtWhen(u.expireTime, now).toLowerCase() : fmtWhen(u.expireTime, now), duration: fmtDuration((u.expireTime - now) / 1000) })}</span>}
               </div>
@@ -1115,7 +1094,7 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
               <span className="truncate font-semibold">
                 {w.url} <span className="font-normal text-faint">{t('staking.declared')}</span>
               </span>
-              <span className="truncate text-[11px] text-faint">{t('staking.witnessVotes', { votes: fmtNumber(w.voteCount, 0) })}</span>
+              <span className="truncate text-[12px] text-faint">{t('staking.witnessVotes', { votes: fmtNumber(w.voteCount, 0) })}</span>
             </span>
             <span className="flex shrink-0 gap-1">
               {tronWitnessBadges(w).map((b) => (
@@ -1236,7 +1215,7 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
           <Row k="TRON Power" v={t('staking.tronPowerBefore', { used: c.account.tronPowerUsed, limit: c.account.tronPowerLimit })} {...(c.warnings.some((k) => k.kind === 'votesReduced') ? { tone: 'warn' as const } : {})} />
           <Row k={t('staking.rowBandwidth')} v={BigInt(c.estimate.bandwidthBurn) > 0n ? t('staking.bandwidthBurned', { bytes: c.estimate.bandwidthNeeded, amount: amt(c.estimate.bandwidthBurn, TRX) }) : t('staking.bandwidthCovered', { bytes: c.estimate.bandwidthNeeded })} />
           <Row k={t('staking.rowExpires')} v={fmtWhen(b.summary.expiration)} />
-          <Row k="ID" v={<span className="font-mono text-[11px]">{shortAddress(b.txid, 10, 8)}</span>} />
+          <Row k="ID" v={<span className="font-mono text-[12px]">{shortAddress(b.txid, 10, 8)}</span>} />
           <Row k={t('staking.rowRisk')} v={t('staking.riskTron')} />
         </>
       );

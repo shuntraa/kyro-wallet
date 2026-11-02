@@ -50,8 +50,8 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
 
   return (
     <section aria-label={t('shell.assets')} className={cn('flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-card', className)}>
-      <div className="flex h-[52px] shrink-0 items-center justify-between gap-3 border-b border-line px-5">
-        <div role="tablist" aria-label={t('portfolio.lists')} className="flex h-[52px] gap-[22px]">
+      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-6">
+        <div role="tablist" aria-label={t('portfolio.lists')} className="flex h-14 gap-7">
           {(
             [
               ['mine', <>{t('portfolio.tabMine')} <span className="font-medium text-mute">{mineCount}</span></>],
@@ -65,19 +65,19 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
               role="tab"
               aria-selected={tab === k}
               onClick={() => setTab(k)}
-              className={cn('relative h-[52px] text-[14px] transition-colors duration-150', tab === k ? 'font-medium text-text' : 'font-normal text-mute hover:text-text2')}
+              className={cn('relative h-14 text-[15px] transition-colors duration-150', tab === k ? 'font-medium text-text' : 'font-normal text-mute hover:text-text2')}
             >
               {label}
-              {tab === k && <motion.span layoutId="asset-tab" aria-hidden="true" className="absolute right-0 -bottom-px left-0 h-[2px] rounded-full bg-ice" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />}
+              {tab === k && <motion.span layoutId="asset-tab" aria-hidden="true" className="absolute right-0 -bottom-px left-0 h-[2px] rounded-full bg-ice shadow-[0_0_10px_rgba(124,196,255,.6)]" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2">
           {tab !== 'mine' && (
-            <label className="pop-in flex h-[30px] w-[190px] items-center gap-2 rounded-ctl border border-line-2 px-2.5 text-mute transition-colors hover:border-line-3 focus-within:border-ice-line">
-              <IconSearch size={13} />
+            <label className="pop-in flex h-9 w-[210px] items-center gap-2 rounded-full border border-line-2 bg-black/20 px-3.5 text-mute transition-colors hover:border-line-3 focus-within:border-ice-line">
+              <IconSearch size={15} />
               <span className="sr-only">{t('portfolio.filter')}</span>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('portfolio.filterPlaceholder')} spellCheck={false} className="min-w-0 flex-1 bg-transparent text-[12px] text-text" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('portfolio.filterPlaceholder')} spellCheck={false} className="min-w-0 flex-1 bg-transparent text-[13.5px] text-text" />
             </label>
           )}
           <Menu<Sort>
@@ -90,8 +90,8 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
               { value: 'name', label: t('portfolio.sortName') },
             ]}
             trigger={
-              <button type="button" className="press flex h-[30px] items-center gap-1.5 rounded-ctl border border-line-2 px-2.5 text-[12px] text-mute hover:border-line-3 hover:text-text">
-                {sort === 'value' ? (tab === 'mine' ? t('portfolio.sortValue') : t('portfolio.sortMarketCap')) : sort === 'change' ? t('portfolio.sortChange') : t('portfolio.sortName')} <IconChevronDown size={12} />
+              <button type="button" className="press flex h-9 items-center gap-1.5 rounded-full border border-line-2 bg-black/20 px-3.5 text-[13px] text-text2 hover:border-line-3 hover:text-text">
+                {sort === 'value' ? (tab === 'mine' ? t('portfolio.sortValue') : t('portfolio.sortMarketCap')) : sort === 'change' ? t('portfolio.sortChange') : t('portfolio.sortName')} <IconChevronDown size={14} />
               </button>
             }
           />
@@ -122,7 +122,7 @@ function MineList({ sort }: { sort: Sort }) {
   const rows = sortHoldings(pf.accountHoldings, sort);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn(GRID, 'eyebrow h-8 shrink-0 px-5 whitespace-nowrap')}>
+      <div className={cn(GRID, 'eyebrow h-10 shrink-0 px-6 whitespace-nowrap')}>
         <span>{t('portfolio.colAsset')}</span>
         <span>{t('portfolio.colPrice24h')}</span>
         <span>{t('portfolio.col7d')}</span>
@@ -132,9 +132,9 @@ function MineList({ sort }: { sort: Sort }) {
       <div key={pf.balancesLoaded ? 'rows' : 'skeleton'} className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">
         {!pf.balancesLoaded
           ? Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className={cn(GRID, 'h-[54px] border-t border-line/70 px-5')}>
+              <div key={i} className={cn(GRID, 'h-16 border-t border-line/60 px-6')}>
                 <span className="flex items-center gap-3">
-                  <Skeleton className="size-[34px] rounded-full" />
+                  <Skeleton className="size-10 rounded-full" />
                   <Skeleton className="h-3.5 w-24" />
                 </span>
                 <Skeleton className="h-3.5 w-20" />
@@ -152,13 +152,13 @@ function MineList({ sort }: { sort: Sort }) {
                   if (h.account) selectChainAccount(h.account.family, h.account.index);
                   navigate({ name: 'asset', id: h.asset.id });
                 }}
-                className={cn(GRID, 'group h-[54px] w-full border-t border-line/70 px-5 text-left transition-colors duration-150 hover:bg-raised/60')}>
+                className={cn(GRID, 'group h-16 w-full border-t border-line/60 px-6 text-left transition-colors duration-150 hover:bg-white/[.03]')}>
 
-                <span className="flex min-w-0 items-center gap-3">
-                  <CoinIcon asset={h.asset} />
+                <span className="flex min-w-0 items-center gap-3.5">
+                  <CoinIcon asset={h.asset} size={40} />
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-[14px] font-medium">{h.asset.name}</span>
-                    <span className="truncate text-[12px] text-mute">
+                    <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{h.asset.name}</span>
+                    <span className="truncate text-[13px] text-mute">
                       {h.asset.symbol}
                       {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL' : h.asset.kind === 'trc20' ? ' · TRC-20' : ''}
                       {h.account ? ` · ${h.account.name}` : ''}
@@ -166,19 +166,19 @@ function MineList({ sort }: { sort: Sort }) {
                   </span>
                 </span>
                 <span className="flex flex-col">
-                  <span className="text-[14px]">{h.price !== null ? fmtFiat(h.price, cur) : '—'}</span>
-                  <span className={cn('text-[12px]', trendColor(h.change24h))}>{fmtPct(h.change24h)}</span>
+                  <span className="text-[14.5px]">{h.price !== null ? fmtFiat(h.price, cur) : '—'}</span>
+                  <span className={cn('text-[13px]', trendColor(h.change24h))}>{fmtPct(h.change24h)}</span>
                 </span>
                 {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
                 <span className="flex flex-col items-end">
-                  <span className="text-[14px] font-medium">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">{t('portfolio.rowWaitingTor')}</span> : serverMissing(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowNoServer')}</span> : serverDown(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowServerDown')}</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">{t('portfolio.rowSyncingFilters')}</span> : <span className="text-warn">{t('portfolio.rowBalanceUnavailable')}</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  <span className="text-[15px] font-medium">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
+                  <span className="text-[13px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">{t('portfolio.rowWaitingTor')}</span> : serverMissing(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowNoServer')}</span> : serverDown(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowServerDown')}</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">{t('portfolio.rowSyncingFilters')}</span> : <span className="text-warn">{t('portfolio.rowBalanceUnavailable')}</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
                 </span>
                 <span className="flex items-center gap-2.5">
-                  <span className="h-[3px] w-16 overflow-hidden rounded-full bg-control-2">
-                    <motion.span className="block h-full rounded-full bg-text2" initial={{ width: 0 }} animate={{ width: `${Math.round(h.share * 100)}%` }} transition={{ duration: 0.5, delay: 0.1 + i * 0.03, ease: [0.22, 1, 0.36, 1] }} />
+                  <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">
+                    <motion.span className="block h-full rounded-full bg-gradient-to-r from-ice to-violet" initial={{ width: 0 }} animate={{ width: `${Math.round(h.share * 100)}%` }} transition={{ duration: 0.5, delay: 0.1 + i * 0.03, ease: [0.22, 1, 0.36, 1] }} />
                   </span>
-                  <span className="font-mono text-[11.5px] text-mute">{fmtPct(h.share * 100, { sign: false, decimals: 0 })}</span>
+                  <span className="text-[13px] text-mute">{fmtPct(h.share * 100, { sign: false, decimals: 0 })}</span>
                 </span>
               </button>
             ))}
@@ -207,12 +207,12 @@ function WatchRow({ coinId, name, symbol, glyph, color, i }: { coinId: string; n
   const p = pf.price(coinId);
   const { t } = useT();
   return (
-    <button type="button" style={idx(i)} onClick={() => navigate({ name: 'asset', id: `cg:${coinId}` })} className={cn(GRID, 'h-[54px] w-full border-t border-line/70 px-5 text-left transition-[background-color,filter] duration-150 [filter:saturate(.4)_brightness(.85)] hover:bg-raised/60 hover:[filter:none]')}>
-      <span className="flex min-w-0 items-center gap-3">
-        <CoinIcon glyph={glyph} color={color} symbol={symbol} id={`cg:${coinId}`} />
+    <button type="button" style={idx(i)} onClick={() => navigate({ name: 'asset', id: `cg:${coinId}` })} className={cn(GRID, 'h-16 w-full border-t border-line/60 px-6 text-left transition-[background-color,filter] duration-150 [filter:saturate(.4)_brightness(.85)] hover:bg-raised/60 hover:[filter:none]')}>
+      <span className="flex min-w-0 items-center gap-3.5">
+        <CoinIcon glyph={glyph} color={color} symbol={symbol} id={`cg:${coinId}`} size={40} />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[14px] font-medium">{name}</span>
-          <span className="truncate text-[12px] text-mute">{t('portfolio.readOnly', { symbol })}</span>
+          <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{name}</span>
+          <span className="truncate text-[13px] text-mute">{t('portfolio.readOnly', { symbol })}</span>
         </span>
       </span>
       <span className="flex flex-col">
@@ -222,7 +222,7 @@ function WatchRow({ coinId, name, symbol, glyph, color, i }: { coinId: string; n
       {m && m.sparkline7d.length > 1 ? <Sparkline values={m.sparkline7d} color={trendHex(m.change7d)} /> : <span />}
       <span className="flex flex-col items-end">
         <span className="text-[14px] font-medium">—</span>
-        <span className="text-[12px] text-mute">Phase 4</span>
+        
       </span>
       <span>
         <Badge tone="ice">{t('portfolio.soon')}</Badge>
@@ -259,7 +259,7 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn(MG, 'eyebrow h-8 shrink-0 px-5 whitespace-nowrap')}>
+      <div className={cn(MG, 'eyebrow h-10 shrink-0 px-6 whitespace-nowrap')}>
         <span>#</span>
         <span>{t('portfolio.colAsset')}</span>
         <span>{t('portfolio.colPrice24h')}</span>
@@ -274,13 +274,13 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
         {rows.map((c, i) => {
           const fav = favs.includes(c.id);
           return (
-            <div key={c.id} style={idx(i)} className={cn(MG, 'h-[50px] border-t border-line/70 px-5 transition-colors duration-150 hover:bg-raised/60')}>
-              <span className="font-mono text-[11px] text-faint">{c.rank ?? '—'}</span>
+            <div key={c.id} style={idx(i)} className={cn(MG, 'h-[60px] border-t border-line/60 px-6 transition-colors duration-150 hover:bg-white/[.03]')}>
+              <span className="text-[13px] text-faint">{c.rank ?? '—'}</span>
               <button type="button" onClick={() => navigate({ name: 'asset', id: `cg:${c.id}` })} className="flex min-w-0 items-center gap-3 text-left">
-                <CoinIcon symbol={c.symbol} id={`cg:${c.id}`} size={30} />
+                <CoinIcon symbol={c.symbol} id={`cg:${c.id}`} size={36} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-[14px] font-medium">{c.name}</span>
-                  <span className="text-[12px] text-mute">{c.symbol}</span>
+                  <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{c.name}</span>
+                  <span className="text-[13px] text-mute">{c.symbol}</span>
                 </span>
               </button>
               <span className="flex flex-col">

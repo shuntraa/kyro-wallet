@@ -645,7 +645,7 @@ function Fingerprint({ hex, compact }: { hex: string; compact?: boolean }) {
   const groups = fingerprintGroups(hex);
   const { t } = useT();
   return (
-    <div aria-label={t('servers.cert.fingerprintLabel', { groups: groups.join(' ') })} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-ctl border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[11px]' : 'px-4 py-3 text-[13px]')}>
+    <div aria-label={t('servers.cert.fingerprintLabel', { groups: groups.join(' ') })} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-ctl border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[12px]' : 'px-4 py-3 text-[13px]')}>
       {groups.map((g, i) => (
         <span key={i}>{g}</span>
       ))}
@@ -792,7 +792,7 @@ function CbfPanel() {
                 {done ? <IconCheck size={12} className="text-up" /> : active ? <Spinner className="size-3 border-[1.5px] text-ice" /> : <span className="size-1.5 rounded-full bg-faint" />}
                 {t(step.label as 'servers.cbf.step.headers')}
               </span>
-              <span className="font-mono text-[11px] text-mute">{detail}</span>
+              <span className="font-mono text-[12px] text-mute">{detail}</span>
             </li>
           );
         })}
@@ -810,7 +810,7 @@ function CbfPanel() {
       {st && st.peers.length > 0 && (
         <details className="text-[12px] text-mute">
           <summary className="cursor-pointer select-none">{t('servers.cbf.peersConnected', { count: st.peers.length })}</summary>
-          <ul className="m-0 mt-1.5 flex list-none flex-col gap-0.5 p-0 font-mono text-[11px]">
+          <ul className="m-0 mt-1.5 flex list-none flex-col gap-0.5 p-0 font-mono text-[12px]">
             {st.peers.map((p) => (
               <li key={p} className="truncate">
                 {p}

@@ -94,7 +94,7 @@ export function NearSummaryView({ u, nearPrice, currency }: { u: NearUnsigned; n
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('near.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('near.title')}</span>
-        <span className="text-[11px] text-mute">{t('near.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('near.decodedByVault')}</span>
       </div>
       {s.token ? (
         <>

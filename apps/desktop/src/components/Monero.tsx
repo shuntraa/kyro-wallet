@@ -104,7 +104,7 @@ export function XmrSyncLine({ status, error, onRetry, className }: { status: Xmr
           {status.running && <Spinner />}
           {status.running ? t('xmr.scanning', { pct }) : done ? t('xmr.upToDate') : status.restoreHeight === null ? t('xmr.notStarted') : t('xmr.interrupted', { pct })}
         </span>
-        <span className="font-mono text-[11px] text-mute">
+        <span className="font-mono text-[12px] text-mute">
           {status.tip !== null ? t('xmr.blockProgress', { scanned: fmtNumber(status.scanned, 0), tip: fmtNumber(status.tip, 0) }) : ''}
         </span>
       </div>
@@ -184,7 +184,7 @@ export function XmrSummaryView({ u, xmrPrice, currency }: { u: XmrUnsigned; xmrP
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('xmr.builtLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('xmr.title')}</span>
-        <span className="text-[11px] text-mute">{t('xmr.builtByVault')}</span>
+        <span className="text-[12px] text-mute">{t('xmr.builtByVault')}</span>
       </div>
       <Line k={t('xmr.lDest')} v={xmrDestinationLabel(s.destination)} warn={s.destination.kind === 'integrated'} />
       <Line k={t('xmr.lAmount')} v={`${XMR(s.amount)}${fiat(s.amount)}`} />

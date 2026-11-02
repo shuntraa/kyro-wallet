@@ -78,7 +78,7 @@ export function CosmosSummaryView({ u, atomPrice, currency }: { u: CosmosUnsigne
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('cosmos.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">MsgSend Cosmos Hub</span>
-        <span className="text-[11px] text-mute">{t('cosmos.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('cosmos.decodedByVault')}</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.memo !== null ? 'border-ice-line' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('cosmos.memo')}</span>

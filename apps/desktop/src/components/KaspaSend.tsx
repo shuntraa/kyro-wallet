@@ -38,7 +38,7 @@ export function KaspaSummaryView({ u, kasPrice, currency }: { u: KaspaUnsigned; 
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('kas.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('kas.title')}</span>
-        <span className="text-[11px] text-mute">{t('kas.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('kas.decodedByVault')}</span>
       </div>
       {s.outputs.map((o, i) => (
         <Line key={i} k={o.isChange ? t('kas.lChangeBack') : t('kas.lDest')} v={`${KAS(o.amount)} · ${o.address ? shortAddress(o.address) : t('kas.unknownScript')}`} warn={o.kind !== 'address'} />

@@ -327,7 +327,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                   : t('receive.descSol');
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <IconButton label={t('receive.backToWallet')} onClick={back} className="size-9">
@@ -393,7 +393,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
             <QrCode value={uri} size={300} />
           </div>
-          <span className="eyebrow">{askAmount && amountBase ? t('receive.qrWithAmount') : t('receive.qrAddress')}</span>
+          {askAmount && amountBase && <span className="eyebrow">{t('receive.qrWithAmount')}</span>}
         </div>
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
@@ -520,7 +520,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           </dl>
           {askAmount && amountBase !== null && amountBase > 0n && (
             <div className="flex items-center justify-between gap-2 rounded-ctl bg-raised py-1.5 pr-1.5 pl-3">
-              <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
+              <span className="truncate font-mono text-[12px] text-mute">{uri}</span>
               <CopyButton text={uri} label={t('receive.copyLink')} />
             </div>
           )}

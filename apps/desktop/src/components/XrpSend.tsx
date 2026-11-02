@@ -44,7 +44,7 @@ export function XrpTagField({
           {t('send.xrpTag')} {required ? <span className="text-down">{t('send.xrpTagRequired')}</span> : <span className="font-normal text-mute">{t('send.xrpTagOptional')}</span>}
         </label>
         {destLoading && (
-          <span className="flex items-center gap-1.5 text-[11px] text-mute">
+          <span className="flex items-center gap-1.5 text-[12px] text-mute">
             <Spinner /> {t('send.xrpReadingAccount')}
           </span>
         )}
@@ -111,7 +111,7 @@ export function XrpSummaryView({ u, xrpPrice, currency }: { u: XrpUnsigned; xrpP
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('send.xrpDecodedAria')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('send.xrpPaymentTitle')}</span>
-        <span className="text-[11px] text-mute">{t('send.xrpDecodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('send.xrpDecodedByVault')}</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.destinationTag !== null ? 'border-ice-line' : c.destination.requireDestTag ? 'border-down/60' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('send.xrpTag')}</span>

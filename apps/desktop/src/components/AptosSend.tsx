@@ -29,7 +29,7 @@ export function AptosSummaryView({ u, aptPrice, currency }: { u: AptosUnsigned; 
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('aptos.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('aptos.title')}</span>
-        <span className="text-[11px] text-mute">{t('aptos.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('aptos.decodedByVault')}</span>
       </div>
       {s.token && (
         <>
@@ -54,7 +54,7 @@ function Line({ k, v, warn, last, mono }: { k: string; v: string; warn?: boolean
   return (
     <div className={cn('flex items-start justify-between gap-3 px-3.5 py-1.5', !last && 'border-b border-line')}>
       <span className="shrink-0 text-text2">{k}</span>
-      <span className={cn('text-right break-all', warn ? 'text-warn' : 'text-text2', mono && 'font-mono text-[11px]')}>{v}</span>
+      <span className={cn('text-right break-all', warn ? 'text-warn' : 'text-text2', mono && 'font-mono text-[12px]')}>{v}</span>
     </div>
   );
 }

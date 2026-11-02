@@ -116,7 +116,7 @@ export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: 
               v={
                 <>
                   {fmtCrypto(BigInt(transfer.amount), transfer.decimals ?? asset.decimals, asset.symbol)}{' '}
-                  <span className="font-mono text-[11px] text-mute">mint {shortAddress(transfer.mint ?? '?')}</span>
+                  <span className="font-mono text-[12px] text-mute">mint {shortAddress(transfer.mint ?? '?')}</span>
                 </>
               }
             />

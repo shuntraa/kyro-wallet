@@ -45,7 +45,7 @@ export function CardanoTokensPanel({ account, hidden }: { account: CardanoAccoun
       {account.tokens.map((tk) => (
         <div key={tokenKey(tk)} className="flex h-[20px] shrink-0 items-center justify-between gap-2 text-[12px]" title={t('send.adaTokenTitle', { policy: tk.policy, name: tk.name || t('send.adaEmpty') })}>
           <span className="min-w-0 truncate">
-            <span className="font-semibold text-text2">{cardanoTokenLabel(tk)}</span> <span className="font-mono text-[10px] text-faint">{shortenHex(tk.policy)}</span>
+            <span className="font-semibold text-text2">{cardanoTokenLabel(tk)}</span> <span className="font-mono text-[12px] text-faint">{shortenHex(tk.policy)}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             <span className="font-mono">{hidden ? '•••••' : tokenAmount(tk)}</span>
@@ -149,7 +149,7 @@ export function CardanoSummaryView({ u, adaPrice, currency }: { u: CardanoUnsign
     <div className="flex flex-col rounded-box border border-line text-[12px]" aria-label={t('send.adaDecodedAria')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('send.adaTxTitle')}</span>
-        <span className="text-[11px] text-mute">{t('send.adaDecodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('send.adaDecodedByVault')}</span>
       </div>
       {s.outputs.map((o, i) => (
         <div key={i} className="flex flex-col gap-1 border-b border-line px-3.5 py-2">
@@ -157,10 +157,10 @@ export function CardanoSummaryView({ u, adaPrice, currency }: { u: CardanoUnsign
             <span className={o.isChange ? 'text-mute' : 'font-semibold text-text'}>{o.isChange ? t('send.adaChange') : t('send.recipient')}</span>
             <span className={o.isChange ? 'text-text2' : 'font-semibold text-text'}>{ADA(o.lovelace)}</span>
           </span>
-          <span className="truncate font-mono text-[10px] text-faint">{shortAddress(o.address)}{o.kind === 'enterprise' ? ` · ${t('send.adaEnterprise')}` : ''}</span>
-          {o.tokens.length > 0 && <span className="text-[11px] text-mute">{t('send.adaMinAda', { amount: ADA(o.minLovelace) })}</span>}
+          <span className="truncate font-mono text-[12px] text-faint">{shortAddress(o.address)}{o.kind === 'enterprise' ? ` · ${t('send.adaEnterprise')}` : ''}</span>
+          {o.tokens.length > 0 && <span className="text-[12px] text-mute">{t('send.adaMinAda', { amount: ADA(o.minLovelace) })}</span>}
           {o.tokens.map((tk) => (
-            <span key={tokenKey(tk)} className="flex items-center justify-between gap-2 text-[11px]">
+            <span key={tokenKey(tk)} className="flex items-center justify-between gap-2 text-[12px]">
               <span className="truncate">
                 + {tk.quantity} × {tk.nameText ?? (tk.name ? `hex ${shortenHex(tk.name)}` : t('send.adaEmptyName'))} <span className="font-mono text-faint">· {shortenHex(tk.policy)}</span>
               </span>

@@ -260,7 +260,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
         </div>
         {demoLayout && (
           <div className="flex flex-col items-center gap-1.5" aria-label={t('hw.pin.simulatedScreen')}>
-            <span className="text-[11px] font-semibold tracking-[0.04em] text-ice uppercase">{t('hw.pin.demoMode')}</span>
+            <span className="text-[12px] font-semibold tracking-[0.04em] text-ice uppercase">{t('hw.pin.demoMode')}</span>
             <div className="grid grid-cols-3 gap-1 rounded-ctl border border-line bg-black p-2 font-mono text-[14px] text-text">
               {demoLayout.flat().map((n, i) => (
                 <span key={i} className="flex size-7 items-center justify-center">
@@ -268,7 +268,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
                 </span>
               ))}
             </div>
-            <span className="max-w-[120px] text-center text-[11px] text-faint">{t('hw.pin.demoHint')}</span>
+            <span className="max-w-[120px] text-center text-[12px] text-faint">{t('hw.pin.demoHint')}</span>
           </div>
         )}
       </div>

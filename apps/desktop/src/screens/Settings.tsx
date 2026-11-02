@@ -10,6 +10,7 @@ import { getBackupState, getContacts, saveContacts, type Contact, type ContactFa
 import { PasswordField } from '../components/kit';
 import { PoisoningWarning } from '../components/Poisoning';
 import { ServersSection } from './settings/Servers';
+import { NetDiagnostics } from './settings/Diagnostics';
 import { Devices } from './settings/Devices';
 import { AccountsSection } from './settings/Accounts';
 import { Dialog } from '../components/ui/dialog';
@@ -65,7 +66,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
             type="button"
             aria-current={section === s.key ? 'page' : undefined}
             onClick={() => setSection(s.key)}
-            className={cn('group relative flex h-9 items-center gap-3 rounded-ctl px-2.5 text-left text-[13.5px] transition-colors duration-150', section === s.key ? 'font-medium text-text' : 'text-mute hover:text-text2')}
+            className={cn('group relative flex h-10 items-center gap-3 rounded-ctl px-3 text-left text-[14px] transition-colors duration-150', section === s.key ? 'font-medium text-text' : 'text-mute hover:text-text2')}
           >
             {section === s.key && (
               <motion.span layoutId="settings-section" aria-hidden="true" className="absolute inset-0 rounded-ctl border border-line-2 bg-raised" transition={{ type: 'spring', stiffness: 520, damping: 42 }}>
@@ -79,14 +80,19 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
         <div className="border-t border-line px-2.5 pt-4 text-[12px] text-mute">Kyro {__APP_VERSION__}</div>
       </nav>
 
-      <div className="flex min-w-0 flex-1 gap-5 px-7 pt-6 pb-5">
+      <div className="flex min-w-0 flex-1 gap-6 px-8 pt-7 pb-6">
         <div key={section} className="rise flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto scroll-thin">
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
           {section === 'accounts' && <AccountsSection {...(family ? { family } : {})} />}
           {section === 'hardware' && <Devices />}
-          {section === 'networks' && <ServersSection />}
+          {section === 'networks' && (
+            <>
+              <NetDiagnostics />
+              <ServersSection />
+            </>
+          )}
           {section === 'display' && <Display save={save} />}
           {section === 'apikeys' && <ApiKeys />}
           {section === 'connections' && <Connections />}
@@ -111,15 +117,15 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
 type Save = (patch: Partial<Settings>) => Promise<void>;
 
 function Panel({ children, className, tone }: { children: ReactNode; className?: string; tone?: 'danger' }) {
-  return <section className={cn('flex flex-col rounded-panel border bg-card px-[22px] py-1.5', tone === 'danger' ? 'border-down/30' : 'border-line', className)}>{children}</section>;
+  return <section className={cn('flex flex-col rounded-panel border bg-card px-6 py-1.5', tone === 'danger' ? 'border-down/30' : 'border-line', className)}>{children}</section>;
 }
 
 function SettingRow({ title, desc, children, last }: { title: string; desc: string; children: ReactNode; last?: boolean }) {
   return (
     <div className={cn('flex items-center justify-between gap-6 py-4', !last && 'border-b border-line')}>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[14px] font-medium">{title}</span>
-        <span className="text-[12px] text-mute">{desc}</span>
+        <span className="text-[14.5px] font-medium">{title}</span>
+        <span className="text-[13px] text-mute">{desc}</span>
       </div>
       {children}
     </div>
@@ -213,7 +219,7 @@ function Privacy() {
           <span className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.01em]">
             <IconTor size={16} className="text-mute" /> {t('settings.connectionState')}
           </span>
-          <span className="font-mono text-[11px]">
+          <span className="font-mono text-[12px]">
             <TorIndicator />
           </span>
         </div>
