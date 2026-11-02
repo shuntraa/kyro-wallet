@@ -31,7 +31,9 @@ async fn rpc(state: &AppState, url: &str, method: &str, params: Value) -> Result
         url: url.into(),
         method: "POST".into(),
         headers: [("content-type".to_owned(), "application/json".to_owned())].into(),
-        body: Some(json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }).to_string()),
+        body: Some(
+            json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }).to_string(),
+        ),
     };
     let r = state
         .net
@@ -39,10 +41,19 @@ async fn rpc(state: &AppState, url: &str, method: &str, params: Value) -> Result
         .await
         .map_err(e)?;
     if r.status != 200 {
-        return Err(format!("HTTP {} {}", r.status, r.body.chars().take(120).collect::<String>()));
+        return Err(format!(
+            "HTTP {} {}",
+            r.status,
+            r.body.chars().take(120).collect::<String>()
+        ));
     }
     let v: Value = serde_json::from_str(&r.body).map_err(e)?;
-    v.get("result").cloned().ok_or_else(|| format!("no result: {}", r.body.chars().take(160).collect::<String>()))
+    v.get("result").cloned().ok_or_else(|| {
+        format!(
+            "no result: {}",
+            r.body.chars().take(160).collect::<String>()
+        )
+    })
 }
 
 const EVM: &[(&str, &str)] = &[
@@ -72,7 +83,8 @@ async fn btc_scan(state: &AppState, seed: &wallet_core::Seed) -> Result<String, 
         let c = &c;
         async move {
             for i in 0..if change { 3 } else { 5 } {
-                let a = wallet_core::btc_address(seed, Network::Mainnet, kind, 0, change, i).map_err(e)?;
+                let a = wallet_core::btc_address(seed, Network::Mainnet, kind, 0, change, i)
+                    .map_err(e)?;
                 crate::btc_backend::address_info(c, &a).await.map_err(e)?;
             }
             Ok::<(), String>(())
@@ -88,7 +100,9 @@ async fn btc_scan(state: &AppState, seed: &wallet_core::Seed) -> Result<String, 
     for x in r {
         x?;
     }
-    let funded = crate::btc_backend::address_info(&c, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa").await.map_err(e)?;
+    let funded = crate::btc_backend::address_info(&c, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa")
+        .await
+        .map_err(e)?;
     let fees = crate::btc_backend::fee_rates(&c).await.map_err(e)?;
     let tip = crate::btc_backend::tip_height(&c).await.map_err(e)?;
     Ok(format!(
@@ -97,7 +111,11 @@ async fn btc_scan(state: &AppState, seed: &wallet_core::Seed) -> Result<String, 
     ))
 }
 
-async fn utxo(state: &AppState, seed: &wallet_core::Seed, coin: UtxoCoin) -> Result<String, String> {
+async fn utxo(
+    state: &AppState,
+    seed: &wallet_core::Seed,
+    coin: UtxoCoin,
+) -> Result<String, String> {
     let c = crate::commands_utxo::ctx(state, coin);
     let a = wallet_core::utxo_address(seed, Network::Mainnet, coin, 0, false, 0).map_err(e)?;
     let info = crate::utxo_backend::address_info(&c, &a).await.map_err(e)?;
@@ -118,7 +136,13 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
         out.push((
             (*key).into(),
             Box::pin(async move {
-                let b = rpc(state, url, "eth_getBalance", json!(["0x0000000000000000000000000000000000000000", "latest"])).await?;
+                let b = rpc(
+                    state,
+                    url,
+                    "eth_getBalance",
+                    json!(["0x0000000000000000000000000000000000000000", "latest"]),
+                )
+                .await?;
                 let n = rpc(state, url, "eth_blockNumber", json!([])).await?;
                 let g = rpc(state, url, "eth_gasPrice", json!([])).await?;
                 Ok(format!("0x0 balance {b}, block {n}, gas {g}"))
@@ -129,21 +153,38 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
         "solana".into(),
         Box::pin(async move {
             let url = "https://api.mainnet-beta.solana.com";
-            let b = rpc(state, url, "getBalance", json!(["So11111111111111111111111111111111111111112"])).await?;
+            let b = rpc(
+                state,
+                url,
+                "getBalance",
+                json!(["So11111111111111111111111111111111111111112"]),
+            )
+            .await?;
             let s = rpc(state, url, "getSlot", json!([])).await?;
             Ok(format!("wSOL mint {} lamports, slot {s}", b["value"]))
         }),
     ));
-    out.push(("litecoin".into(), Box::pin(utxo(state, seed, UtxoCoin::Litecoin))));
-    out.push(("dogecoin".into(), Box::pin(utxo(state, seed, UtxoCoin::Dogecoin))));
-    out.push(("bitcoincash".into(), Box::pin(utxo(state, seed, UtxoCoin::BitcoinCash))));
+    out.push((
+        "litecoin".into(),
+        Box::pin(utxo(state, seed, UtxoCoin::Litecoin)),
+    ));
+    out.push((
+        "dogecoin".into(),
+        Box::pin(utxo(state, seed, UtxoCoin::Dogecoin)),
+    ));
+    out.push((
+        "bitcoincash".into(),
+        Box::pin(utxo(state, seed, UtxoCoin::BitcoinCash)),
+    ));
     out.push(("dash".into(), Box::pin(utxo(state, seed, UtxoCoin::Dash))));
     out.push((
         "zcash".into(),
         Box::pin(async move {
             let c = crate::commands_zcash::ctx(state);
             let a = wallet_core::zec_address(seed, net, 0, false, 0).map_err(e)?;
-            let i = crate::zcash_backend::address_info(&c, &a).await.map_err(e)?;
+            let i = crate::zcash_backend::address_info(&c, &a)
+                .await
+                .map_err(e)?;
             let t = crate::zcash_backend::tip_height(&c).await.map_err(e)?;
             Ok(format!("txs {}, tip {t}", i["chain_stats"]["tx_count"]))
         }),
@@ -154,9 +195,17 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_tron::ctx(state);
             let a = wallet_core::tron_address(seed, 0).map_err(e)?;
             let acc = crate::tron_backend::account(&c, &a).await.map_err(e)?;
-            let usdt = crate::tron_backend::trc20_balance(&c, "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", &a).await.map_err(e)?;
+            let usdt =
+                crate::tron_backend::trc20_balance(&c, "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", &a)
+                    .await
+                    .map_err(e)?;
             let p = crate::tron_backend::params(&c).await.map_err(e)?;
-            Ok(format!("balance {}, USDT {usdt}, params {:?}", acc.balance, p).chars().take(160).collect())
+            Ok(
+                format!("balance {}, USDT {usdt}, params {:?}", acc.balance, p)
+                    .chars()
+                    .take(160)
+                    .collect(),
+            )
         }),
     ));
     out.push((
@@ -165,7 +214,9 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_xrp::ctx(state);
             let a = wallet_core::xrp_address(seed, 0).map_err(e)?;
             let info = crate::xrp_backend::server_info(&c).await.map_err(e)?;
-            let acc = crate::xrp_backend::account(&c, &a, &info).await.map_err(e)?;
+            let acc = crate::xrp_backend::account(&c, &a, &info)
+                .await
+                .map_err(e)?;
             let f = crate::xrp_backend::fee(&c).await.map_err(e)?;
             Ok(format!("{acc:?} fee {f:?}").chars().take(160).collect())
         }),
@@ -175,18 +226,33 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
         Box::pin(async move {
             let (evm, pk) = crate::commands_hbar::ours(state, 0).map_err(e)?;
             let c = crate::commands_hbar::ctx(state);
-            let r = crate::commands_hbar::own_account(&c, OurKey::Ecdsa { evm: &evm, pk: &pk }, evm.clone()).await.map_err(e)?;
-            let big = crate::hbar_backend::account(&c, "0.0.98").await.map_err(e)?;
-            Ok(format!("exists {}, 0.0.98 balance {}", r.info.exists, big.balance))
+            let r = crate::commands_hbar::own_account(
+                &c,
+                OurKey::Ecdsa { evm: &evm, pk: &pk },
+                evm.clone(),
+            )
+            .await
+            .map_err(e)?;
+            let big = crate::hbar_backend::account(&c, "0.0.98")
+                .await
+                .map_err(e)?;
+            Ok(format!(
+                "exists {}, 0.0.98 balance {}",
+                r.info.exists, big.balance
+            ))
         }),
     ));
     out.push((
         "cardano".into(),
         Box::pin(async move {
             let c = crate::commands_cardano::ctx(state);
-            let a = state.with_cardano(|r| Ok(wallet_core::cardano_address(r, net, 0, 0)?)).map_err(e)?;
+            let a = state
+                .with_cardano(|r| Ok(wallet_core::cardano_address(r, net, 0, 0)?))
+                .map_err(e)?;
             let p = crate::cardano_backend::params(&c).await.map_err(e)?;
-            let (acc, _) = crate::commands_cardano::account_and_utxos(&c, &a, &p).await.map_err(e)?;
+            let (acc, _) = crate::commands_cardano::account_and_utxos(&c, &a, &p)
+                .await
+                .map_err(e)?;
             Ok(format!("{acc:?}").chars().take(160).collect())
         }),
     ));
@@ -196,7 +262,9 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_stellar::ctx(state);
             let a = wallet_core::stellar_address(seed, 0).map_err(e)?;
             let l = crate::stellar_backend::latest_ledger(&c).await.map_err(e)?;
-            let acc = crate::stellar_backend::account(&c, &a, &l).await.map_err(e)?;
+            let acc = crate::stellar_backend::account(&c, &a, &l)
+                .await
+                .map_err(e)?;
             let f = crate::stellar_backend::fee(&c, &l).await.map_err(e)?;
             Ok(format!("{acc:?} fee {f}").chars().take(160).collect())
         }),
@@ -207,9 +275,16 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_near::ctx(state);
             let a = wallet_core::near_address(seed, 0).map_err(e)?;
             let f = crate::near_backend::fees(&c).await.map_err(e)?;
-            let acc = crate::near_backend::account(&c, &a, f.storage_per_byte).await.map_err(e)?;
-            let big = crate::near_backend::account(&c, "near", f.storage_per_byte).await.map_err(e)?;
-            Ok(format!("{acc:?} / near {big:?}").chars().take(160).collect())
+            let acc = crate::near_backend::account(&c, &a, f.storage_per_byte)
+                .await
+                .map_err(e)?;
+            let big = crate::near_backend::account(&c, "near", f.storage_per_byte)
+                .await
+                .map_err(e)?;
+            Ok(format!("{acc:?} / near {big:?}")
+                .chars()
+                .take(160)
+                .collect())
         }),
     ));
     out.push((
@@ -218,10 +293,20 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_sui::ctx(state);
             let a = wallet_core::sui_address(seed, 0).map_err(e)?;
             let b = crate::sui_backend::balance(&c, &a).await.map_err(e)?;
-            crate::sui_backend::token_balances(&c, &a).await.map_err(e)?;
-            let busy = crate::sui_backend::balance(&c, "0x177a0f6b96e2c76703d97b39990a62106aee3bb048b5fbfa4fcfdfc671c54869").await.map_err(e)?;
+            crate::sui_backend::token_balances(&c, &a)
+                .await
+                .map_err(e)?;
+            let busy = crate::sui_backend::balance(
+                &c,
+                "0x177a0f6b96e2c76703d97b39990a62106aee3bb048b5fbfa4fcfdfc671c54869",
+            )
+            .await
+            .map_err(e)?;
             let ep = crate::sui_backend::epoch(&c).await.map_err(e)?;
-            Ok(format!("{b:?} / busy {busy:?} / {ep:?}").chars().take(200).collect())
+            Ok(format!("{b:?} / busy {busy:?} / {ep:?}")
+                .chars()
+                .take(200)
+                .collect())
         }),
     ));
     out.push((
@@ -233,22 +318,34 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let b = crate::kaspa_backend::balance(&c, &ks).await.map_err(e)?;
             let u = crate::kaspa_backend::utxos(&c, &ks).await.map_err(e)?;
             let f = crate::kaspa_backend::fee_estimate(&c).await.map_err(e)?;
-            Ok(format!("daa {daa}, balance {b}, utxos {}, fee {f}", u.len()))
+            Ok(format!(
+                "daa {daa}, balance {b}, utxos {}, fee {f}",
+                u.len()
+            ))
         }),
     ));
     out.push((
         "polkadot".into(),
         Box::pin(async move {
             let c = crate::commands_dot::ctx(state);
-            let a = state.with_polkadot(|r| Ok(wallet_core::dot_address(r, 0, net)?)).map_err(e)?;
+            let a = state
+                .with_polkadot(|r| Ok(wallet_core::dot_address(r, 0, net)?))
+                .map_err(e)?;
             let id = wallet_core::dot_account_id(&a, net).map_err(e)?;
             let rt = crate::dot_backend::runtime(&c).await.map_err(e)?;
-            let info = crate::dot_backend::account_info(&c, &id, None).await.map_err(e)?;
+            let info = crate::dot_backend::account_info(&c, &id, None)
+                .await
+                .map_err(e)?;
             for k in wallet_core::dot_known_assets(net) {
                 crate::dot_backend::asset_details(&c, k).await.map_err(e)?;
-                crate::dot_backend::asset_account(&c, k.id, &id).await.map_err(e)?;
+                crate::dot_backend::asset_account(&c, k.id, &id)
+                    .await
+                    .map_err(e)?;
             }
-            Ok(format!("ED {}, {info:?}", rt.existential_deposit).chars().take(160).collect())
+            Ok(format!("ED {}, {info:?}", rt.existential_deposit)
+                .chars()
+                .take(160)
+                .collect())
         }),
     ));
     out.push((
@@ -265,7 +362,9 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
         "monero".into(),
         Box::pin(async move {
             let c = crate::xmr_backend::XmrCtx::of(state);
-            let d = crate::xmr_backend::probe(&c.net, c.network, &c.server, c.tor).await.map_err(e)?;
+            let d = crate::xmr_backend::probe(&c.net, c.network, &c.server, c.tor)
+                .await
+                .map_err(e)?;
             Ok(format!("{d:?}"))
         }),
     ));
@@ -275,8 +374,12 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             let c = crate::commands_ton::ctx(state);
             let a = wallet_core::ton_address(seed, 0, false).map_err(e)?;
             let f = crate::commands_ton::parse_user_address(&a, net).map_err(e)?;
-            let acc = crate::ton_backend::account(&c, &f.address).await.map_err(e)?;
-            crate::ton_backend::jetton_balances(&c, &f.address).await.map_err(e)?;
+            let acc = crate::ton_backend::account(&c, &f.address)
+                .await
+                .map_err(e)?;
+            crate::ton_backend::jetton_balances(&c, &f.address)
+                .await
+                .map_err(e)?;
             Ok(format!("{acc:?}").chars().take(160).collect())
         }),
     ));
@@ -298,7 +401,9 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
             crate::aptos_backend::checked_ledger(&c).await.map_err(e)?;
             let acc = crate::aptos_backend::account(&c, &a).await.map_err(e)?;
             for k in wallet_core::aptos_known_assets(c.chain_id) {
-                crate::aptos_backend::fa_balance(&c, &a, k.metadata).await.map_err(e)?;
+                crate::aptos_backend::fa_balance(&c, &a, k.metadata)
+                    .await
+                    .map_err(e)?;
             }
             let g = crate::aptos_backend::gas_price(&c).await.map_err(e)?;
             Ok(format!("{acc:?} gas {g}").chars().take(160).collect())
@@ -359,7 +464,11 @@ fn live_smoke_all_chains_mainnet() {
             .unzip();
         let results = futures_util::future::join_all(futs).await;
         let mut failed = Vec::new();
-        eprintln!("\n=== {} chains, Tor {} ===", names.len(), if clear { "off" } else { "on" });
+        eprintln!(
+            "\n=== {} chains, Tor {} ===",
+            names.len(),
+            if clear { "off" } else { "on" }
+        );
         for (n, (r, dt)) in names.iter().zip(results) {
             match r {
                 Ok(m) => eprintln!("OK   {n:<12} {:>5.1}s  {m}", dt.as_secs_f32()),
