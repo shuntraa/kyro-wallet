@@ -7,11 +7,13 @@ import { useApp } from '../../state/app';
 import { cbfPhaseLabel, useCbf } from '../../state/cbf';
 import { useNetProbe } from '../../shell/StatusBar';
 import { useT } from '../../i18n';
+import { useNetErrors } from '../../lib/netErrors';
 
 export function NetDiagnostics() {
   const { adapters, settings, network } = useApp();
   const { t, tp } = useT();
   const stat = useNetProbe();
+  const netErrors = useNetErrors();
   const cbf = useCbf().status;
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const ms = (v: number | null) => (v !== null ? `${v} ms` : t('shell.offline'));
@@ -35,7 +37,7 @@ export function NetDiagnostics() {
   const evm = adapters ? [...adapters.evm.values()][0] : undefined;
   if (evm) rows.push([evm.chain.label, ms(stat.evmMs)]);
   if (adapters?.sol) rows.push([adapters.sol.chain.label, ms(stat.solMs)]);
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && netErrors.length === 0) return null;
   return (
     <section className="flex flex-col rounded-panel border border-line bg-card px-[22px] py-4">
       <span className="pb-2 text-[15px] font-medium">{t('settings.diagnostics')}</span>
@@ -45,6 +47,18 @@ export function NetDiagnostics() {
           <span className="text-[13px] text-mute">{value}</span>
         </div>
       ))}
+      {netErrors.length > 0 && (
+        <details className="border-t border-line pt-2 text-[12.5px]">
+          <summary className="flex h-8 cursor-pointer items-center text-text2">{t('settings.diagnosticsErrors', { n: netErrors.length })}</summary>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 pb-1">
+            {netErrors.map((e) => (
+              <li key={`${e.source}:${e.chainKey}`} className="break-words text-mute">
+                <span className="text-text2">{e.chainKey}</span> · {t(e.source === 'history' ? 'settings.diagnosticsHistory' : 'settings.diagnosticsBalances')} — <span className="font-mono text-[11.5px]">{e.message}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }

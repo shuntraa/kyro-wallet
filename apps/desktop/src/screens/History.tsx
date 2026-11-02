@@ -9,7 +9,7 @@ import { useHistory, type HistoryEntry } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { useOnCbfSynced } from '../state/cbf';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtDate, fmtDayGroup, fmtFiat, fmtIntl, fmtMonth, shortAddress } from '../lib/format';
+import { fmtCrypto, fmtDate, fmtDayGroup, fmtFiat, fmtMonth, shortAddress } from '../lib/format';
 import { addLocalTx, getApprovals, removeApproval, type ApprovalRecord } from '../lib/storage';
 import { downloadText, toCsv } from '../lib/csv';
 import { useAsync } from '../lib/useAsync';
@@ -146,7 +146,7 @@ export function History() {
             {history.data && Object.entries(history.data.errors).some(([, v]) => tronNoHistory(v)) && <TronNoHistoryLine className="px-5 py-3" />}
             {history.data && Object.entries(history.data.errors).some(([, v]) => !tronNoHistory(v)) && (
               <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).filter((v) => !tronNoHistory(v)).join(' ')}>
-                {t('history.partial', { details: Object.entries(history.data.errors).filter(([, v]) => !tronNoHistory(v)).map(([k, v]) => `${k} (${v})`).join(', ') })}
+                {t('history.partial')}
               </ErrorLine>
             )}
             {history.data?.dotHistory === 'unavailable' && <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">{t('history.dotUnavailable')}</p>}
@@ -156,9 +156,7 @@ export function History() {
                 {t('history.btcCapped', { cap: BTC_TXS_CAP })}
               </p>
             )}
-            <p className="m-0 px-[22px] py-3 text-[12px] leading-[1.5] text-faint">
-              {t('history.ethNote', { blocks: fmtIntl(5000) })}
-            </p>
+            <p className="m-0 px-[22px] py-3 text-[12px] leading-[1.5] text-faint">{t('history.ethNote')}</p>
           </div>
         </section>
 

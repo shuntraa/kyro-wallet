@@ -10,6 +10,7 @@ import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
 import { useAsync } from '../lib/useAsync';
 import { useVault } from './app';
+import { recordNetErrors } from '../lib/netErrors';
 
 export interface HistoryEntry extends HistoryItem {
   asset: AssetDef | undefined;
@@ -78,6 +79,7 @@ export function useHistory() {
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
       const dotStatuses = jobs.filter((j) => j.a.family === 'dot').map((j) => (j.a as { historyStatus?: string | null }).historyStatus);
       const dotHistory: 'ok' | 'partial' | 'unavailable' | null = dotStatuses.length === 0 ? null : dotStatuses.includes('unavailable') ? 'unavailable' : dotStatuses.includes('partial') ? 'partial' : 'ok';
+      recordNetErrors('history', errors);
       return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
     },
     [sourcesKey, network],

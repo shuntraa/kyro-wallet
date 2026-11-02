@@ -167,4 +167,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.forget': 'Forget',
   'settings.forgetAll': 'Forget all',
   'settings.diagnostics': 'Network diagnostics',
+  'settings.diagnosticsErrors': 'Recent network errors ({n})',
+  'settings.diagnosticsHistory': 'history',
+  'settings.diagnosticsBalances': 'balances',
 };

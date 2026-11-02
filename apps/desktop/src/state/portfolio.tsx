@@ -11,6 +11,7 @@ import { useOnTorReady } from './tor';
 import { useOnCbfSynced } from './cbf';
 import { BALANCE_REFRESH_MS, balanceRetryDelay } from '../lib/retry';
 import { fingerprint, loadBalances, loadPrices, saveBalances, savePrices, settleErrors } from '../lib/balanceCache';
+import { recordNetErrors } from '../lib/netErrors';
 
 export type { Holding } from '../lib/holdings';
 
@@ -128,6 +129,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       const settled = settleErrors(errors, failingSince.current, Date.now());
       failingSince.current = settled.since;
       setChainErrors(settled.visible);
+      recordNetErrors('balances', settled.visible);
       setBalancesLoaded(true);
       setBalancesLoading(false);
       setUpdatedAt(Date.now());

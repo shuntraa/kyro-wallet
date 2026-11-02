@@ -178,4 +178,7 @@ export const settings = {
   'settings.forget': 'Oublier',
   'settings.forgetAll': 'Tout oublier',
   'settings.diagnostics': 'Diagnostic réseau',
+  'settings.diagnosticsErrors': 'Erreurs réseau récentes ({n})',
+  'settings.diagnosticsHistory': 'historique',
+  'settings.diagnosticsBalances': 'soldes',
 } as const;
