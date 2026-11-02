@@ -1,6 +1,7 @@
 // Hedera end to end against the demo backend: typed hbar_* commands, accounts_get, the EVM
 // address (alias) of m/44'/3030'/0'/0/a, our account 0.0.x, recipient refusals, the memo, the max
 // fee, one copy per node, the native dialog text and the consensus follow-up.
+import { isHiddenFamily } from '../src/registry';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { call, IpcError, setBackend, type Accounts } from '@kyro/shared';
 import { createMockBackend, hbarChecksum, parseHbarRecipient, type MockBackend } from '@kyro/shared/mock';
@@ -62,7 +63,7 @@ describe('Hedera helpers', () => {
   });
 });
 
-describe('Hedera in the app', () => {
+describe.skipIf(isHiddenFamily('hbar'))('Hedera in the app', () => {
   it('is a full chain: HBAR asset (8 decimals, hedera-hashgraph price), mirror node and node proxies listed', () => {
     expect(HBAR).toMatchObject({ family: 'hbar', kind: 'native', symbol: 'HBAR', decimals: 8, chainKey: 'hedera', coingeckoId: 'hedera-hashgraph' });
     expect(assetsFor('mainnet').some((a) => a.id === 'hbar')).toBe(true);

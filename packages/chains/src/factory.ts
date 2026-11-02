@@ -39,7 +39,7 @@ export {
 } from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain, tonChain, zecChain, isHiddenFamily } from './registry';
+import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain, tonChain, zecChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
@@ -121,7 +121,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...h, ...a }) : null;
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...h, ...a }) : null;
   // Hedera on a Ledger: only the ED25519 key read with `hw_key_add` (never a vault EVM address).
-  const hbar = !isHiddenFamily('hbar') && accounts.hbar && (!hw || isHbarEd25519Key(accounts.hbar.address)) ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...h, ...a }) : null;
+  const hbar = accounts.hbar && (!hw || isHbarEd25519Key(accounts.hbar.address)) ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...h, ...a }) : null;
   const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
   const polkadot = accounts.polkadot ? new PolkadotAdapter({ chain: polkadotChain(network), address: accounts.polkadot.address, ...a }) : null;
   const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...h, ...a }) : null;

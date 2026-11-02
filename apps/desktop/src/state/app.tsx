@@ -3,7 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
-import { createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
+import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
 import { readJson, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
@@ -17,6 +17,13 @@ const DEMO_SWAP_FEES: SwapFeeConfig = {
 import { torStore } from './tor';
 import { settingsPayload } from '../lib/settingsPayload';
 import { setLanguagePreference, setSystemLanguage, t } from '../i18n';
+
+/** Accounts without the chains hidden in this release (`HIDDEN_FAMILIES`). */
+function visibleAccounts<T extends object>(acc: T): T {
+  const out = { ...acc } as Record<string, unknown>;
+  for (const f of HIDDEN_FAMILIES) delete out[f];
+  return out as T;
+}
 
 export type SettingsSection = 'security' | 'privacy' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
 
@@ -309,7 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!vaultAccounts) return out;
     for (const i of listedIndices) {
       const acc = i === 0 ? vaultAccounts : extraAccounts.get(i);
-      if (acc) out.set(i, { accounts: acc, adapters: createAdapters(acc, settingsRef.current.servers, undefined, undefined, i) });
+      if (acc) out.set(i, { accounts: acc, adapters: createAdapters(visibleAccounts(acc), settingsRef.current.servers, undefined, undefined, i) });
     }
     return out;
   }, [vaultAccounts, extraAccounts, listedIndices, serversKey]);
@@ -336,7 +343,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, zec: of('zec').zec, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, ...(of('kas').kas ? { kas: of('kas').kas } : {}), polkadot: of('dot').polkadot, algo: of('algo').algo, xmr: of('xmr').xmr, ton: of('ton').ton, cosmos: of('cosmos').cosmos, aptos: of('apt').aptos };
   }, [activeHw, vaultAccounts, vaultSets, selectedAccounts]);
   const hwAdapters = useMemo<AdapterSet | null>(
-    () => (activeHw && accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
+    () => (activeHw && accounts ? createAdapters(visibleAccounts(accounts), settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
     [accounts, serversKey, activeHw?.id],
   );
   const adapters = useMemo<AdapterSet | null>(() => {

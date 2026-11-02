@@ -1,5 +1,6 @@
 // Hedera USDC (HTS): registry IDs, balances of associated known tokens, the checks the adapter
 // makes on what Rust built (association, token transfer), history rows of known tokens.
+import { isHiddenFamily } from '../src/registry';
 import { describe, expect, it } from 'vitest';
 import type { HbarBuilt, HbarContext, HbarHistoryEntry, HbarOwnAccount, HbarTxSummary } from '@kyro/shared';
 import { HBAR_TOKENS, HbarAdapter, findAsset, hbarChain, type HbarBackend } from '../src';
@@ -41,7 +42,7 @@ function backend(make?: (kind: 'assoc' | 'token', to: string, amount: string) =>
 
 const adapter = (b: HbarBackend) => new HbarAdapter({ chain: hbarChain('mainnet'), address: EVM, backend: b });
 
-describe('Hedera USDC', () => {
+describe.skipIf(isHiddenFamily('hbar'))('Hedera USDC', () => {
   it('registry: Circle USDC on mainnet and testnet', () => {
     expect(HBAR_TOKENS.mainnet.map((t) => [t.symbol, t.contract, t.decimals])).toEqual([['USDC', '0.0.456858', 6]]);
     expect(HBAR_TOKENS.testnet.map((t) => t.contract)).toEqual(['0.0.429274']);
