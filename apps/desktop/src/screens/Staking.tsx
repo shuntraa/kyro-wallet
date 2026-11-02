@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote delegation), TRON
-// (Stake 2.0 + SR votes).
+// (Stake 2.0 + SR votes), NEAR (staking pools).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CHAIN_COLORS, tryParseUnits } from '@kyro/chains';
@@ -10,6 +10,8 @@ import {
   type AdaPool,
   type AdaStakeOverview,
   type Commands,
+  type NearStakeOverview,
+  type NearValidator,
   type SolStakeOverview,
   type SolStakePosition,
   type SolValidator,
@@ -29,6 +31,8 @@ import {
   drepLabel,
   fmtDuration,
   fmtStake,
+  nearUnlockSecs,
+  nearWarningText,
   networkLabel,
   solStateLabel,
   solStateTone,
@@ -76,6 +80,7 @@ type Ret<K extends keyof Commands> = Commands[K]['ret'];
 const SOL = { decimals: 9, symbol: 'SOL' };
 const ADA = { decimals: 6, symbol: 'ADA' };
 const TRX = { decimals: 6, symbol: 'TRX' };
+const NEAR = { decimals: 24, symbol: 'NEAR' };
 const amt = (v: string | bigint | null | undefined, u: { decimals: number; symbol: string }) => (v === null || v === undefined ? '—' : fmtCrypto(BigInt(v), u.decimals, u.symbol, u.decimals));
 
 const pc = (n: number, maxFrac = 0) => (getLanguage() === 'fr' ? `${fmtNumber(n, maxFrac)} %` : `${fmtNumber(n, maxFrac)}%`);
@@ -87,7 +92,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const { accounts } = useVault();
   const { t } = useT();
   const tab: 'home' | StakeChain = chain ?? 'home';
-  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron };
+  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
       <header className="flex items-end justify-between gap-4">
@@ -102,6 +107,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
             { value: 'sol', label: 'Solana', disabled: !!activeHw || !has.sol },
             { value: 'ada', label: 'Cardano', disabled: !!activeHw || !has.ada },
             { value: 'tron', label: 'TRON', disabled: !!activeHw || !has.tron },
+            { value: 'near', label: 'NEAR', disabled: !!activeHw || !has.near },
           ]}
         />
       </header>
@@ -110,7 +116,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
           <strong className="font-semibold text-text">{t('staking.hwTitle')}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
         </Notice>
       )}
-      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : <TronStaking />}
+      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : <NearStaking />}
     </div>
   );
 }
@@ -123,11 +129,14 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   const sol = useCachedAsync(sk('sol_stake_overview', acct('sol')), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
   const ada = useCachedAsync(sk('ada_stake_overview', acct('ada')), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
   const tron = useCachedAsync(sk('tron_stake_overview', acct('tron')), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
+  const near = useCachedAsync(sk('near_stake_overview', acct('near')), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account]);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
     tron.reload();
+    near.reload();
   });
+  const nearStaked = near.data?.positions.reduce((s, p) => s + BigInt(p.staked), 0n);
   const solStaked = sol.data?.accounts.reduce((s, a) => s + BigInt(a.lamports), 0n);
   const tronStaked = tron.data ? BigInt(tron.data.stakedBandwidth) + BigInt(tron.data.stakedEnergy) : undefined;
   const hide = (s: string) => (hideBalances ? HIDDEN : s);
@@ -159,10 +168,19 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       line: tron.data ? t('staking.homeTronLine', { amount: hide(amt(tronStaked, TRX)), used: tron.data.tronPowerUsed, limit: tron.data.tronPowerLimit }) : null,
       error: tron.error,
     },
+    {
+      chain: 'near',
+      name: 'NEAR',
+      glyph: 'N',
+      color: '#00EC97',
+      what: t('staking.homeNearWhat'),
+      line: near.data ? (near.data.positions.length ? tp('staking.homeNearLine', near.data.positions.length, { amount: hide(amt(nearStaked, NEAR)) }) : t('staking.homeNearNone')) : null,
+      error: near.error,
+    },
   ];
   return (
     <>
-      <div className="grid shrink-0 grid-cols-3 divide-x divide-line overflow-hidden rounded-panel border border-line bg-card">
+      <div className="grid shrink-0 grid-cols-4 divide-x divide-line overflow-hidden rounded-panel border border-line bg-card">
         {cards.map((c, i) => (
           <div key={c.chain} className="rise group flex flex-col gap-3 px-5 pt-4 pb-5" style={idx(i)}>
             <div className="flex items-center gap-2.5">
@@ -1236,6 +1254,180 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
     sign: async (b, password) => ({ ...(await call('tron_stake_sign', { raw: b.raw, password, ...acct('tron') })), raw: b.raw }),
     broadcast: (s) => call('tron_broadcast', { raw: s.raw, signature: s.signature, ...acct('tron') }),
     doneText: t('staking.doneTron'),
+  };
+  return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
+}
+
+function NearStaking() {
+  const { hideBalances } = useApp();
+  const acct = useStakeAccount();
+  const ov = useCachedAsync(useStakeKey()('near_stake_overview', acct('near')), () => call('near_stake_overview', acct('near')), [acct('near').account], { intervalMs: 60_000 });
+  const vs = useCachedAsync(useStakeKey()('near_stake_validators'), () => call('near_stake_validators'), [], { persist: true });
+  useOnTorReady(ov.reload);
+  const { t } = useT();
+  const [op, setOp] = useState<{ kind: NearOp; pool: string } | null>(null);
+  const o = ov.data;
+  const h = (s: string) => (hideBalances ? HIDDEN : s);
+  if (ov.error && !o) return <ErrorLine error={ov.error} onRetry={ov.reload}>{ov.error.message}</ErrorLine>;
+  if (!o) return <Skeleton className="h-64 w-full" />;
+  const staked = o.positions.reduce((s, p) => s + BigInt(p.staked), 0n);
+  const unlock = fmtDuration(nearUnlockSecs(o.epoch, o.unlockEpochs));
+  const apy = vs.data?.grossApy ?? null;
+  return (
+    <>
+      <Card className="flex flex-col gap-4 px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid flex-1 grid-cols-3 gap-6">
+            <Stat k={t('staking.available')} v={h(amt(o.spendable, NEAR))} />
+            <Stat k={t('staking.nearStaked')} v={h(amt(staked, NEAR))} sub={t('staking.nearRewardsIn')} />
+            <Stat k={t('staking.nearApy')} v={apy !== null ? `≈ ${pc(apy, 1)}` : '—'} sub={t('staking.nearApySub')} />
+          </div>
+          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake', pool: '' })}>
+            {t('staking.stakeNear')}
+          </Button>
+        </div>
+        <Hint>{t('staking.nearHint', { epochs: o.unlockEpochs, duration: unlock })}</Hint>
+      </Card>
+      <Card className="flex flex-col">
+        <div className="flex h-[50px] items-center border-b border-line px-5">
+          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.nearPools')}</span>
+        </div>
+        {o.positions.length === 0 ? (
+          <EmptyState title={t('staking.nearNoPool')}>{t('staking.nearNoPoolBody')}</EmptyState>
+        ) : (
+          o.positions.map((p) => (
+            <div key={p.poolId} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-semibold">{p.poolId}</span>
+                <span className="text-[12px] text-faint">
+                  {t('staking.nearStakedIn', { amount: h(amt(p.staked, NEAR)) })}
+                  {p.feePct !== null && ` · ${t('staking.nearFee', { pct: pc(p.feePct, 1) })}`}
+                </span>
+                {BigInt(p.unstaked) > 0n && <span className="text-[12px] text-mute">{p.canWithdraw ? t('staking.nearUnstakedReady', { amount: h(amt(p.unstaked, NEAR)) }) : t('staking.nearUnstakedWait', { amount: h(amt(p.unstaked, NEAR)), duration: unlock })}</span>}
+              </span>
+              <span className="flex shrink-0 gap-2">
+                <Button size="sm" onClick={() => setOp({ kind: 'stake', pool: p.poolId })}>
+                  {t('staking.nearAdd')}
+                </Button>
+                <Button size="sm" disabled={BigInt(p.staked) === 0n} onClick={() => setOp({ kind: 'unstake', pool: p.poolId })}>
+                  {t('staking.nearUnstake')}
+                </Button>
+                <Button size="sm" variant="ice" disabled={BigInt(p.unstaked) === 0n || !p.canWithdraw} onClick={() => setOp({ kind: 'withdraw', pool: p.poolId })}>
+                  {t('staking.withdraw')}
+                </Button>
+              </span>
+            </div>
+          ))
+        )}
+      </Card>
+      {op && <NearOpDialog key={`${op.kind}-${op.pool}`} op={op.kind} pool={op.pool} o={o} validators={vs.data?.validators ?? []} apy={apy} onClose={() => setOp(null)} onDone={ov.reload} />}
+    </>
+  );
+}
+
+type NearOp = 'stake' | 'unstake' | 'withdraw';
+type NearBuilt = Ret<'near_stake_build'>;
+type NearSigned = Ret<'near_stake_sign'>;
+
+function NearPoolPicker({ value, onChange, validators, apy }: { value: string; onChange: (v: string) => void; validators: NearValidator[]; apy: number | null }) {
+  const { t } = useT();
+  const [q, setQ] = useState('');
+  const list = useMemo(() => validators.filter((v) => v.supported && v.poolId.includes(q.trim().toLowerCase())).slice(0, 60), [validators, q]);
+  return (
+    <div className="flex flex-col gap-2">
+      <Input aria-label={t('staking.nearSearch')} placeholder={t('staking.nearSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+        {validators.length === 0 ? (
+          <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
+            <Spinner /> {t('staking.nearLoadingPools')}
+          </div>
+        ) : (
+          list.map((v) => (
+            <button key={v.poolId} type="button" onClick={() => onChange(v.poolId)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.poolId && 'bg-bg')}>
+              <span className="truncate font-medium">{v.poolId}</span>
+              <span className="shrink-0 text-[12px] text-faint">{fmtStake(v.stake, 24, 'NEAR')}</span>
+            </button>
+          ))
+        )}
+      </div>
+      {apy !== null && <span className="text-[12px] text-faint">{t('staking.nearApyHint', { apy: pc(apy, 1) })}</span>}
+    </div>
+  );
+}
+
+function NearOpDialog({ op, pool: initialPool, o, validators, apy, onClose, onDone }: { op: NearOp; pool: string; o: NearStakeOverview; validators: NearValidator[]; apy: number | null; onClose: () => void; onDone: () => void }) {
+  const acct = useStakeAccount();
+  const [pool, setPool] = useState(initialPool);
+  const [amount, setAmount] = useState('');
+  const { t } = useT();
+  const yocto = tryParseUnits(amount, 24);
+  const pos = o.positions.find((p) => p.poolId === pool);
+  const staked = BigInt(pos?.staked ?? '0');
+  let title: string;
+  let form: ReactNode | undefined;
+  let canBuild = true;
+  let action: Commands['near_stake_build']['args']['action'];
+  if (op === 'stake') {
+    title = t('staking.stakeNear');
+    canBuild = !!pool && !!yocto && yocto > 0n && yocto <= BigInt(o.spendable);
+    action = { kind: 'stake', pool, amount: (yocto ?? 0n).toString() };
+    form = (
+      <>
+        {initialPool ? <Row k={t('staking.nearPool')} v={pool} /> : <NearPoolPicker value={pool} onChange={setPool} validators={validators} apy={apy} />}
+        <AmountField id="near-stake" label={t('staking.amountToStake')} value={amount} onChange={setAmount} unit={NEAR} hint={t('staking.nearStakeHint', { available: amt(o.spendable, NEAR) })} />
+      </>
+    );
+  } else if (op === 'unstake') {
+    title = t('staking.nearUnstakeTitle');
+    const all = !!yocto && yocto === staked;
+    canBuild = !!yocto && yocto > 0n && yocto <= staked;
+    action = all ? { kind: 'unstakeAll', pool } : { kind: 'unstake', pool, amount: (yocto ?? 0n).toString() };
+    form = (
+      <>
+        <Row k={t('staking.nearPool')} v={pool} />
+        <AmountField id="near-unstake" label={t('staking.nearAmountToUnstake')} value={amount} onChange={setAmount} unit={NEAR} onMax={() => setAmount(toInputDecimal(staked, 24))} hint={t('staking.nearUnstakeHint', { staked: amt(staked, NEAR), epochs: o.unlockEpochs })} />
+      </>
+    );
+  } else {
+    title = t('staking.nearWithdrawTitle');
+    action = { kind: 'withdrawAll', pool };
+  }
+  const spec: FlowSpec<NearBuilt, NearSigned> = {
+    title,
+    ...(form ? { form } : {}),
+    canBuild,
+    build: () => call('near_stake_build', { action, ...acct('near') }),
+    enClair: (b) => {
+      const x = b.summary.action;
+      const c = b.context;
+      const duration = fmtDuration(nearUnlockSecs(c.epoch, c.unlockEpochs));
+      switch (x.type) {
+        case 'stake':
+          return t('staking.plainNearStake', { amount: amt(x.amount, NEAR), pool: b.summary.poolId, epochs: c.unlockEpochs, duration });
+        case 'unstake':
+          return t('staking.plainNearUnstake', { amount: amt(x.amount, NEAR), pool: b.summary.poolId, epochs: c.unlockEpochs, duration });
+        case 'unstakeAll':
+          return t('staking.plainNearUnstake', { amount: amt(c.position.staked, NEAR), pool: b.summary.poolId, epochs: c.unlockEpochs, duration });
+        case 'withdrawAll':
+          return t('staking.plainNearWithdraw', { amount: amt(c.position.unstaked, NEAR), pool: b.summary.poolId });
+      }
+    },
+    review: (b) => {
+      const c = b.context;
+      return (
+        <>
+          <Row k={t('staking.nearPool')} v={b.summary.poolId} {...(c.validating ? {} : { tone: 'warn' as const })} />
+          {c.position.feePct !== null && <Row k={t('staking.nearPoolFee')} v={pc(c.position.feePct, 1)} {...(c.warnings.some((w) => w.kind === 'highFee') ? { tone: 'warn' as const } : {})} />}
+          <Row k={t('staking.nearStakedBefore')} v={amt(c.position.staked, NEAR)} />
+          <Row k={t('staking.nearNetworkFee')} v={t('staking.nearFeeRow', { estimate: amt(c.feeEstimate, NEAR), bound: amt(c.feeBound, NEAR) })} />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskNear')} />
+        </>
+      );
+    },
+    warnings: (b) => b.context.warnings.map(nearWarningText),
+    sign: (b, password) => call('near_stake_sign', { tx: b.tx, password, ...acct('near') }),
+    broadcast: async (s) => (await call('near_stake_broadcast', { signed: s.signed, ...acct('near') })).hash,
+    doneText: t('staking.doneNear'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }

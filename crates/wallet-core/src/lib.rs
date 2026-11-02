@@ -28,6 +28,7 @@ mod mnemonic;
 mod monero;
 mod monero_words;
 mod near;
+mod near_stake;
 mod network;
 mod polkadot;
 mod sol;
@@ -158,6 +159,11 @@ pub use near::{
     near_path, near_public_key, near_public_key_string, near_sign, near_verify_signed,
     NearAccountKind, NearFtTransfer, NearKnownToken, NearTokenSummary, NearTransfer, NearTxSummary,
     NearWarning, NEAR_DECIMALS, NEAR_FT_GAS, NEAR_MAX_STORAGE_DEPOSIT,
+};
+pub use near_stake::{
+    near_stake_code_ok, near_stake_decode, near_stake_pool_network, near_stake_sign,
+    near_stake_verify_signed, NearStakeAction, NearStakeCall, NearStakeSummary, NearStakeTx,
+    NEAR_STAKE_GAS,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{

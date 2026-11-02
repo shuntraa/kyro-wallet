@@ -12,10 +12,10 @@ use crate::mnemonic::Seed;
 
 /// 1 NEAR = 10^24 yoctoNEAR.
 pub const NEAR_DECIMALS: u32 = 24;
-const MAX_DEPOSIT: u128 = 10_000_000_000 * 1_000_000_000_000_000_000_000_000;
-const ED25519: u8 = 0;
+pub(crate) const MAX_DEPOSIT: u128 = 10_000_000_000 * 1_000_000_000_000_000_000_000_000;
+pub(crate) const ED25519: u8 = 0;
 const ACTION_TRANSFER: u8 = 3;
-const ACTION_FUNCTION_CALL: u8 = 2;
+pub(crate) const ACTION_FUNCTION_CALL: u8 = 2;
 /// Gas attached to each call to a token contract (30 Tgas, what NEAR wallets attach).
 pub const NEAR_FT_GAS: u64 = 30_000_000_000_000;
 /// Max storage deposit to register a token recipient (0.0125 NEAR; usual min 0.00125 NEAR).
@@ -138,7 +138,7 @@ fn read_call(b: &mut &[u8]) -> Result<(String, Vec<u8>, u64, u128)> {
     let args = take(b, n)?.to_vec();
     Ok((method, args, read_u64(b)?, read_u128(b)?))
 }
-const MAX_TX: usize = 1024;
+pub(crate) const MAX_TX: usize = 1024;
 
 fn hardened(index: u32) -> Result<ChildIndex> {
     ChildIndex::hardened(index).map_err(|_| Error::input("derivation index must be < 2^31"))
@@ -149,7 +149,7 @@ pub fn near_path(account: u32) -> String {
     format!("m/44'/397'/{account}'")
 }
 
-fn signing_key(seed: &Seed, account: u32) -> Result<ed25519_dalek::SigningKey> {
+pub(crate) fn signing_key(seed: &Seed, account: u32) -> Result<ed25519_dalek::SigningKey> {
     let path = [hardened(44)?, hardened(397)?, hardened(account)?];
     let root = ExtendedSigningKey::from_seed(&seed[..])
         .map_err(|_| Error::crypto("SLIP-10 master derivation failed"))?;
@@ -261,11 +261,11 @@ pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
     Ok(NearAccountKind::Named)
 }
 
-fn bad(msg: impl Into<String>) -> Error {
+pub(crate) fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("NEAR transaction: {}", msg.into()))
 }
 
-fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
+pub(crate) fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     if b.len() < n {
         return Err(bad("truncated"));
     }
@@ -274,27 +274,27 @@ fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     Ok(head)
 }
 
-fn take_array<const N: usize>(b: &mut &[u8]) -> Result<[u8; N]> {
+pub(crate) fn take_array<const N: usize>(b: &mut &[u8]) -> Result<[u8; N]> {
     take(b, N)?.try_into().map_err(|_| bad("truncated"))
 }
 
-fn read_u8(b: &mut &[u8]) -> Result<u8> {
+pub(crate) fn read_u8(b: &mut &[u8]) -> Result<u8> {
     Ok(take(b, 1)?[0])
 }
 
-fn read_u32(b: &mut &[u8]) -> Result<u32> {
+pub(crate) fn read_u32(b: &mut &[u8]) -> Result<u32> {
     Ok(u32::from_le_bytes(take_array(b)?))
 }
 
-fn read_u64(b: &mut &[u8]) -> Result<u64> {
+pub(crate) fn read_u64(b: &mut &[u8]) -> Result<u64> {
     Ok(u64::from_le_bytes(take_array(b)?))
 }
 
-fn read_u128(b: &mut &[u8]) -> Result<u128> {
+pub(crate) fn read_u128(b: &mut &[u8]) -> Result<u128> {
     Ok(u128::from_le_bytes(take_array(b)?))
 }
 
-fn read_account_id(b: &mut &[u8], what: &str) -> Result<String> {
+pub(crate) fn read_account_id(b: &mut &[u8], what: &str) -> Result<String> {
     let len = read_u32(b)? as usize;
     if len > 64 {
         return Err(bad(format!("{what}: ID longer than 64 bytes")));
@@ -305,12 +305,12 @@ fn read_account_id(b: &mut &[u8], what: &str) -> Result<String> {
     Ok(s.to_owned())
 }
 
-fn put_string(out: &mut Vec<u8>, s: &str) {
+pub(crate) fn put_string(out: &mut Vec<u8>, s: &str) {
     out.extend_from_slice(&(s.len() as u32).to_le_bytes());
     out.extend_from_slice(s.as_bytes());
 }
 
-fn action_name(tag: u8) -> &'static str {
+pub(crate) fn action_name(tag: u8) -> &'static str {
     match tag {
         0 => "CreateAccount",
         1 => "DeployContract",
@@ -668,7 +668,7 @@ fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Res
     })
 }
 
-fn unhex(s: &str) -> Result<Vec<u8>> {
+pub(crate) fn unhex(s: &str) -> Result<Vec<u8>> {
     hex::decode(s.trim()).map_err(|_| Error::input("NEAR transaction: hexadecimal expected"))
 }
 

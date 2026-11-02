@@ -62,6 +62,7 @@ mod servers;
 mod settings;
 mod solana;
 mod stake_ada;
+mod stake_near;
 mod stake_sol;
 mod stake_tron;
 mod state;
@@ -393,6 +394,11 @@ pub fn run() {
             stake_tron::tron_stake_witnesses,
             stake_tron::tron_stake_build,
             stake_tron::tron_stake_sign,
+            stake_near::near_stake_overview,
+            stake_near::near_stake_validators,
+            stake_near::near_stake_build,
+            stake_near::near_stake_sign,
+            stake_near::near_stake_broadcast,
             commands::set_capture_protection,
             commands::open_fees_page,
             commands::config_get,

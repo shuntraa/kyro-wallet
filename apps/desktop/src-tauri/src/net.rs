@@ -43,6 +43,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "test.rpc.fastnear.com",
     "tx.main.fastnear.com",
     "tx.test.fastnear.com",
+    // FastNEAR account API: the staking pools of an account (`near_stake_*`).
+    "api.fastnear.com",
+    "test.api.fastnear.com",
     // Sui GraphQL RPC (Sui Foundation, testnet and mainnet): only Rust's `sui_*` commands.
     "graphql.testnet.sui.io",
     "graphql.mainnet.sui.io",
@@ -492,6 +495,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
             | "test.rpc.fastnear.com"
             | "tx.main.fastnear.com"
             | "tx.test.fastnear.com"
+            | "api.fastnear.com"
+            | "test.api.fastnear.com"
     ) {
         Family::Near
     } else if host == "graphql.testnet.sui.io" || host == "graphql.mainnet.sui.io" {
@@ -1356,7 +1361,10 @@ mod tests {
             "test.rpc.fastnear.com",
             "tx.main.fastnear.com",
             "tx.test.fastnear.com",
+            "api.fastnear.com",
+            "test.api.fastnear.com",
         ] {
+            assert!(ALLOWED_HOSTS.contains(&h), "{h}");
             assert_eq!(family_for(h, &c), Family::Near);
         }
         assert_eq!(family_for("evil.fastnear.com", &c), Family::Other);

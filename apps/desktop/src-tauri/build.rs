@@ -250,6 +250,11 @@ const COMMANDS: &[&str] = &[
     "tron_stake_witnesses",
     "tron_stake_build",
     "tron_stake_sign",
+    "near_stake_overview",
+    "near_stake_validators",
+    "near_stake_build",
+    "near_stake_sign",
+    "near_stake_broadcast",
     "set_capture_protection",
     // Opens https://kyrowallet.com/frais (fixed in Rust) in the system browser: Swap screen.
     "open_fees_page",

@@ -218,3 +218,29 @@ describe('demo staking — TRON', () => {
     expect(a.balance).toBe((30_000_000n + 1_250_000n + 5_000_000n).toString());
   });
 });
+
+describe('demo staking — NEAR', () => {
+  it('stake, unstake all, refusals, reinforced dialog for a high pool fee', async () => {
+    const { texts } = setup();
+    const vs = await call('near_stake_validators');
+    expect(vs.validators[0]!.poolId).toBe('kiln.pool.f863973.m0');
+    const before = await call('near_stake_overview');
+    expect(before.unlockEpochs).toBe(4);
+    expect(before.positions).toHaveLength(1);
+    const pool = vs.validators[1]!.poolId;
+    const one = (10n ** 24n).toString();
+    const b = await call('near_stake_build', { action: { kind: 'stake', pool, amount: one } });
+    expect(b.summary.action).toEqual({ type: 'stake', amount: one });
+    expect(b.context.requiresExtraConfirmation).toBe(false);
+    const s = await call('near_stake_sign', { tx: b.tx, password: PW });
+    await call('near_stake_broadcast', { signed: s.signed });
+    const after = await call('near_stake_overview');
+    expect(after.positions.find((p) => p.poolId === pool)?.staked).toBe(one);
+    expect((await code(call('near_stake_build', { action: { kind: 'unstake', pool, amount: (10n ** 25n).toString() } }))).message).toMatch(/stake/i);
+    expect((await code(call('near_stake_build', { action: { kind: 'withdrawAll', pool } }))).message).toMatch(/retirer|withdraw/i);
+    const u = await call('near_stake_build', { action: { kind: 'unstakeAll', pool } });
+    await call('near_stake_broadcast', { signed: (await call('near_stake_sign', { tx: u.tx, password: PW })).signed });
+    expect((await call('near_stake_overview')).positions.find((p) => p.poolId === pool)).toMatchObject({ staked: '0', unstaked: one, canWithdraw: false });
+    expect(texts.some((x) => x.includes(pool))).toBe(true);
+  });
+});

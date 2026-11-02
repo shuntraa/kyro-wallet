@@ -200,7 +200,7 @@ export function createDemoNear(d: DemoNearDeps) {
     return out;
   };
 
-  const handlers: Record<Extract<keyof Commands, `near_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const handlers: Record<Exclude<Extract<keyof Commands, `near_${string}`>, `near_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     near_backend_info: (): NearBackendInfo => ({
       kind: 'default',
       network: netKey,

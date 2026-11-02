@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-stake-sign"
+description = "Enables the near_stake_sign command without any pre-configured scope."
+commands.allow = ["near_stake_sign"]
+
+[[permission]]
+identifier = "deny-near-stake-sign"
+description = "Denies the near_stake_sign command without any pre-configured scope."
+commands.deny = ["near_stake_sign"]

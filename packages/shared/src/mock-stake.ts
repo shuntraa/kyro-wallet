@@ -15,6 +15,11 @@ import {
   type CardanoCertView,
   type CardanoDrepView,
   type CardanoStakeSummary,
+  type NearPoolPosition,
+  type NearStakeContext,
+  type NearStakeRequest,
+  type NearStakeSummary,
+  type NearValidator,
   type Commands,
   type Network,
   type SolEpoch,
@@ -632,8 +637,72 @@ export function createDemoStake(d: DemoStakeDeps) {
     },
   };
 
+  // NEAR: staking pools (no balance moves in the demo, only the pool positions).
+  const YOCTO = 10n ** 24n;
+  const nearPools: NearValidator[] = (testnet ? ['kiln.pool.f863973.m0', 'aurora.pool.f863973.m0', 'legends.pool.f863973.m0'] : ['astro-stakers.poolv1.near', 'figment.poolv1.near', 'zavodil.poolv1.near', 'liver.pool.near', 'lst-pool.near']).map((poolId, i) => ({
+    poolId,
+    stake: ((40_000_000n - BigInt(i) * 6_000_000n) * YOCTO).toString(),
+    supported: !poolId.startsWith('lst-'),
+  }));
+  const nearFee = (pool: string) => (pool.startsWith('zavodil') ? 25 : pool.startsWith('figment') ? 9 : 1);
+  const nearPos = new Map<string, { staked: bigint; unstaked: bigint; unlockAt: number }>([[nearPools[0]!.poolId, { staked: 12n * YOCTO, unstaked: 2n * YOCTO, unlockAt: d.now() + 20 * 3600_000 }]]);
+  const nearSpendable = 40n * YOCTO;
+  const nearEpoch = () => ({ height: 222_760_000, startHeight: 222_753_137, length: 43_200, blockSecs: 0.6, secondsLeft: Math.round((43_200 - 6_863) * 0.6) });
+  const nearPosition = (pool: string): NearPoolPosition => {
+    const p = nearPos.get(pool) ?? { staked: 0n, unstaked: 0n, unlockAt: 0 };
+    return { poolId: pool, staked: p.staked.toString(), unstaked: p.unstaked.toString(), canWithdraw: p.unlockAt <= d.now(), feePct: nearFee(pool) };
+  };
+  const nearBuild = (act: NearStakeRequest): { tx: string; summary: NearStakeSummary; context: NearStakeContext } => {
+    const v = nearPools.find((x) => x.poolId === act.pool);
+    if (!v?.supported) throw invalid(l10n(`${act.pool} : pas un pool de staking accepté par Kyro`, `${act.pool}: not a staking pool Kyro accepts`));
+    const pos = nearPosition(act.pool);
+    const amount = 'amount' in act ? BigInt(act.amount || '0') : 0n;
+    if (act.kind === 'stake' && (amount <= 0n || amount + YOCTO / 100n > nearSpendable)) throw invalid(l10n('solde insuffisant pour ce montant plus les frais', 'balance too low for this amount plus the network fee'));
+    if (act.kind === 'unstake' && (amount <= 0n || amount > BigInt(pos.staked))) throw invalid(l10n('montant supérieur au stake de ce pool', 'amount above what is staked in this pool'));
+    if (act.kind === 'withdrawAll' && (pos.unstaked === '0' || !pos.canWithdraw)) throw invalid(l10n('rien à retirer pour l’instant', 'nothing to withdraw yet'));
+    const action: NearStakeSummary['action'] = act.kind === 'stake' ? { type: 'stake', amount: act.amount } : act.kind === 'unstake' ? { type: 'unstake', amount: act.amount } : { type: act.kind };
+    const warnings: NearStakeContext['warnings'] = act.kind === 'stake' && nearFee(act.pool) > 20 ? [{ kind: 'highFee', pct: nearFee(act.pool) }] : [];
+    const tx = encode({ near: true, act, at: d.now() });
+    const summary: NearStakeSummary = { signerId: h('near-demo'), publicKey: `ed25519:${b58('near-demo')}`, nonce: '8', poolId: act.pool, testnet, action, gas: '125000000000000', attached: act.kind === 'stake' ? act.amount : '0', blockHash: b58(`blk:${tx}`), hash: b58(`tx:${tx}`) };
+    const account = { accountId: summary.signerId, exists: true, balance: nearSpendable.toString(), locked: '0', storageUsage: 182, storageReserve: '1820000000000000000000', spendable: nearSpendable.toString(), hasContract: false };
+    return { tx, summary, context: { account, position: pos, validating: true, epoch: nearEpoch(), unlockEpochs: 4, gasPrice: '100000000', feeEstimate: '3500000000000000000000', feeBound: '13000000000000000000000', warnings, requiresExtraConfirmation: warnings.length > 0 } };
+  };
+  const nearHandlers: Record<Extract<keyof Commands, `near_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
+    near_stake_overview: () => ({ accountId: h('near-demo'), spendable: nearSpendable.toString(), positions: [...nearPos.keys()].map(nearPosition).filter((p) => p.staked !== '0' || p.unstaked !== '0'), epoch: nearEpoch(), unlockEpochs: 4 }),
+    near_stake_validators: () => ({ validators: nearPools.map((v) => ({ ...v })), grossApy: 4.6 }),
+    near_stake_build: (a) => {
+      d.requireUnlocked();
+      return nearBuild(a.action as NearStakeRequest);
+    },
+    near_stake_sign: (a) => {
+      d.requireUnlocked();
+      const o = decode<{ near?: boolean; act?: NearStakeRequest }>(a.tx);
+      if (!o.near || !o.act) throw invalid(l10n('ce n’est pas une transaction de staking NEAR de Kyro', 'this is not a Kyro NEAR staking transaction'));
+      const built = nearBuild(o.act);
+      d.checkPassword(a.password);
+      confirmTwice(l10n(`Confirmer le staking NEAR
+pool ${o.act.pool}`, `Confirm the NEAR staking
+pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool garde plus de 20 % des récompenses', '• the pool keeps more than 20% of the rewards'));
+      return { signed: String(a.tx), hash: built.summary.hash, summary: built.summary, context: built.context };
+    },
+    near_stake_broadcast: (a) => {
+      const o = decode<{ act: NearStakeRequest }>(a.signed);
+      const act = o.act;
+      const p = nearPos.get(act.pool) ?? { staked: 0n, unstaked: 0n, unlockAt: 0 };
+      if (act.kind === 'stake') p.staked += BigInt(act.amount);
+      else if (act.kind === 'unstake' || act.kind === 'unstakeAll') {
+        const v = act.kind === 'unstake' ? BigInt(act.amount) : p.staked;
+        p.staked -= v;
+        p.unstaked += v;
+        p.unlockAt = d.now() + 30 * 3600_000;
+      } else p.unstaked = 0n;
+      nearPos.set(act.pool, p);
+      return { hash: b58(`tx:${String(a.signed)}`), status: 'success', message: '' };
+    },
+  };
+
   return {
-    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers },
+    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers },
     tronStakeBroadcast,
     advanceSolEpochs(n: number) {
       solEpochShift += n;

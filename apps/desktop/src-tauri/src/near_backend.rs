@@ -123,13 +123,13 @@ async fn post(ctx: &NearCtx<'_>, url: &str, family_what: &str, body: String) -> 
     Ok(bytes)
 }
 
-async fn rpc(ctx: &NearCtx<'_>, method: &str, params: Value) -> Result<Value, RpcError> {
+pub(crate) async fn rpc(ctx: &NearCtx<'_>, method: &str, params: Value) -> Result<Value, RpcError> {
     let body = json!({ "jsonrpc": "2.0", "id": "kyro", "method": method, "params": params });
     let bytes = post(ctx, rpc_url(ctx), method, body.to_string()).await?;
     parse_rpc(&bytes, method)
 }
 
-fn u128_at(v: &Value) -> Option<u128> {
+pub(crate) fn u128_at(v: &Value) -> Option<u128> {
     match v {
         Value::String(s) if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) => {
             s.parse().ok()

@@ -1882,6 +1882,18 @@ export interface TronStakeSummary {
   rawSize: number;
 }
 export type TronStakeWarning = { kind: 'srNotPaid'; address: string; rank: number } | { kind: 'brokerageAll'; address: string } | { kind: 'votesReduced' };
+/** NEAR staking pools (`near_stake_*`, docs/IPC.md §2.8). Amounts: yoctoNEAR, decimal strings. */
+export interface NearPoolPosition { poolId: string; staked: string; unstaked: string; canWithdraw: boolean; feePct: number | null }
+export interface NearEpoch { height: number; startHeight: number; length: number; blockSecs: number; secondsLeft: number }
+export interface NearStakeOverview { accountId: string; spendable: string; positions: NearPoolPosition[]; epoch: NearEpoch; unlockEpochs: number }
+export interface NearValidator { poolId: string; stake: string; supported: boolean }
+export interface NearValidators { validators: NearValidator[]; grossApy: number | null }
+export type NearStakeRequest = { kind: 'stake'; pool: string; amount: string } | { kind: 'unstake'; pool: string; amount: string } | { kind: 'unstakeAll'; pool: string } | { kind: 'withdrawAll'; pool: string };
+export type NearStakeAction = { type: 'stake'; amount: string } | { type: 'unstake'; amount: string } | { type: 'unstakeAll' } | { type: 'withdrawAll' };
+export interface NearStakeSummary { signerId: string; publicKey: string; nonce: string; poolId: string; testnet: boolean; action: NearStakeAction; gas: string; attached: string; blockHash: string; hash: string }
+export type NearStakeWarning = { kind: 'highFee'; pct: number } | { kind: 'notValidating' };
+export interface NearStakeContext { account: NearAccountInfo; position: NearPoolPosition; validating: boolean; epoch: NearEpoch; unlockEpochs: number; gasPrice: string; feeEstimate: string; feeBound: string; warnings: NearStakeWarning[]; requiresExtraConfirmation: boolean }
+
 export interface TronStakeContext {
   account: TronStakeAccount;
   estimate: TronEstimate;
@@ -2498,6 +2510,11 @@ export interface Commands {
   tron_stake_witnesses: { args: undefined; ret: TronWitness[] };
   tron_stake_build: { args: { action: TronStakeRequest } & WithAccount; ret: { raw: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
   tron_stake_sign: { args: { raw: string; password: string } & WithAccount; ret: { signature: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
+  near_stake_overview: { args: WithAccount | undefined; ret: NearStakeOverview };
+  near_stake_validators: { args: undefined; ret: NearValidators };
+  near_stake_build: { args: { action: NearStakeRequest } & WithAccount; ret: { tx: string; summary: NearStakeSummary; context: NearStakeContext } };
+  near_stake_sign: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearStakeSummary; context: NearStakeContext } };
+  near_stake_broadcast: { args: { signed: string } & WithAccount; ret: NearTxOutcome };
   /** Native file picker for Bitcoin Core's `.cookie` (checked: name, no symlink, <= 256 bytes,
    * `__cookie__:<64 hex>`). The only new cookie path `settings_set` / `server_test` accept.
    * `path: null` = cancelled. */

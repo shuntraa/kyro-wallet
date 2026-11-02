@@ -1,0 +1,109 @@
+{
+ "epoch_start_height": 222753137,
+ "current_validators": [
+  {
+   "account_id": "astro-stakers.poolv1.near",
+   "stake": "33273353083886651320583589091524"
+  },
+  {
+   "account_id": "figment.poolv1.near",
+   "stake": "27902219925133068668267253605526"
+  },
+  {
+   "account_id": "ledgerbyfigment.poolv1.near",
+   "stake": "22961903870800664278991886851798"
+  },
+  {
+   "account_id": "staked.poolv1.near",
+   "stake": "21241967516773972078264669310080"
+  },
+  {
+   "account_id": "binancenode1.poolv1.near",
+   "stake": "20127520057300232979539796018220"
+  },
+  {
+   "account_id": "bitwise_1.poolv1.near",
+   "stake": "19936806137298443572641809821116"
+  },
+  {
+   "account_id": "sumerian.poolv1.near",
+   "stake": "18773464476212863196982877382473"
+  },
+  {
+   "account_id": "zavodil.poolv1.near",
+   "stake": "17816010367290542933892697916275"
+  },
+  {
+   "account_id": "bitwise_2.poolv1.near",
+   "stake": "16880436802126627685989538584740"
+  },
+  {
+   "account_id": "liver.pool.near",
+   "stake": "16256764157061887834055142027653"
+  },
+  {
+   "account_id": "cnear-1.poolv1.near",
+   "stake": "15888314633606734344555108167203"
+  },
+  {
+   "account_id": "cnear-3.poolv1.near",
+   "stake": "15876661804343398470481243482234"
+  },
+  {
+   "account_id": "cnear-2.poolv1.near",
+   "stake": "15875211954620316719536848865396"
+  },
+  {
+   "account_id": "kiln-1.poolv1.near",
+   "stake": "12917895825067909418674460659913"
+  },
+  {
+   "account_id": "svrn-ai.poolv1.near",
+   "stake": "12068948182038374530699275025393"
+  },
+  {
+   "account_id": "svrn.pool.near",
+   "stake": "12036846725893010935282984573832"
+  },
+  {
+   "account_id": "epic.poolv1.near",
+   "stake": "11945261980230621087692002135362"
+  },
+  {
+   "account_id": "svrn-luganodes.pool.near",
+   "stake": "11449175038562735343407510214760"
+  },
+  {
+   "account_id": "nearvana.poolv1.near",
+   "stake": "10449047306927831628422828034391"
+  },
+  {
+   "account_id": "stake1.poolv1.near",
+   "stake": "10426646199157801053176655951269"
+  },
+  {
+   "account_id": "svrn_bitwise.poolv1.near",
+   "stake": "10407281646828544777445404373440"
+  },
+  {
+   "account_id": "metapool01.pool.near",
+   "stake": "8980392426576327193488624725223"
+  },
+  {
+   "account_id": "p2p-org.poolv1.near",
+   "stake": "8004732060809071578303938139641"
+  },
+  {
+   "account_id": "dragonfly.poolv1.near",
+   "stake": "7904508424071167421962298271276"
+  },
+  {
+   "account_id": "allnodes.poolv1.near",
+   "stake": "6839414245820350781880383635080"
+  },
+  {
+   "account_id": "lst-pool.near",
+   "stake": "5535764310930751544231184129288"
+  }
+ ]
+}

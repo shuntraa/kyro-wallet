@@ -1155,7 +1155,7 @@ Hardware wallets: Ledger ("Cardano ADA" app ≥ 7.0.0) and Trezor T / Safe, paym
 
 **Done on the UI side** (commit 45208d5): `Family` `'ada'` (today `CardanoChain` / `cardanoChain(network)` exist in the registry but outside `Family` and `allChains()`), `Commands` types of `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano`; the types are today in `packages/chains/src/cardano/adapter.ts`, to be moved to `ipc.ts`), `WalletAccounts.cardano` and `AdapterSet.cardano` (`createAdapters`), demo backend, Send screens (address, ADA amount with `adaToLovelace`, optional token with quantity, optional public message, preview of the `summary` before the password: outputs, min-ADA, fees), Receive (base address only), Asset (ADA, `spendable` = balance − `lockedWithTokens`, token list with policy id and "unverified" mention), History (`lovelaceDelta`, tokens, message), Cardano server setting (Koios), "Outgoing connections" (`preprod.koios.rest` / `api.koios.rest`), removal of Cardano from `WATCH_ONLY_CHAINS`. Adapter: `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
 
-### 2.8 Staking (Solana, Cardano, TRON)
+### 2.8 Staking (Solana, Cardano, TRON, NEAR)
 
 **Chains concerned.** Solana (native staking, Stake program), Cardano (delegation to a pool + vote delegation, Conway) and TRON (Stake 2.0 + votes for SRs). **No staking** for Bitcoin, Litecoin, Dogecoin and XRP Ledger: these protocols do not have it. **Ethereum (and EVM chains): out of scope** — native staking requires 32 ETH and a validator running permanently; "liquid staking" (Lido, Rocket Pool…) is merely a call to a third party's contract (contract and custody risk), which Kyro does not decode: it is not offered.
 
@@ -1277,6 +1277,31 @@ type TronStakeContext = { account: TronStakeAccount /*before*/; estimate: TronEs
                           warnings: TronStakeWarning[]; requiresExtraConfirmation: boolean };
 ```
 Refused by wallet-core before any signature: `DelegateResource` / `UnDelegateResource` (lending your energy or bandwidth to **another account**), the `TRON_POWER` resource, the obsolete `support` field of a vote, any other contract. There is no dedicated TRON tracking command: refresh `tron_stake_overview` after the broadcast.
+
+#### NEAR (`near_stake_*`) — staking pools, implicit account `m/44'/397'/a'`
+
+| Command | Arguments | Return | Notes |
+|---|---|---|---|
+| `near_stake_overview` | — | `NearStakeOverview` | pools of the account from FastNEAR (`api.fastnear.com/v1/account/{id}/staking`, only pools of a known factory kept, at most 20), then per pool the views `get_account` (staked, unstaked, `can_withdraw`) and `get_reward_fee_fraction`; epoch from `validators` + `block` (seconds per block measured over the current epoch) |
+| `near_stake_validators` | — | `NearValidators` | `validators` (current set, largest stake first; `supported` = pool of a known factory) and `grossApy` = `max_inflation_rate` × (1 − `protocol_reward_rate`) × `total_supply` / total stake, **an estimate before the pool fee**; the UI keeps it on disk (`persist`) |
+| `near_stake_build` | `{ action: NearStakeRequest }` | `{ tx /*Borsh hex*/, summary: NearStakeSummary, context: NearStakeContext }` | Rust builds a `TransactionV0` with **one** `FunctionCall` to the pool, 125 Tgas; refused: pool outside `*.poolv1.near`, `*.pool.near` (testnet `*.pool.f863973.m0`), pool whose live `code_hash` is not the one of its factory, amount + fee bound > spendable, unstake > staked, nothing to withdraw |
+| `near_stake_sign` | `{ tx, password }` | `{ signed, hash, summary, context }` | wallet-core decoding (`near_stake_decode`: signer and key = ours, known factory, method in the closed list, exact arguments, gas, deposit only on `deposit_and_stake`), nonce and block age checked, **re-reads live** code hash, account, position, fee and validator set; native dialog, then the reinforced one if `requiresExtraConfirmation` |
+| `near_stake_broadcast` | `{ signed }` | `NearTxOutcome` | strict decode + strict ed25519, signer = our account, then `send_tx` (§2.5) |
+
+```ts
+type NearStakeRequest = { kind: 'stake'; pool: string; amount: string /*yocto*/ } | { kind: 'unstake'; pool: string; amount: string }
+  | { kind: 'unstakeAll'; pool: string } | { kind: 'withdrawAll'; pool: string };
+type NearPoolPosition = { poolId: string; staked: string; unstaked: string; canWithdraw: boolean; feePct: number | null };
+type NearEpoch = { height: number; startHeight: number; length: number; blockSecs: number; secondsLeft: number };
+type NearStakeOverview = { accountId: string; spendable: string; positions: NearPoolPosition[]; epoch: NearEpoch; unlockEpochs: 4 };
+type NearValidators = { validators: { poolId: string; stake: string; supported: boolean }[]; grossApy: number | null };
+type NearStakeAction = { type: 'stake' | 'unstake'; amount: string } | { type: 'unstakeAll' } | { type: 'withdrawAll' };
+type NearStakeSummary = { signerId; publicKey; nonce; poolId; testnet: boolean; action: NearStakeAction; gas; attached; blockHash; hash };
+type NearStakeWarning = { kind: 'highFee'; pct: number /* > 20 */ } | { kind: 'notValidating' };
+type NearStakeContext = { account: NearAccountInfo; position: NearPoolPosition /*before*/; validating: boolean; epoch: NearEpoch; unlockEpochs: number;
+  gasPrice: string; feeEstimate: string; feeBound: string; warnings: NearStakeWarning[]; requiresExtraConfirmation: boolean };
+```
+Rewards are added to `staked` by the pool (no separate claim). Unstaked NEAR are withdrawable after 4 epochs (`withdraw_all`). Refused by wallet-core before any signature: `deposit`, `stake`, `withdraw`, `ping`, any other method, several actions, extra JSON fields, NEAR attached to anything but `deposit_and_stake`, another gas value. Hardware accounts: not offered (the Staking screen is disabled for them).
 
 #### What the UI must do (Staking screens)
 

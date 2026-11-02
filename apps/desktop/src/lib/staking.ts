@@ -2,11 +2,11 @@
 // Staking (docs/IPC.md §2.8): pure helpers for the screens — labels, warning texts that match
 // Rust's reinforced-dialog triggers, picker sorting and badges.
 
-import type { AdaPool, AdaStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
+import type { AdaPool, AdaStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
 import { fmtCrypto, fmtNumber, shortAddress } from './format';
 import { t } from '../i18n';
 
-export type StakeChain = 'sol' | 'ada' | 'tron';
+export type StakeChain = 'sol' | 'ada' | 'tron' | 'near';
 
 /** Rust thresholds (reinforced 2nd dialog). */
 export const SOL_HIGH_COMMISSION = 10;
@@ -16,7 +16,7 @@ export const TRON_PAID_RANKS = 127;
 
 export function networkLabel(chain: StakeChain, network: Network): string {
   if (network === 'mainnet') return 'mainnet';
-  return { sol: 'devnet', ada: 'preprod', tron: 'Nile' }[chain];
+  return { sol: 'devnet', ada: 'preprod', tron: 'Nile', near: 'testnet' }[chain];
 }
 
 export function solStateLabel(s: SolStakeState): string {
@@ -98,6 +98,15 @@ export function tronWarningText(w: TronStakeWarning, witnesses: TronWitness[] = 
     case 'votesReduced':
       return t('staking.warnTronVotesReduced');
   }
+}
+
+export function nearWarningText(w: NearStakeWarning): string {
+  return w.kind === 'highFee' ? t('staking.warnNearFee', { pct: fmtNumber(w.pct, 0) }) : t('staking.warnNearNotValidating');
+}
+
+/** Unlock estimate: what is left of this epoch plus the remaining full epochs. */
+export function nearUnlockSecs(e: { length: number; blockSecs: number; secondsLeft: number }, epochs: number): number {
+  return e.secondsLeft + Math.max(0, epochs - 1) * e.length * e.blockSecs;
 }
 
 export type SolSort = 'commission' | 'stake';
