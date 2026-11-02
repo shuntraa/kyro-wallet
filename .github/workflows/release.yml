@@ -151,6 +151,9 @@ jobs:
   release:
     name: Publish the draft GitHub Release
     needs: build
+    # Publish even if the macOS build failed (GitHub's macOS runners are sometimes unavailable):
+    # Windows and Linux are required, macOS files are added when present.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -162,6 +165,14 @@ jobs:
           path: dist-release
           merge-multiple: true
 
+      - name: Windows and Linux packages are required
+        working-directory: dist-release
+        run: |
+          for f in Kyro-windows-x64-setup.exe Kyro-windows-x64-setup.exe.sig Kyro-windows-x64.msi Kyro-linux-x86_64.AppImage Kyro-linux-x86_64.AppImage.sig Kyro-linux-amd64.deb; do
+            test -f "$f" || { echo "::error::missing $f"; exit 1; }
+          done
+          test -f Kyro-macos.app.tar.gz.sig || echo "::warning::no macOS build in this release"
+
       - name: Check the update signatures (key pinned in tauri.conf.json, version)
         run: |
           python3 - <<'EOF'
@@ -170,7 +181,10 @@ jobs:
           version = conf["version"]
           pub = base64.b64decode(conf["plugins"]["updater"]["pubkey"]).decode().splitlines()
           key_id = base64.b64decode(pub[1])[2:10]
+          import os
           for f in ["Kyro-windows-x64-setup.exe", "Kyro-macos.app.tar.gz", "Kyro-linux-x86_64.AppImage"]:
+              if f.startswith("Kyro-macos") and not os.path.exists(f"dist-release/{f}.sig"):
+                  continue
               sig = base64.b64decode(open(f"dist-release/{f}.sig").read().strip()).decode().splitlines()
               raw = base64.b64decode(sig[1])
               if raw[:2] != b"ED" or raw[2:10] != key_id:
@@ -199,8 +213,6 @@ jobs:
             --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg win_url "$base/Kyro-windows-x64-setup.exe" \
             --rawfile win_sig Kyro-windows-x64-setup.exe.sig \
-            --arg mac_url "$base/Kyro-macos.app.tar.gz" \
-            --rawfile mac_sig Kyro-macos.app.tar.gz.sig \
             --arg lin_url "$base/Kyro-linux-x86_64.AppImage" \
             --rawfile lin_sig Kyro-linux-x86_64.AppImage.sig \
             '{
@@ -208,22 +220,25 @@ jobs:
               platforms: {
                 "windows-x86_64-nsis":   {signature: ($win_sig | rtrimstr("\n")), url: $win_url},
                 "windows-x86_64":        {signature: ($win_sig | rtrimstr("\n")), url: $win_url},
-                "darwin-aarch64-app":    {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
-                "darwin-aarch64":        {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
-                "darwin-x86_64-app":     {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
-                "darwin-x86_64":         {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
                 "linux-x86_64-appimage": {signature: ($lin_sig | rtrimstr("\n")), url: $lin_url},
                 "linux-x86_64":          {signature: ($lin_sig | rtrimstr("\n")), url: $lin_url}
               }
             }' > latest.json
+          if [ -f Kyro-macos.app.tar.gz.sig ]; then
+            jq --arg mac_url "$base/Kyro-macos.app.tar.gz" --rawfile mac_sig Kyro-macos.app.tar.gz.sig \
+              '.platforms += {
+                "darwin-aarch64-app": {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-aarch64":     {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-x86_64-app":  {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-x86_64":      {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url}
+              }' latest.json > latest.tmp && mv latest.tmp latest.json
+          fi
           # Every URL must name a file of this release.
           for f in $(jq -r '.platforms[].url' latest.json | sort -u); do
             test -f "${f##*/}" || { echo "::error::latest.json points to a missing file: $f"; exit 1; }
           done
           cat latest.json
-          sha256sum Kyro-windows-x64-setup.exe Kyro-windows-x64.msi Kyro-macos.dmg \
-            Kyro-linux-x86_64.AppImage Kyro-linux-amd64.deb Kyro-macos.app.tar.gz Kyro-windows-x64.msix \
-            latest.json > SHA256SUMS
+          sha256sum $(ls Kyro-* | grep -v '\.sig$') latest.json > SHA256SUMS
           cat SHA256SUMS
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -232,7 +247,8 @@ jobs:
           # Draft: the maintainer checks the files, then publishes.
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          fail_on_unmatched_files: true
+          # macOS files may be missing (see the job condition); Windows and Linux were checked above.
+          fail_on_unmatched_files: false
           body: |
             Kyro ${{ github.ref_name }} installers.
 
