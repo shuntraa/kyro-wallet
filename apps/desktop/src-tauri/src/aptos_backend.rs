@@ -1,6 +1,9 @@
 //! Aptos data from the Aptos Labs fullnode REST API (`api.mainnet.aptoslabs.com/v1`,
 //! `api.testnet.aptoslabs.com/v1`, keyless public tier) and its indexer (`/v1/graphql`, same
-//! host), on the `aptos` Tor family, never with a fallback.
+//! host), on the `aptos` Tor family. Cloudflare in front of `api.*` refuses many Tor exits, so
+//! each network has an ordered list of keyless Aptos Labs fullnodes ([`default_urls`]): a host
+//! answering 403/429/5xx, a non-JSON page or a connection error is skipped for the next one, and
+//! every host is checked to be on the expected chain (`/v1` chain id) before it is used.
 //!
 //! Kyro fills the sequence number, gas price, maximum gas and expiration itself (`/accounts`,
 //! `/estimate_gas_price`, `/transactions/simulate`, ledger time) and encodes the transfer with
@@ -29,11 +32,35 @@ const APT_COIN: &str = "0x1::aptos_coin::AptosCoin";
 const APT_FA: &str = "0x000000000000000000000000000000000000000000000000000000000000000a";
 const BCS_SIGNED: &str = "application/x.aptos.signed_transaction+bcs";
 
-pub fn default_url(network: Network) -> &'static str {
+/// Keyless public fullnodes (REST `/v1` and indexer `/v1/graphql`), in order of preference.
+const MAINNET_URLS: &[&str] = &[
+    "https://api.mainnet.aptoslabs.com/v1",
+    "https://fullnode.mainnet.aptoslabs.com/v1",
+    "https://mainnet.aptoslabs.com/v1",
+];
+const TESTNET_URLS: &[&str] = &[
+    "https://api.testnet.aptoslabs.com/v1",
+    "https://fullnode.testnet.aptoslabs.com/v1",
+];
+
+pub fn default_urls(network: Network) -> &'static [&'static str] {
     match network {
-        Network::Mainnet => "https://api.mainnet.aptoslabs.com/v1",
-        Network::Testnet => "https://api.testnet.aptoslabs.com/v1",
+        Network::Mainnet => MAINNET_URLS,
+        Network::Testnet => TESTNET_URLS,
     }
+}
+
+#[cfg(test)]
+pub fn default_url(network: Network) -> &'static str {
+    default_urls(network)[0]
+}
+
+/// The ordered bases of `network`, as owned strings for [`AptosCtx::bases`].
+pub fn default_bases(network: Network) -> Vec<String> {
+    default_urls(network)
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect()
 }
 
 pub fn chain_id_of(network: Network) -> u8 {
@@ -46,8 +73,9 @@ pub fn chain_id_of(network: Network) -> u8 {
 pub struct AptosCtx<'a> {
     pub net_client: &'a NetClient,
     pub tor: bool,
-    /// REST base (`…/v1`). The app always uses [`default_url`]; the live test uses devnet.
-    pub base: String,
+    /// REST bases (`…/v1`), tried in order. The app always uses [`default_bases`]; the live test
+    /// uses devnet alone.
+    pub bases: Vec<String>,
     /// Expected chain id (1 mainnet, 2 testnet; devnet's changes at each reset).
     pub chain_id: u8,
 }
@@ -56,29 +84,129 @@ fn bad(msg: impl Into<String>) -> AppError {
     AppError::ServerUnreachable(msg.into())
 }
 
-async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(u16, Value)> {
-    let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
-    if status == 429 {
-        return Err(bad(format!(
-            "Aptos Labs rate-limits requests without a key{}: try again in a few minutes",
-            if ctx.tor {
-                " (the Tor exit relay's IP is shared with other users)"
-            } else {
-                ""
-            }
-        )));
-    }
-    let v: Value = serde_json::from_slice(&bytes).map_err(|_| {
-        bad(format!(
-            "Aptos: unreadable response on {what} (HTTP {status})"
-        ))
-    })?;
-    Ok((status, v))
+/// Last base that answered for a given list (keyed by its first base): later requests start there.
+static PREFERRED: std::sync::Mutex<std::collections::BTreeMap<String, usize>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+/// `(base, chain id)` pairs already checked on `/v1`.
+static VALIDATED: std::sync::Mutex<std::collections::BTreeSet<(String, u8)>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+fn lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-fn url(ctx: &AptosCtx<'_>, path: &str) -> AppResult<url::Url> {
-    url::Url::parse(&format!("{}{path}", ctx.base))
+/// Indices of `n` bases in trial order: `start` first, then the following ones, wrapping around.
+fn host_order(n: usize, start: usize) -> Vec<usize> {
+    let start = if start < n { start } else { 0 };
+    (0..n).map(|i| (start + i) % n).collect()
+}
+
+/// A response that says nothing about the request (blocked exit, rate limit, overloaded or
+/// unreachable node): the next base is tried.
+fn should_fall_back(status: u16) -> bool {
+    status == 403 || status == 429 || status >= 500
+}
+
+fn preferred(ctx: &AptosCtx<'_>) -> usize {
+    ctx.bases
+        .first()
+        .and_then(|k| lock(&PREFERRED).get(k).copied())
+        .unwrap_or(0)
+}
+
+/// The base requests currently start from (the last one that answered).
+pub fn current_base<'a>(ctx: &'a AptosCtx<'_>) -> &'a str {
+    ctx.bases.get(preferred(ctx)).map_or("", String::as_str)
+}
+
+/// `base` is on `ctx.chain_id` (`/v1`, cached once checked). Only checked when there is more than
+/// one base: a single base (devnet live test) is the caller's job (`checked_ledger`).
+async fn validate(ctx: &AptosCtx<'_>, base: &str) -> AppResult<()> {
+    if ctx.bases.len() < 2 || lock(&VALIDATED).contains(&(base.to_owned(), ctx.chain_id)) {
+        return Ok(());
+    }
+    let u = url_at(base, "")?;
+    let (status, bytes) = ctx
+        .net_client
+        .server_request(ServerRequest::get(u, Family::Aptos), ctx.tor)
+        .await?;
+    if status != 200 {
+        return Err(bad(format!("Aptos: HTTP {status} on /v1")));
+    }
+    let v: Value =
+        serde_json::from_slice(&bytes).map_err(|_| bad("Aptos: unreadable response on /v1"))?;
+    let chain = v["chain_id"].as_u64();
+    if chain != Some(u64::from(ctx.chain_id)) {
+        return Err(AppError::ServerWrongNetwork(format!(
+            "this Aptos server is on chain {}, not on {}",
+            chain.map_or_else(|| "?".to_owned(), |c| c.to_string()),
+            ctx.chain_id
+        )));
+    }
+    lock(&VALIDATED).insert((base.to_owned(), ctx.chain_id));
+    Ok(())
+}
+
+fn rate_limited(tor: bool) -> AppError {
+    bad(format!(
+        "Aptos Labs rate-limits requests without a key{}: try again in a few minutes",
+        if tor {
+            " (the Tor exit relay's IP is shared with other users)"
+        } else {
+            ""
+        }
+    ))
+}
+
+/// Sends `req` with its URL set to each base + `path` in turn until one gives a usable answer;
+/// that base becomes the preferred one for the next requests.
+async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, path: &str) -> AppResult<(u16, Value)> {
+    let mut last: Option<AppResult<(u16, Value)>> = None;
+    for i in host_order(ctx.bases.len(), preferred(ctx)) {
+        let base = &ctx.bases[i];
+        if let Err(e) = validate(ctx, base).await {
+            last = Some(Err(e));
+            continue;
+        }
+        let mut r = req.clone();
+        r.url = url_at(base, path)?;
+        let (status, bytes) = match ctx.net_client.server_request(r, ctx.tor).await {
+            Ok(x) => x,
+            Err(e) => {
+                last = Some(Err(e));
+                continue;
+            }
+        };
+        if status == 429 {
+            last = Some(Err(rate_limited(ctx.tor)));
+            continue;
+        }
+        match serde_json::from_slice::<Value>(&bytes) {
+            Ok(v) if !should_fall_back(status) => {
+                if let Some(k) = ctx.bases.first() {
+                    lock(&PREFERRED).insert(k.clone(), i);
+                }
+                return Ok((status, v));
+            }
+            Ok(v) => last = Some(Ok((status, v))),
+            Err(_) => {
+                last = Some(Err(bad(format!(
+                    "Aptos: unreadable response on {path} (HTTP {status})"
+                ))))
+            }
+        }
+    }
+    last.unwrap_or_else(|| Err(AppError::Internal("no Aptos server".into())))
+}
+
+fn url_at(base: &str, path: &str) -> AppResult<url::Url> {
+    url::Url::parse(&format!("{base}{path}"))
         .map_err(|_| AppError::Internal("invalid Aptos URL".into()))
+}
+
+/// URL on the first base ([`send`] rewrites it for each base it tries).
+fn url(ctx: &AptosCtx<'_>, path: &str) -> AppResult<url::Url> {
+    url_at(ctx.bases.first().map_or("", String::as_str), path)
 }
 
 async fn get(ctx: &AptosCtx<'_>, path: &str) -> AppResult<(u16, Value)> {
@@ -589,5 +717,41 @@ mod tests {
         assert!(
             matches!(check_transfer(&me(10_000_000, false), 1, 1), Err(AppError::InvalidInput(m)) if m.contains("was changed"))
         );
+    }
+
+    #[test]
+    fn aptos_fallback_order_and_selection() {
+        assert_eq!(host_order(3, 0), vec![0, 1, 2]);
+        assert_eq!(host_order(3, 1), vec![1, 2, 0]);
+        assert_eq!(host_order(3, 2), vec![2, 0, 1]);
+        assert_eq!(host_order(3, 7), vec![0, 1, 2]);
+        assert_eq!(host_order(1, 0), vec![0]);
+        assert!(host_order(0, 0).is_empty());
+        for s in [403, 429, 500, 502, 503, 504] {
+            assert!(should_fall_back(s), "{s}");
+        }
+        for s in [200, 202, 400, 404, 410] {
+            assert!(!should_fall_back(s), "{s}");
+        }
+        // api.* first (the historical default), then the other Aptos Labs fullnodes; HTTPS and
+        // `/v1` only, no duplicate.
+        for n in [Network::Mainnet, Network::Testnet] {
+            let urls = default_urls(n);
+            assert_eq!(urls[0], default_url(n));
+            assert!(urls[0].starts_with("https://api."));
+            assert!(urls.len() >= 2);
+            let set: std::collections::BTreeSet<_> = urls.iter().collect();
+            assert_eq!(set.len(), urls.len());
+            for u in urls {
+                assert!(
+                    u.starts_with("https://") && u.ends_with(".aptoslabs.com/v1"),
+                    "{u}"
+                );
+            }
+            assert_eq!(
+                default_bases(n),
+                urls.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+            );
+        }
     }
 }

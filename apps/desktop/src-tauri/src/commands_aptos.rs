@@ -21,7 +21,7 @@ pub(crate) fn ctx(state: &AppState) -> AptosCtx<'_> {
     AptosCtx {
         net_client: &state.net,
         tor: state.settings().tor.enabled,
-        base: aptos_backend::default_url(state.network).to_owned(),
+        bases: aptos_backend::default_bases(state.network),
         chain_id: aptos_backend::chain_id_of(state.network),
     }
 }
@@ -217,7 +217,7 @@ pub fn aptos_backend_info(state: State<'_, AppState>) -> AptosBackendInfo {
     let c = ctx(&state);
     AptosBackendInfo {
         network: crate::commands::network_name(state.network),
-        label: crate::servers::host_of(&c.base).unwrap_or_default(),
+        label: crate::servers::host_of(aptos_backend::current_base(&c)).unwrap_or_default(),
         tor: c.tor,
     }
 }
@@ -803,6 +803,39 @@ mod live {
         wallet_core::Mnemonic::parse(&words).unwrap().to_seed("")
     }
 
+    /// Each fallback fullnode alone over Tor (`--ignored --nocapture`): which ones answer.
+    #[test]
+    #[ignore]
+    fn aptos_hosts_over_tor() {
+        let net = NetClient::new(std::env::temp_dir().join("kyro-aptos-hosts")).unwrap();
+        tauri::async_runtime::block_on(async {
+            net.tor.restart();
+            while net.tor.status().state != TorState::Ready {
+                assert_ne!(net.tor.status().state, TorState::Error);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            for n in [Network::Mainnet, Network::Testnet] {
+                for u in aptos_backend::default_urls(n) {
+                    let c = AptosCtx {
+                        net_client: &net,
+                        tor: true,
+                        bases: vec![(*u).to_owned()],
+                        chain_id: aptos_backend::chain_id_of(n),
+                    };
+                    let t = std::time::Instant::now();
+                    let l = aptos_backend::checked_ledger(&c).await;
+                    let h = aptos_backend::txs(
+                        &c,
+                        "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    )
+                    .await
+                    .map(|_| "ok");
+                    eprintln!("{u}: ledger {l:?} indexer {h:?} in {:.1?}", t.elapsed());
+                }
+            }
+        });
+    }
+
     #[test]
     #[ignore]
     fn aptos_live_over_tor() {
@@ -819,7 +852,7 @@ mod live {
             let mk = |network: Network| AptosCtx {
                 net_client: &net,
                 tor,
-                base: aptos_backend::default_url(network).to_owned(),
+                bases: aptos_backend::default_bases(network),
                 chain_id: aptos_backend::chain_id_of(network),
             };
             let testnet = mk(Network::Testnet);
@@ -865,7 +898,7 @@ mod live {
             let mut dev = AptosCtx {
                 net_client: &net,
                 tor,
-                base: "https://api.devnet.aptoslabs.com/v1".into(),
+                bases: vec!["https://api.devnet.aptoslabs.com/v1".into()],
                 chain_id: 0,
             };
             dev.chain_id = aptos_backend::ledger(&dev).await.unwrap().chain_id;
@@ -939,7 +972,7 @@ mod live {
             let c = AptosCtx {
                 net_client: &net,
                 tor: false,
-                base: aptos_backend::default_url(Network::Mainnet).to_owned(),
+                bases: aptos_backend::default_bases(Network::Mainnet),
                 chain_id: 1,
             };
             let me = "0xbabf76f1e6ac1af9c2666c07be12f90b188ed484fcef0bf1408961b5461373e9";

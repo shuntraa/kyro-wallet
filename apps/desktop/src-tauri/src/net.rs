@@ -82,9 +82,13 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "cosmos-rest.publicnode.com",
     "rest.provider-sentry-01.hub-testnet.polypore.xyz",
     // Aptos (Aptos Labs fullnode REST + indexer `/v1/graphql`, keyless public tier): mainnet and
-    // testnet; only Rust's `aptos_*` commands.
+    // testnet, then the other Aptos Labs fullnodes tried in order when Cloudflare refuses the Tor
+    // exit (`aptos_backend::default_urls`); only Rust's `aptos_*` commands.
     "api.mainnet.aptoslabs.com",
     "api.testnet.aptoslabs.com",
+    "fullnode.mainnet.aptoslabs.com",
+    "mainnet.aptoslabs.com",
+    "fullnode.testnet.aptoslabs.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -445,6 +449,15 @@ pub enum Family {
     Other,
 }
 
+/// Aptos Labs fullnodes (`aptos_backend::default_urls`).
+const APTOS_HOSTS: &[&str] = &[
+    "api.mainnet.aptoslabs.com",
+    "api.testnet.aptoslabs.com",
+    "fullnode.mainnet.aptoslabs.com",
+    "mainnet.aptoslabs.com",
+    "fullnode.testnet.aptoslabs.com",
+];
+
 const EVM_OWN_RPC_HOSTS: &[&str] = &[
     "rpc.ankr.com",
     "kaia.api.pocket.network",
@@ -498,7 +511,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         || host == "rest.provider-sentry-01.hub-testnet.polypore.xyz"
     {
         Family::Cosmos
-    } else if host == "api.mainnet.aptoslabs.com" || host == "api.testnet.aptoslabs.com" {
+    } else if APTOS_HOSTS.contains(&host) {
         Family::Aptos
     } else if UPDATE_HOSTS.contains(&host) {
         Family::Update
@@ -1375,6 +1388,16 @@ mod tests {
         );
         assert_eq!(family_for("api.mainnet.aptoslabs.com", &c), Family::Aptos);
         assert_eq!(family_for("api.testnet.aptoslabs.com", &c), Family::Aptos);
+        for n in [wallet_core::Network::Mainnet, wallet_core::Network::Testnet] {
+            for u in crate::aptos_backend::default_urls(n) {
+                let host = url::Url::parse(u).unwrap().host_str().unwrap().to_owned();
+                assert_eq!(family_for(&host, &c), Family::Aptos, "{host}");
+                assert!(
+                    ALLOWED_HOSTS.contains(&host.as_str()),
+                    "{host} not allowlisted"
+                );
+            }
+        }
         assert_eq!(family_for("api.devnet.aptoslabs.com", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
