@@ -22,6 +22,7 @@ import type { ZcashChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, parseXpub } from '../bitcoin/xpub';
 import type { HwSigner } from '../hw';
+import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
 
 export type { ZecTxSummary } from '@kyro/shared';
 
@@ -159,20 +160,19 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     if (!force && this.scanCache && Date.now() - this.scanCache.at < SCAN_TTL_MS) return this.scanCache.addrs;
     if (this.scanning) return this.scanning;
     this.scanning = (async () => {
-      const out: DerivedZecAddress[] = [];
-      await Promise.all(
-        ([0, 1] as const).map(async (change) => {
-          let unused = 0;
-          for (let i = 0; i < MAX_SCAN && unused < (change === 0 ? this.gap : Math.max(2, this.gap - 2)); i++) {
+      const run = limiter(SCAN_CONCURRENCY);
+      const lists = await Promise.all(
+        ([0, 1] as const).map((change) =>
+          gapScanBranch(change === 0 ? this.gap : Math.max(2, this.gap - 2), MAX_SCAN, async (i) => {
             const d = this.addressAt(change, i);
             const info = await this.backend.addressInfo(d.address);
             d.used = info.chain_stats.tx_count + info.mempool_stats.tx_count > 0;
             d.balance = BigInt(info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum + info.mempool_stats.funded_txo_sum - info.mempool_stats.spent_txo_sum);
-            out.push(d);
-            unused = d.used ? 0 : unused + 1;
-          }
-        }),
+            return d;
+          }, run),
+        ),
       );
+      const out = lists.flat();
       this.scanCache = { at: Date.now(), addrs: out };
       return out;
     })();

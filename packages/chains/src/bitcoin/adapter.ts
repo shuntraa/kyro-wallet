@@ -12,6 +12,7 @@ import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selecti
 import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 import { scriptTypeOf } from '../utxo/utxo';
+import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
 
 bitcoin.initEccLib(ecc);
 
@@ -98,23 +99,22 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     if (!force && this.scanCache && Date.now() - this.scanCache.at < SCAN_TTL_MS) return this.scanCache.addrs;
     if (this.scanning) return this.scanning;
     this.scanning = (async () => {
-      const out: DerivedAddress[] = [];
       const branches: Array<[BtcKind, 0 | 1]> = [['segwit', 0], ['segwit', 1], ['taproot', 0], ['taproot', 1]];
-      await Promise.all(
-        branches.map(async ([kind, change]) => {
-          let unused = 0;
-          for (let i = 0; i < MAX_SCAN && unused < (change === 0 ? this.gap : Math.max(2, this.gap - 2)); i++) {
+      const run = limiter(SCAN_CONCURRENCY);
+      const lists = await Promise.all(
+        branches.map(([kind, change]) =>
+          gapScanBranch(change === 0 ? this.gap : Math.max(2, this.gap - 2), MAX_SCAN, async (i) => {
             const d = this.addressAt(kind, change, i);
             const info = await call('btc_address_info', { address: d.address });
             const txs = info.chain_stats.tx_count + info.mempool_stats.tx_count;
             d.used = txs > 0;
             // Esplora: funded − spent.
             d.balance = BigInt(info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum + info.mempool_stats.funded_txo_sum - info.mempool_stats.spent_txo_sum);
-            out.push(d);
-            unused = d.used ? 0 : unused + 1;
-          }
-        }),
+            return d;
+          }, run),
+        ),
       );
+      const out = lists.flat();
       this.scanCache = { at: Date.now(), addrs: out };
       return out;
     })();
