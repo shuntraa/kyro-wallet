@@ -39,7 +39,7 @@ describe('hardware-wallet error messages', () => {
     expect(v('HW_WRONG_APP', { expected: 'Ethereum', open: 'Bitcoin Test' }).detail).toContain('« Ethereum »');
     expect(v('HW_WRONG_APP', { expected: 'Ethereum', open: 'Bitcoin Test' }).detail).toContain('« Bitcoin Test »');
     expect(v('HW_REJECTED').detail).toMatch(/rien n’a été signé/);
-    expect(v('HW_DISCONNECTED').detail).toMatch(/rien n’a été signé ni envoyé/);
+    expect(v('HW_DISCONNECTED').detail).toMatch(/[Rr]ien n’a été signé ni envoyé/);
     expect(v('HW_TIMEOUT').title).toMatch(/Pas de réponse/);
     expect(v('HW_UNSUPPORTED', { min: '1.10.4' })).toMatchObject({ title: 'Firmware ou application trop ancien' });
     expect(v('HW_UNSUPPORTED', { min: '1.10.4' }).detail).toContain('1.10.4');
