@@ -6,9 +6,9 @@ Key facts:
 
 - Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Full table: https://kyrowallet.com/fees/
 - Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
-- Blockchains (37): Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. 220+ tokens.
+- Blockchains (36): Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa and Zcash. 220+ tokens.
 - Staking: SOL (Solana), ADA (Cardano), TRX (TRON).
-- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
 - Privacy: Tor built in and on by default, no telemetry, optional custom servers.
 - Security status: internal security review done; no external audit published yet.
 - Downloads: only from GitHub Releases (https://github.com/shuntraa/kyro-wallet/releases). No mobile app.
@@ -16,12 +16,12 @@ Key facts:
 
 ## Pages
 
-- [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 37 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
+- [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
 - [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
 - [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.
 - [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.0 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
 - [FAQ](https://kyrowallet.com/faq/): Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.
-- [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 37 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
+- [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 36 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
 
 ## Blockchains
 
@@ -60,7 +60,6 @@ Key facts:
 - [Aptos (APT)](https://kyrowallet.com/chains/aptos/): send and receive, swap, hardware wallet
 - [Algorand (ALGO)](https://kyrowallet.com/chains/algorand/): send and receive, hardware wallet
 - [Kaspa (KAS)](https://kyrowallet.com/chains/kaspa/): send and receive
-- [Hedera (HBAR)](https://kyrowallet.com/chains/hedera/): send and receive, hardware wallet
 - [Zcash (ZEC)](https://kyrowallet.com/chains/zcash/): send and receive, swap, hardware wallet
 
 ## Optional
