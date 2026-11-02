@@ -7,8 +7,8 @@ import { PERIODS, useCoinChart, type Period } from '../state/charts';
 import { useHistory } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
-import { fmtAgo, fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
-import { useAsync, useNow } from '../lib/useAsync';
+import { fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { useAsync } from '../lib/useAsync';
 import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
@@ -27,7 +27,6 @@ export function AssetDetail({ id }: { id: string }) {
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
   const [period, setPeriod] = useState<Period>('1J');
-  const now = useNow(5000);
   const { t } = useT();
   const cur = settings.currency;
 
@@ -88,8 +87,8 @@ export function AssetDetail({ id }: { id: string }) {
           </IconButton>
           <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={40} />
           <h1 className="screen-title truncate">{name}</h1>
-          <span className="rounded-full border border-line-3 px-2 py-0.5 font-mono text-[12px] font-medium text-text2">{symbol}</span>
-          {coin?.rank && <span className="font-mono text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
+          <span className="rounded-full bg-control px-2.5 py-0.5 text-[12px] font-medium text-text2">{symbol}</span>
+          {coin?.rank && <span className="text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
           {supported && <AccountPicker family={supported.family} />}
           <button type="button" aria-label={fav ? t('portfolio.removeFavorite') : t('portfolio.addFavorite')} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press flex size-8 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
             <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
@@ -257,7 +256,7 @@ export function AssetDetail({ id }: { id: string }) {
         </section>
         <section className="rise flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5" style={idx(2)}>
           <div className="flex items-baseline justify-between pb-3">
-            <span className="text-[15px] font-medium tracking-[-0.01em]" title={`CoinGecko${pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}`}>{t('portfolio.market')}</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.market')}</span>
           </div>
           {[
             [t('portfolio.high24h'), coin?.high24h !== null && coin?.high24h !== undefined ? fmtFiat(coin.high24h, cur) : '—', ''],

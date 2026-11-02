@@ -180,7 +180,7 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
                 className={`flex w-full items-center justify-between gap-3 rounded-[5px] px-3 py-2 text-left text-[13px] transition-colors duration-100 ${i === sel ? 'bg-control' : ''}`}
               >
                 <span className="truncate font-medium">{r.label}</span>
-                <span className="shrink-0 font-mono text-[10.5px] text-faint">{r.hint}</span>
+                <span className="shrink-0 text-[12px] text-faint">{r.hint}</span>
               </button>
             ))
           )}

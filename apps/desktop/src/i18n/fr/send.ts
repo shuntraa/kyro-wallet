@@ -322,7 +322,7 @@ export const send = {
   'send.xrpDecodedAria': 'Paiement XRP décodé',
   'send.xrpPaymentTitle': 'Paiement XRP Ledger',
   'send.xrpDecodedByVault': 'décodé par le coffre',
-  'send.xrpNoTagUpper': 'AUCUN',
+  'send.xrpNoTagUpper': 'Aucun',
   'send.xrpDestAccount': 'Compte destinataire',
   'send.xrpDestCreated': 'créé par ce paiement (réserve 1 XRP bloquée chez lui)',
   'send.xrpYourBalance': 'Ton solde',

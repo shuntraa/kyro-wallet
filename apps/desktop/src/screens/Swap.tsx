@@ -29,10 +29,10 @@ import {
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
-import { fmtAgo, fmtCrypto, fmtEta, fmtFiat, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
+import { fmtCrypto, fmtEta, fmtFiat, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
 import { buildDepositTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
-import { useAsync, useDebounced, useNow } from '../lib/useAsync';
+import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { TorWait, useTorBlocked } from '../components/Tor';
@@ -97,7 +97,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const { adapters, accounts } = useVault();
   const pf = usePortfolio();
   const cur = settings.currency;
-  const now = useNow(1000);
 
   // EVM (where 0x / LI.FI has a checked contract, or 1Click serves it) and Solana first, then the
   // chains swaps leave through NEAR Intents (mainnet).
@@ -591,7 +590,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           <section className="flex flex-col gap-2.5 rounded-panel border border-line bg-card p-[18px]">
             <div className="flex items-center justify-between px-1">
               <span className="text-[15px] font-medium tracking-[-0.01em]">{t('swap.bestPrice')}</span>
-              <span className="text-[12px] text-faint">{quotes.loading ? t('swap.refreshing') : quotes.updatedAt ? t('swap.refreshed', { ago: fmtAgo(quotes.updatedAt, now) }) : ''}</span>
+              <span className="text-[12px] text-faint">{quotes.loading ? t('swap.refreshing') : ''}</span>
             </div>
             {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">{t('swap.enterAmount')}</p>}
             {params && quotes.loading && !quotes.data && <div className="skeleton h-[62px] rounded-box" />}

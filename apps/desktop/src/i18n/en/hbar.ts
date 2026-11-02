@@ -40,7 +40,7 @@ export const hbar: Record<keyof typeof fr, string> = {
   'hbar.associateConfirm': 'Associate {symbol}',
   'hbar.associateCancelled': 'Association cancelled: nothing was signed.',
   'hbar.decodedByVault': 'decoded by the vault',
-  'hbar.memoNone': 'NONE',
+  'hbar.memoNone': 'None',
   'hbar.lFrom': 'From',
   'hbar.lTo': 'To',
   'hbar.lToEvm': '{to} (EVM address)',

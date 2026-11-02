@@ -18,7 +18,7 @@ export const ton: Record<keyof typeof fr, string> = {
   'ton.decodedLabel': 'Decoded TON transfer',
   'ton.title': 'TON transfer (v4R2 wallet)',
   'ton.decodedByVault': 'decoded by the vault',
-  'ton.commentNone': 'NONE',
+  'ton.commentNone': 'None',
   'ton.lDest': 'Recipient',
   'ton.lDestOther': 'Same account, other form',
   'ton.lJetton': 'Token (jetton)',

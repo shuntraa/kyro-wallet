@@ -6,6 +6,6 @@ export const update: Record<keyof typeof fr, string> = {
   'update.autoDesc': 'Version {version} · signed and verified',
   'update.title': 'Updates',
   'update.store': 'Version {version}. Updates are handled by the Microsoft Store.',
-  'update.updated': 'Kyro updated to {version}.',
+  'update.updated': 'Kyro has been updated.',
   'update.dismiss': 'Dismiss',
 };

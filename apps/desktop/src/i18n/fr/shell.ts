@@ -21,7 +21,7 @@ export const shell = {
   'shell.searchPlaceholder': 'Rechercher un actif, une adresse…',
   'shell.noResults': 'Aucun résultat.',
   // Status bar
-  'shell.demoMode': 'MODE DÉMO',
+  'shell.demoMode': 'Démo',
   'shell.customServerTitle': 'Serveur personnalisé (Réglages › Réseaux et serveurs)',
   'shell.customShort': 'perso',
   'shell.cbfCompact': 'filtres compacts',

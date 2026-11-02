@@ -322,7 +322,7 @@ export const send: Record<keyof typeof fr, string> = {
   'send.xrpDecodedAria': 'Decoded XRP payment',
   'send.xrpPaymentTitle': 'XRP Ledger payment',
   'send.xrpDecodedByVault': 'decoded by the vault',
-  'send.xrpNoTagUpper': 'NONE',
+  'send.xrpNoTagUpper': 'None',
   'send.xrpDestAccount': 'Recipient account',
   'send.xrpDestCreated': 'created by this payment (1 XRP reserve locked on it)',
   'send.xrpYourBalance': 'Your balance',

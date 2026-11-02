@@ -16,7 +16,7 @@ export const ton = {
   'ton.decodedLabel': 'Transfert TON décodé',
   'ton.title': 'Transfert TON (portefeuille v4R2)',
   'ton.decodedByVault': 'décodé par le coffre',
-  'ton.commentNone': 'AUCUN',
+  'ton.commentNone': 'Aucun',
   'ton.lDest': 'Destinataire',
   'ton.lDestOther': 'Même compte, autre forme',
   'ton.lJetton': 'Jeton (jetton)',

@@ -79,7 +79,7 @@ export const portfolio = {
   'portfolio.soonReadOnly': 'Bientôt · lecture seule',
   'portfolio.unsupported': 'Non pris en charge',
   'portfolio.priceOf': '{symbol} / {currency}',
-  'portfolio.highest': 'PLUS HAUT',
+  'portfolio.highest': 'Plus haut',
   'portfolio.priceChartAria': 'Cours de {name}',
   'portfolio.chartError': 'Graphique indisponible : {error}',
   'portfolio.yourBalance': 'Ton solde',

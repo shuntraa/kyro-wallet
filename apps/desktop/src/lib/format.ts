@@ -218,11 +218,13 @@ export function fmtMonth(ms: number): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Chart tooltip label: "AUJ. 14:00", "27 OCT. 09:10" — "TODAY 02:00 PM", "OCT 27 09:10 AM". */
+/** Chart tooltip label: "Aujourd’hui, 14:00", "27 oct., 09:10" — "Today, 2:00 PM", "Oct 27, 9:10 AM". */
 export function fmtChartTime(ms: number, now = Date.now()): string {
   const d = new Date(ms);
-  if (sameDay(d, new Date(now))) return `${t('time.todayShort')} ${timeFmt.format(d)}`;
-  return `${dayFmt.format(d)} ${timeFmt.format(d)}`.toUpperCase();
+  const time = df({ hour: 'numeric', minute: '2-digit' }).format(d);
+  if (sameDay(d, new Date(now))) return `${t('time.today')}, ${time}`;
+  if (sameDay(d, new Date(now - 86_400_000))) return `${t('time.yesterday')}, ${time}`;
+  return `${dayFmt.format(d)}, ${time}`;
 }
 
 /**

@@ -31,7 +31,7 @@ export function CurrencySelect({ value, onChange, label }: { value: Currency; on
       trigger={
         <button type="button" aria-label={`${label} : ${value}`} className="press flex h-9 min-w-[180px] items-center gap-2 rounded-ctl border border-line-2 bg-raised px-3 text-left text-[13px] hover:border-line-3">
           <span className="flex-1 truncate">
-            <span className="font-mono font-medium">{value}</span> <span className="text-mute">{currencyName(value)}</span>
+            <span className="font-medium">{value}</span> <span className="text-mute">{currencyName(value)}</span>
           </span>
           <IconChevronDown size={14} className="text-mute" />
         </button>

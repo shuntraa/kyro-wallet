@@ -34,7 +34,7 @@ export const stellar: Record<keyof typeof fr, string> = {
   'stellar.createTitle': 'Stellar account creation',
   'stellar.paymentTitle': 'Stellar payment',
   'stellar.decodedByVault': 'decoded by the vault',
-  'stellar.memoNone': 'NONE',
+  'stellar.memoNone': 'None',
   'stellar.lDest': 'Recipient account',
   'stellar.lDestCreated': 'created by this send (CreateAccount: 1 XLM reserve locked on it)',
   'stellar.lFee': 'Max. fee',

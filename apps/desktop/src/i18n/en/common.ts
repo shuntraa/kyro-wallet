@@ -52,7 +52,6 @@ export const common: Record<keyof typeof fr, string> = {
 
   'time.today': 'Today',
   'time.yesterday': 'Yesterday',
-  'time.todayShort': 'TODAY',
   'time.agoSeconds': '{n} s ago',
   'time.agoMinutes': '{n} min ago',
   'time.agoHours': '{n} h ago',

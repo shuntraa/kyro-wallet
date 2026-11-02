@@ -38,7 +38,7 @@ export const hbar = {
   'hbar.associateConfirm': 'Associer {symbol}',
   'hbar.associateCancelled': 'Association annulée : rien n’a été signé.',
   'hbar.decodedByVault': 'décodé par le coffre',
-  'hbar.memoNone': 'AUCUN',
+  'hbar.memoNone': 'Aucun',
   'hbar.lFrom': 'Depuis',
   'hbar.lTo': 'Vers',
   'hbar.lToEvm': '{to} (adresse EVM)',

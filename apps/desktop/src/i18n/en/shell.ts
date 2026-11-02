@@ -18,7 +18,7 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.search': 'Search',
   'shell.searchPlaceholder': 'Search for an asset, an address…',
   'shell.noResults': 'No results.',
-  'shell.demoMode': 'DEMO MODE',
+  'shell.demoMode': 'Demo',
   'shell.customServerTitle': 'Custom server (Settings › Networks and servers)',
   'shell.customShort': 'custom',
   'shell.cbfCompact': 'compact filters',

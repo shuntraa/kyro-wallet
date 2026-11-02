@@ -257,7 +257,7 @@ export function StellarSummaryView({ u, xlmPrice, currency }: { u: StellarUnsign
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', memo ? 'border-ice-line' : c.destination.memoRequired ? 'border-down/60' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('stellar.memo')}{memo ? ` (${memo.kind})` : ''}</span>
-        <span className={cn('block font-mono font-semibold break-all', memo ? 'text-text' : 'text-warn', memo && memo.value.length > 24 ? 'text-[12px]' : 'text-[18px]')}>{memo ? memo.value : t('stellar.memoNone')}</span>
+        <span className={cn('block font-semibold break-all', memo ? 'font-mono text-text' : 'text-warn', memo && memo.value.length > 24 ? 'text-[12px]' : 'text-[18px]')}>{memo ? memo.value : t('stellar.memoNone')}</span>
       </div>
       {u.createsAccount && <Line k={t('stellar.lDest')} v={t('stellar.lDestCreated')} warn />}
       {s.operation.kind === 'payment' && s.operation.asset.kind === 'credit' && <Line k={t('stellar.lVerifiedIssuer')} v={`${s.operation.asset.code} · ${shortAddress(s.operation.asset.issuer)}`} />}

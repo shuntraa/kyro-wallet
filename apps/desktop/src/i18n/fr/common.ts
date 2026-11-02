@@ -52,7 +52,6 @@ export const common = {
 
   'time.today': 'Aujourd’hui',
   'time.yesterday': 'Hier',
-  'time.todayShort': 'AUJ.',
   'time.agoSeconds': 'il y a {n} s',
   'time.agoMinutes': 'il y a {n} min',
   'time.agoHours': 'il y a {n} h',

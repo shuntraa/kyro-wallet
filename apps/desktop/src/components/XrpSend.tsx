@@ -115,7 +115,7 @@ export function XrpSummaryView({ u, xrpPrice, currency }: { u: XrpUnsigned; xrpP
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.destinationTag !== null ? 'border-ice-line' : c.destination.requireDestTag ? 'border-down/60' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('send.xrpTag')}</span>
-        <span className={cn('block font-mono text-[18px] font-semibold', s.destinationTag !== null ? 'text-text' : 'text-warn')}>{s.destinationTag !== null ? s.destinationTag : t('send.xrpNoTagUpper')}</span>
+        <span className={cn('block text-[18px] font-semibold', s.destinationTag !== null ? 'font-mono text-text' : 'text-warn')}>{s.destinationTag !== null ? s.destinationTag : t('send.xrpNoTagUpper')}</span>
       </div>
       {!c.destination.exists && <Line k={t('send.xrpDestAccount')} v={t('send.xrpDestCreated')} warn />}
       <Line k={t('common.fees')} v={`${XRP(s.fee)}${fiat(s.fee)}`} />

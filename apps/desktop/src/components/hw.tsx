@@ -260,7 +260,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
         </div>
         {demoLayout && (
           <div className="flex flex-col items-center gap-1.5" aria-label={t('hw.pin.simulatedScreen')}>
-            <span className="text-[12px] font-semibold tracking-[0.04em] text-ice uppercase">{t('hw.pin.demoMode')}</span>
+            <span className="text-[12px] font-medium text-ice">{t('hw.pin.demoMode')}</span>
             <div className="grid grid-cols-3 gap-1 rounded-ctl border border-line bg-black p-2 font-mono text-[14px] text-text">
               {demoLayout.flat().map((n, i) => (
                 <span key={i} className="flex size-7 items-center justify-center">
@@ -411,7 +411,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
           const idx = ['detect', 'device', 'reading', 'done'].indexOf(step);
           return (
             <li key={s} aria-current={idx === i ? 'step' : undefined} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1', idx === i ? 'bg-ice/12 font-semibold text-ice-text' : idx > i ? 'text-up' : 'text-faint')}>
-              {idx > i ? <IconCheck size={12} /> : <span className="font-mono">{i + 1}</span>} {s}
+              {idx > i ? <IconCheck size={12} /> : <span>{i + 1}</span>} {s}
             </li>
           );
         })}

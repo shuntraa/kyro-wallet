@@ -356,7 +356,7 @@ function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: st
       <div className="flex items-center gap-2">
         <div className="flex h-11 flex-1 items-center rounded-ctl border border-line-2 bg-bg pr-3 pl-3.5 transition-colors hover:border-line-3 focus-within:border-ice-line">
           <input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(sanitizeDecimalInput(e.target.value, unit.decimals))} placeholder="0" className="min-w-0 flex-1 bg-transparent text-[15px]" />
-          <span className="font-mono text-[12px] font-medium text-mute">{unit.symbol}</span>
+          <span className="text-[13px] font-medium text-mute">{unit.symbol}</span>
         </div>
         {onMax && (
           <Button size="md" onClick={onMax}>
@@ -378,7 +378,7 @@ function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label 
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between text-[13px]">
         <span className="font-medium">
-          {label} <span className="font-mono">{epoch}</span>
+          {label} <span>{epoch}</span>
         </span>
         <span className="text-mute">{t('staking.endsIn', { duration: fmtDuration(left) })}</span>
       </div>

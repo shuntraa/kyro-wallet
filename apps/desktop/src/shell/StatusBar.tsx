@@ -18,8 +18,8 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
       <div className="flex min-w-0 items-center gap-[18px] overflow-hidden pr-6 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)]">{left}</div>
       <div className="flex shrink-0 items-center gap-3">
         {right}
-        {demo && <span className="rounded-full border border-ice/30 px-2 py-[3px] leading-none font-medium text-ice">{t('shell.demoMode')}</span>}
-        {network === 'testnet' && <span className="rounded-full border border-warn/40 bg-warn/[.08] px-2 py-[3px] leading-none font-medium text-warn">TESTNET</span>}
+        {demo && <span className="rounded-full bg-ice/[.08] px-2 py-[3px] leading-none text-ice-text2">{t('shell.demoMode')}</span>}
+        {network === 'testnet' && <span className="rounded-full bg-warn/[.08] px-2 py-[3px] leading-none text-warn">Testnet</span>}
         <TorIndicator />
       </div>
     </footer>

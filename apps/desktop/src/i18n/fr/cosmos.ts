@@ -12,7 +12,7 @@ export const cosmos = {
   'cosmos.spendable': '<b>Disponible : {spendable}</b> (solde {balance}, le reste est encore en vesting).',
   'cosmos.decodedLabel': 'Transaction Cosmos décodée',
   'cosmos.decodedByVault': 'décodé par le coffre',
-  'cosmos.memoNone': 'AUCUN',
+  'cosmos.memoNone': 'Aucun',
   'cosmos.lFee': 'Frais',
   'cosmos.lGas': 'Gas maximum',
   'cosmos.lGasValue': '{gas} (simulé par le réseau)',

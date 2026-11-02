@@ -32,7 +32,7 @@ export const stellar = {
   'stellar.createTitle': 'Création de compte Stellar',
   'stellar.paymentTitle': 'Paiement Stellar',
   'stellar.decodedByVault': 'décodé par le coffre',
-  'stellar.memoNone': 'AUCUN',
+  'stellar.memoNone': 'Aucun',
   'stellar.lDest': 'Compte destinataire',
   'stellar.lDestCreated': 'créé par cet envoi (CreateAccount : 1 XLM de réserve bloqué chez lui)',
   'stellar.lFee': 'Frais max.',

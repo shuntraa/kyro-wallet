@@ -42,7 +42,7 @@ export function NetDiagnostics() {
       {rows.map(([label, value]) => (
         <div key={label} className="flex h-10 items-center justify-between border-t border-line text-[13.5px]">
           <span className="text-text2">{label}</span>
-          <span className="font-mono text-[13px] text-mute">{value}</span>
+          <span className="text-[13px] text-mute">{value}</span>
         </div>
       ))}
     </section>

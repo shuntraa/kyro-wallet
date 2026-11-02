@@ -6,6 +6,6 @@ export const update = {
   'update.autoDesc': 'Version {version} · signées et vérifiées',
   'update.title': 'Mises à jour',
   'update.store': 'Version {version}. Les mises à jour sont gérées par le Microsoft Store.',
-  'update.updated': 'Kyro a été mis à jour en version {version}.',
+  'update.updated': 'Kyro a été mis à jour.',
   'update.dismiss': 'Fermer',
 } as const;

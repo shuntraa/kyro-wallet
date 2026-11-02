@@ -110,7 +110,7 @@ export function HbarSummaryView({ u, hbarPrice, currency }: { u: HbarUnsigned; h
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.memo !== null ? 'border-ice-line' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('hbar.memo')}</span>
-        <span className={cn('block break-all font-mono text-[16px] font-semibold', s.memo !== null ? 'text-text' : 'text-warn')}>{s.memo !== null ? t('common.quoted', { text: s.memo }) : t('hbar.memoNone')}</span>
+        <span className={cn('block break-all text-[16px] font-semibold', s.memo !== null ? 'font-mono text-text' : 'text-warn')}>{s.memo !== null ? t('common.quoted', { text: s.memo }) : t('hbar.memoNone')}</span>
       </div>
       {s.token && <Line k={t('hbar.lToken')} v={t('hbar.lTokenValue', { symbol: s.token.symbol, id: s.token.tokenId, decimals: s.token.decimals })} />}
       {s.token?.associate && <Line k={t('hbar.lAssociate')} v={t('hbar.lAssociateValue', { symbol: s.token.symbol })} warn />}

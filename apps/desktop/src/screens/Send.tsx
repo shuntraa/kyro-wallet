@@ -714,9 +714,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   }}
                   className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-text2"
                 />
-                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgePasted')}</span>}
-                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgeTyped')}</span>}
-                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgePicked')}</span>}
+                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 text-[12px] text-text2">{t('send.badgePasted')}</span>}
+                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 text-[12px] text-text2">{t('send.badgeTyped')}</span>}
+                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 text-[12px] text-text2">{t('send.badgePicked')}</span>}
                 {!activeHw && (
                   <Menu
                     align="end"
@@ -852,7 +852,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 }}
                 className="figure w-[200px] bg-transparent text-[36px] tracking-[-0.035em]"
               />
-              <span className="font-mono text-[14px] font-medium text-mute">{fiatMode ? cur : asset.symbol}</span>
+              <span className="text-[15px] font-medium text-mute">{fiatMode ? cur : asset.symbol}</span>
               <span className="flex-1 text-[14px] text-faint">
                 {fiatMode ? (amountBase !== null ? `≈ ${fmtCrypto(amountBase, decimals, asset.symbol)}` : '') : amountFiat !== null ? `≈ ${fmtFiat(amountFiat, cur)}` : ''}
               </span>
@@ -870,8 +870,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               >
                 <IconUpDown size={16} />
               </button>
-              <button type="button" onClick={() => setMax(true)} className={cn('press h-10 rounded-ctl border px-3.5 font-mono text-[12px] font-medium tracking-[0.06em]', max ? 'border-ice/40 bg-ice/[.1] text-ice-text' : 'border-line-2 text-text hover:border-line-3 hover:bg-raised')}>
-                MAX
+              <button type="button" onClick={() => setMax(true)} className={cn('press h-10 rounded-ctl border px-3.5 text-[13px] font-medium', max ? 'border-ice/40 bg-ice/[.1] text-ice-text' : 'border-line-2 text-text hover:border-line-3 hover:bg-raised')}>
+                {t('swap.maxButton')}
               </button>
             </div>
             {overBalance && <span className="text-[12px] text-down">{isXrp || isXlm ? t('send.overSpendable') : isNear ? t('send.overSpendableNear') : isDot ? t('send.overSpendableDot') : isAlgo ? t('send.overSpendableAlgo') : t('send.overBalance')}</span>}
@@ -1112,7 +1112,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         <aside aria-label={t('send.review')} className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
-            <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[12px] font-medium tracking-[0.02em] text-ice-text2">
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-ice/[.08] px-2.5 text-[12px] font-medium text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
               {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'zec' || built?.unsigned.family === 'apt' || built?.unsigned.family === 'cosmos' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
@@ -1446,7 +1446,7 @@ function dataLabel(b: Built | null, family?: string): string {
 function Step({ n, done, current, label }: { n: number; done: boolean; current: boolean; label: string }) {
   return (
     <li aria-current={current ? 'step' : undefined} className={cn('flex h-8 items-center gap-2 transition-colors duration-200', current ? 'font-medium text-text' : done ? 'text-text2' : 'text-faint')}>
-      <span className={cn('flex size-5 items-center justify-center rounded-[4px] border font-mono text-[12px] transition-colors duration-200', done ? 'border-up/40 text-up' : current ? 'border-ice bg-ice text-on-primary' : 'border-line-3 text-faint')}>
+      <span className={cn('flex size-5 items-center justify-center rounded-full border text-[12px] transition-colors duration-200', done ? 'border-up/40 text-up' : current ? 'border-ice bg-ice text-on-primary' : 'border-line-3 text-faint')}>
         <span key={done ? 'done' : 'n'} className="pop-in">{done ? '✓' : n}</span>
       </span>
       {label}

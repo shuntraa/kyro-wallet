@@ -14,7 +14,7 @@ export const cosmos: Record<keyof typeof fr, string> = {
   'cosmos.spendable': '<b>Available: {spendable}</b> (balance {balance}, the rest is still vesting).',
   'cosmos.decodedLabel': 'Decoded Cosmos transaction',
   'cosmos.decodedByVault': 'decoded by the vault',
-  'cosmos.memoNone': 'NONE',
+  'cosmos.memoNone': 'None',
   'cosmos.lFee': 'Fee',
   'cosmos.lGas': 'Max. gas',
   'cosmos.lGasValue': '{gas} (simulated by the network)',

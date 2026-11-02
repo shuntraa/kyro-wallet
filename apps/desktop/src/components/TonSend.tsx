@@ -101,7 +101,7 @@ export function TonSummaryView({ u, tonPrice, currency }: { u: TonUnsigned; tonP
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.comment !== null ? 'border-ice-line' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('ton.comment')}</span>
-        <span className={cn('block font-mono text-[16px] font-semibold break-all', s.comment !== null ? 'text-text' : 'text-warn')}>{s.comment !== null ? s.comment : t('ton.commentNone')}</span>
+        <span className={cn('block text-[16px] font-semibold break-all', s.comment !== null ? 'font-mono text-text' : 'text-warn')}>{s.comment !== null ? s.comment : t('ton.commentNone')}</span>
       </div>
       {s.jetton ? (
         <>

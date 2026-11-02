@@ -80,14 +80,17 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
             <div
               style={{
                 position: 'absolute',
-                left: `clamp(100px, ${(p.x / VB_W) * 100}%, calc(100% - 100px))`,
-                top: Math.max(0, p.y - 64),
+                left: `clamp(110px, ${(p.x / VB_W) * 100}%, calc(100% - 110px))`,
+                top: Math.max(0, p.y - 80),
                 transform: 'translateX(-50%)',
               }}
-              className="pointer-events-none flex flex-col items-center gap-px rounded-ctl border border-line-2 bg-[#121418]/95 px-2.5 py-1.5 whitespace-nowrap"
+              className="pointer-events-none flex flex-col items-start gap-1 rounded-[12px] bg-[#1a1c21]/90 px-3.5 py-2.5 whitespace-nowrap shadow-[0_10px_30px_-10px_rgba(0,0,0,.75),inset_0_1px_0_rgba(255,255,255,.06)] ring-1 ring-white/[.05] backdrop-blur-md"
             >
-              <span className="font-mono text-[12px] tracking-[0.04em] text-faint">{hover === null && defaultLabel ? `${tip.label} · ${defaultLabel}` : tip.label}</span>
-              <span className="text-[13px] font-medium">{tip.value}</span>
+              <span className="flex items-center gap-1.5 text-[12px] leading-none text-mute">
+                {tip.label}
+                {hover === null && defaultLabel && <span className="rounded-full bg-ice/[.12] px-1.5 py-[3px] text-[11px] leading-none font-medium text-ice">{defaultLabel}</span>}
+              </span>
+              <span className="figure text-[17px] leading-tight font-semibold text-text">{tip.value}</span>
             </div>
           )}
         </>

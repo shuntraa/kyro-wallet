@@ -82,7 +82,7 @@ export function CosmosSummaryView({ u, atomPrice, currency }: { u: CosmosUnsigne
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.memo !== null ? 'border-ice-line' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('cosmos.memo')}</span>
-        <span className={cn('block font-mono text-[16px] font-semibold break-all', s.memo !== null ? 'text-text' : 'text-warn')}>{s.memo ?? t('cosmos.memoNone')}</span>
+        <span className={cn('block text-[16px] font-semibold break-all', s.memo !== null ? 'font-mono text-text' : 'text-warn')}>{s.memo ?? t('cosmos.memoNone')}</span>
       </div>
       <Line k={t('cosmos.lFee')} v={`${ATOM(s.fee)}${fiat(s.fee)}`} />
       <Line k={t('cosmos.lGas')} v={t('cosmos.lGasValue', { gas: s.gasLimit.toLocaleString(locale()) })} />

@@ -138,7 +138,7 @@ export function TorDialogs() {
         <Notice icon={<IconShield size={16} className="mt-0.5 shrink-0 text-ice" />}>
           {rt('shell.torRefusesClear', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
         </Notice>
-        {detail && <p className="m-0 font-mono text-[12px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
+        {detail && <p className="m-0 text-[12px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
         {tor.actionError && <Notice tone="error">{tor.actionError}</Notice>}
         <div className="flex items-center justify-between gap-2 pt-1">
           <Button variant="ghost" onClick={() => torStore.requestDisable('failure')} disabled={tor.busy}>

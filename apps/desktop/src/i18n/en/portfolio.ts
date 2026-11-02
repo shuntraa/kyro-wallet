@@ -75,7 +75,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.soonReadOnly': 'Coming soon · read-only',
   'portfolio.unsupported': 'Not supported',
   'portfolio.priceOf': '{symbol} / {currency}',
-  'portfolio.highest': 'HIGH',
+  'portfolio.highest': 'High',
   'portfolio.priceChartAria': '{name} price',
   'portfolio.chartError': 'Chart unavailable: {error}',
   'portfolio.yourBalance': 'Your balance',
