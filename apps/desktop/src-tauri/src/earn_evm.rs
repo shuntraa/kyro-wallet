@@ -17,6 +17,13 @@ use crate::state::AppState;
 pub const EARN_CHAIN_ID: u64 = 1;
 /// Lido stETH (ERC-20 + `submit(address)` entry point).
 pub const LIDO_STETH: &str = "0xae7ab96520de3a18e5e111b5eaab095312d7fe84";
+/// Lido WithdrawalQueueERC721 ("Lido: stETH Withdrawal NFT", `STETH()` = [`LIDO_STETH`], checked on-chain).
+pub const LIDO_WITHDRAWAL_QUEUE: &str = "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1";
+/// Lido withdrawal request bounds (per request): 100 wei .. 1000 stETH.
+pub const LIDO_MIN_REQUEST: u128 = 100;
+pub const LIDO_MAX_REQUEST: u128 = 1_000 * 10u128.pow(18);
+/// At most this many requests in one transaction.
+const LIDO_MAX_REQUESTS: usize = 20;
 /// Aave v3 Pool, Ethereum core market.
 pub const AAVE_V3_POOL: &str = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2";
 /// Aave v3 Pool on Arbitrum One and Polygon PoS (same deployment address on both).
@@ -112,6 +119,12 @@ pub const AAVE_V3_RESERVES: &[AaveReserve] = &[
 
 /// `submit(address _referral)`.
 pub const SEL_LIDO_SUBMIT: [u8; 4] = [0xa1, 0x90, 0x3e, 0xab];
+/// `requestWithdrawals(uint256[] _amounts, address _owner)`.
+pub const SEL_LIDO_REQUEST_WITHDRAWALS: [u8; 4] = [0xd6, 0x68, 0x10, 0x42];
+/// `claimWithdrawal(uint256 _requestId)` (ETH goes to the caller).
+pub const SEL_LIDO_CLAIM: [u8; 4] = [0xf8, 0x44, 0x44, 0x36];
+/// ERC-20 `approve(address,uint256)`.
+const SEL_APPROVE: [u8; 4] = [0x09, 0x5e, 0xa7, 0xb3];
 /// `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`.
 pub const SEL_AAVE_SUPPLY: [u8; 4] = [0x61, 0x7b, 0xa0, 0x37];
 /// `withdraw(address asset, uint256 amount, address to)`.
@@ -124,6 +137,8 @@ pub fn contract_name(chain_id: u64, address: &str) -> Option<&'static str> {
         Some("Aave v3 Pool")
     } else if chain_id == EARN_CHAIN_ID && a == LIDO_STETH {
         Some("Lido stETH")
+    } else if chain_id == EARN_CHAIN_ID && a == LIDO_WITHDRAWAL_QUEUE {
+        Some("Lido Withdrawal Queue")
     } else {
         None
     }
@@ -156,6 +171,10 @@ fn default_chain() -> u64 {
 pub enum EarnAction {
     /// Stake `amount` wei of ETH with Lido (receives stETH).
     LidoStake { amount: String },
+    /// Ask Lido's withdrawal queue for `amount` stETH back in ETH (split into ≤ 1000 stETH requests).
+    LidoRequestWithdrawal { amount: String },
+    /// Claim the finalized request `request_id` (decimal).
+    LidoClaim { request_id: String },
     /// Supply `amount` raw units of `asset` (symbol) to Aave v3.
     AaveSupply {
         asset: String,
@@ -178,6 +197,17 @@ pub enum EarnCall {
     LidoSubmit {
         amount_wei: u128,
     },
+    /// `approve(queue, amount)` on stETH: the step before a withdrawal request.
+    LidoApproveQueue {
+        amount: u128,
+    },
+    LidoRequestWithdrawals {
+        amounts: Vec<u128>,
+        owner: String,
+    },
+    LidoClaim {
+        request_id: u128,
+    },
     AaveSupply {
         reserve: &'static AaveReserve,
         amount: u128,
@@ -195,7 +225,10 @@ impl EarnCall {
     /// The account that receives the position or the funds (must be the signer).
     pub fn beneficiary(&self) -> Option<&str> {
         match self {
-            EarnCall::LidoSubmit { .. } => None,
+            EarnCall::LidoSubmit { .. }
+            | EarnCall::LidoApproveQueue { .. }
+            | EarnCall::LidoClaim { .. } => None,
+            EarnCall::LidoRequestWithdrawals { owner, .. } => Some(owner),
             EarnCall::AaveSupply { on_behalf_of, .. } => Some(on_behalf_of),
             EarnCall::AaveWithdraw { to, .. } => Some(to),
         }
@@ -249,6 +282,41 @@ pub fn build(action: &EarnAction, owner: &str) -> AppResult<EarnBuilt> {
             data.extend_from_slice(&SEL_LIDO_SUBMIT);
             data.extend_from_slice(&[0u8; 32]); // no referral
             (LIDO_STETH, v)
+        }
+        EarnAction::LidoRequestWithdrawal { amount } => {
+            let total = parse_amount(amount)?;
+            if total < LIDO_MIN_REQUEST {
+                return Err(AppError::InvalidInput("Lido: at least 100 wei".into()));
+            }
+            let mut amounts = Vec::new();
+            let mut left = total;
+            while left > 0 {
+                let mut chunk = left.min(LIDO_MAX_REQUEST);
+                // Keep the last request above the minimum.
+                if left - chunk > 0 && left - chunk < LIDO_MIN_REQUEST {
+                    chunk -= LIDO_MIN_REQUEST;
+                }
+                amounts.push(chunk);
+                left -= chunk;
+            }
+            if amounts.len() > LIDO_MAX_REQUESTS {
+                return Err(AppError::InvalidInput(
+                    "Lido: amount too large for one transaction".into(),
+                ));
+            }
+            data.extend_from_slice(&SEL_LIDO_REQUEST_WITHDRAWALS);
+            data.extend_from_slice(&u128_word(0x40));
+            data.extend_from_slice(&addr_word(&owner)?);
+            data.extend_from_slice(&u128_word(amounts.len() as u128));
+            for a in &amounts {
+                data.extend_from_slice(&u128_word(*a));
+            }
+            (LIDO_WITHDRAWAL_QUEUE, 0)
+        }
+        EarnAction::LidoClaim { request_id } => {
+            data.extend_from_slice(&SEL_LIDO_CLAIM);
+            data.extend_from_slice(&u128_word(parse_amount(request_id)?));
+            (LIDO_WITHDRAWAL_QUEUE, 0)
         }
         EarnAction::AaveSupply {
             asset,
@@ -319,6 +387,11 @@ pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Optio
         let v = value_wei.parse::<u128>().ok().filter(|v| *v > 0)?;
         return Some(EarnCall::LidoSubmit { amount_wei: v });
     }
+    if chain_id == EARN_CHAIN_ID && value_wei == "0" {
+        if let Some(c) = decode_lido_queue(&to, sel, &words) {
+            return Some(c);
+        }
+    }
     if aave_pool(chain_id) != Some(to.as_str()) || value_wei != "0" {
         return None;
     }
@@ -352,6 +425,39 @@ pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Optio
     None
 }
 
+fn decode_lido_queue(to: &str, sel: &[u8], words: &[&[u8]]) -> Option<EarnCall> {
+    if to == LIDO_STETH && sel == SEL_APPROVE && words.len() == 2 {
+        if word_addr(words[0])? != LIDO_WITHDRAWAL_QUEUE {
+            return None;
+        }
+        let amount = word_u128(words[1]).filter(|v| *v > 0)?;
+        return Some(EarnCall::LidoApproveQueue { amount });
+    }
+    if to != LIDO_WITHDRAWAL_QUEUE {
+        return None;
+    }
+    if sel == SEL_LIDO_CLAIM && words.len() == 1 {
+        let request_id = word_u128(words[0]).filter(|v| *v > 0)?;
+        return Some(EarnCall::LidoClaim { request_id });
+    }
+    if sel == SEL_LIDO_REQUEST_WITHDRAWALS && words.len() >= 4 {
+        if word_u128(words[0])? != 0x40 {
+            return None;
+        }
+        let owner = word_addr(words[1])?;
+        let n = usize::try_from(word_u128(words[2])?).ok()?;
+        if n == 0 || n > LIDO_MAX_REQUESTS || words.len() != 3 + n {
+            return None;
+        }
+        let amounts = words[3..]
+            .iter()
+            .map(|w| word_u128(w).filter(|v| (LIDO_MIN_REQUEST..=LIDO_MAX_REQUEST).contains(v)))
+            .collect::<Option<Vec<_>>>()?;
+        return Some(EarnCall::LidoRequestWithdrawals { amounts, owner });
+    }
+    None
+}
+
 fn checksum(a: &str) -> String {
     wallet_core::evm_checksum_address(a).unwrap_or_else(|_| a.to_owned())
 }
@@ -371,6 +477,40 @@ pub fn describe(lang: Lang, c: &EarnCall) -> String {
                 "Tu reçois du stETH (≈ 1 stETH par ETH), dont le solde augmente avec les récompenses.\n",
                 "You receive stETH (≈ 1 stETH per ETH), whose balance grows with the rewards.\n"
             ),
+        ),
+        EarnCall::LidoApproveQueue { amount } => format!(
+            "{}Lido stETH ({})\n{}approve\n{}Lido Withdrawal Queue ({})\n{}{} stETH\n",
+            lang.pick("Contrat : ", "Contract: "),
+            checksum(LIDO_STETH),
+            lang.pick("Fonction : ", "Function: "),
+            lang.pick("Bénéficiaire : ", "Spender: "),
+            checksum(LIDO_WITHDRAWAL_QUEUE),
+            lang.pick("Montant exact : ", "Exact amount: "),
+            units(*amount, 18),
+        ),
+        EarnCall::LidoRequestWithdrawals { amounts, owner } => format!(
+            "{}Lido Withdrawal Queue ({})\n{}requestWithdrawals\n{}{} stETH ({} {})\n{}{}\n{}",
+            lang.pick("Contrat : ", "Contract: "),
+            checksum(LIDO_WITHDRAWAL_QUEUE),
+            lang.pick("Fonction : ", "Function: "),
+            lang.pick("Retrait demandé : ", "Withdrawal requested: "),
+            units(amounts.iter().sum(), 18),
+            amounts.len(),
+            lang.pick("demande(s)", "request(s)"),
+            lang.pick("Propriétaire : ", "Owner: "),
+            checksum(owner),
+            lang.pick(
+                "L'ETH se réclame quand Lido a finalisé la demande (souvent 1 à 5 jours).\n",
+                "The ETH can be claimed once Lido has finalized the request (often 1 to 5 days).\n"
+            ),
+        ),
+        EarnCall::LidoClaim { request_id } => format!(
+            "{}Lido Withdrawal Queue ({})\n{}claimWithdrawal\n{}#{request_id}\n{}",
+            lang.pick("Contrat : ", "Contract: "),
+            checksum(LIDO_WITHDRAWAL_QUEUE),
+            lang.pick("Fonction : ", "Function: "),
+            lang.pick("Demande : ", "Request: "),
+            lang.pick("L'ETH est envoyé à ce compte.\n", "The ETH is sent to this account.\n"),
         ),
         EarnCall::AaveSupply { reserve, amount, on_behalf_of } => format!(
             "{}Aave v3 Pool ({})\n{}supply\n{}{} {} ({})\n{}{}\n",
@@ -700,6 +840,109 @@ mod tests {
         assert_eq!(
             contract_name(42_161, AAVE_V3_POOL_ARB_POLYGON),
             Some("Aave v3 Pool")
+        );
+    }
+
+    #[test]
+    fn lido_queue_fixtures() {
+        assert_eq!(
+            SEL_LIDO_REQUEST_WITHDRAWALS,
+            sel("requestWithdrawals(uint256[],address)")
+        );
+        assert_eq!(SEL_LIDO_CLAIM, sel("claimWithdrawal(uint256)"));
+        assert_eq!(SEL_APPROVE, sel("approve(address,uint256)"));
+        assert_eq!(
+            LIDO_WITHDRAWAL_QUEUE,
+            "0x889edc2edab5f40e902b864ad4d7ade8e412f9b1"
+        );
+        let one = 10u128.pow(18);
+        let b = build(
+            &EarnAction::LidoRequestWithdrawal {
+                amount: one.to_string(),
+            },
+            ME,
+        )
+        .unwrap();
+        assert_eq!(b.to, LIDO_WITHDRAWAL_QUEUE);
+        assert_eq!(
+            b.data,
+            concat!(
+                "0xd6681042",
+                "0000000000000000000000000000000000000000000000000000000000000040",
+                "0000000000000000000000001111111111111111111111111111111111111111",
+                "0000000000000000000000000000000000000000000000000000000000000001",
+                "0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+            )
+        );
+        let c = decode(1, &b.to, "0", &b.data).unwrap();
+        assert_eq!(c.beneficiary(), Some(ME));
+        assert!(describe(Lang::En, &c).contains("requestWithdrawals"));
+        // 2500 stETH: three requests (1000, 1000, 500), sum preserved.
+        let big = build(
+            &EarnAction::LidoRequestWithdrawal {
+                amount: (2_500 * one).to_string(),
+            },
+            ME,
+        )
+        .unwrap();
+        let Some(EarnCall::LidoRequestWithdrawals { amounts, .. }) =
+            decode(1, &big.to, "0", &big.data)
+        else {
+            panic!("not decoded")
+        };
+        assert_eq!(amounts, vec![1_000 * one, 1_000 * one, 500 * one]);
+        // Remainder below the minimum is avoided.
+        let edge = build(
+            &EarnAction::LidoRequestWithdrawal {
+                amount: (1_000 * one + 50).to_string(),
+            },
+            ME,
+        )
+        .unwrap();
+        let Some(EarnCall::LidoRequestWithdrawals { amounts, .. }) =
+            decode(1, &edge.to, "0", &edge.data)
+        else {
+            panic!("not decoded")
+        };
+        assert_eq!(amounts.iter().sum::<u128>(), 1_000 * one + 50);
+        assert!(amounts
+            .iter()
+            .all(|a| (LIDO_MIN_REQUEST..=LIDO_MAX_REQUEST).contains(a)));
+        assert!(build(
+            &EarnAction::LidoRequestWithdrawal {
+                amount: "99".into()
+            },
+            ME
+        )
+        .is_err());
+        // Claim.
+        let cl = build(
+            &EarnAction::LidoClaim {
+                request_id: "12345".into(),
+            },
+            ME,
+        )
+        .unwrap();
+        assert_eq!(
+            decode(1, &cl.to, "0", &cl.data),
+            Some(EarnCall::LidoClaim { request_id: 12_345 })
+        );
+        assert_eq!(decode(1, &cl.to, "1", &cl.data), None);
+        // stETH approval to the queue is recognised; to anyone else it is not.
+        let ap = format!(
+            "0x095ea7b3{}{}",
+            "0".repeat(24) + &LIDO_WITHDRAWAL_QUEUE[2..],
+            "0".repeat(48) + "0de0b6b3a7640000"
+        );
+        assert_eq!(
+            decode(1, LIDO_STETH, "0", &ap),
+            Some(EarnCall::LidoApproveQueue { amount: one })
+        );
+        let other = ap.replace(&LIDO_WITHDRAWAL_QUEUE[2..], &"22".repeat(20));
+        assert_eq!(decode(1, LIDO_STETH, "0", &other), None);
+        assert_eq!(
+            contract_name(1, LIDO_WITHDRAWAL_QUEUE),
+            Some("Lido Withdrawal Queue")
         );
     }
 

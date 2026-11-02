@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, filterOptions, parseReserveData } from './earn';
+import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, filterOptions, parseReserveData } from './earn';
 
 describe('earn', () => {
   it('Aave APY from the ray liquidity rate (compounded per second)', () => {
@@ -28,6 +28,21 @@ describe('earn', () => {
     expect(AAVE_MARKETS['usdt-aave']!.aToken).toBe('0x23878914efe38d27c4d67ab83ed1b93a74d4086a');
     expect(AAVE_MARKETS['usdc-aave-pol']!.aToken).toBe('0xa4d94019934d8333ef880abffbf2fdd611c762bd');
     expect(AAVE_MARKETS['usdc-aave-base']!.pool).toBe('0xa238dd80c259a72e81d7e4664a9801593f98d1c5');
+  });
+
+  it('Lido withdrawal queue reads', () => {
+    expect(LIDO_QUEUE).toBe('0x889edc2edab5f40e902b864ad4d7ade8e412f9b1');
+    const word = (v: bigint) => v.toString(16).padStart(64, '0');
+    expect(parseUintArray(`0x${word(32n)}${word(2n)}${word(7n)}${word(9n)}`)).toEqual([7n, 9n]);
+    expect(parseUintArray('0x')).toEqual([]);
+    expect(withdrawalStatusCall([7n])).toBe(`0xb8c4b85a${word(32n)}${word(1n)}${word(7n)}`);
+    const one = 10n ** 18n;
+    const st = `0x${word(32n)}${word(2n)}${word(one)}${word(1n)}${word(1n)}${word(5n)}${word(1n)}${word(0n)}${word(2n * one)}${word(2n)}${word(1n)}${word(6n)}${word(0n)}${word(0n)}`;
+    expect(parseWithdrawalStatus(st, [7n, 9n])).toEqual([
+      { id: 7n, amountOfStETH: one, isFinalized: true, isClaimed: false },
+      { id: 9n, amountOfStETH: 2n * one, isFinalized: false, isClaimed: false },
+    ]);
+    expect(() => parseWithdrawalStatus(st, [7n])).toThrow();
   });
 
   it('filters', () => {

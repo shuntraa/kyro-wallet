@@ -92,6 +92,46 @@ export function parseReserveData(hex: string): { liquidityRate: bigint; aToken: 
 }
 
 export const SEL_GET_RESERVE_DATA = '0x35ea6a75';
+/** Lido WithdrawalQueueERC721 (pinned in Rust too; checked on-chain). */
+export const LIDO_QUEUE = '0x889edc2edab5f40e902b864ad4d7ade8e412f9b1';
+export const SEL_GET_WITHDRAWAL_REQUESTS = '0x7d031b65';
+export const SEL_GET_WITHDRAWAL_STATUS = '0xb8c4b85a';
+
+/** ABI `uint256[]` return value (offset, length, items). */
+export function parseUintArray(hex: string): bigint[] {
+  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const w = (i: number) => BigInt(`0x${h.slice(64 * i, 64 * (i + 1)) || '0'}`);
+  if (h.length < 128) return [];
+  const start = Number(w(0) / 32n);
+  const n = Number(w(start));
+  if (n > 1000 || h.length < 64 * (start + 1 + n)) throw new Error('uint256[]: short answer');
+  return Array.from({ length: n }, (_, i) => w(start + 1 + i));
+}
+
+/** `getWithdrawalStatus(uint256[])` call data. */
+export function withdrawalStatusCall(ids: bigint[]): string {
+  return `${SEL_GET_WITHDRAWAL_STATUS}${(32n).toString(16).padStart(64, '0')}${BigInt(ids.length).toString(16).padStart(64, '0')}${ids.map((i) => i.toString(16).padStart(64, '0')).join('')}`;
+}
+
+export interface WithdrawalStatus {
+  id: bigint;
+  amountOfStETH: bigint;
+  isFinalized: boolean;
+  isClaimed: boolean;
+}
+
+/** `getWithdrawalStatus` answer: array of (amountOfStETH, amountOfShares, owner, timestamp, isFinalized, isClaimed). */
+export function parseWithdrawalStatus(hex: string, ids: bigint[]): WithdrawalStatus[] {
+  const h = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const w = (i: number) => BigInt(`0x${h.slice(64 * i, 64 * (i + 1)) || '0'}`);
+  const start = Number(w(0) / 32n);
+  const n = Number(w(start));
+  if (n !== ids.length || h.length < 64 * (start + 1 + 6 * n)) throw new Error('getWithdrawalStatus: bad answer');
+  return ids.map((id, i) => {
+    const b = start + 1 + 6 * i;
+    return { id, amountOfStETH: w(b), isFinalized: w(b + 4) === 1n, isClaimed: w(b + 5) === 1n };
+  });
+}
 export const SEL_BALANCE_OF = '0x70a08231';
 
 /** `balanceOf(owner)` answer → amount. */

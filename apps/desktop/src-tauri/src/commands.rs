@@ -911,6 +911,17 @@ pub async fn evm_sign_tx(
             ));
         }
     }
+    // stETH is not in the token table: its approval to the pinned Lido queue is named here.
+    let token = token.or_else(|| {
+        matches!(
+            earn,
+            Some(crate::earn_evm::EarnCall::LidoApproveQueue { .. })
+        )
+        .then(|| TokenLabel {
+            symbol: "stETH".into(),
+            decimals: 18,
+        })
+    });
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
     let body = match &earn {
