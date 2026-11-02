@@ -13,7 +13,7 @@ import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
-import { HistoryRow } from '../components/HistoryRow';
+import { HistoryRow, LoadingLine } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
 import { Badge, Button, IconButton, Segmented, Skeleton } from '../components/ui/primitives';
@@ -243,8 +243,8 @@ export function AssetDetail({ id }: { id: string }) {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-            {history.loading && !history.data ? (
-              <div className="flex flex-col gap-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
+            {history.loading && activity.length === 0 ? (
+              <LoadingLine />
             ) : activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
               <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
             ) : activity.length === 0 ? (

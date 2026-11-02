@@ -3,6 +3,7 @@
 // on the next launch while the network (Tor) is still loading. Amounts and prices only: no keys,
 // no addresses (the wallet is identified by a hash of its account list).
 
+import type { HistoryItem } from '@kyro/chains';
 import type { SimplePrice } from '@kyro/market';
 import { readJson, writeJson } from './storage';
 
@@ -95,4 +96,123 @@ export function settleErrors(errors: Record<string, string>, since: Record<strin
     if (now - t >= grace) visible[k] = msg;
   }
   return { visible, since: nextSince };
+}
+
+// --- History -------------------------------------------------------------------------------------
+// Last known activity per account and chain, so the History screen and the asset activity cards
+// render at once; the network refresh then merges in what changed. Transaction metadata only
+// (ids, amounts, counterparties, times): never a key or a seed.
+
+/** One account's history on one chain: `<family>:<account index>:<chain key>`. */
+export type HistoryCache = Map<string, HistoryItem[]>;
+
+/** Items kept per account and chain. */
+export const HISTORY_CACHE_MAX = 200;
+const HKEY_RE = /^[a-z0-9]{1,16}:\d{1,4}:[\w.-]{1,64}$/;
+const DIRS = new Set(['in', 'out', 'self']);
+const STATUSES = new Set(['pending', 'confirmed', 'failed']);
+const KINDS = new Set(['transfer', 'swap', 'approval', 'contract']);
+
+export function historyKey(family: string, index: number, chainKey: string): string {
+  return `${family}:${index}:${chainKey}`;
+}
+
+/** Newest first; pending items without a time first of all. */
+function byTime(a: HistoryItem, b: HistoryItem): number {
+  return (b.time ?? Number.MAX_SAFE_INTEGER) - (a.time ?? Number.MAX_SAFE_INTEGER);
+}
+
+/**
+ * Merges a fresh fetch into the cached list. The fetch is authoritative for the period it covers
+ * (from its oldest dated item to now: a cached pending item it no longer lists is dropped, a
+ * confirmed one replaces it); cached items older than that period are kept. Deduplicated by id,
+ * newest first, capped at `max`.
+ */
+export function mergeHistory(cached: readonly HistoryItem[] | undefined, fresh: readonly HistoryItem[], max = HISTORY_CACHE_MAX): HistoryItem[] {
+  const out = new Map<string, HistoryItem>();
+  for (const x of fresh) if (!out.has(x.id)) out.set(x.id, x);
+  const times = fresh.map((x) => x.time).filter((t): t is number => typeof t === 'number');
+  if (cached && times.length > 0) {
+    const oldest = Math.min(...times);
+    for (const x of cached) if (!out.has(x.id) && typeof x.time === 'number' && x.time < oldest) out.set(x.id, x);
+  }
+  return [...out.values()].sort(byTime).slice(0, max);
+}
+
+/** Newest dated item of a list (what a refresh needs to be "new"). */
+export function newestTime(items: readonly HistoryItem[] | undefined): number | null {
+  let best: number | null = null;
+  for (const x of items ?? []) if (typeof x.time === 'number' && (best === null || x.time > best)) best = x.time;
+  return best;
+}
+
+interface StoredItem {
+  i: string;
+  c: string;
+  a: string;
+  d: string;
+  m: string;
+  f?: string;
+  p?: string;
+  t?: number;
+  s: string;
+  k: string;
+  n?: string;
+  x?: string;
+}
+interface StoredHistory {
+  fp: string;
+  h: Record<string, StoredItem[]>;
+}
+
+export function encodeHistory(fp: string, m: HistoryCache): StoredHistory {
+  const h: StoredHistory['h'] = {};
+  m.forEach((items, key) => {
+    h[key] = items.slice(0, HISTORY_CACHE_MAX).map((x) => {
+      const o: StoredItem = { i: x.id, c: x.chainKey, a: x.assetId, d: x.direction, m: x.amount.toString(), s: x.status, k: x.kind };
+      if (x.fee !== undefined) o.f = x.fee.toString();
+      if (x.counterparty !== undefined) o.p = x.counterparty;
+      if (x.time !== undefined) o.t = x.time;
+      if (x.note !== undefined) o.n = x.note;
+      if (x.suspect !== undefined) o.x = x.suspect;
+      return o;
+    });
+  });
+  return { fp, h };
+}
+
+const str = (v: unknown, max: number): v is string => typeof v === 'string' && v.length > 0 && v.length <= max;
+
+function decodeItem(raw: unknown): HistoryItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<Record<keyof StoredItem, unknown>>;
+  if (!str(r.i, 300) || !str(r.c, 64) || !ID_RE.test(String(r.a)) || !DIRS.has(String(r.d)) || !str(r.m, 78) || !AMOUNT_RE.test(r.m) || !STATUSES.has(String(r.s)) || !KINDS.has(String(r.k))) return null;
+  const x: HistoryItem = { id: r.i, chainKey: r.c, assetId: String(r.a), direction: r.d as HistoryItem['direction'], amount: BigInt(r.m), status: r.s as HistoryItem['status'], kind: r.k as HistoryItem['kind'] };
+  if (str(r.f, 78) && AMOUNT_RE.test(r.f)) x.fee = BigInt(r.f);
+  if (str(r.p, 300)) x.counterparty = r.p;
+  if (typeof r.t === 'number' && Number.isFinite(r.t) && r.t > 0) x.time = r.t;
+  if (str(r.n, 500)) x.note = r.n;
+  if (r.x === 'zero' || r.x === 'notSigned') x.suspect = r.x;
+  return x;
+}
+
+/** Shape-checked read back; null when absent, malformed or for another wallet. */
+export function decodeHistory(raw: unknown, fp: string): HistoryCache | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<StoredHistory>;
+  if (r.fp !== fp || !r.h || typeof r.h !== 'object') return null;
+  const out: HistoryCache = new Map();
+  for (const [k, items] of Object.entries(r.h)) {
+    if (!HKEY_RE.test(k) || !Array.isArray(items)) continue;
+    const list = items.map(decodeItem).filter((x): x is HistoryItem => x !== null);
+    out.set(k, list.sort(byTime).slice(0, HISTORY_CACHE_MAX));
+  }
+  return out;
+}
+
+export function loadHistory(network: string, fp: string): HistoryCache | null {
+  return decodeHistory(readJson<unknown>(`cache.history.${network}`, null), fp);
+}
+export function saveHistory(network: string, fp: string, m: HistoryCache): void {
+  if (m.size > 0) writeJson(`cache.history.${network}`, encodeHistory(fp, m));
 }

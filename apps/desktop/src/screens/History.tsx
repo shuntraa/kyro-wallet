@@ -15,7 +15,7 @@ import { downloadText, toCsv } from '../lib/csv';
 import { useAsync } from '../lib/useAsync';
 import { EmptyState, ErrorLine, PasswordField } from '../components/kit';
 import { TronNoHistoryLine, tronNoHistory } from '../components/ServerDown';
-import { HistoryRow, entryTitle } from '../components/HistoryRow';
+import { HistoryRow, LoadingLine, entryTitle } from '../components/HistoryRow';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconImport } from '../components/icons';
@@ -125,8 +125,8 @@ export function History() {
       <div className="flex min-h-0 flex-1 gap-5">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
           <div key={`${filter}:${history.data ? 'data' : 'loading'}`} className="min-h-0 flex-1 overflow-y-auto pb-2 scroll-thin">
-            {history.loading && !history.data ? (
-              <div className="flex flex-col gap-3 p-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-full" />)}</div>
+            {history.loading && groups.length === 0 ? (
+              <LoadingLine />
             ) : groups.length === 0 ? (
               <EmptyState title={t('history.noTransactions')}>{filter === 'all' ? t('history.noTransactionsHint') : t('history.nothingForFilter')}</EmptyState>
             ) : (

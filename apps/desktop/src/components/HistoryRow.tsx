@@ -4,7 +4,7 @@ import { cn } from '../lib/cn';
 import { fmtCrypto, fmtFiat, fmtWhen, shortAddress, MINUS } from '../lib/format';
 import type { HistoryEntry } from '../state/history';
 import { findContact, type ContactFamily } from '../lib/storage';
-import { Badge } from './ui/primitives';
+import { Badge, Spinner } from './ui/primitives';
 import { IconCheck, IconDown, IconSwap, IconUp } from './icons';
 import { CoinIcon, HIDDEN } from './kit';
 import { idx } from './motion';
@@ -59,5 +59,15 @@ export function HistoryRow({ e, price, currency, hidden, compact, i = 0 }: { e: 
         <span className="text-[12px] text-mute">{hidden ? HIDDEN : price !== null && e.asset ? fmtFiat(units * price, currency) : compact ? (e.status === 'pending' ? t('history.rowPending') : '') : '—'}</span>
       </span>
     </div>
+  );
+}
+
+/** First-ever load (nothing cached yet): one quiet line, never a stack of skeleton bars. */
+export function LoadingLine() {
+  return (
+    <p role="status" className="m-0 flex items-center gap-2.5 px-5 py-4 text-[13px] text-mute">
+      <Spinner className="size-3.5" />
+      {t('common.loading')}
+    </p>
   );
 }
