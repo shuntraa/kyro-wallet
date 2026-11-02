@@ -142,16 +142,14 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             // Only the main window: closing the phrase window must not lock the session.
-            if window.label() == "main"
-                && matches!(
-                    event,
-                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-                )
-            {
+            if updater::is_quit(window.label(), event) {
                 if let Some(phrase) = window.app_handle().get_webview_window(phrase_window::LABEL) {
                     let _ = phrase.destroy();
                 }
                 commands::lock_on_exit(window.app_handle());
+                // Closing the main window quits Kyro: apply a staged update now, not at
+                // `RunEvent::Exit`, which may never come (see `updater::QuitOnce`).
+                updater::on_exit(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -462,7 +460,10 @@ pub fn run() {
         .build(context)
         .expect("error while running Kyro")
         .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
                 updater::on_exit(app);
             }
         });

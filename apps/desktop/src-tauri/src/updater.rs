@@ -462,15 +462,43 @@ fn install(how: &Install, package: &Path, at_quit: bool) -> Result<(), String> {
             } else {
                 &["/P", "/R", "/UPDATE"]
             };
-            std::process::Command::new(package)
-                .args(args)
-                .spawn()
-                .map(|_| ())
-                .map_err(|e| format!("launching the installer: {e}"))
+            spawn_detached(package, args).map_err(|e| format!("launching the installer: {e}"))
         }
         Install::MacApp(bundle) => replace_bundle(bundle, package),
         Install::AppImage(target) => replace_appimage(target, package),
     }
+}
+
+/// Starts the installer outside Kyro's console, process group and (when allowed) job, so that
+/// it outlives this process; no handle is inherited.
+#[cfg(windows)]
+fn spawn_detached(package: &Path, args: &[&str]) -> io::Result<()> {
+    use std::os::windows::process::CommandExt as _;
+    use std::process::{Command, Stdio};
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    let run = |flags: u32| {
+        Command::new(package)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(flags)
+            .spawn()
+            .map(|_| ())
+    };
+    let base = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+    // A job that forbids breakaway refuses the flag: then start it inside the job.
+    run(base | CREATE_BREAKAWAY_FROM_JOB).or_else(|_| run(base))
+}
+
+#[cfg(not(windows))]
+fn spawn_detached(package: &Path, args: &[&str]) -> io::Result<()> {
+    std::process::Command::new(package)
+        .args(args)
+        .spawn()
+        .map(|_| ())
 }
 
 fn replace_bundle(bundle: &Path, archive: &Path) -> Result<(), String> {
@@ -545,6 +573,31 @@ fn current_version(app: &tauri::AppHandle) -> Option<Version> {
 #[derive(Default)]
 pub struct UpdaterState {
     updated_to: Mutex<Option<String>>,
+    quit: QuitOnce,
+}
+
+/// The quit hook runs once, from whichever quit signal comes first (the main window's close,
+/// `ExitRequested`, `Exit`): `RunEvent::Exit` alone is not reliable on Windows (a process
+/// left without its window, an end of session, a kill) and the update then waited for the
+/// next start.
+#[derive(Default)]
+pub struct QuitOnce(std::sync::atomic::AtomicBool);
+
+impl QuitOnce {
+    /// True the first time only.
+    pub fn first(&self) -> bool {
+        !self.0.swap(true, std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Which window event means "the app is quitting": the main window closing or gone (the
+/// phrase window is closed with it). Any other window, or event, is not a quit.
+pub fn is_quit(label: &str, event: &tauri::WindowEvent) -> bool {
+    label == "main"
+        && matches!(
+            event,
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+        )
 }
 
 #[derive(Debug, Serialize)]
@@ -601,8 +654,15 @@ pub fn on_start(app: &tauri::AppHandle) {
     }
 }
 
-/// When the app quits: applies a staged update silently.
+/// When the app quits: applies a staged update silently. Called at the main window's close
+/// (before WebView2 and Tor shut down) and again at `ExitRequested`/`Exit`; runs once.
 pub fn on_exit(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<UpdaterState>() else {
+        return;
+    };
+    if !state.quit.first() {
+        return;
+    }
     let Some((store, current, enabled, key)) = context(app) else {
         return;
     };
@@ -683,6 +743,21 @@ mod tests {
 
     fn v(s: &str) -> Version {
         parse_version(s).unwrap()
+    }
+
+    #[test]
+    fn quit_hook_fires_once_on_main_window_close() {
+        use tauri::WindowEvent;
+        assert!(is_quit("main", &WindowEvent::Destroyed));
+        assert!(!is_quit("phrase", &WindowEvent::Destroyed), "phrase window");
+        assert!(!is_quit("main", &WindowEvent::Focused(false)));
+        let once = QuitOnce::default();
+        assert!(once.first(), "window close applies the update");
+        assert!(
+            !once.first(),
+            "ExitRequested then Exit do not apply it twice"
+        );
+        assert!(!once.first());
     }
 
     #[test]
