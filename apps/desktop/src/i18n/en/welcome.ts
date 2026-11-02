@@ -45,7 +45,7 @@ export const welcome: Record<keyof typeof fr, string> = {
   'welcome.words12': '12 words',
   'welcome.writeTitle': 'Write your phrase on paper',
   'welcome.writeIntro': 'Kyro shows your {count} words in a protected window, separate from this interface: even a compromised interface module cannot read them. Write them in order, in pen. No photo, no copy, no cloud.',
-  'welcome.writeWarn': 'The window is hidden from screenshots and screen sharing on Windows and macOS (not on Linux), but not from a camera: make sure nobody is watching your screen.',
+  'welcome.writeWarn': 'Make sure nobody can see your screen.',
   'welcome.showAgain': 'Show the phrase again',
   'welcome.showPhrase': 'Show my phrase',
   'welcome.wroteWords': 'I have written the {count} words, in order.',

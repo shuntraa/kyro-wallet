@@ -45,7 +45,7 @@ export const welcome = {
   'welcome.words12': '12 mots',
   'welcome.writeTitle': 'Écris ta phrase sur papier',
   'welcome.writeIntro': 'Kyro affiche tes {count} mots dans une fenêtre protégée, séparée de cette interface : même un module compromis de l’interface ne peut pas les lire. Écris-les dans l’ordre, au stylo. Pas de photo, pas de copie, pas de cloud.',
-  'welcome.writeWarn': 'La fenêtre est masquée des captures et des partages d’écran sous Windows et macOS (pas sous Linux), mais pas d’une caméra : vérifie que personne ne regarde ton écran.',
+  'welcome.writeWarn': 'Vérifie que personne ne voit ton écran.',
   'welcome.showAgain': 'Réafficher la phrase',
   'welcome.showPhrase': 'Afficher ma phrase',
   'welcome.wroteWords': 'J’ai écrit les {count} mots, dans l’ordre.',

@@ -16,13 +16,11 @@ import { KyroMark, PasswordField } from '../components/kit';
 import { Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
-import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
+import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey } from '../components/icons';
 import { demoPasswordHint } from './demoHint';
 import { NetworkSwitchDialog, useNetworkInfo } from '../components/NetworkSwitch';
-import { NETWORK_HINT } from '../lib/network';
 import { idx } from '../components/motion';
 import { t, useT } from '../i18n';
-import { rt } from '../i18n/rich';
 
 function BrandPanel() {
   return (
@@ -94,14 +92,6 @@ export function Welcome() {
           <ChoiceCard icon={<IconImport size={20} />} title={t('welcome.choiceImport')} subtitle={t('welcome.choiceImportSub')} onClick={() => setMode('import')} />
         </div>
 
-        <p className="rise -mt-6 m-0 text-[13px] text-mute" style={idx(3)}>
-          {rt(network === 'mainnet' ? 'welcome.vaultOnMainnet' : 'welcome.vaultOnTestnet', { b: (c) => <span className="text-text2">{c}</span> }, { hint: NETWORK_HINT[network] })}{' '}
-          {netInfo.data?.canSwitch && (
-            <button type="button" className="text-ice underline decoration-ice/40 underline-offset-[4px] hover:decoration-ice" onClick={() => setSwitchTo(network === 'mainnet' ? 'testnet' : 'mainnet')}>
-              {t(network === 'mainnet' ? 'welcome.switchToTestnet' : 'welcome.switchToMainnet')}
-            </button>
-          )}
-        </p>
 
         <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
           {(
@@ -336,9 +326,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
           <StepHeader step={2} total={3} title={t('welcome.writeTitle')}>
             {t('welcome.writeIntro', { count: wordCount })}
           </StepHeader>
-          <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            {t('welcome.writeWarn')}
-          </Notice>
+          <p className="m-0 -mt-3 text-[13px] text-mute">{t('welcome.writeWarn')}</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant={seen ? 'secondary' : 'primary'} size="xl" disabled={busy} onClick={() => void show()}>
               {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : seen ? t('welcome.showAgain') : t('welcome.showPhrase')}
