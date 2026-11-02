@@ -21,7 +21,7 @@ import { useApp, useVault } from '../state/app';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtNumber, fmtWhen, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
-import { useAsync, useNow } from '../lib/useAsync';
+import { useCachedAsync, useNow } from '../lib/useAsync';
 import {
   adaPoolBadges,
   adaWarningText,
@@ -60,6 +60,15 @@ import { rt } from '../i18n/rich';
 function useStakeAccount(): (chain: StakeChain) => { account?: number } {
   const { selectedAccounts } = useApp();
   return (chain) => (selectedAccounts[chain] ? { account: selectedAccounts[chain] } : {});
+}
+
+/**
+ * Cache key of a staking read (network, command, account): the screen shows the last answer at
+ * once and refreshes in the background (`useCachedAsync`).
+ */
+function useStakeKey(): (cmd: string, args?: { account?: number }) => string {
+  const { network } = useApp();
+  return (cmd, args) => `stake.${network}.${cmd}.${args?.account ?? 0}`;
 }
 
 type Ret<K extends keyof Commands> = Commands[K]['ret'];
@@ -110,9 +119,10 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   const { navigate, network, hideBalances } = useApp();
   const acct = useStakeAccount();
   const { t, tp } = useT();
-  const sol = useAsync(!disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
-  const ada = useAsync(!disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
-  const tron = useAsync(!disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
+  const sk = useStakeKey();
+  const sol = useCachedAsync(sk('sol_stake_overview', acct('sol')), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
+  const ada = useCachedAsync(sk('ada_stake_overview', acct('ada')), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
+  const tron = useCachedAsync(sk('tron_stake_overview', acct('tron')), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
@@ -402,7 +412,7 @@ function SortBar<T extends string>({ value, onChange, options, label }: { value:
 }
 
 function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const list = useAsync(() => call('sol_stake_validators', {}), []);
+  const list = useCachedAsync(useStakeKey()('sol_stake_validators'), () => call('sol_stake_validators', {}), [], { persist: true });
   const [sort, setSort] = useState<SolSort>('commission');
   const { t } = useT();
   const sorted = useMemo(() => sortValidators(list.data?.validators ?? [], sort), [list.data, sort]);
@@ -459,8 +469,8 @@ type SolOp = { kind: 'create' } | { kind: 'delegate'; acc: SolStakePosition } | 
 function SolStaking() {
   const { network, hideBalances } = useApp();
   const acct = useStakeAccount();
-  const ov = useAsync(() => call('sol_stake_overview', acct('sol')), [acct('sol').account], { intervalMs: 60_000 });
-  const vals = useAsync(() => call('sol_stake_validators', {}), []);
+  const ov = useCachedAsync(useStakeKey()('sol_stake_overview', acct('sol')), () => call('sol_stake_overview', acct('sol')), [acct('sol').account], { intervalMs: 60_000 });
+  const vals = useCachedAsync(useStakeKey()('sol_stake_validators'), () => call('sol_stake_validators', {}), [], { persist: true });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<SolOp | null>(null);
   const { t, tp } = useT();
@@ -701,7 +711,7 @@ function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: Dre
 }
 
 function PoolPicker({ value, onChange }: { value: string; onChange: (id: string, pool: AdaPool | null) => void }) {
-  const list = useAsync(() => call('ada_stake_pools', { limit: 50 }), []);
+  const list = useCachedAsync(useStakeKey()('ada_stake_pools'), () => call('ada_stake_pools', { limit: 50 }), [], { persist: true });
   const [sort, setSort] = useState<AdaSort>('margin');
   const [typed, setTyped] = useState('');
   const { t } = useT();
@@ -782,7 +792,7 @@ type AdaOp = 'delegate' | 'vote' | 'withdraw' | 'deregister';
 function AdaStaking() {
   const { hideBalances, network } = useApp();
   const acct = useStakeAccount();
-  const ov = useAsync(() => call('ada_stake_overview', acct('ada')), [acct('ada').account], { intervalMs: 60_000 });
+  const ov = useCachedAsync(useStakeKey()('ada_stake_overview', acct('ada')), () => call('ada_stake_overview', acct('ada')), [acct('ada').account], { intervalMs: 60_000 });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<AdaOp | null>(null);
   const { t } = useT();
@@ -969,8 +979,8 @@ type TronOp = 'freeze' | 'unfreeze' | 'vote' | 'withdraw' | 'cancel' | 'claim';
 function TronStaking() {
   const { hideBalances, network } = useApp();
   const acct = useStakeAccount();
-  const ov = useAsync(() => call('tron_stake_overview', acct('tron')), [acct('tron').account], { intervalMs: 60_000 });
-  const ws = useAsync(() => call('tron_stake_witnesses'), []);
+  const ov = useCachedAsync(useStakeKey()('tron_stake_overview', acct('tron')), () => call('tron_stake_overview', acct('tron')), [acct('tron').account], { intervalMs: 60_000 });
+  const ws = useCachedAsync(useStakeKey()('tron_stake_witnesses'), () => call('tron_stake_witnesses'), [], { persist: true });
   useOnTorReady(ov.reload);
   const now = useNow(1000);
   const { t, tp } = useT();

@@ -10,6 +10,7 @@ import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
 import type { AsyncState } from '../lib/useAsync';
 import { fingerprint, historyKey, loadHistory, mergeHistory, saveHistory, type HistoryCache } from '../lib/balanceCache';
+import { Dedupe, settleWithin } from '../lib/dedupe';
 import { useVault } from './app';
 import { recordNetErrors } from '../lib/netErrors';
 
@@ -90,6 +91,11 @@ function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string,
 }
 
 const REFRESH_MS = 60_000;
+/** A chain's history request: joined while in flight, its answer reused this long by other screens. */
+const HISTORY_REUSE_MS = 20_000;
+/** Past this, a chain's round ends without it (its request keeps running and is merged next time). */
+const CHAIN_TIMEOUT_MS = 25_000;
+const historyRequests = new Dedupe(HISTORY_REUSE_MS);
 
 /**
  * Unified history. The last known activity (local cache, `balanceCache.ts`) renders at once; every
@@ -125,25 +131,37 @@ export function useHistory(): AsyncState<HistoryData> {
     const publish = (errs: Record<string, string>) => {
       if (alive) setState({ id, data: assemble(jobs, cache, errs, network, isMultiAccount) });
     };
+    const persist = () => saveHistory(network, fp, new Map(jobs.flatMap((j) => (cache.has(j.key) ? [[j.key, cache.get(j.key) ?? []] as const] : []))));
+    // Each chain's answer reaches the disk without waiting for the slowest one (batched).
+    let saveTimer: number | undefined;
+    const saveSoon = () => {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(persist, 500);
+    };
     if (state.id !== id) {
       lastErrors.current = {};
       setState({ id, data: fromCache() });
     }
     setLoading(true);
-    void Promise.allSettled(
+    // Every chain in parallel, each merged in as it answers; requests are shared by every screen
+    // showing history (and reused for a few seconds). The round ends at `CHAIN_TIMEOUT_MS` even if
+    // a chain is still busy: its late answer is merged when it comes, without an error.
+    void settleWithin(
       jobs.map(async (j) => {
         try {
-          const fresh = await j.a.getHistory();
+          const fresh = await historyRequests.run(`${network}|${j.key}|${j.src.addresses.join(',')}`, () => j.a.getHistory());
           cache.set(j.key, mergeHistory(cache.get(j.key), fresh));
+          if (alive) saveSoon();
         } catch (e) {
           errors[j.a.chain.key] ??= e instanceof Error ? e.message : String(e);
         }
         publish(lastErrors.current);
       }),
+      CHAIN_TIMEOUT_MS,
     ).then(() => {
       if (!alive) return;
-      const keep: HistoryCache = new Map(jobs.flatMap((j) => (cache.has(j.key) ? [[j.key, cache.get(j.key) ?? []] as const] : [])));
-      saveHistory(network, fp, keep);
+      window.clearTimeout(saveTimer);
+      persist();
       recordNetErrors('history', errors);
       lastErrors.current = errors;
       publish(errors);
@@ -152,6 +170,10 @@ export function useHistory(): AsyncState<HistoryData> {
     });
     return () => {
       alive = false;
+      if (saveTimer !== undefined) {
+        window.clearTimeout(saveTimer);
+        persist();
+      }
     };
   }, [sourcesKey, network, tick]);
 

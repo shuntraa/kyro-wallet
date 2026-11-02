@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dedupe } from './dedupe';
+import { readJson, writeJson } from './storage';
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -55,6 +57,40 @@ export function useAsync<T>(loader: (() => Promise<T>) | null, key: unknown[], o
   }, [opts.intervalMs]);
 
   return { data, error, loading, updatedAt, reload };
+}
+
+const lastAnswers = new Map<string, unknown>();
+// Joins a load in flight only: a reload after an action always asks again.
+const sharedLoads = new Dedupe(0);
+
+/**
+ * [`useAsync`] that shows the last answer for `cacheKey` at once (this session's; with `persist`,
+ * also the previous launch's, from localStorage: public data only) and refreshes in the
+ * background. Screens mounting together share one request.
+ */
+export function useCachedAsync<T>(cacheKey: string | null, loader: (() => Promise<T>) | null, key: unknown[], opts: { intervalMs?: number; persist?: boolean } = {}): AsyncState<T> {
+  const res = useAsync<T>(
+    loader && cacheKey
+      ? () =>
+          sharedLoads.run(cacheKey, loader).then((d) => {
+            lastAnswers.set(cacheKey, d);
+            if (opts.persist) writeJson(`cache.async.${cacheKey}`, d);
+            return d;
+          })
+      : loader,
+    key,
+    opts,
+  );
+  let cached: T | undefined;
+  if (cacheKey) {
+    if (!lastAnswers.has(cacheKey) && opts.persist) {
+      const stored = readJson<T | null>(`cache.async.${cacheKey}`, null);
+      if (stored !== null) lastAnswers.set(cacheKey, stored);
+    }
+    cached = lastAnswers.get(cacheKey) as T | undefined;
+  }
+  const data = cached ?? res.data;
+  return { ...res, data, error: data === undefined ? res.error : null };
 }
 
 /** Debounce a value. */

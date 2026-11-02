@@ -167,6 +167,17 @@ export class CoinGeckoClient {
     return raw.map(normaliseMarket);
   }
 
+  /** Last known market list (any age), without the network: what the UI shows while it refreshes. */
+  peekMarkets(currency: Currency, perPage = 250): MarketCoin[] | null {
+    const cached = this.read<RawMarket[]>(`markets:${currency.toLowerCase()}:${perPage}`);
+    if (!cached || !Array.isArray(cached.data)) return null;
+    try {
+      return cached.data.map(normaliseMarket);
+    } catch {
+      return null;
+    }
+  }
+
   /** Price history: `days` = 1, 7, 30, 365 or 'max'. */
   async chart(id: string, currency: Currency, days: ChartDays): Promise<ChartPoint[]> {
     const vs = currency.toLowerCase();

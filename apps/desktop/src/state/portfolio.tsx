@@ -12,6 +12,7 @@ import { useOnCbfSynced } from './cbf';
 import { BALANCE_REFRESH_MS, balanceRetryDelay } from '../lib/retry';
 import { fingerprint, loadBalances, loadPrices, saveBalances, savePrices, settleErrors } from '../lib/balanceCache';
 import { recordNetErrors } from '../lib/netErrors';
+import { Dedupe, settleWithin } from '../lib/dedupe';
 
 export type { Holding } from '../lib/holdings';
 
@@ -49,15 +50,21 @@ export function usePortfolio(): PortfolioValue {
 }
 
 const MARKET_REFRESH_MS = 60_000;
+/** A balance round ends after this even if a chain is still busy (it applies its answer later). */
+const ROUND_MS = 20_000;
+/** In-flight balance requests per account and chain (a poll never doubles a slow one). */
+const balanceRequests = new Dedupe(0);
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { adapters, accounts, market, settings, accountSources } = useVault();
   const network = accounts.network;
-  const [accountBalances, setAccountBalances] = useState<Map<string, Map<string, bigint>>>(new Map());
+  // Last known balances in the very first render (no empty frame before the cache effect below).
+  const [accountBalances, setAccountBalances] = useState<Map<string, Map<string, bigint>>>(() => loadBalances(network, fingerprint(accountSources.map((x) => `${x.family}:${x.index}:${x.addresses.join(',')}`).join('|'))) ?? new Map());
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balancesLoaded, setBalancesLoaded] = useState(false);
   const [chainErrors, setChainErrors] = useState<Record<string, string>>({});
-  const [markets, setMarkets] = useState<MarketCoin[] | null>(null);
+  // Last known market list (any age) until the network answers: the markets list never starts empty.
+  const [markets, setMarkets] = useState<MarketCoin[] | null>(() => market.peekMarkets(settings.currency, 250));
   const [extraPrices, setExtraPrices] = useState<Record<string, SimplePrice>>({});
   const [marketError, setMarketError] = useState<string | null>(null);
   const [marketUpdatedAt, setMarketUpdatedAt] = useState<number | null>(null);
@@ -98,34 +105,36 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(retry);
       setBalancesLoading(true);
       const jobs = sourcesRef.current.flatMap((src) => src.adapters.map((a) => ({ key: `${src.family}:${src.index}`, a })));
-      const results = await Promise.allSettled(jobs.map((j) => j.a.getBalance()));
-      if (!alive) return;
-      const next = new Map<string, Map<string, bigint>>();
       const errors: Record<string, string> = {};
-      results.forEach((r, i) => {
-        const j = jobs[i];
-        if (!j) return;
-        if (r.status === 'fulfilled') {
-          const m = next.get(j.key) ?? new Map<string, bigint>();
-          r.value.forEach((b) => m.set(b.assetId, b.amount));
-          next.set(j.key, m);
-        } else errors[j.a.chain.key] ??= r.reason instanceof Error ? r.reason.message : String(r.reason);
-      });
-      setAccountBalances((prev) => {
-        const merged = new Map<string, Map<string, bigint>>();
-        for (const [k, m] of prev) merged.set(k, new Map(m));
-        next.forEach((m, k) => {
-          const cur = merged.get(k) ?? new Map<string, bigint>();
-          m.forEach((v, id) => cur.set(id, v));
-          merged.set(k, cur);
+      // Each chain is shown as soon as it answers (the fastest within a second or two), not when
+      // the slowest one does; a request still running is joined, never sent twice.
+      const apply = (key: string, list: Array<{ assetId: string; amount: bigint }>) =>
+        setAccountBalances((prev) => {
+          const merged = new Map(prev);
+          const cur = new Map(prev.get(key) ?? []);
+          list.forEach((b) => cur.set(b.assetId, b.amount));
+          merged.set(key, cur);
+          // Persist this account (amounts only), for the next launch.
+          const { network: net, fp: id } = cacheRef.current;
+          const stored = loadBalances(net, id) ?? new Map<string, Map<string, bigint>>();
+          stored.set(key, cur);
+          saveBalances(net, id, stored);
+          return merged;
         });
-        // Persist only the accounts of this round (amounts only), for the next launch.
-        const { network: net, fp: id } = cacheRef.current;
-        const stored = loadBalances(net, id) ?? new Map<string, Map<string, bigint>>();
-        next.forEach((_, k) => stored.set(k, merged.get(k) ?? new Map<string, bigint>()));
-        saveBalances(net, id, stored);
-        return merged;
-      });
+      await settleWithin(
+        jobs.map((j) =>
+          balanceRequests.run(`${j.key}|${j.a.chain.key}|${sourcesKey}`, () => j.a.getBalance()).then(
+            (list) => {
+              if (alive) apply(j.key, list);
+            },
+            (e: unknown) => {
+              errors[j.a.chain.key] ??= e instanceof Error ? e.message : String(e);
+            },
+          ),
+        ),
+        ROUND_MS,
+      );
+      if (!alive) return;
       const settled = settleErrors(errors, failingSince.current, Date.now());
       failingSince.current = settled.since;
       setChainErrors(settled.visible);
@@ -146,6 +155,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(retry);
     };
   }, [sourcesKey, tick]);
+
+  // Another currency: its last known list at once, not the previous currency's prices.
+  useEffect(() => setMarkets(market.peekMarkets(settings.currency, 250)), [market, settings.currency]);
 
   useEffect(() => {
     let alive = true;
