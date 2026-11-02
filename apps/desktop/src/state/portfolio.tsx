@@ -10,6 +10,7 @@ import { useVault, type AccountSource } from './app';
 import { useOnTorReady } from './tor';
 import { useOnCbfSynced } from './cbf';
 import { BALANCE_REFRESH_MS, balanceRetryDelay } from '../lib/retry';
+import { fingerprint, loadBalances, loadPrices, saveBalances, savePrices, settleErrors } from '../lib/balanceCache';
 
 export type { Holding } from '../lib/holdings';
 
@@ -19,7 +20,10 @@ interface PortfolioValue {
   accountBalances: Map<string, Map<string, bigint>>;
   balancesLoading: boolean;
   balancesLoaded: boolean;
-  /** chainKey → error message */
+  /**
+   * chainKey → error message, only for chains that kept failing after the automatic retries
+   * (`ERROR_GRACE_MS`): the first load over Tor stays silent.
+   */
   chainErrors: Record<string, string>;
   markets: MarketCoin[] | null;
   marketById: Map<string, MarketCoin>;
@@ -62,6 +66,24 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const sourcesRef = useRef<AccountSource[]>(accountSources);
   sourcesRef.current = accountSources;
   const sourcesKey = accountSources.map((x) => `${x.family}:${x.index}:${x.addresses.join(',')}`).join('|');
+  const fp = useMemo(() => fingerprint(sourcesKey), [sourcesKey]);
+  const failingSince = useRef<Record<string, number>>({});
+  const cacheRef = useRef({ network, fp });
+  cacheRef.current = { network, fp };
+  const [cachedPrices, setCachedPrices] = useState(() => ({ ...loadPrices(`${settings.currency}.extra`), ...loadPrices(settings.currency) }));
+  useEffect(() => setCachedPrices({ ...loadPrices(`${settings.currency}.extra`), ...loadPrices(settings.currency) }), [settings.currency]);
+
+  // Last known balances of this wallet: shown at once, replaced in place as fresh ones arrive.
+  useEffect(() => {
+    if (!sourcesKey) return;
+    const cached = loadBalances(network, fp);
+    if (!cached) return;
+    setAccountBalances((prev) => {
+      const merged = new Map(cached);
+      prev.forEach((m, k) => merged.set(k, new Map([...(cached.get(k) ?? new Map<string, bigint>()), ...m])));
+      return merged;
+    });
+  }, [network, fp, sourcesKey]);
 
   // Tor just became ready (after a bootstrap, a retry or a re-enable): reload now rather than at the next poll.
   useOnTorReady(refresh);
@@ -96,9 +118,16 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           m.forEach((v, id) => cur.set(id, v));
           merged.set(k, cur);
         });
+        // Persist only the accounts of this round (amounts only), for the next launch.
+        const { network: net, fp: id } = cacheRef.current;
+        const stored = loadBalances(net, id) ?? new Map<string, Map<string, bigint>>();
+        next.forEach((_, k) => stored.set(k, merged.get(k) ?? new Map<string, bigint>()));
+        saveBalances(net, id, stored);
         return merged;
       });
-      setChainErrors(errors);
+      const settled = settleErrors(errors, failingSince.current, Date.now());
+      failingSince.current = settled.since;
+      setChainErrors(settled.visible);
       setBalancesLoaded(true);
       setBalancesLoading(false);
       setUpdatedAt(Date.now());
@@ -123,13 +152,17 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         const list = await market.markets(settings.currency, 250);
         if (!alive) return;
         setMarkets(list);
+        savePrices(settings.currency, Object.fromEntries(list.map((c) => [c.id, { price: c.price, change24h: c.change24h }])));
         setMarketError(null);
         setMarketUpdatedAt(market.lastUpdated ?? Date.now());
         const have = new Set(list.map((c) => c.id));
         const missing = [...new Set(assetsFor(network).map((a) => a.coingeckoId))].filter((id) => !have.has(id));
         if (missing.length) {
           const extra = await market.simplePrice(missing, settings.currency).catch(() => ({}));
-          if (alive) setExtraPrices(extra);
+          if (alive) {
+            setExtraPrices(extra);
+            savePrices(`${settings.currency}.extra`, extra);
+          }
         }
       } catch (e) {
         if (alive) setMarketError(e instanceof Error ? e.message : String(e));
@@ -149,9 +182,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     (coinId: string): SimplePrice | null => {
       const m = marketById.get(coinId);
       if (m) return { price: m.price, change24h: m.change24h };
-      return extraPrices[coinId] ?? null;
+      return extraPrices[coinId] ?? cachedPrices[coinId] ?? null;
     },
-    [marketById, extraPrices],
+    [marketById, extraPrices, cachedPrices],
   );
 
   const balances = useMemo(() => {

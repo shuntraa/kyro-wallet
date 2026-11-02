@@ -14,11 +14,10 @@ import { usePortfolio, type Holding } from '../state/portfolio';
 import { CoinIcon, EmptyState, ErrorLine, HIDDEN, trendColor, trendHex } from './kit';
 import { Sparkline } from './charts';
 import { useTorBlocked } from './Tor';
-import { NetworkDownLine, ServerDownLine, ServerMissingLine, cbfPending, networkDown, serverDown, serverMissing, useCustomServer } from './ServerDown';
-import { findChain } from '@kyro/chains';
+import { cbfPending, networkDown, serverDown, serverMissing, useCustomServer } from './ServerDown';
 import { Menu } from './ui/menu';
 import { Badge, Skeleton } from './ui/primitives';
-import { IconChevronDown, IconSearch, IconStar } from './icons';
+import { IconChevronDown, IconInfo, IconSearch, IconStar } from './icons';
 import { idx } from './motion';
 import { getLanguage, t, useT } from '../i18n';
 
@@ -113,15 +112,21 @@ function MineList({ sort }: { sort: Sort }) {
   const pf = usePortfolio();
   const torBlocked = useTorBlocked(Object.values(pf.chainErrors).join(' ') || undefined);
   const { network } = useApp();
-  const customServer = useCustomServer();
-  const downChains = Object.entries(pf.chainErrors)
-    .filter(([k, m]) => serverDown(m, customServer(k)))
-    .map(([k]) => findChain(network, k)?.label ?? k);
-  const netDownChains = Object.entries(pf.chainErrors)
-    .filter(([k, m]) => networkDown(m, customServer(k)))
-    .map(([k]) => findChain(network, k)?.label ?? k);
-  const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const { t } = useT();
+  const customServer = useCustomServer();
+  // Only chains that still fail after the automatic retries (`pf.chainErrors` is already settled):
+  // the row keeps its last known amount and gets a small muted icon, never a banner.
+  const problem = (chainKey: string): string | null => {
+    const m = pf.chainErrors[chainKey];
+    if (m === undefined) return null;
+    if (torBlocked) return t('portfolio.rowWaitingTor');
+    if (serverMissing(m)) return network === 'testnet' && chainKey === 'zcash' ? t('portfolio.zecTestnetNoServer') : t('portfolio.rowNoServer');
+    if (serverDown(m, customServer(chainKey))) return t('portfolio.rowServerDown');
+    if (networkDown(m, customServer(chainKey))) return t('portfolio.rowNetworkDown');
+    if (cbfPending(m)) return t('portfolio.rowSyncingFilters');
+    return t('portfolio.rowBalanceUnavailable');
+  };
+  const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const cur = settings.currency;
   const rows = sortHoldings(pf.accountHoldings, sort);
   return (
@@ -133,21 +138,10 @@ function MineList({ sort }: { sort: Sort }) {
         <span className="text-right">{t('portfolio.colBalance')}</span>
         <span>{t('portfolio.colShare')}</span>
       </div>
-      <div key={pf.balancesLoaded ? 'rows' : 'skeleton'} className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">
-        {!pf.balancesLoaded
-          ? Array.from({ length: 4 }, (_, i) => (
-              <div key={i} className={cn(GRID, 'h-16 border-t border-line/60 px-6')}>
-                <span className="flex items-center gap-3">
-                  <Skeleton className="size-10 rounded-full" />
-                  <Skeleton className="h-3.5 w-24" />
-                </span>
-                <Skeleton className="h-3.5 w-20" />
-                <Skeleton className="h-3.5 w-20" />
-                <Skeleton className="ml-auto h-3.5 w-20" />
-                <Skeleton className="h-1 w-16" />
-              </div>
-            ))
-          : rows.map((h, i) => (
+      <div className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">
+        {rows.map((h, i) => {
+          const issue = problem(h.asset.chainKey);
+          return (
               <button
                 key={h.key}
                 type="button"
@@ -176,7 +170,14 @@ function MineList({ sort }: { sort: Sort }) {
                 {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
                 <span className="flex flex-col items-end">
                   <span className="text-[15px] font-medium">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="text-[13px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">{t('portfolio.rowWaitingTor')}</span> : serverMissing(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowNoServer')}</span> : serverDown(pf.chainErrors[h.asset.chainKey], customServer(h.asset.chainKey)) ? <span className="text-warn">{t('portfolio.rowServerDown')}</span> : networkDown(pf.chainErrors[h.asset.chainKey], customServer(h.asset.chainKey)) ? <span className="text-mute">{t('portfolio.rowNetworkDown')}</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">{t('portfolio.rowSyncingFilters')}</span> : <span className="text-warn">{t('portfolio.rowBalanceUnavailable')}</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  <span className="flex items-center gap-1.5 text-[13px] text-mute">
+                    {issue && (
+                      <span title={issue} aria-label={issue} className="text-faint">
+                        <IconInfo size={13} />
+                      </span>
+                    )}
+                    <span key={hideBalances ? 'h' : h.amount.toString()} className="fade-in">{hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  </span>
                 </span>
                 <span className="flex items-center gap-2.5">
                   <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">
@@ -185,21 +186,14 @@ function MineList({ sort }: { sort: Sort }) {
                   <span className="text-[13px] text-mute">{fmtPct(h.share * 100, { sign: false, decimals: 0 })}</span>
                 </span>
               </button>
-            ))}
-        {pf.balancesLoaded && WATCH_ONLY_CHAINS.map((w, i) => <WatchRow key={w.key} i={rows.length + i} coinId={w.coingeckoId} name={w.name} symbol={w.symbol} glyph={w.glyph} color={w.color} />)}
+          );
+        })}
+        {WATCH_ONLY_CHAINS.map((w, i) => <WatchRow key={w.key} i={rows.length + i} coinId={w.coingeckoId} name={w.name} symbol={w.symbol} glyph={w.glyph} color={w.color} />)}
         {pf.balancesLoaded && pf.holdings.every((h) => h.amount === 0n) && (
           <EmptyState title={t('portfolio.emptyVault')} action={<button type="button" onClick={() => navigate({ name: 'receive' })} className="text-[13px] font-semibold text-ice hover:underline">{t('portfolio.receiveFunds')}</button>}>
             {t('portfolio.emptyVaultHint')}
           </EmptyState>
         )}
-        {!torBlocked && downChains.length > 0 && <ServerDownLine className="px-5 py-3" what={downChains.join(', ')} />}
-        {!torBlocked && netDownChains.length > 0 && <NetworkDownLine className="px-5 py-3" what={netDownChains.join(', ')} />}
-        {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'dogecoin' && serverMissing(m)) && <ServerMissingLine className="px-5 py-3" coin="Dogecoin" />}
-        {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'dash' && serverMissing(m)) && <ServerMissingLine className="px-5 py-3" coin="Dash" />}
-        {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'zcash' && serverMissing(m)) && (
-          <span role="status" className="px-5 py-3 text-[12px] text-warn">{t('portfolio.zecTestnetNoServer')}</span>
-        )}
-        {pf.marketError && <ErrorLine className="px-5 py-3" error={pf.marketError}>{t('portfolio.pricesUnavailable', { error: pf.marketError })}</ErrorLine>}
       </div>
     </div>
   );

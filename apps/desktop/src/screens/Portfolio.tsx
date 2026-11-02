@@ -8,8 +8,7 @@ import { BigFiat, HIDDEN, TrendPill } from '../components/kit';
 import { AllocationBar, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
 import { VaultCard } from '../components/VaultCard';
-import { Button, Segmented, Skeleton } from '../components/ui/primitives';
-import { useTorBlocked } from '../components/Tor';
+import { Button, Segmented } from '../components/ui/primitives';
 import { useOnTorReady } from '../state/tor';
 import { idx, useMedia } from '../components/motion';
 import { IconDown, IconEye, IconEyeOff, IconSwap, IconUp } from '../components/icons';
@@ -22,7 +21,6 @@ export function Portfolio() {
   const [period, setPeriod] = useState<Period>('1J');
   const chart = usePortfolioChart(period);
   useOnTorReady(chart.reload);
-  const torBlocked = useTorBlocked(chart.error);
   const cur = settings.currency;
   const series = chart.data ?? [];
   const values = series.map((p) => p[1]);
@@ -52,7 +50,8 @@ export function Portfolio() {
               {network === 'testnet' && <span className="text-[12px] text-faint">{t('portfolio.testnetPrices')}</span>}
             </div>
             <div className="figure text-[clamp(60px,5.8vw,84px)] leading-[0.92] font-[500] tracking-[-0.055em]">
-              {pf.balancesLoaded && pf.markets ? <BigFiat value={pf.total} currency={cur} hidden={hideBalances} tick className="fade-in inline-block" /> : <Skeleton className="h-[64px] w-[340px]" />}
+              {/* Last known total (or 0) right away, updated in place: the first load over Tor stays invisible. */}
+              <BigFiat value={pf.total} currency={cur} hidden={hideBalances} tick className="fade-in inline-block" />
             </div>
             <div className="flex h-7 items-center gap-2.5 text-[14px]">
               {delta !== null && pf.total > 0 ? (
@@ -63,7 +62,7 @@ export function Portfolio() {
                   <span className="text-mute">{periodLabel}</span>
                 </span>
               ) : (
-                <span className="text-mute">{pf.balancesLoaded ? (pf.total === 0 ? t('portfolio.noFundsYet') : '') : t('portfolio.loadingBalances')}</span>
+                <span className="text-mute">{pf.balancesLoaded && pf.total === 0 ? t('portfolio.noFundsYet') : ''}</span>
               )}
             </div>
           </div>
@@ -98,7 +97,6 @@ export function Portfolio() {
               <svg width="100%" height="60" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="1.5" strokeDasharray="3 6" vectorEffect="non-scaling-stroke" />
               </svg>
-              <span className="absolute bottom-14 left-0 text-[13px] text-faint">{chart.loading ? t('portfolio.loadingChart') : chart.error ? (torBlocked ? t('shell.waitingTor') : t('portfolio.chartUnavailable', { error: chart.error.message })) : t('portfolio.chartLater')}</span>
             </div>
           )}
         </div>
