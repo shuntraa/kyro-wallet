@@ -8,6 +8,12 @@
   refused by a just-closed circuit is retried on a new one. Tor still never falls back to clear.
 - History: no more raw error text. A short message with Retry is shown instead; the
   technical detail is in Settings > Network diagnostics.
+- History: activity shows at once from a local cache (amounts and transaction details only),
+  then refreshes in the background; each blockchain appears as soon as it answers, without
+  waiting for the slowest. No more long grey placeholder rows.
+- Privacy: new anonymous weekly count (on by default, Settings > Privacy). Once a week, over
+  Tor only, Kyro downloads a tiny file from its GitHub release so the download counter can
+  estimate active wallets. No identifier and no personal data are sent.
 
 ## 1.0.1
 

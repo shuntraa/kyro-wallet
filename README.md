@@ -39,7 +39,7 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
 - **Automatic signed updates**, downloaded silently over Tor, signature-checked, applied at the next start.
 - **Tor by default.** If Tor is unavailable, Kyro stops instead of silently connecting in the clear.
-- **No account, no tracking, no analytics, no telemetry.**
+- **No account, no tracking, no analytics, no personal data.** Once a week Kyro anonymously downloads a tiny file over Tor so GitHub's download counter can estimate active wallets; turn it off in Settings › Privacy.
 - Interface in **English and French**.
 
 ### Supported blockchains
@@ -145,7 +145,7 @@ irm https://kyrowallet.com/install.ps1 | iex
 curl -fsSL https://kyrowallet.com/install.sh | sh
 ```
 
-The script downloads the latest release from GitHub, checks its SHA-256 against `SHA256SUMS` (it stops if they differ), then installs it: the normal installer window on Windows, `Kyro.app` in `/Applications` (or `~/Applications`) on macOS, `~/.local/bin/kyro` with a menu entry on Linux x86_64. No telemetry, no sudo. Files fetched by PowerShell or curl are not marked as downloaded from the internet, so SmartScreen and Gatekeeper do not block the first launch. Both scripts are short and open source: read them first in [`website/src/install.ps1`](website/src/install.ps1) and [`website/src/install.sh`](website/src/install.sh).
+The script downloads the latest release from GitHub, checks its SHA-256 against `SHA256SUMS` (it stops if they differ), then installs it: the normal installer window on Windows, `Kyro.app` in `/Applications` (or `~/Applications`) on macOS, `~/.local/bin/kyro` with a menu entry on Linux x86_64. Nothing is sent about you, no sudo. Files fetched by PowerShell or curl are not marked as downloaded from the internet, so SmartScreen and Gatekeeper do not block the first launch. Both scripts are short and open source: read them first in [`website/src/install.ps1`](website/src/install.ps1) and [`website/src/install.sh`](website/src/install.sh).
 
 ### Or download the file
 
