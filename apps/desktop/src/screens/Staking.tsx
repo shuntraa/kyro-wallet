@@ -24,6 +24,7 @@ import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtNumber, fmtWhen, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { useCachedAsync, useNow } from '../lib/useAsync';
+import { fingerprint } from '../lib/balanceCache';
 import {
   adaPoolBadges,
   adaWarningText,
@@ -125,11 +126,17 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   const { navigate, network, hideBalances } = useApp();
   const acct = useStakeAccount();
   const { t, tp } = useT();
-  const sk = useStakeKey();
-  const sol = useCachedAsync(sk('sol_stake_overview', acct('sol')), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
-  const ada = useCachedAsync(sk('ada_stake_overview', acct('ada')), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
-  const tron = useCachedAsync(sk('tron_stake_overview', acct('tron')), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
-  const near = useCachedAsync(sk('near_stake_overview', acct('near')), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account]);
+  // Persisted per wallet (address fingerprint): the cards render from the last launch's answer
+  // at once, then refresh in the background.
+  const stakeKey = useStakeKey();
+  const { accounts } = useVault();
+  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '' };
+  const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
+  const p = { persist: true };
+  const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account], p);
+  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account], p);
+  const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account], p);
+  const near = useCachedAsync(sk('near_stake_overview', 'near'), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account], p);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();

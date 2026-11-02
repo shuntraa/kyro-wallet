@@ -588,6 +588,106 @@ fn live_smoke_evm_history_tor() {
 
 const TRANSFER: &str = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
+/// Timings of what the asset page waits for over Tor (cold, then warm): the gap scan of an empty
+/// Bitcoin account (16 `address_info`, 5 in flight, like `gapScan.ts`), the history of a used
+/// address, an EVM `eth_blockNumber` and a CoinGecko 1Y chart.
+#[test]
+#[ignore]
+fn live_smoke_activity_timing_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-smoke-act-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let mut s = state.settings();
+    s.tor.enabled = true;
+    state.save_settings(s).unwrap();
+    let seed = wallet_core::Mnemonic::generate(wallet_core::WordCount::W12)
+        .unwrap()
+        .to_seed("");
+    tauri::async_runtime::block_on(async {
+        let t0 = Instant::now();
+        state.net.tor.start();
+        let s = state.settings();
+        let c = crate::commands_servers::ctx(&state, &s).unwrap();
+        let get = |url: &'static str| {
+            let state = &state;
+            async move {
+                let req = FetchRequest {
+                    url: url.into(),
+                    method: "GET".into(),
+                    headers: Default::default(),
+                    body: None,
+                };
+                state
+                    .net
+                    .fetch(req, &state.settings(), &state.env_keys, state.network)
+                    .await
+                    .map(|r| r.status)
+                    .map_err(e)
+            }
+        };
+        for round in ["cold", "warm"] {
+            let t = Instant::now();
+            let sem = tokio::sync::Semaphore::new(5);
+            let mut addrs = Vec::new();
+            for (kind, change, n) in [
+                (BtcKind::Segwit, false, 5),
+                (BtcKind::Segwit, true, 3),
+                (BtcKind::Taproot, false, 5),
+                (BtcKind::Taproot, true, 3),
+            ] {
+                for i in 0..n {
+                    addrs.push(
+                        wallet_core::btc_address(&seed, Network::Mainnet, kind, 0, change, i)
+                            .unwrap(),
+                    );
+                }
+            }
+            let r = futures_util::future::join_all(addrs.iter().map(|a| {
+                let (c, sem) = (&c, &sem);
+                async move {
+                    let _p = sem.acquire().await;
+                    let t = Instant::now();
+                    let r = crate::btc_backend::address_info(c, a).await;
+                    (r.is_ok(), t.elapsed())
+                }
+            }))
+            .await;
+            let worst = r.iter().map(|x| x.1).max().unwrap_or_default();
+            let ok = r.iter().filter(|x| x.0).count();
+            eprintln!(
+                "{round} btc empty scan  {:>5.1}s ({ok}/16 ok, slowest {:.1}s)",
+                t.elapsed().as_secs_f32(),
+                worst.as_secs_f32()
+            );
+            let t = Instant::now();
+            let used = "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh";
+            let i = crate::btc_backend::address_info(&c, used).await.is_ok();
+            let h = crate::btc_backend::address_txs(&c, used)
+                .await
+                .map(|v| v.as_array().map_or(0, Vec::len));
+            eprintln!(
+                "{round} btc used history {:>5.1}s (info {i}, txs {h:?})",
+                t.elapsed().as_secs_f32()
+            );
+            let t = Instant::now();
+            let n = rpc(&state, EVM[0].1, "eth_blockNumber", json!([])).await;
+            eprintln!(
+                "{round} evm blockNumber  {:>5.1}s ({})",
+                t.elapsed().as_secs_f32(),
+                n.is_ok()
+            );
+            let t = Instant::now();
+            let st = get("https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365").await;
+            eprintln!(
+                "{round} chart 1Y         {:>5.1}s ({st:?})",
+                t.elapsed().as_secs_f32()
+            );
+        }
+        eprintln!("total {:.1?}", t0.elapsed());
+    });
+}
+
 /// Exolix public API v2 over Tor, without a key: `GET /rate` (fixed, then float) and
 /// `POST /transactions` (XMR → BTC to a fresh, never-funded address; nothing is ever sent).
 #[test]

@@ -48,6 +48,10 @@ export interface HistoryData {
   errors: Record<string, string>;
   btcCapped: boolean;
   dotHistory: 'ok' | 'partial' | 'unavailable' | null;
+  /** Chains with a known answer (cached, even empty, or fetched): « No activity » is final for them. */
+  known: string[];
+  /** Chains whose request is still running (a background refresh when they are also `known`). */
+  pending: string[];
 }
 
 type Source = ReturnType<typeof useVault>['accountSources'][number];
@@ -58,7 +62,7 @@ interface Job {
 }
 
 /** Cached + fetched remote items of every account, merged with the local records. */
-function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string, string>, network: LocalTx['network'], isMultiAccount: (f: Source['family']) => boolean): HistoryData {
+function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string, string>, network: LocalTx['network'], isMultiAccount: (f: Source['family']) => boolean, pending: ReadonlySet<string>): HistoryData {
   // Every account of every chain (§2.9); with several accounts on a chain, each entry says which
   // one (« Sepolia · Ethereum 2 ») and keeps a distinct id (a transfer between two of your
   // accounts appears in both).
@@ -87,7 +91,9 @@ function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string,
   entries.sort((a, b) => (b.time ?? now) - (a.time ?? now));
   const dotStatuses = jobs.filter((j) => j.a.family === 'dot').map((j) => (j.a as { historyStatus?: string | null }).historyStatus);
   const dotHistory: HistoryData['dotHistory'] = dotStatuses.length === 0 ? null : dotStatuses.includes('unavailable') ? 'unavailable' : dotStatuses.includes('partial') ? 'partial' : 'ok';
-  return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
+  const known = [...new Set(jobs.filter((j) => remoteByJob.has(j.key)).map((j) => j.a.chain.key))];
+  const pendingChains = [...new Set(jobs.filter((j) => pending.has(j.key)).map((j) => j.a.chain.key))];
+  return { entries, errors, known, pending: pendingChains, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
 }
 
 const REFRESH_MS = 60_000;
@@ -110,7 +116,9 @@ export function useHistory(): AsyncState<HistoryData> {
   const jobsFor = (): Job[] => accountSources.flatMap((src) => src.adapters.map((a) => ({ a, src, key: historyKey(src.family, src.index, a.chain.key) })));
   const fromCache = (): HistoryData | undefined => {
     const cache = loadHistory(network, fp);
-    return cache && [...cache.values()].some((l) => l.length > 0) ? assemble(jobsFor(), cache, {}, network, isMultiAccount) : undefined;
+    // Empty answers are cached too: « No activity » shows at once, then refreshes silently.
+    const jobs = jobsFor();
+    return cache && cache.size > 0 ? assemble(jobs, cache, {}, network, isMultiAccount, new Set(jobs.map((j) => j.key))) : undefined;
   };
 
   const [state, setState] = useState<{ id: string; data: HistoryData | undefined }>(() => ({ id: `${network}|${fp}`, data: fromCache() }));
@@ -128,8 +136,9 @@ export function useHistory(): AsyncState<HistoryData> {
     const jobs = jobsFor();
     const cache: HistoryCache = loadHistory(network, fp) ?? new Map();
     const errors: Record<string, string> = {};
+    const pending = new Set(jobs.map((j) => j.key));
     const publish = (errs: Record<string, string>) => {
-      if (alive) setState({ id, data: assemble(jobs, cache, errs, network, isMultiAccount) });
+      if (alive) setState({ id, data: assemble(jobs, cache, errs, network, isMultiAccount, pending) });
     };
     const persist = () => saveHistory(network, fp, new Map(jobs.flatMap((j) => (cache.has(j.key) ? [[j.key, cache.get(j.key) ?? []] as const] : []))));
     // Each chain's answer reaches the disk without waiting for the slowest one (batched).
@@ -155,6 +164,7 @@ export function useHistory(): AsyncState<HistoryData> {
         } catch (e) {
           errors[j.a.chain.key] ??= e instanceof Error ? e.message : String(e);
         }
+        pending.delete(j.key);
         publish(lastErrors.current);
       }),
       CHAIN_TIMEOUT_MS,

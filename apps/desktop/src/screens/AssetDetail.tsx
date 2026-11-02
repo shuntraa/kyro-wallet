@@ -70,6 +70,16 @@ export function AssetDetail({ id }: { id: string }) {
     });
   }, [supported, network, pf.balances]);
 
+  // This asset's chain only: a spinner for a few seconds at most, then « Updating… » until its first
+  // answer; a known (cached) answer refreshes silently.
+  const chainPending = !!supported && (history.data?.pending.includes(supported.chainKey) ?? true);
+  const chainKnown = !!supported && !!history.data?.known.includes(supported.chainKey);
+  const [spinWindow, setSpinWindow] = useState(true);
+  useEffect(() => {
+    setSpinWindow(true);
+    const tm = window.setTimeout(() => setSpinWindow(false), 4000);
+    return () => window.clearTimeout(tm);
+  }, [supported?.id]);
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
   const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address, kas: accounts.kas?.address, dot: accounts.polkadot?.address, algo: accounts.algo?.address, xmr: accounts.xmr?.address, ton: accounts.ton?.address, cosmos: accounts.cosmos?.address, apt: accounts.aptos?.address, zec: accounts.zec?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
@@ -278,7 +288,7 @@ export function AssetDetail({ id }: { id: string }) {
             {activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
               <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
             ) : activity.length === 0 ? (
-              <EmptyState title={t('portfolio.noActivity')} action={history.loading ? <Spinner className="size-3.5 text-mute" /> : undefined}>
+              <EmptyState title={t('portfolio.noActivity')} action={chainPending && !chainKnown ? (spinWindow ? <Spinner className="size-3.5 text-mute" /> : <span className="text-[12px] text-mute">{t('portfolio.updating')}</span>) : undefined}>
                 {t('portfolio.noActivityHint')}
               </EmptyState>
             ) : (

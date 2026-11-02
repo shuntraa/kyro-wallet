@@ -101,6 +101,7 @@ export const portfolio = {
   'portfolio.seeAll': 'Tout voir',
   'portfolio.noActivity': 'Aucune activité',
   'portfolio.noActivityHint': 'Rien pour l’instant.',
+  'portfolio.updating': 'Mise à jour…',
   'portfolio.noAccountHere': 'Aucun compte Kyro sur ce réseau.',
   'portfolio.market': 'Marché',
   'portfolio.high24h': 'Plus haut 24 h',

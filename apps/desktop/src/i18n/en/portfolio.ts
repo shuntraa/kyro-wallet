@@ -97,6 +97,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.seeAll': 'See all',
   'portfolio.noActivity': 'No activity',
   'portfolio.noActivityHint': 'Nothing yet.',
+  'portfolio.updating': 'Updating…',
   'portfolio.noAccountHere': 'No Kyro account on this network.',
   'portfolio.market': 'Market',
   'portfolio.high24h': '24 h high',
