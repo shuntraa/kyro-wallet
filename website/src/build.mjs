@@ -141,7 +141,7 @@ Key facts:
 - Blockchains (${chains.length}): ${P.listNames(chains.map((c) => c.name))}. 220+ tokens.
 - Staking: SOL (Solana), ADA (Cardano), TRX (TRON).
 - Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}.
-- Privacy: Tor built in and on by default, no telemetry, optional custom servers.
+- Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
 - Security status: internal security review done; no external audit published yet.
 - Downloads: only from GitHub Releases (${REPO}/releases). No mobile app.
 - Vulnerability reports: privately via GitHub security advisories (${REPO}/security).

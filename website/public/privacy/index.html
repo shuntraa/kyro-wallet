@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy policy | Kyro Wallet</title>
-  <meta name="description" content="Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.">
+  <meta name="description" content="Kyro Wallet collects no personal data: no account, no analytics. A weekly anonymous count over Tor estimates active wallets and can be turned off. Network requests are listed in NETWORK.md.">
   <link rel="canonical" href="https://kyrowallet.com/privacy/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#07080a">
@@ -17,7 +17,7 @@
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Privacy policy | Kyro Wallet">
-  <meta property="og:description" content="Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.">
+  <meta property="og:description" content="Kyro Wallet collects no personal data: no account, no analytics. A weekly anonymous count over Tor estimates active wallets and can be turned off. Network requests are listed in NETWORK.md.">
   <meta property="og:url" content="https://kyrowallet.com/privacy/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
   <meta property="og:image:width" content="1200">
@@ -26,9 +26,9 @@
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Privacy policy | Kyro Wallet">
-  <meta name="twitter:description" content="Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.">
+  <meta name="twitter:description" content="Kyro Wallet collects no personal data: no account, no analytics. A weekly anonymous count over Tor estimates active wallets and can be turned off. Network requests are listed in NETWORK.md.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/privacy/#page","url":"https://kyrowallet.com/privacy/","name":"Kyro Wallet privacy policy","description":"Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Privacy","item":"https://kyrowallet.com/privacy/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/privacy/#page","url":"https://kyrowallet.com/privacy/","name":"Kyro Wallet privacy policy","description":"Kyro Wallet collects no personal data: no account, no analytics. A weekly anonymous count over Tor estimates active wallets and can be turned off. Network requests are listed in NETWORK.md.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Privacy","item":"https://kyrowallet.com/privacy/"}]}]}</script>
   <script src="/motion.js"></script>
   
 </head>
@@ -74,7 +74,7 @@
             
             <p class="eyebrow" data-reveal>Privacy</p>
             <h1 id="page-title" data-reveal>Privacy policy</h1>
-            <p class="lead" data-reveal>Kyro Wallet collects no personal data. There is no account, no analytics and no telemetry.</p>
+            <p class="lead" data-reveal>Kyro Wallet collects no personal data. There is no account and no analytics. Once a week, an anonymous download over Tor helps estimate how many wallets are active.</p>
             
           </div>
           
@@ -86,14 +86,17 @@
       <div class="wrap">
         <div class="prose">
           <h2 id="collect">What Kyro collects</h2>
-          <p>Nothing. The Kyro developers do not receive any data from the app: no personal data, no usage statistics, no crash reports, no identifiers. Kyro has no user accounts and no sign-up.</p>
+          <p>No personal data. The Kyro developers do not receive any personal data from the app: no crash reports, no identifiers, no addresses, no balances. Kyro has no user accounts and no sign-up.</p>
+
+          <h2 id="weekly-count">Anonymous weekly count</h2>
+          <p>Once a week, after you unlock Kyro and only over Tor, the app downloads a tiny file (<code>ping.txt</code>) from Kyro’s latest GitHub release. Nothing is sent with it: no identifier, no version, no address. GitHub’s public download counter for that file then gives an estimate of how many wallets are active each week; the only thing Kyro stores is the week it last did this. If Tor is off, it never happens. You can turn it off in Settings, Privacy, “Anonymous weekly count”.</p>
 
           <h2 id="device">Data on your device</h2>
           <p>Your recovery phrase and keys are encrypted with your password (Argon2id, then XChaCha20-Poly1305) and stored only on your computer. Settings, contacts and cached balances also stay on your computer. Nothing is backed up to a server or a cloud. Uninstalling Kyro and deleting its app folder removes this data; keep your recovery phrase on paper to restore your wallet.</p>
 
           <h2 id="network">Network requests</h2>
           <p>To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).</p>
-          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics.</p>
+          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics. To show its usage counters it reads one public file from <code>raw.githubusercontent.com</code>, without cookies or referrer.</p>
 
           <h2 id="contact">Contact</h2>
           <p>Questions about privacy: open an issue on <a href="https://github.com/shuntraa/kyro-wallet/issues">GitHub</a>. Security issues: report them privately through <a href="https://github.com/shuntraa/kyro-wallet/security">GitHub security advisories</a>.</p>

@@ -9,7 +9,7 @@ Key facts:
 - Blockchains (36): Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa and Zcash. 220+ tokens.
 - Staking: SOL (Solana), ADA (Cardano), TRX (TRON).
 - Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
-- Privacy: Tor built in and on by default, no telemetry, optional custom servers.
+- Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
 - Security status: internal security review done; no external audit published yet.
 - Downloads: only from GitHub Releases (https://github.com/shuntraa/kyro-wallet/releases). No mobile app.
 - Vulnerability reports: privately via GitHub security advisories (https://github.com/shuntraa/kyro-wallet/security).

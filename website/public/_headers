@@ -1,7 +1,8 @@
 # Cloudflare Pages HTTP headers (this file is not served).
-# Everything comes from this site: no external resources, no inline scripts.
+# Everything comes from this site: no external resources, no inline scripts. One exception:
+# stats.js reads the public usage counters (stats/stats.json) from raw.githubusercontent.com.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src https://raw.githubusercontent.com; object-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer

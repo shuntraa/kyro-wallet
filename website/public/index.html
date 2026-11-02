@@ -29,10 +29,11 @@
   <meta name="twitter:title" content="Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux">
   <meta name="twitter:description" content="Free, open-source, non-custodial wallet for Bitcoin, Ethereum, Solana and 33 more blockchains. Send, swap and stake. Your keys stay on your computer.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://kyrowallet.com/#org","name":"Kyro Wallet","url":"https://kyrowallet.com/","logo":"https://kyrowallet.com/favicon.svg","sameAs":["https://github.com/shuntraa/kyro-wallet"]},{"@type":"WebSite","@id":"https://kyrowallet.com/#website","url":"https://kyrowallet.com/","name":"Kyro Wallet","publisher":{"@id":"https://kyrowallet.com/#org"},"inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://kyrowallet.com/#app","name":"Kyro Wallet","alternateName":"Kyro","description":"Free, open-source, non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on your device.","applicationCategory":"FinanceApplication","applicationSubCategory":"Cryptocurrency wallet","operatingSystem":"Windows, macOS, Linux","softwareVersion":"1.0.2","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/shuntraa/kyro-wallet/releases/latest","installUrl":"https://kyrowallet.com/download/","screenshot":"https://kyrowallet.com/img/win-portfolio.webp","url":"https://kyrowallet.com/","publisher":{"@id":"https://kyrowallet.com/#org"},"featureList":["Send and receive on 36 blockchains","Token swaps with fees from 0.7%, included in the amount you receive","Staking for SOL, ADA and TRX","Ledger and Trezor hardware wallets","Built-in Tor, no telemetry","Transactions decoded and confirmed in a system window"]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://kyrowallet.com/#org","name":"Kyro Wallet","url":"https://kyrowallet.com/","logo":"https://kyrowallet.com/favicon.svg","sameAs":["https://github.com/shuntraa/kyro-wallet"]},{"@type":"WebSite","@id":"https://kyrowallet.com/#website","url":"https://kyrowallet.com/","name":"Kyro Wallet","publisher":{"@id":"https://kyrowallet.com/#org"},"inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://kyrowallet.com/#app","name":"Kyro Wallet","alternateName":"Kyro","description":"Free, open-source, non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on your device.","applicationCategory":"FinanceApplication","applicationSubCategory":"Cryptocurrency wallet","operatingSystem":"Windows, macOS, Linux","softwareVersion":"1.0.2","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/shuntraa/kyro-wallet/releases/latest","installUrl":"https://kyrowallet.com/download/","screenshot":"https://kyrowallet.com/img/win-portfolio.webp","url":"https://kyrowallet.com/","publisher":{"@id":"https://kyrowallet.com/#org"},"featureList":["Send and receive on 36 blockchains","Token swaps with fees from 0.7%, included in the amount you receive","Staking for SOL, ADA and TRX","Ledger and Trezor hardware wallets","Built-in Tor, no personal data collected","Transactions decoded and confirmed in a system window"]}]}</script>
   <script src="/motion.js"></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
+  <script src="/stats.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
@@ -84,6 +85,11 @@
           </a>
           <a class="link-muted" href="/download/" data-dl-other>Windows, macOS and Linux</a>
         </div>
+        <p class="usage" data-usage hidden>
+          <span data-usage-item="weekly_active" hidden><strong data-usage-n></strong> active wallets this week</span>
+          <span data-usage-item="downloads_week" hidden><strong data-usage-n></strong> downloads this week</span>
+          <span class="usage-total" data-usage-item="downloads_total" hidden><strong data-usage-n></strong> downloads in total</span>
+        </p>
       </div>
 
       <div class="wrap">
@@ -100,7 +106,7 @@
           <li><strong>Open source</strong><span>GPL-3.0, on GitHub</span></li>
           <li><strong>Self-custody</strong><span>No account, no server</span></li>
           <li><strong>Ledger &amp; Trezor</strong><span>Hardware wallet support</span></li>
-          <li><strong>Tor built in</strong><span>No tracking, no telemetry</span></li>
+          <li><strong>Tor built in</strong><span>No tracking, no personal data</span></li>
         </ul>
       </div>
 
@@ -194,7 +200,7 @@
           <article class="card card-mini spot" data-reveal>
             <span class="mini-icon ic-tor" aria-hidden="true"></span>
             <h3>Private by default</h3>
-            <p>Built-in Tor, no telemetry. Use your own nodes if you like.</p>
+            <p>Built-in Tor, no personal data collected. Use your own nodes if you like.</p>
           </article>
         </div>
         <p class="center"><a class="more" href="/features/">All features</a></p>

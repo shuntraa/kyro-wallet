@@ -2966,3 +2966,27 @@ pre code {
     transform: none;
   }
 }
+
+/* Usage counters (stats.js): hidden until real numbers arrive. */
+.usage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 6px 18px;
+  margin: 18px 0 0;
+  color: var(--mute);
+  font-size: 14px;
+}
+.usage[hidden],
+.usage [hidden] {
+  display: none;
+}
+.usage strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.usage-total {
+  font-size: 12px;
+}

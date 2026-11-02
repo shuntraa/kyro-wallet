@@ -120,7 +120,7 @@ function appLd(chains) {
       'Token swaps with fees from 0.7%, included in the amount you receive',
       'Staking for SOL, ADA and TRX',
       'Ledger and Trezor hardware wallets',
-      'Built-in Tor, no telemetry',
+      'Built-in Tor, no personal data collected',
       'Transactions decoded and confirmed in a system window'
     ]
   };
@@ -181,6 +181,13 @@ function coinWall(chains) {
   return `<nav class="coin-wall" aria-label="All supported blockchains" data-reveal>${row(chains.slice(0, half), 'cr-a')}${row(chains.slice(half), 'cr-b')}</nav>`;
 }
 
+/** Usage counters, filled by stats.js from the public `stats` branch; hidden if unavailable. */
+const usage = () => `<p class="usage" data-usage hidden>
+          <span data-usage-item="weekly_active" hidden><strong data-usage-n></strong> active wallets this week</span>
+          <span data-usage-item="downloads_week" hidden><strong data-usage-n></strong> downloads this week</span>
+          <span class="usage-total" data-usage-item="downloads_total" hidden><strong data-usage-n></strong> downloads in total</span>
+        </p>`;
+
 export function home(chains) {
   const n = chains.length;
   const path = '/';
@@ -208,6 +215,7 @@ export function home(chains) {
           ${dlButton()}
           <a class="link-muted" href="/download/" data-dl-other>Windows, macOS and Linux</a>
         </div>
+        ${usage()}
       </div>
 
       <div class="wrap">
@@ -224,7 +232,7 @@ export function home(chains) {
           <li><strong>Open source</strong><span>GPL-3.0, on GitHub</span></li>
           <li><strong>Self-custody</strong><span>No account, no server</span></li>
           <li><strong>Ledger &amp; Trezor</strong><span>Hardware wallet support</span></li>
-          <li><strong>Tor built in</strong><span>No tracking, no telemetry</span></li>
+          <li><strong>Tor built in</strong><span>No tracking, no personal data</span></li>
         </ul>
       </div>
 
@@ -264,7 +272,7 @@ ${tour()}
           <article class="card card-mini spot" data-reveal>
             <span class="mini-icon ic-tor" aria-hidden="true"></span>
             <h3>Private by default</h3>
-            <p>Built-in Tor, no telemetry. Use your own nodes if you like.</p>
+            <p>Built-in Tor, no personal data collected. Use your own nodes if you like.</p>
           </article>
         </div>
         <p class="center"><a class="more" href="/features/">All features</a></p>
@@ -442,7 +450,7 @@ ${tour()}
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js'],
+    scripts: ['/download.js', '/copy.js', '/stats.js'],
     preload: '<link rel="preload" href="/img/win-portfolio.webp" as="image" media="(min-width: 761px)">\n  <link rel="preload" href="/img/win-portfolio-sm.webp" as="image" media="(max-width: 760px)">',
     ld: [
       {
@@ -584,8 +592,8 @@ export function features(chains) {
           </article>
           <article class="card card-mini spot">
             <span class="mini-icon ic-eye" aria-hidden="true"></span>
-            <h3>No telemetry</h3>
-            <p>No account and no analytics. Every server Kyro contacts is listed on GitHub.</p>
+            <h3>No personal data</h3>
+            <p>No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.</p>
           </article>
           <article class="card card-mini spot">
             <span class="mini-icon ic-lock" aria-hidden="true"></span>
@@ -682,7 +690,7 @@ export function security() {
             <li>If Tor fails, Kyro stops. It never falls back to a direct connection.</li>
             <li>Every server Kyro contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>.</li>
             <li>Use your own node or server for each blockchain.</li>
-            <li>No telemetry, no analytics, no account.</li>
+            <li>No personal data, no analytics, no account. Only an anonymous weekly count over Tor, which you can turn off.</li>
           </ul>
         </div>
         <div class="feature-visual" data-reveal>
@@ -862,7 +870,7 @@ export function download(chains) {
       eyebrow: `Version ${VERSION}`,
       h1: 'Download Kyro Wallet',
       lead: 'Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.',
-      extra: `<div class="actions" data-reveal><a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div>`
+      extra: `<div class="actions" data-reveal><a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div>${usage()}`
     })}
 
     <section class="section section-tight" id="install" aria-labelledby="install-title">
@@ -962,7 +970,7 @@ pnpm build</code></pre>
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js'],
+    scripts: ['/download.js', '/copy.js', '/stats.js'],
     ld: [...webPage(path, 'Download Kyro Wallet', description, trail), appLd(chains)]
   };
 }
@@ -992,7 +1000,7 @@ const FAQ = [
       { q: 'What happens if I lose my recovery phrase?', a: () => `<p>If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.</p>` },
       { q: 'Can I import a recovery phrase from another wallet?', a: () => `<p>Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.</p>` },
       { q: 'Does Kyro use Tor?', a: () => `<p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p>` },
-      { q: 'Does Kyro collect any data?', a: () => `<p>No. No account, no telemetry, no analytics. Every server the app contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies and loads nothing from other sites.</p>` },
+      { q: 'Does Kyro collect any data?', a: () => `<p>No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub’s download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies; it only reads the public usage counters from GitHub.</p>` },
       { home: true, q: 'Is Kyro open source? Has it been audited?', a: () => `<p>The full source is on <a href="${REPO}">GitHub</a> under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.</p>` },
       { q: 'How do I report a vulnerability?', a: () => `<p>Privately, through <a href="${REPO}/security">GitHub security advisories</a>. Please do not open a public issue. See the <a href="${REPO}/blob/main/SECURITY.md">security policy</a>.</p>` }
     ]
@@ -1257,28 +1265,31 @@ export function privacy() {
   const trail = [['/', 'Home'], [path, 'Privacy']];
   const title = 'Privacy policy | Kyro Wallet';
   const description =
-    'Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.';
+    'Kyro Wallet collects no personal data: no account, no analytics. A weekly anonymous count over Tor estimates active wallets and can be turned off. Network requests are listed in NETWORK.md.';
 
   const body = html`
     ${pageHero({
       trail,
       eyebrow: 'Privacy',
       h1: 'Privacy policy',
-      lead: 'Kyro Wallet collects no personal data. There is no account, no analytics and no telemetry.'
+      lead: 'Kyro Wallet collects no personal data. There is no account and no analytics. Once a week, an anonymous download over Tor helps estimate how many wallets are active.'
     })}
 
     <section class="section section-tight" aria-label="Privacy policy">
       <div class="wrap">
         <div class="prose">
           <h2 id="collect">What Kyro collects</h2>
-          <p>Nothing. The Kyro developers do not receive any data from the app: no personal data, no usage statistics, no crash reports, no identifiers. Kyro has no user accounts and no sign-up.</p>
+          <p>No personal data. The Kyro developers do not receive any personal data from the app: no crash reports, no identifiers, no addresses, no balances. Kyro has no user accounts and no sign-up.</p>
+
+          <h2 id="weekly-count">Anonymous weekly count</h2>
+          <p>Once a week, after you unlock Kyro and only over Tor, the app downloads a tiny file (<code>ping.txt</code>) from Kyro’s latest GitHub release. Nothing is sent with it: no identifier, no version, no address. GitHub’s public download counter for that file then gives an estimate of how many wallets are active each week; the only thing Kyro stores is the week it last did this. If Tor is off, it never happens. You can turn it off in Settings, Privacy, “Anonymous weekly count”.</p>
 
           <h2 id="device">Data on your device</h2>
           <p>Your recovery phrase and keys are encrypted with your password (Argon2id, then XChaCha20-Poly1305) and stored only on your computer. Settings, contacts and cached balances also stay on your computer. Nothing is backed up to a server or a cloud. Uninstalling Kyro and deleting its app folder removes this data; keep your recovery phrase on paper to restore your wallet.</p>
 
           <h2 id="network">Network requests</h2>
           <p>To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).</p>
-          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics.</p>
+          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics. To show its usage counters it reads one public file from <code>raw.githubusercontent.com</code>, without cookies or referrer.</p>
 
           <h2 id="contact">Contact</h2>
           <p>Questions about privacy: open an issue on <a href="${REPO}/issues">GitHub</a>. Security issues: report them privately through <a href="${REPO}/security">GitHub security advisories</a>.</p>

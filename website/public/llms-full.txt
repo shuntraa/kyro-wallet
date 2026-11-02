@@ -15,13 +15,15 @@ A desktop wallet for Bitcoin, Ethereum, Solana and 33 more blockchains. Send, sw
 
 Download Kyro  Windows, macOS and Linux
 
+:  active wallets this week :  downloads this week :  downloads in total
+
 - Open source: GPL-3.0, on GitHub
 
 - Self-custody: No account, no server
 
 - Ledger & Trezor: Hardware wallet support
 
-- Tor built in: No tracking, no telemetry
+- Tor built in: No tracking, no personal data
 
 Swap
 
@@ -78,7 +80,7 @@ Address-poisoning alerts, clipboard checks and exact token approvals.
 
 ### Private by default
 
-Built-in Tor, no telemetry. Use your own nodes if you like.
+Built-in Tor, no personal data collected. Use your own nodes if you like.
 
 All features
 
@@ -295,9 +297,9 @@ Several accounts per blockchain from the same phrase. Move funds between them in
 
 All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.
 
-### No telemetry
+### No personal data
 
-No account and no analytics. Every server Kyro contacts is listed on GitHub.
+No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.
 
 ### Auto-lock
 
@@ -390,7 +392,7 @@ Kyro talks to blockchains over Tor, which is built into the app. Your IP address
 
 - Use your own node or server for each blockchain.
 
-- No telemetry, no analytics, no account.
+- No personal data, no analytics, no account. Only an anonymous weekly count over Tor, which you can turn off.
 
 Limits
 
@@ -537,6 +539,8 @@ Version 1.0.2
 Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.
 
 Release notes
+
+:  active wallets this week :  downloads this week :  downloads in total
 
 Recommended
 
@@ -702,7 +706,7 @@ Q: Does Kyro use Tor?
 A: Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.
 
 Q: Does Kyro collect any data?
-A: No. No account, no telemetry, no analytics. Every server the app contacts is listed in NETWORK.md. This website sets no cookies and loads nothing from other sites.
+A: No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub's download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in NETWORK.md. This website sets no cookies; it only reads the public usage counters from GitHub.
 
 Q: Is Kyro open source? Has it been audited?
 A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
@@ -928,11 +932,15 @@ Privacy
 
 # Privacy policy
 
-Kyro Wallet collects no personal data. There is no account, no analytics and no telemetry.
+Kyro Wallet collects no personal data. There is no account and no analytics. Once a week, an anonymous download over Tor helps estimate how many wallets are active.
 
 ## What Kyro collects
 
-Nothing. The Kyro developers do not receive any data from the app: no personal data, no usage statistics, no crash reports, no identifiers. Kyro has no user accounts and no sign-up.
+No personal data. The Kyro developers do not receive any personal data from the app: no crash reports, no identifiers, no addresses, no balances. Kyro has no user accounts and no sign-up.
+
+## Anonymous weekly count
+
+Once a week, after you unlock Kyro and only over Tor, the app downloads a tiny file (ping.txt) from Kyro's latest GitHub release. Nothing is sent with it: no identifier, no version, no address. GitHub's public download counter for that file then gives an estimate of how many wallets are active each week; the only thing Kyro stores is the week it last did this. If Tor is off, it never happens. You can turn it off in Settings, Privacy, "Anonymous weekly count".
 
 ## Data on your device
 
@@ -942,7 +950,7 @@ Your recovery phrase and keys are encrypted with your password (Argon2id, then X
 
 To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in NETWORK.md, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).
 
-The website kyrowallet.com sets no cookies and uses no trackers or analytics.
+The website kyrowallet.com sets no cookies and uses no trackers or analytics. To show its usage counters it reads one public file from raw.githubusercontent.com, without cookies or referrer.
 
 ## Contact
 
