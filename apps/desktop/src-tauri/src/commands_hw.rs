@@ -39,7 +39,13 @@ pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
     let app = app.clone();
     let id = id.to_string();
     Arc::new(move |kind| {
-        let _ = app.emit("hw-prompt", serde_json::json!({ "id": id, "kind": kind }));
+        let msg = match kind {
+            crate::hw::Prompt::OpenApp(name) => {
+                serde_json::json!({ "id": id, "kind": "open-app", "app": name })
+            }
+            _ => serde_json::json!({ "id": id, "kind": kind }),
+        };
+        let _ = app.emit("hw-prompt", msg);
     })
 }
 

@@ -11,6 +11,8 @@ import { t } from '../i18n';
 
 export interface HwPromptSnapshot {
   byDevice: Record<string, HwPrompt['kind']>;
+  /** `open-app` prompts: the app being opened, per device. */
+  apps?: Record<string, string>;
 }
 
 export interface HwPromptStore {
@@ -39,7 +41,9 @@ export function createHwPromptStore(listen: (cb: (p: HwPrompt) => void) => Promi
       };
     },
     start() {
-      started ??= listen((p) => set({ byDevice: { ...snap.byDevice, [p.id]: p.kind } })).then((u) => {
+      started ??= listen((p) =>
+        set({ byDevice: { ...snap.byDevice, [p.id]: p.kind }, ...(p.app || snap.apps ? { apps: { ...snap.apps, ...(p.app ? { [p.id]: p.app } : {}) } } : {}) }),
+      ).then((u) => {
         un = u;
       });
       return started;
@@ -52,7 +56,8 @@ export function createHwPromptStore(listen: (cb: (p: HwPrompt) => void) => Promi
     clear(id) {
       if (!(id in snap.byDevice)) return;
       const { [id]: _gone, ...rest } = snap.byDevice;
-      set({ byDevice: rest });
+      const { [id]: _app, ...apps } = snap.apps ?? {};
+      set(snap.apps ? { byDevice: rest, apps } : { byDevice: rest });
     },
   };
 }
@@ -103,6 +108,10 @@ export function hwErrorView(e: unknown): HwErrorView {
         detail: d ? t('hw.err.wrongAppDetail', { expected: d.expected, open: d.open }) : err.message,
         safe: true,
       };
+    }
+    case 'HW_APP_MISSING': {
+      const d = errorData(e, 'HW_APP_MISSING');
+      return { title: t('hw.err.appMissingTitle'), detail: d ? t('hw.err.appMissingDetail', { app: d.app }) : err.message, safe: true };
     }
     case 'HW_REJECTED':
       return { title: t('hw.err.rejectedTitle'), detail: t('hw.err.rejectedDetail'), safe: true };

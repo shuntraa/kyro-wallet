@@ -199,7 +199,7 @@ pub fn ledger_ensure(
             Some(st) => HwError::unsupported(st.reason.unwrap_or_default()),
             None => HwError::unsupported(format!("{} on Ledger", chain.label())),
         })?;
-    let (name, version) = ledger_open_app(link, ctl)?;
+    let (name, version) = super::ledger::ensure_open(link, ctl, expected)?;
     if name != expected {
         return Err(HwError::WrongApp {
             expected: expected.into(),
@@ -925,7 +925,11 @@ mod tests {
         let k = k.key.unwrap();
         assert_eq!(k.address, wallet_core::stellar_address(&seed, 0).unwrap());
         assert_eq!(k.path, "m/44'/148'/0'");
-        let mut l = Ledger::with_link(Replay(Mutex::new(vec![app("XRP", "2.4.0")])));
+        let mut l = Ledger::with_link(Replay(Mutex::new(vec![
+            app("XRP", "2.4.0"),
+            (apdu::quit_app(), vec![0x90, 0x00]),
+            app("XRP", "2.4.0"),
+        ])));
         assert_eq!(
             read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Stellar, 0).unwrap_err(),
             HwError::WrongApp {

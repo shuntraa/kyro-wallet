@@ -1,12 +1,14 @@
 //! Ledger over USB HID (hidapi): Bitcoin app v2 (Ledger's `ledger_bitcoin_client`, PSBT +
 //! default wallet policies), Ethereum app (EIP-1559, ERC-20 descriptors), Solana app.
 //!
-//! The right app must be open on the device: "Bitcoin Test" on testnet / "Bitcoin" on mainnet,
-//! "Ethereum" (all EVM chains), "Solana".
+//! Each chain needs its app: "Bitcoin Test" on testnet / "Bitcoin" on mainnet, "Ethereum" (all
+//! EVM chains), "Solana", … Kyro opens it from the dashboard (the user approves on the device),
+//! quitting another open app first ([`ensure_open`]).
 
 use std::ffi::CString;
 use std::str::FromStr;
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use hidapi::{HidApi, HidDevice};
@@ -129,7 +131,10 @@ pub fn open(loc: &Locator, model: &str) -> HwResult<Box<dyn HardwareWallet>> {
     let api = guard.as_ref().ok_or(HwError::NotFound)?;
     let dev = api.open_path(&loc.path).map_err(|_| HwError::NotFound)?;
     Ok(Box::new(Ledger {
-        link: HidLink { dev },
+        link: HidLink {
+            dev: Mutex::new(dev),
+            path: Mutex::new(loc.path.clone()),
+        },
         model: model.to_string(),
     }))
 }
@@ -137,18 +142,70 @@ pub fn open(loc: &Locator, model: &str) -> HwResult<Box<dyn HardwareWallet>> {
 /// Raw APDU exchange. `HidLink` in the app, a recorded replay in tests.
 pub trait ApduLink: Send {
     fn exchange(&self, ctl: &Ctl, apdu: &[u8]) -> HwResult<(Vec<u8>, u16)>;
+
+    /// After an app switch the USB device disconnects and comes back: open it again.
+    fn reconnect(&self, _ctl: &Ctl) -> HwResult<()> {
+        Ok(())
+    }
 }
 
 pub struct HidLink {
-    dev: HidDevice,
+    dev: Mutex<HidDevice>,
+    path: Mutex<CString>,
+}
+
+/// How long the device may take to come back after an app switch.
+const REENUMERATE: Duration = Duration::from_secs(10);
+
+impl HidLink {
+    /// The same HID path if it is back, otherwise the first Ledger found (the path can change
+    /// with the app).
+    fn find_again(&self) -> Option<(HidDevice, CString)> {
+        let want = lock(&self.path).clone();
+        let mut guard = lock(hidapi());
+        let api = guard.as_mut()?;
+        let _ = api.refresh_devices();
+        let mut paths: Vec<CString> = api
+            .device_list()
+            .filter(|d| {
+                d.vendor_id() == VENDOR_ID
+                    && (d.usage_page() == USAGE_PAGE
+                        || (d.usage_page() == 0 && d.interface_number() == 0))
+            })
+            .map(|d| d.path().to_owned())
+            .collect();
+        paths.sort_by_key(|p| *p != want);
+        paths
+            .into_iter()
+            .find_map(|p| api.open_path(&p).ok().map(|d| (d, p)))
+    }
 }
 
 impl ApduLink for HidLink {
+    fn reconnect(&self, ctl: &Ctl) -> HwResult<()> {
+        let end = Instant::now() + REENUMERATE;
+        // Let the old device go away first.
+        std::thread::sleep(POLL * 5);
+        loop {
+            ctl.check()?;
+            if let Some((dev, path)) = self.find_again() {
+                *lock(&self.dev) = dev;
+                *lock(&self.path) = path;
+                return Ok(());
+            }
+            if Instant::now() >= end {
+                return Err(HwError::Disconnected);
+            }
+            std::thread::sleep(POLL * 3);
+        }
+    }
+
     fn exchange(&self, ctl: &Ctl, apdu_bytes: &[u8]) -> HwResult<(Vec<u8>, u16)> {
         ctl.check()?;
+        let dev = lock(&self.dev);
         let mut junk = [0u8; apdu::PACKET];
         for _ in 0..64 {
-            match self.dev.read_timeout(&mut junk, 0) {
+            match dev.read_timeout(&mut junk, 0) {
                 Ok(0) => break,
                 Ok(_) => continue,
                 Err(_) => return Err(HwError::Disconnected),
@@ -157,13 +214,12 @@ impl ApduLink for HidLink {
         for f in apdu::frames(apdu_bytes) {
             let mut report = [0u8; apdu::PACKET + 1]; // leading HID report id 0
             report[1..].copy_from_slice(&f);
-            self.dev.write(&report).map_err(|_| HwError::Disconnected)?;
+            dev.write(&report).map_err(|_| HwError::Disconnected)?;
         }
         let mut d = apdu::Deframer::default();
         loop {
             let mut pkt = [0u8; apdu::PACKET];
-            let n = self
-                .dev
+            let n = dev
                 .read_timeout(&mut pkt, POLL.as_millis() as i32)
                 .map_err(|_| HwError::Disconnected)?;
             if n == 0 {
@@ -194,17 +250,13 @@ impl<L: ApduLink> Ledger<L> {
     }
 
     fn open_app(&self, ctl: &Ctl) -> HwResult<(String, String)> {
-        let (data, sw) = self.link.exchange(ctl, &apdu::get_app_and_version())?;
-        if sw != SW_OK {
-            return Err(apdu::sw_error(sw, SwContext::General));
-        }
-        apdu::parse_app_and_version(&data)
+        current_app(&self.link, ctl)
     }
 
     fn ensure_app(&self, ctl: &Ctl, chain: Chain, net: Network) -> HwResult<()> {
         let (expected, min) = app_for(chain, net)
             .ok_or_else(|| HwError::unsupported(format!("{} on Ledger", chain.label())))?;
-        let (name, version) = self.open_app(ctl)?;
+        let (name, version) = ensure_open(&self.link, ctl, expected)?;
         if name != expected {
             return Err(HwError::WrongApp {
                 expected: expected.into(),
@@ -561,6 +613,71 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
     }
 }
 
+/// GET APP AND VERSION: name and version of the open app ("BOLOS" on the dashboard).
+pub fn current_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
+    let (data, sw) = link.exchange(ctl, &apdu::get_app_and_version())?;
+    if sw != SW_OK {
+        return Err(apdu::sw_error(sw, SwContext::General));
+    }
+    apdu::parse_app_and_version(&data)
+}
+
+/// Status of QUIT APP / OPEN APP. A disconnect before the answer means the switch started.
+fn switch_result(r: HwResult<(Vec<u8>, u16)>, app: &str) -> HwResult<()> {
+    match r {
+        Ok((_, SW_OK)) | Err(HwError::Disconnected) => Ok(()),
+        Ok((_, 0x6807)) => Err(HwError::AppMissing(app.into())),
+        Ok((_, 0x5501 | 0x6985)) => Err(HwError::Rejected),
+        Ok((_, 0x5515 | 0x6982)) => Err(HwError::Locked),
+        Ok((_, sw)) => Err(apdu::sw_error(sw, SwContext::General)),
+        Err(e) => Err(e),
+    }
+}
+
+/// Makes `expected` the open app, like Ledger Live: another open app is quit, then the
+/// dashboard is asked to open `expected` (the user approves on the device). Returns the open
+/// app's name and version; the caller still checks both.
+pub fn ensure_open(
+    link: &dyn ApduLink,
+    ctl: &Ctl,
+    expected: &'static str,
+) -> HwResult<(String, String)> {
+    let mut quit = false;
+    let mut opened: Option<Instant> = None;
+    loop {
+        let (name, version) = current_app(link, ctl)?;
+        if name == expected {
+            return Ok((name, version));
+        }
+        if name == DASHBOARD {
+            if let Some(at) = opened {
+                // Approved, but the app is not up yet.
+                if at.elapsed() > REENUMERATE {
+                    return Err(HwError::WrongApp {
+                        expected: expected.into(),
+                        open: name,
+                    });
+                }
+                std::thread::sleep(POLL * 3);
+                continue;
+            }
+            ctl.prompt(super::Prompt::OpenApp(expected));
+            switch_result(link.exchange(ctl, &apdu::open_app(expected)?), expected)?;
+            opened = Some(Instant::now());
+        } else {
+            if quit || opened.is_some() {
+                return Err(HwError::WrongApp {
+                    expected: expected.into(),
+                    open: name,
+                });
+            }
+            quit = true;
+            switch_result(link.exchange(ctl, &apdu::quit_app()), expected)?;
+        }
+        link.reconnect(ctl)?;
+    }
+}
+
 /// The app returns both the public key and its address: they must agree.
 fn check_eth_address(a: &apdu::EthAddress) -> HwResult<String> {
     let from_key =
@@ -716,11 +833,80 @@ mod tests {
         assert_eq!(err, HwError::Rejected);
     }
 
+    const GET_APP: &str = "=> b001000000";
+    const DASH: &str = "<= 0105424f4c4f5305312e302e309000"; // "BOLOS" 1.0.0
+    const BTC_APP: &str = "<= 0107426974636f696e05322e312e309000"; // "Bitcoin" 2.1.0
+    const ETH_APP: &str = "<= 0108457468657265756d05312e31322e3001029000"; // "Ethereum" 1.12.0
+    const OPEN_BTC: &str = "=> e0d8000007426974636f696e";
+    const QUIT: &str = "=> b0a7000000";
+
+    fn auto_open(lines: &[&str]) -> HwResult<()> {
+        Ledger::with_link(Replay::new(lines)).ensure_app(&ctl(), Chain::Btc, Network::Mainnet)
+    }
+
+    #[test]
+    fn opens_the_app_from_the_dashboard() {
+        assert_eq!(
+            apdu::open_app("Bitcoin").unwrap(),
+            hex::decode(&OPEN_BTC[3..]).unwrap()
+        );
+        let prompts = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let p = prompts.clone();
+        let c = Ctl::new(
+            Duration::from_secs(5),
+            std::sync::Arc::new(move |x| lock(&p).push(x)),
+        );
+        let ledger = Ledger::with_link(Replay::new(&[
+            GET_APP, DASH, OPEN_BTC, "<= 9000", GET_APP, BTC_APP,
+        ]));
+        ledger.ensure_app(&c, Chain::Btc, Network::Mainnet).unwrap();
+        assert_eq!(
+            *lock(&prompts),
+            vec![super::super::Prompt::OpenApp("Bitcoin")]
+        );
+    }
+
+    #[test]
+    fn quits_another_app_then_opens() {
+        assert_eq!(
+            auto_open(&[
+                GET_APP, ETH_APP, QUIT, "<= 9000", GET_APP, DASH, OPEN_BTC, "<= 9000", GET_APP,
+                BTC_APP,
+            ]),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn open_app_failures() {
+        assert_eq!(
+            auto_open(&[GET_APP, DASH, OPEN_BTC, "<= 6807"]),
+            Err(HwError::AppMissing("Bitcoin".into()))
+        );
+        assert_eq!(
+            auto_open(&[GET_APP, DASH, OPEN_BTC, "<= 5501"]),
+            Err(HwError::Rejected)
+        );
+        assert_eq!(
+            auto_open(&[GET_APP, DASH, OPEN_BTC, "<= 6985"]),
+            Err(HwError::Rejected)
+        );
+        assert_eq!(
+            auto_open(&[GET_APP, DASH, OPEN_BTC, "<= 5515"]),
+            Err(HwError::Locked)
+        );
+        assert_eq!(auto_open(&[GET_APP, "<= 5515"]), Err(HwError::Locked));
+        assert_eq!(
+            auto_open(&[GET_APP, ETH_APP, QUIT, "<= 5515"]),
+            Err(HwError::Locked)
+        );
+    }
+
     #[test]
     fn wrong_app_is_reported_with_names() {
+        // The app did not quit: reported, not retried forever.
         let ledger = Ledger::with_link(Replay::new(&[
-            "=> b001000000",
-            "<= 0108457468657265756d05312e31322e3001029000", // "Ethereum" 1.12.0
+            GET_APP, ETH_APP, QUIT, "<= 9000", GET_APP, ETH_APP,
         ]));
         let err = ledger
             .ensure_app(&ctl(), Chain::Btc, Network::Testnet)

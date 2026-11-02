@@ -139,10 +139,18 @@ impl Chain {
 pub enum HwError {
     NotFound,
     Locked,
-    WrongApp { expected: String, open: String },
+    WrongApp {
+        expected: String,
+        open: String,
+    },
+    /// The Ledger has no app of this name.
+    AppMissing(String),
     Rejected,
     Disconnected,
-    Unsupported { what: String, min: Option<String> },
+    Unsupported {
+        what: String,
+        min: Option<String>,
+    },
     Busy(String),
     Timeout,
     Cancelled,
@@ -193,6 +201,7 @@ impl From<HwError> for AppError {
             HwError::NotFound => AppError::HwNotFound,
             HwError::Locked => AppError::HwLocked,
             HwError::WrongApp { expected, open } => AppError::HwWrongApp { expected, open },
+            HwError::AppMissing(app) => AppError::HwAppMissing { app },
             HwError::Rejected => AppError::HwRejected,
             HwError::Disconnected => AppError::HwDisconnected,
             HwError::Unsupported { what, min } => AppError::HwUnsupported { what, min },
@@ -211,6 +220,8 @@ impl From<HwError> for AppError {
 #[serde(rename_all = "kebab-case")]
 pub enum Prompt {
     ConfirmOnDevice,
+    /// Ledger: approve opening this app on the device.
+    OpenApp(&'static str),
     PinOnDevice,
     PassphraseOnDevice,
     /// Trezor One: show the 3×3 blind matrix, then call `hw_pin_matrix`.

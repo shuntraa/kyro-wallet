@@ -117,6 +117,17 @@ pub fn get_app_and_version() -> Vec<u8> {
     vec![0xB0, 0x01, 0x00, 0x00, 0x00]
 }
 
+/// QUIT APP (`B0 A7 00 00`): the open app exits to the dashboard (the USB device re-enumerates).
+pub fn quit_app() -> Vec<u8> {
+    vec![0xB0, 0xA7, 0x00, 0x00, 0x00]
+}
+
+/// OPEN APP (`E0 D8 00 00 Lc name`), sent to the dashboard: the user approves on the device,
+/// then the app starts and the USB device re-enumerates.
+pub fn open_app(name: &str) -> HwResult<Vec<u8>> {
+    apdu(0xE0, 0xD8, 0x00, 0x00, name.as_bytes())
+}
+
 /// `format (=1) || len || name || len || version || [len || flags]`.
 pub fn parse_app_and_version(data: &[u8]) -> HwResult<(String, String)> {
     let bad = || HwError::bad("malformed “app and version” response");

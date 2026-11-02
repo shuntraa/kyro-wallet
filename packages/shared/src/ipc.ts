@@ -2199,7 +2199,9 @@ export interface WatchOnlyAccount {
 /** Event `hw-prompt`: what to tell the user while a device call is pending. */
 export interface HwPrompt {
   id: string;
-  kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' | 'thp-confirm-pairing' | 'thp-pairing-code' | 'thp-confirm-connection';
+  /** `open-app` only: the Ledger app Kyro asked the device to open. */
+  app?: string;
+  kind: 'confirm-on-device' | 'open-app' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' | 'thp-confirm-pairing' | 'thp-pairing-code' | 'thp-confirm-connection';
 }
 
 /** `hw_thp_pairings` entry: a Trezor Safe 7 paired with this installation (public data). */
@@ -2619,6 +2621,8 @@ export const ERROR_CODES = [
   'HW_NOT_FOUND',
   'HW_LOCKED',
   'HW_WRONG_APP',
+  /** Ledger: the app is not installed. `data: { app }`. */
+  'HW_APP_MISSING',
   'HW_REJECTED',
   'HW_DISCONNECTED',
   'HW_UNSUPPORTED',
@@ -2639,6 +2643,7 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 /** `data` of the hardware-wallet errors that carry details. */
 export interface IpcErrorData {
   HW_WRONG_APP: { expected: string; open: string };
+  HW_APP_MISSING: { app: string };
   HW_UNSUPPORTED: { min: string | null };
   HW_ADDRESS_MISMATCH: { device: string; expected: string };
 }

@@ -106,7 +106,7 @@ impl<'a> App<'a> {
     /// Fails unless the app of `chain` is open, recent enough.
     pub fn open(link: &'a dyn ApduLink, ctl: &'a Ctl, chain: HwKeyChain) -> HwResult<Self> {
         let (name, min) = app_for(hw_chain(chain)).ok_or_else(|| HwError::unsupported("app"))?;
-        let (open, version) = open_app(link, ctl)?;
+        let (open, version) = super::ledger::ensure_open(link, ctl, name)?;
         if open != name {
             return Err(HwError::WrongApp {
                 expected: name.into(),
@@ -280,7 +280,12 @@ mod tests {
 
     #[test]
     fn app_checks() {
-        let r = Replay::new(&app("Ethereum", "1.10.0"));
+        // Kyro quits the other app; if it is still open, the user is told.
+        let mut lines = app("Ethereum", "1.10.0").to_vec();
+        lines.push("=> b0a7000000".into());
+        lines.push("<= 9000".into());
+        lines.extend(app("Ethereum", "1.10.0"));
+        let r = Replay::new(&lines);
         let ctl = ctl();
         assert_eq!(
             App::open(&r, &ctl, HwKeyChain::Sui).err(),

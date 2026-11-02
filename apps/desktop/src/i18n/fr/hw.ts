@@ -12,6 +12,8 @@ export const hw = {
   'hw.err.lockedDetail': 'Déverrouille-le avec ton code PIN (sur l’appareil, ou la grille pour une Trezor One), puis réessaie.',
   'hw.err.wrongAppTitle': 'Mauvaise application ouverte',
   'hw.err.wrongAppDetail': 'Ouvre l’app « {expected} » sur ton Ledger (ouverte : « {open} »), puis réessaie.',
+  'hw.err.appMissingTitle': 'App non installée',
+  'hw.err.appMissingDetail': 'Installe l’app « {app} » sur ton Ledger avec Ledger Live, puis réessaie.',
   'hw.err.rejectedTitle': 'Refusé sur l’appareil',
   'hw.err.rejectedDetail': 'Tu as refusé sur l’écran de l’appareil : rien n’a été signé ni envoyé.',
   'hw.err.disconnectedTitle': 'Appareil débranché',
@@ -40,6 +42,8 @@ export const hw = {
   'hw.err.genericTitle': 'Erreur',
 
   // components/hw.tsx — device prompts
+  'hw.prompt.openAppTitle': 'Confirme sur ton Ledger : ouvrir {app}',
+  'hw.prompt.openAppDetail': 'Ton Ledger demande d’ouvrir l’app « {app} ». Accepte sur l’appareil.',
   'hw.prompt.confirmTitle': 'Confirme sur ton appareil',
   'hw.prompt.confirmDetail': 'Vérifie le détail sur l’appareil et confirme-le là. Si quelque chose diffère, refuse.',
   'hw.prompt.pinTitle': 'Saisis ton PIN sur l’appareil',

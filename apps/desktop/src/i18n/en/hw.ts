@@ -10,6 +10,8 @@ export const hw: Record<keyof typeof fr, string> = {
   'hw.err.lockedDetail': 'Unlock it with your PIN (on the device, or in the grid for a Trezor One), then try again.',
   'hw.err.wrongAppTitle': 'Wrong app open',
   'hw.err.wrongAppDetail': 'Open the “{expected}” app on your Ledger (open now: “{open}”), then try again.',
+  'hw.err.appMissingTitle': 'App not installed',
+  'hw.err.appMissingDetail': 'Install the “{app}” app on your Ledger with Ledger Live, then try again.',
   'hw.err.rejectedTitle': 'Rejected on the device',
   'hw.err.rejectedDetail': 'You rejected on the device screen: nothing was signed or sent.',
   'hw.err.disconnectedTitle': 'Device unplugged',
@@ -37,6 +39,8 @@ export const hw: Record<keyof typeof fr, string> = {
   'hw.err.vaultLockedDetail': 'Unlock Kyro to use your hardware wallet.',
   'hw.err.genericTitle': 'Error',
 
+  'hw.prompt.openAppTitle': 'Confirm on your Ledger: open {app}',
+  'hw.prompt.openAppDetail': 'Your Ledger asks to open the “{app}” app. Accept on the device.',
   'hw.prompt.confirmTitle': 'Confirm on your device',
   'hw.prompt.confirmDetail': 'Check the details on the device and confirm there. If anything differs, reject.',
   'hw.prompt.pinTitle': 'Enter your PIN on the device',

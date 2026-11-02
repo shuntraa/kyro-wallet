@@ -42,10 +42,19 @@ function promptText(kind: string): { title: string; detail: string } | null {
 
 /** "Waiting for the device" panel with Cancel (`hw_cancel`). */
 export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: string; idle?: string; className?: string; confirm?: { title: string; detail: string } }) {
-  const prompt = useHwPrompts().byDevice[deviceId];
+  const prompts = useHwPrompts();
+  const prompt = prompts.byDevice[deviceId];
   const [cancelling, setCancelling] = useState(false);
   const { t } = useT();
-  const text = prompt === 'confirm-on-device' && confirm ? confirm : prompt ? promptText(prompt) : null;
+  const app = prompts.apps?.[deviceId];
+  const text =
+    prompt === 'open-app' && app
+      ? { title: t('hw.prompt.openAppTitle', { app }), detail: t('hw.prompt.openAppDetail', { app }) }
+      : prompt === 'confirm-on-device' && confirm
+        ? confirm
+        : prompt
+          ? promptText(prompt)
+          : null;
   return (
     <div role="status" aria-live="polite" className={cn('fade-in flex items-start gap-3.5 rounded-box border border-l-2 border-ice-line border-l-ice bg-ice/[.05] px-4 py-3.5', className)}>
       <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ice/12 text-ice">

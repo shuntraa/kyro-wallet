@@ -40,6 +40,8 @@ pub enum AppError {
     HwLocked,
     #[error("Wrong app open on the device: open “{expected}” (open: “{open}”).")]
     HwWrongApp { expected: String, open: String },
+    #[error("Install the “{app}” app on your Ledger with Ledger Live.")]
+    HwAppMissing { app: String },
     #[error("Refused on the device.")]
     HwRejected,
     #[error("Device unplugged or unreachable: operation aborted, nothing was signed.")]
@@ -97,6 +99,7 @@ impl AppError {
             AppError::HwNotFound => "HW_NOT_FOUND",
             AppError::HwLocked => "HW_LOCKED",
             AppError::HwWrongApp { .. } => "HW_WRONG_APP",
+            AppError::HwAppMissing { .. } => "HW_APP_MISSING",
             AppError::HwRejected => "HW_REJECTED",
             AppError::HwDisconnected => "HW_DISCONNECTED",
             AppError::HwUnsupported { .. } => "HW_UNSUPPORTED",
@@ -147,6 +150,9 @@ impl AppError {
             AppError::HwWrongApp { expected, open } => format!(
                 "Mauvaise application ouverte sur l'appareil : ouvre « {expected} » (ouverte : « {open} »)."
             ),
+            AppError::HwAppMissing { app } => {
+                format!("Installe l'application « {app} » sur ton Ledger avec Ledger Live.")
+            }
             AppError::HwRejected => "Refusé sur l'appareil.".into(),
             AppError::HwDisconnected => {
                 "Appareil débranché ou injoignable : opération abandonnée, rien n'a été signé."
@@ -179,6 +185,7 @@ impl AppError {
             AppError::HwWrongApp { expected, open } => {
                 Some(serde_json::json!({ "expected": expected, "open": open }))
             }
+            AppError::HwAppMissing { app } => Some(serde_json::json!({ "app": app })),
             AppError::HwUnsupported { min, .. } => Some(serde_json::json!({ "min": min })),
             AppError::HwAddressMismatch { device, expected } => {
                 Some(serde_json::json!({ "device": device, "expected": expected }))

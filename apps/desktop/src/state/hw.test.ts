@@ -39,6 +39,7 @@ describe('hardware-wallet error messages', () => {
     expect(v('HW_WRONG_APP', { expected: 'Ethereum', open: 'Bitcoin Test' }).detail).toContain('« Ethereum »');
     expect(v('HW_WRONG_APP', { expected: 'Ethereum', open: 'Bitcoin Test' }).detail).toContain('« Bitcoin Test »');
     expect(v('HW_REJECTED').detail).toMatch(/rien n’a été signé/);
+    expect(v('HW_APP_MISSING', { app: 'Bitcoin' }).detail).toContain('« Bitcoin »');
     expect(v('HW_DISCONNECTED').detail).toMatch(/[Rr]ien n’a été signé ni envoyé/);
     expect(v('HW_TIMEOUT').title).toMatch(/Pas de réponse/);
     expect(v('HW_UNSUPPORTED', { min: '1.10.4' })).toMatchObject({ title: 'Firmware ou application trop ancien' });
@@ -65,5 +66,14 @@ describe('hw-prompt store', () => {
     expect(store.getSnapshot().byDevice).toEqual({ 'trezor-1': 'confirm-on-device', 'ledger-1': 'confirm-on-device' });
     store.clear('trezor-1');
     expect(store.getSnapshot().byDevice).toEqual({ 'ledger-1': 'confirm-on-device' });
+  });
+
+  it('keeps the app name of an open-app prompt', async () => {
+    store = createHwPromptStore(onHwPrompt);
+    await store.start();
+    emitDemoEvent('hw-prompt', { id: 'ledger-1', kind: 'open-app', app: 'Bitcoin' });
+    expect(store.getSnapshot()).toEqual({ byDevice: { 'ledger-1': 'open-app' }, apps: { 'ledger-1': 'Bitcoin' } });
+    store.clear('ledger-1');
+    expect(store.getSnapshot()).toEqual({ byDevice: {}, apps: {} });
   });
 });
