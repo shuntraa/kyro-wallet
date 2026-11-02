@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.5
+
+- Earn (was Staking): a new page with 14 options and live estimated rates. New: ETH liquid
+  staking with Lido (stake, unstake through the withdrawal queue, claim), and lending on
+  Aave v3: USDT, USDC, DAI and WETH on Ethereum, USDT and USDC on Arbitrum and Polygon, USDC
+  on Base. Every step shows the contract, the function and the exact amount; approvals are
+  for the exact amount only.
+- Activity: an asset page only waits for its own blockchain. Empty history is remembered, so
+  "No activity" shows at once; a spinner never stays more than a few seconds.
+- Charts fit the window in width and height.
+- Earn opens from its last state, without grey placeholders.
+- Notifications: one short style everywhere, starting with the update notice.
 ## 1.0.4
 
 - Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools
