@@ -16,7 +16,7 @@ ignore = [
   { id = "RUSTSEC-2023-0071", reason = "arti client: RSA signature verification only, no private-key operation" },
   # crypto-bigint 0.5 (non-constant-time operations). Pulled only by monero-ed25519 0.1 (monero-oxide);
   # no release of it on crypto-bigint >= 0.7.6 yet. All Monero computation runs locally in the desktop
-  # process: a remote node cannot time it. Re-check on every monero-oxide update.
+  # process: a remote node cannot time it. Re-checked 2026-11-02: monero-wallet 0.2.0, monero-oxide 0.1.0, monero-ed25519 0.1.0 are the latest releases and crypto-bigint 0.5.5 is the last 0.5.x (no patched 0.5 release). Re-check on every monero-oxide update.
   { id = "RUSTSEC-2026-0387", reason = "monero-oxide only, local computation; waiting for an upstream release on crypto-bigint >= 0.7.6" },
 ]
 
