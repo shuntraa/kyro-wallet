@@ -3,11 +3,11 @@
 import type { SolTxSummary } from '@kyro/shared';
 import type { EvmSwapCheck } from './verify';
 
-export type ProviderId = 'zerox' | 'jupiter' | 'lifi' | 'near';
+export type ProviderId = 'zerox' | 'jupiter' | 'lifi' | 'near' | 'exolix';
 
 /** EVM chain id, 'solana', or a chain reached only through NEAR Intents 1Click (providers/near.ts). */
 export type SwapChain = number | 'solana' | UtxoOrOtherChain;
-export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash' | 'zcash' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'stellar';
+export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash' | 'zcash' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'stellar' | 'monero';
 
 export interface SwapToken {
   /** ERC-20 address, `0xEeee…` (native), Solana mint, TRC-20 contract, or the chain name for other natives. */
@@ -55,6 +55,10 @@ export interface DepositPlan {
   kyroFeeBps: number;
   oneClickFeeBps: number;
   timeEstimateSecs: number | null;
+  /** Exolix: the order id (status tracking, reconfirmation). */
+  orderId?: string;
+  /** Exolix (no affiliate program): Kyro's fee, a second ordinary transfer of the sold coin to this address. */
+  kyroFee?: { recipient: string; amount: bigint };
 }
 
 export interface SolanaRouteCheck {

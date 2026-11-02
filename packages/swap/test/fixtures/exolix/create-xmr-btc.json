@@ -1,0 +1,55 @@
+{
+  "note": "Recorded 2026-11-02 18:21 UTC over Tor (live_smoke_exolix_tor), no API key; withdrawal address is a fresh never-funded test address, nothing deposited. Icon URLs trimmed.",
+  "request": {
+    "coinFrom": "XMR",
+    "networkFrom": "XMR",
+    "coinTo": "BTC",
+    "networkTo": "BTC",
+    "amount": "1",
+    "withdrawalAddress": "bc1qtepp55wjf5dkhyx3h8qgm3y7vqaarw547t0j4u",
+    "rateType": "fixed"
+  },
+  "response": {
+    "id": "5023b15f2ce4fc",
+    "amount": 1,
+    "amountTo": 0.00768269,
+    "coinFrom": {
+      "coinCode": "XMR",
+      "coinName": "Monero",
+      "network": "XMR",
+      "networkName": "Monero",
+      "memoName": "",
+      "contract": null
+    },
+    "coinTo": {
+      "coinCode": "BTC",
+      "coinName": "Bitcoin",
+      "network": "BTC",
+      "networkName": "Bitcoin",
+      "memoName": "",
+      "contract": null
+    },
+    "comment": null,
+    "createdAt": "2026-11-02T18:21:37.030Z",
+    "depositAddress": "876JRFBx6gs2VDju9gatQC9Kx66mmwpPnhTYbB7FRqp5jEZ3EKHjNHgTQtK9dQf4QYdRSnMDwPMDHaiJ1MyvjyVJT7xauD4",
+    "depositExtraId": null,
+    "withdrawalAddress": "bc1qtepp55wjf5dkhyx3h8qgm3y7vqaarw547t0j4u",
+    "withdrawalExtraId": null,
+    "refundAddress": null,
+    "refundExtraId": null,
+    "hashIn": {
+      "hash": null,
+      "link": null
+    },
+    "hashOut": {
+      "hash": null,
+      "link": null
+    },
+    "rate": 0.00768269,
+    "rateType": "fixed",
+    "affiliateToken": null,
+    "status": "wait",
+    "email": null,
+    "clickId": null
+  }
+}

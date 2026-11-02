@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
 import { netFetch } from '@kyro/shared';
-import { lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
+import { exolixOrderStatus, lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
 import type { AsyncState } from '../lib/useAsync';
@@ -190,7 +190,9 @@ export function useHistory(): AsyncState<HistoryData> {
         const c = t.cross;
         if (!c) return;
         try {
-          const st = c.bridge === '1click' && c.depositAddress
+          const st = c.bridge === 'exolix' && c.orderId
+            ? await exolixOrderStatus(netFetch, c.orderId).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
+            : c.bridge === '1click' && c.depositAddress
             ? await nearDepositStatus(netFetch, c.depositAddress).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
             : await lifiTransferStatus(netFetch, { txHash: t.id, fromChain: swapChain(c.fromChain), toChain: swapChain(c.toChain), bridge: c.bridge });
           if (st.status === c.status && st.receivingTxHash === c.receivingTxHash) return;

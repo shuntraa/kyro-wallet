@@ -146,7 +146,7 @@ Limits of the NEAR Intents routes:
 - **Cardano**: ADA only (1Click does not list native Cardano tokens).
 - **Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos**: native currency only (Kyro does not handle tokens there). Zcash: transparent addresses (`t1…`), never a TEX or shielded address. TON: the currency is now called **Gram** at 1Click (`GRAM`, asset `nep245:v2_1.omni.hot.tg:1117_`).
 - **Stellar**: destination only (1Click requires a memo when departing from Stellar).
-- **No route** for NEAR (1Click only knows wNEAR, a NEP-141 token that Kyro does not handle), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub, nor for Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM and Conflux eSpace cross-chain (absent from `/v0/tokens` as of 2026-11-01; "hypercore" is not HyperEVM).
+- **No route** for NEAR (1Click only knows wNEAR, a NEP-141 token that Kyro does not handle), Hedera, Kaspa, Polkadot, Algorand, Cosmos Hub, nor for Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM and Conflux eSpace cross-chain (absent from `/v0/tokens` as of 2026-11-01; "hypercore" is not HyperEVM).
 - **XRP**: XRP only (no issued tokens); refused if the deposit address requires a tag.
 - 1Click **minimums** (for example $100 when departing from TRON as of 2026-11-01): below that, no quote.
 - **Cost to the user**: the Kyro rate **plus** the same for 1Click (its half of the split), i.e. double withheld on the deposit (e.g. 0.9% + 0.9% at $1,000), already deducted from the displayed received amount.
@@ -165,7 +165,12 @@ Limits of the NEAR Intents routes:
 | Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, XRP, Cardano, Sui, TON, Aptos | — | 1Click |
 | TRON | 1Click (TRX ⇄ USDT) | 1Click |
 | Stellar | — | 1Click, **destination only** |
-| NEAR, Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub | — | — |
+| Monero | — | Exolix: XMR ⇄ BTC, LTC, ETH, USDT / USDC (Ethereum), SOL, USDT / USDC (Solana). **To Monero** only for now: no Kyro Monero fee address is configured (`recipients.monero`), so no route FROM Monero (never fee-free) |
+| NEAR, Hedera, Kaspa, Polkadot, Algorand, Cosmos Hub | — | — |
+
+## Exolix (Monero)
+
+Exolix (public API v2, no key, no affiliate program) has no integrator fee. Kyro takes its fee on the **source** side: the amount swapped is reduced by the Kyro rate (same curve), and the fee goes in a **second ordinary transfer** of the sold coin to Kyro's fee address on that chain (`recipients.bitcoin`, `litecoin`, `evm`, `solana`; `monero` when set), checked like the deposit and sent right after it. One transaction with an extra output (BTC / LTC / XMR) is planned; today it is two transfers. Fixed rate when Exolix offers one (the received amount is then the minimum), else floating (minimum = quote minus your slippage, not guaranteed by Exolix).
 
 ## 1inch: removed
 

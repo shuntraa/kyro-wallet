@@ -116,6 +116,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // NEAR Intents 1Click (public, no key): quotes for the direct routes (POST /v0/quote), token
     // list, and the status that confirms where a cross-chain deposit goes.
     "1click.chaindefuser.com",
+    // Exolix public API v2 (no key): Monero swaps (`/api/v2/rate`, `/api/v2/transactions`).
+    "exolix.com",
     // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages) and
     // the release-asset CDN GitHub redirects downloads to.
     "github.com",
@@ -523,7 +525,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Market
     } else if matches!(
         host,
-        "api.0x.org" | "li.quest" | "lite-api.jup.ag" | "1click.chaindefuser.com"
+        "api.0x.org" | "li.quest" | "lite-api.jup.ag" | "1click.chaindefuser.com" | "exolix.com"
     ) {
         Family::Swap
     } else {
@@ -1329,6 +1331,7 @@ mod tests {
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
+        assert_eq!(family_for("exolix.com", &c), Family::Swap);
         assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
         assert_eq!(family_for("nile.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);

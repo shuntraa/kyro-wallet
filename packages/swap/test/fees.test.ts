@@ -276,7 +276,7 @@ describe('Kyro fee curve (USD value → bps)', () => {
     expect(sellValueUsd({ ...evmParams, sellAmount: 300_000_000n, sell: { ...evmParams.sell, priceFiat: 1 } })).toBe(300);
   });
   it('clamped to each provider maximum', () => {
-    expect(PROVIDER_MAX_FEE_BPS).toEqual({ zerox: 1_000, lifi: 4_999, jupiter: 255, near: 250 });
+    expect(PROVIDER_MAX_FEE_BPS).toEqual({ zerox: 1_000, lifi: 4_999, jupiter: 255, near: 250, exolix: 500 });
     const tiny = { ...evmParams, sell: { ...evmParams.sell, priceFiat: 1 } }; // 1 $ → 500 bps
     expect(feeForQuote(providerFee('zerox'), tiny)).toMatchObject({ bps: 500 });
     expect(feeForQuote(providerFee('lifi'), tiny)).toMatchObject({ bps: 500 });

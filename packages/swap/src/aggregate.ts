@@ -6,7 +6,8 @@ import { JupiterProvider } from './providers/jupiter';
 import { LIFI_CHAINS, LifiProvider } from './providers/lifi';
 import { ZEROX_CHAINS, ZeroExProvider } from './providers/zerox';
 import { NearIntentsProvider } from './providers/near';
-import { KYRO_SWAP_FEE, lifiFeeFor, nearIntentsAppFee, providerFee, type SwapFeeConfig } from './fees';
+import { ExolixProvider } from './providers/exolix';
+import { KYRO_SWAP_FEE, exolixFeeRecipients, lifiFeeFor, nearIntentsAppFee, providerFee, type SwapFeeConfig } from './fees';
 import type { Quote, QuoteParams, SwapProvider } from './types';
 
 export function createProviders(opts: { fetch?: NetFetch; hasZeroxKey: () => boolean; fees?: SwapFeeConfig }): SwapProvider[] {
@@ -18,6 +19,8 @@ export function createProviders(opts: { fetch?: NetFetch; hasZeroxKey: () => boo
     new JupiterProvider({ ...f, fee: providerFee('jupiter', cfg), feeMints: cfg.solanaFeeMints }),
     // Routes LI.FI cannot serve (from BTC / LTC / DOGE / TRON / XRP / Cardano, or to LTC / DOGE / TRON / XRP / Cardano).
     new NearIntentsProvider({ ...f, fee: nearIntentsAppFee(cfg) }),
+    // Monero (not listed by 1Click): Kyro's fee is a second transfer on the source chain.
+    new ExolixProvider({ ...f, fee: providerFee('exolix', cfg), recipients: exolixFeeRecipients(cfg) }),
   ];
 }
 

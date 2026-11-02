@@ -87,15 +87,17 @@ export interface LocalCross {
   status?: string;
   receivingTxHash?: string;
   depositAddress?: string;
+  /** Exolix order id (`bridge` `exolix`): status from `/api/v2/transactions/{id}`. */
+  orderId?: string;
 }
 
-const CHAIN_ID = /^(\d{1,20}|solana|bitcoin|litecoin|dogecoin|bitcoincash|dash|zcash|tron|xrp|cardano|sui|ton|aptos|stellar)$/;
+const CHAIN_ID = /^(\d{1,20}|solana|bitcoin|litecoin|dogecoin|bitcoincash|dash|zcash|tron|xrp|cardano|sui|ton|aptos|stellar|monero)$/;
 function isLocalCross(x: unknown): x is LocalCross {
   if (!x || typeof x !== 'object') return false;
   const c = x as Record<string, unknown>;
   const s = (k: string, re: RegExp) => typeof c[k] === 'string' && re.test(c[k] as string);
   const opt = (k: string, re: RegExp) => c[k] === undefined || s(k, re);
-  return s('fromChain', CHAIN_ID) && s('toChain', CHAIN_ID) && s('toChainKey', /^[a-z0-9-]{1,64}$/) && s('bridge', /^[a-zA-Z0-9]{1,32}$/) && opt('status', /^[A-Z_]{1,32}$/) && opt('receivingTxHash', /^[0-9a-zA-Z+/=_-]{1,130}$/) && opt('depositAddress', /^[0-9a-zA-Z:_-]{20,130}$/);
+  return s('fromChain', CHAIN_ID) && s('toChain', CHAIN_ID) && s('toChainKey', /^[a-z0-9-]{1,64}$/) && s('bridge', /^[a-zA-Z0-9]{1,32}$/) && opt('status', /^[A-Z_]{1,32}$/) && opt('receivingTxHash', /^[0-9a-zA-Z+/=_-]{1,130}$/) && opt('depositAddress', /^[0-9a-zA-Z:_-]{20,130}$/) && opt('orderId', /^[A-Za-z0-9_-]{4,64}$/);
 }
 
 const DECIMAL = /^\d{1,78}$/;

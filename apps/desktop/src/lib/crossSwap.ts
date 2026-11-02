@@ -6,7 +6,7 @@
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
-import { evmSwapSupported, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
+import { evmSwapSupported, EXOLIX_CHAINS, exolixFeeRecipients, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
@@ -23,9 +23,13 @@ const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
   ton: 'ton',
   apt: 'aptos',
   xlm: 'stellar',
+  // Exolix only (1Click does not list Monero).
+  xmr: 'monero',
 };
 
 const oneClickServes = (c: SwapChain | null) => c !== null && ONE_CLICK_CHAINS[String(c)] !== undefined;
+/** Exolix: Monero on one side, a mapped chain on the other. */
+const exolixPair = (a: SwapChain | null, b: SwapChain | null) => a !== null && b !== null && a !== b && (a === 'monero' || b === 'monero') && EXOLIX_CHAINS.has(a) && EXOLIX_CHAINS.has(b);
 
 /** The swap id of a chain: EVM chain id, 'solana', 'bitcoin', 'litecoin'…; null when swaps don't serve it. */
 export function swapChainOf(chain: Chain | undefined): SwapChain | null {
@@ -45,14 +49,18 @@ const sameChainSwaps = (chain: Chain | undefined, network: Network) => chain?.fa
 export function canSwapFrom(chain: Chain | undefined, network: Network = 'mainnet'): boolean {
   if (sameChainSwaps(chain, network)) return true;
   const c = swapChainOf(chain);
-  return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c));
+  // Monero (Exolix): source only once Kyro has a Monero fee address (never fee-free).
+  if (c === 'monero') return network === 'mainnet' && !!exolixFeeRecipients().monero;
+  return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c) || EXOLIX_CHAINS.has(c));
 }
 
 /** Can a swap from `from` ARRIVE on `to`? */
 export function canSwapTo(network: Network, from: Chain | undefined, to: Chain | undefined): boolean {
   if (!from || !to || !canSwapFrom(from, network)) return false;
   if (from.key === to.key) return sameChainSwaps(from, network) || (network === 'mainnet' && from.family === 'tron');
-  return network === 'mainnet' && oneClickServes(swapChainOf(from)) && oneClickServes(swapChainOf(to));
+  const a = swapChainOf(from);
+  const b = swapChainOf(to);
+  return network === 'mainnet' && ((oneClickServes(a) && oneClickServes(b)) || exolixPair(a, b));
 }
 
 export interface OwnAccounts {
@@ -71,6 +79,7 @@ export interface OwnAccounts {
   ton?: { address: string };
   aptos?: { address: string };
   stellar?: { address: string };
+  xmr?: { address: string };
 }
 
 /** Our own receiving address on `chain` (the selected account). */
@@ -107,6 +116,8 @@ export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): s
       return accounts.aptos?.address || null;
     case 'xlm':
       return accounts.stellar?.address || null;
+    case 'xmr':
+      return accounts.xmr?.address || null;
     default:
       return null;
   }
@@ -240,6 +251,11 @@ export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<Depo
       if (s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
       return s.recipient.toLowerCase() === to.toLowerCase() && s.function === '0x1::aptos_account::transfer' && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
     }
+    case 'xmr': {
+      // One payment to the deposit address (Rust built it; Rust decodes it again in the native dialog).
+      const s = u.summary;
+      return s.destination.address === to && s.amount === plan.amountIn.toString() ? null : t('swap.depNotExactPayment');
+    }
     case 'ton': {
       const s = u.summary;
       if (u.comment || s.comment !== null || s.warnings.length > 0) return t('swap.depUnexpectedMemo');
@@ -252,7 +268,7 @@ export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<Depo
 }
 
 /** The adapters a NEAR Intents deposit may go through. */
-export type DepositAdapters = Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos'>;
+export type DepositAdapters = Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'xmr'>;
 
 /** The vault adapter that sends `asset` (a NEAR Intents deposit is an ordinary transfer). */
 export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): AnyAdapter | undefined {
@@ -283,6 +299,8 @@ export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): A
       return adapters.ton ?? undefined;
     case 'apt':
       return adapters.aptos ?? undefined;
+    case 'xmr':
+      return adapters.xmr ?? undefined;
     case 'evm':
       return adapters.evm.get(asset.chainKey);
     default:
@@ -306,6 +324,20 @@ const stop = (why: string) => new Error(t('swap.depStop', { why }));
  * against the plan (`depositTxProblem`).
  */
 export async function buildDepositTx(sell: AssetDef, adapters: DepositAdapters, plan: DepositPlan): Promise<PreparedDeposit> {
+  if (plan.kyroFee && (plan.kyroFee.amount <= 0n || plan.kyroFee.recipient === plan.depositAddress)) throw stop(t('swap.depProblem', { problem: t('swap.depUnexpectedTransfer') }));
+  return buildPlainTransfer(sell, adapters, plan);
+}
+
+/**
+ * Exolix (no affiliate program): Kyro's fee, a second ordinary transfer of the sold coin to Kyro's
+ * fee address on that chain, built and checked exactly like the deposit (sent right after it).
+ */
+export async function buildKyroFeeTx(sell: AssetDef, adapters: DepositAdapters, plan: DepositPlan): Promise<PreparedDeposit | null> {
+  if (!plan.kyroFee) return null;
+  return buildPlainTransfer(sell, adapters, { ...plan, depositAddress: plan.kyroFee.recipient, amountIn: plan.kyroFee.amount });
+}
+
+async function buildPlainTransfer(sell: AssetDef, adapters: DepositAdapters, plan: DepositPlan): Promise<PreparedDeposit> {
   const ad = depositAdapterFor(sell, adapters);
   if (!ad) throw new Error(t('swap.depNoAccount'));
   if (!ad.isValidAddress(plan.depositAddress)) throw stop(t('swap.depInvalidAddress'));

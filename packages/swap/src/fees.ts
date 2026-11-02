@@ -49,6 +49,8 @@ export interface SwapFeeConfig extends FeeSchedule {
     tron?: string;
     xrp?: string;
     cardano?: string;
+    /** Exolix Monero sends (second output / transfer). Empty: no route FROM Monero (never fee-free). */
+    monero?: string;
   };
   /** THORChain affiliate THORName. Empty means no THORChain route (never fee-free). */
   thorname?: string;
@@ -96,7 +98,7 @@ export const MAX_FEE_BPS = 500;
  * Max each provider's fee mechanism accepts (docs/SWAP_FEES.md). Jupiter's `platform_fee_bps` is a u8;
  * 1Click gets twice our rate (it keeps half) with a 500 bps total cap.
  */
-export const PROVIDER_MAX_FEE_BPS: Readonly<Record<ProviderId, number>> = { zerox: 1_000, lifi: 4_999, jupiter: 255, near: 250 };
+export const PROVIDER_MAX_FEE_BPS: Readonly<Record<ProviderId, number>> = { zerox: 1_000, lifi: 4_999, jupiter: 255, near: 250, exolix: 500 };
 
 const validBps = (b: number) => Number.isInteger(b) && b >= 0 && b <= MAX_FEE_BPS;
 
@@ -244,7 +246,22 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
     case 'near':
       // NEAR Intents account of the EVM fee address (lower case, as NEAR account ids are).
       return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm.toLowerCase()) : { kind: 'unavailable', reason: l10n('Adresse EVM des frais Kyro non configurée', 'EVM address for Kyro fees not configured') };
+    case 'exolix':
+      // No affiliate: paid by a second transfer to Kyro's address on the SOURCE chain (`exolixFeeRecipients`).
+      return fee('');
   }
+}
+
+/** Kyro fee addresses Exolix routes pay on their source chain (only the valid ones). */
+export function exolixFeeRecipients(cfg: SwapFeeConfig = KYRO_SWAP_FEE): Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'monero', string>> {
+  const out: Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'monero', string>> = {};
+  for (const c of ['evm', 'solana', 'bitcoin', 'litecoin'] as const) {
+    const a = feeRecipientFor(c, cfg);
+    if (a) out[c] = a;
+  }
+  const xmr = cfg.recipients.monero ?? '';
+  if (/^[48][1-9A-HJ-NP-Za-km-z]{94}$/.test(xmr)) out.monero = xmr;
+  return out;
 }
 
 /**

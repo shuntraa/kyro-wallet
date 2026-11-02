@@ -12,4 +12,5 @@ export { ZeroExProvider, ZEROX_CHAINS } from './providers/zerox';
 export { LifiProvider, LIFI_CHAINS, LIFI_CROSS_BRIDGES, lifiFeeEchoed, lifiTransferStatus, type LifiStatus } from './providers/lifi';
 export { JupiterProvider } from './providers/jupiter';
 export { NearIntentsProvider, NEAR_MIN_TIME_LEFT_MS, checkOneClickQuote, nearDepositStatus, oneClickAsset, type OneClickQuoteAnswer, type NearFee } from './providers/near';
+export { ExolixProvider, EXOLIX_ASSETS, EXOLIX_CHAINS, EXOLIX_HOST, checkExolixTx, exolixAsset, exolixFeeSplit, exolixOrderStatus, fromDecimal, parseExolixRate, toDecimal, validChainAddress, type ExolixAsset, type ExolixTx, type ExolixRate } from './providers/exolix';
 export { createProviders, evmSwapSupported, fetchQuotes } from './aggregate';

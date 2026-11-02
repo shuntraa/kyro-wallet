@@ -31,7 +31,7 @@ import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
-import { buildDepositTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
+import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
@@ -251,7 +251,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         const fresh = await buildDeposit(plan);
         setPhase('swapping');
         const id = await signAndBroadcast(sourceAdapter, fresh.unsigned, password);
-        recordSwap(id, quote, { fee: fresh.unsigned.maxFee.toString(), counterparty: plan.depositAddress }, plan.depositAddress);
+        recordSwap(id, quote, { fee: fresh.unsigned.maxFee.toString(), counterparty: plan.depositAddress }, plan.depositAddress, plan.orderId);
+        // Exolix: Kyro's service fee, a second plain transfer of the same coin (checked like the deposit).
+        const feeTx = await buildKyroFeeTx(sell, adapters, plan);
+        if (feeTx) await signAndBroadcast(sourceAdapter, feeTx.unsigned, password);
         setDoneId(id);
         setPhase('done');
         setPassword('');
@@ -390,7 +393,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     }
   };
 
-  function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}, depositAddress?: string) {
+  function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}, depositAddress?: string, orderId?: string) {
     if (!sell || !buy || !sellAmount) return;
     const arrival = q.cross && buyChain ? t('swap.historyArrival', { chain: buyChain.label }) : '';
     addLocalTx({
@@ -405,7 +408,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       label: `Swap ${fmtCrypto(sellAmount, sell.decimals)} ${sell.symbol} → ${buy.symbol}${arrival}`,
       time: Date.now(),
       status: 'pending',
-      ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge, ...(depositAddress ? { depositAddress } : {}) } } : {}),
+      ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge, ...(depositAddress ? { depositAddress } : {}), ...(orderId ? { orderId } : {}) } } : {}),
     });
   }
 

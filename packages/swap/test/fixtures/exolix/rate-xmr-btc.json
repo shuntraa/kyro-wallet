@@ -1,0 +1,30 @@
+{
+  "note": "Recorded 2026-11-02 18:21 UTC over Tor (live_smoke_exolix_tor), no API key; withdrawal address is a fresh never-funded test address, nothing deposited. Icon URLs trimmed.",
+  "request": {
+    "coinFrom": "XMR",
+    "networkFrom": "XMR",
+    "coinTo": "BTC",
+    "networkTo": "BTC",
+    "amount": "1"
+  },
+  "fixed": {
+    "fromAmount": 1,
+    "toAmount": 0.00768153,
+    "rate": 0.00768153,
+    "message": null,
+    "minAmount": 0.08164225,
+    "withdrawMin": 6.24e-06,
+    "maxAmount": 1300.7799072265625,
+    "priceImpact": "0"
+  },
+  "float": {
+    "fromAmount": 1,
+    "toAmount": 0.00775557,
+    "rate": 0.00775557,
+    "message": null,
+    "minAmount": 0.08164225,
+    "withdrawMin": 6.24e-06,
+    "maxAmount": 1289.0377197265625,
+    "priceImpact": "0"
+  }
+}

@@ -59,7 +59,13 @@ describe('cross-chain swap helpers', () => {
     expect(canSwapFrom(by('xlm'))).toBe(false);
     expect(canSwapTo('mainnet', eth, by('xlm'))).toBe(true);
     expect(canSwapTo('mainnet', by('bch'), by('xlm'))).toBe(true);
-    for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'cosmos']) {
+    // Monero (Exolix): arrival from BTC / LTC / ETH / SOL; no source while no Kyro Monero fee address.
+    expect(canSwapFrom(by('xmr'))).toBe(false);
+    for (const f of ['btc', 'ltc', 'sol']) expect(canSwapTo('mainnet', by(f), by('xmr')), f).toBe(true);
+    expect(canSwapTo('mainnet', eth, by('xmr'))).toBe(true);
+    expect(canSwapTo('mainnet', by('doge'), by('xmr'))).toBe(false);
+    expect(ownAddressOn({ ...accounts, xmr: { address: '44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A' } }, by('xmr'))).toMatch(/^44AF/);
+    for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'cosmos']) {
       expect(canSwapFrom(by(f)), f).toBe(false);
       expect(canSwapTo('mainnet', eth, by(f)), f).toBe(false);
     }

@@ -2,6 +2,11 @@
 
 ## 1.0.3
 
+- Swap: Monero. Swap BTC, LTC, ETH, SOL, USDT or USDC to XMR through Exolix (no account,
+  no key, over Tor). Kyro creates the order, checks that it pays your own Monero address and
+  that the deposit address is valid, then sends a normal transfer. Kyro's service fee is a
+  second small transfer of the same coin. XMR to other coins comes later. Tested with live
+  quotes only.
 - Ledger: Kyro now opens the right app for you. Plug in and unlock the Ledger, click Connect,
   and approve "Open Bitcoin" (or Ethereum, Solana…) on the device when asked. If another app
   is open, Kyro closes it first. A missing app shows "Install the app with Ledger Live".

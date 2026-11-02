@@ -587,3 +587,88 @@ fn live_smoke_evm_history_tor() {
 }
 
 const TRANSFER: &str = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+/// Exolix public API v2 over Tor, without a key: `GET /rate` (fixed, then float) and
+/// `POST /transactions` (XMR → BTC to a fresh, never-funded address; nothing is ever sent).
+#[test]
+#[ignore]
+fn live_smoke_exolix_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-exolix-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let mut s = state.settings();
+    s.tor.enabled = std::env::var("KYRO_SMOKE_CLEAR").as_deref() != Ok("yes");
+    state.save_settings(s).unwrap();
+    let m = wallet_core::Mnemonic::generate(wallet_core::WordCount::W12).unwrap();
+    let seed = m.to_seed("");
+    let btc =
+        wallet_core::btc_address(&seed, Network::Mainnet, BtcKind::Segwit, 0, false, 0).unwrap();
+    tauri::async_runtime::block_on(async {
+        state.net.tor.start();
+        let get = |url: String| FetchRequest {
+            url,
+            method: "GET".into(),
+            headers: Default::default(),
+            body: None,
+        };
+        for rt in ["fixed", "float"] {
+            let r = state
+                .net
+                .fetch(
+                    get(format!("https://exolix.com/api/v2/rate?coinFrom=XMR&networkFrom=XMR&coinTo=BTC&networkTo=BTC&amount=1&rateType={rt}")),
+                    &state.settings(),
+                    &state.env_keys,
+                    state.network,
+                )
+                .await
+                .unwrap();
+            eprintln!(
+                "RATE {rt} HTTP {} {}",
+                r.status,
+                r.body.chars().take(600).collect::<String>()
+            );
+        }
+        let body = json!({ "coinFrom": "XMR", "networkFrom": "XMR", "coinTo": "BTC", "networkTo": "BTC", "amount": 1, "withdrawalAddress": btc, "rateType": "fixed" });
+        let r = state
+            .net
+            .fetch(
+                FetchRequest {
+                    url: "https://exolix.com/api/v2/transactions".into(),
+                    method: "POST".into(),
+                    headers: [("content-type".to_owned(), "application/json".to_owned())].into(),
+                    body: Some(body.to_string()),
+                },
+                &state.settings(),
+                &state.env_keys,
+                state.network,
+            )
+            .await
+            .unwrap();
+        eprintln!(
+            "CREATE HTTP {} {}",
+            r.status,
+            r.body.chars().take(1500).collect::<String>()
+        );
+        if let Some(id) = serde_json::from_str::<Value>(&r.body)
+            .ok()
+            .and_then(|v| v.get("id").and_then(Value::as_str).map(str::to_owned))
+        {
+            let r = state
+                .net
+                .fetch(
+                    get(format!("https://exolix.com/api/v2/transactions/{id}")),
+                    &state.settings(),
+                    &state.env_keys,
+                    state.network,
+                )
+                .await
+                .unwrap();
+            eprintln!(
+                "STATUS HTTP {} {}",
+                r.status,
+                r.body.chars().take(1500).collect::<String>()
+            );
+        }
+    });
+}
