@@ -1,0 +1,110 @@
+name: Stats
+
+# Public usage counters for the website (website/src, "active wallets this week").
+# Reads the download counts of every release's assets (GitHub API, default GITHUB_TOKEN) and keeps
+# a daily snapshot on the `stats` branch (never main):
+#   stats/history.json  [{ date, ping, downloads }]  cumulative counts, one entry per day
+#   stats/stats.json    { weekly_active, downloads_total, downloads_week, updated }
+# `ping` = downloads of `ping.txt`, fetched at most once a week by each wallet over Tor
+# (apps/desktop/src-tauri/src/weekly_count.rs, docs/NETWORK.md). Nothing else is collected.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: stats
+  cancel-in-progress: false
+
+jobs:
+  stats:
+    name: Update stats
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Switch to the stats branch
+        run: |
+          if git ls-remote --exit-code --heads origin stats > /dev/null; then
+            git fetch origin stats
+            git switch stats
+          else
+            git switch --orphan stats
+          fi
+          mkdir -p stats
+
+      - name: Count downloads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const EXCLUDED = (n) => n.endsWith('.sig') || n === 'latest.json' || n === 'ping.txt' || n === 'SHA256SUMS';
+          async function releases() {
+            const out = [];
+            for (let page = 1; page < 50; page++) {
+              const r = await fetch(`https://api.github.com/repos/${process.env.REPO}/releases?per_page=100&page=${page}`, {
+                headers: { authorization: `Bearer ${process.env.GH_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
+              });
+              if (!r.ok) throw new Error(`GitHub API: HTTP ${r.status}`);
+              const batch = await r.json();
+              out.push(...batch);
+              if (batch.length < 100) break;
+            }
+            return out;
+          }
+          (async () => {
+            let ping = 0, downloads = 0;
+            for (const rel of await releases()) {
+              if (rel.draft) continue;
+              for (const a of rel.assets ?? []) {
+                if (a.name === 'ping.txt') ping += a.download_count;
+                else if (!EXCLUDED(a.name)) downloads += a.download_count;
+              }
+            }
+            const today = new Date().toISOString().slice(0, 10);
+            let history = [];
+            try { history = JSON.parse(fs.readFileSync('stats/history.json', 'utf8')); } catch {}
+            if (!Array.isArray(history)) history = [];
+            history = history.filter((e) => e && typeof e.date === 'string' && e.date !== today);
+            history.push({ date: today, ping, downloads });
+            history.sort((a, b) => a.date.localeCompare(b.date));
+            history = history.slice(-800);
+            const weekAgo = new Date(Date.now() - 7 * 86400e3).toISOString().slice(0, 10);
+            const older = history.filter((e) => e.date <= weekAgo);
+            const base = older[older.length - 1];
+            // Less than a week of history: ping.txt only exists since 1.0.2, so its whole count is
+            // recent (baseline 0); downloads use the oldest snapshot (0 on the first run).
+            const pingBase = base ? base.ping : 0;
+            const dlBase = base ? base.downloads : history[0].downloads;
+            const stats = {
+              weekly_active: Math.max(0, ping - pingBase),
+              downloads_total: downloads,
+              downloads_week: Math.max(0, downloads - dlBase),
+              updated: new Date().toISOString(),
+            };
+            fs.writeFileSync('stats/history.json', JSON.stringify(history, null, 1) + '\n');
+            fs.writeFileSync('stats/stats.json', JSON.stringify(stats) + '\n');
+            console.log(stats);
+          })().catch((e) => { console.error(e); process.exit(1); });
+          EOF
+
+      - name: Commit to the stats branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add stats/history.json stats/stats.json
+          if git diff --cached --quiet; then
+            echo "No change"
+            exit 0
+          fi
+          git commit -m "stats: $(date -u +%F)"
+          git push origin HEAD:refs/heads/stats

@@ -241,6 +241,13 @@ jobs:
           sha256sum $(ls Kyro-* | grep -v '\.sig$') latest.json > SHA256SUMS
           cat SHA256SUMS
 
+      # Anonymous weekly count (apps/desktop/src-tauri/src/weekly_count.rs, docs/NETWORK.md): the
+      # app downloads this tiny file at most once a week over Tor; its download counter estimates
+      # active wallets (.github/workflows/stats.yml). Not an installer: not in SHA256SUMS, not required.
+      - name: ping.txt (anonymous weekly count)
+        working-directory: dist-release
+        run: printf 'kyro' > ping.txt
+
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           name: Kyro ${{ github.ref_name }}
@@ -279,3 +286,4 @@ jobs:
             dist-release/Kyro-linux-amd64.deb
             dist-release/latest.json
             dist-release/SHA256SUMS
+            dist-release/ping.txt
