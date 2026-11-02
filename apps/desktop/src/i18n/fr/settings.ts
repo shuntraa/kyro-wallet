@@ -38,13 +38,13 @@ export const settings = {
   // Recovery phrase
   'settings.recoveryPhrase': 'Phrase de récupération',
   'settings.backupUnverified': 'Sauvegarde non vérifiée',
-  'settings.revealDesc': 'Mot de passe requis. Affichée dans une fenêtre du système, jamais dans l’interface. Jamais copiée.',
+  'settings.revealDesc': 'Mot de passe requis. Affichée dans une fenêtre protégée, jamais dans l’interface. Jamais copiée.',
   'settings.changePasswordSoon': 'Changement de mot de passe : bientôt',
   'settings.revealWarn': 'Vérifie que personne ne regarde ton écran et qu’aucun partage d’écran n’est actif. Quiconque voit ces mots contrôle tes fonds.',
-  'settings.revealHow': 'Après ton mot de passe, Kyro te demande une confirmation dans une fenêtre du système, puis y affiche les mots. Si une fenêtre te demande ta phrase au lieu de l’afficher, c’est une arnaque.',
+  'settings.revealHow': 'Après ton mot de passe, Kyro te demande une confirmation dans une fenêtre du système, puis affiche les mots dans une fenêtre protégée, masquée des captures d’écran. Si une fenêtre te demande ta phrase au lieu de l’afficher, c’est une arnaque.',
   'settings.revealButton': 'Afficher la phrase',
   'settings.revealCancelled': 'Affichage annulé dans la fenêtre système.',
-  'settings.revealClosed': 'La fenêtre système est fermée : la phrase n’est plus affichée.',
+  'settings.revealClosed': 'La fenêtre de la phrase est fermée : la phrase n’est plus affichée.',
 
   // Privacy
   'settings.useTor': 'Passer par Tor',

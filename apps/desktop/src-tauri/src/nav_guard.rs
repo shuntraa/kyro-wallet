@@ -26,7 +26,14 @@ pub fn is_app_url(url: &Url, dev: Option<&Url>) -> bool {
 pub fn init<R: Runtime>(dev: Option<Url>) -> TauriPlugin<R> {
     let dev = if cfg!(debug_assertions) { dev } else { None };
     Builder::new("kyro-nav-guard")
-        .on_navigation(move |_webview, url| is_app_url(url, dev.as_ref()))
+        .on_navigation(move |webview, url| {
+            // The phrase window may only show its own page; no other window may show it.
+            if webview.label() == crate::phrase_window::LABEL {
+                crate::phrase_window::is_phrase_url(url)
+            } else {
+                is_app_url(url, dev.as_ref())
+            }
+        })
         .build()
 }
 

@@ -1,6 +1,7 @@
 //! Every IPC command exposed to the webview (see docs/IPC.md and build.rs).
 //! Secrets only flow *into* these functions (passwords, an imported phrase) and never back out:
-//! the recovery phrase is only ever displayed in native dialogs (creation, explicit reveal).
+//! the recovery phrase is only ever displayed in the phrase window, opened by Rust outside the
+//! interface (`phrase_window.rs`: creation, explicit reveal).
 
 use base64::Engine as _;
 use serde::Serialize;
@@ -105,54 +106,12 @@ pub(crate) async fn confirm_native_with(
     }
 }
 
-/// Shows the recovery phrase in a native dialog (one button). The words never reach the
-/// webview: a compromised interface cannot read them, even with the password.
-async fn show_words_native(app: &AppHandle, words: Zeroizing<Vec<String>>) -> AppResult<()> {
+/// Shows the recovery phrase in the phrase window (`phrase_window.rs`). The words never reach the
+/// main webview: a compromised interface cannot read them, even with the password.
+async fn show_words(app: &AppHandle, words: Zeroizing<Vec<String>>) -> AppResult<()> {
     let _open = app.state::<AppState>().dialogs.enter();
-    let app = app.clone();
     let lang = crate::i18n::current();
-    blocking(move || {
-        let body = words_text(lang, &words);
-        app.dialog()
-            .message(body.as_str())
-            .title(lang.pick("Ta phrase de récupération", "Your recovery phrase"))
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCustom(
-                lang.pick("J'ai fini de noter", "I have written it down")
-                    .into(),
-            ))
-            .blocking_show();
-        Ok(())
-    })
-    .await
-}
-
-pub(crate) fn words_text(lang: Lang, words: &[String]) -> Zeroizing<String> {
-    let mut out = Zeroizing::new(match lang {
-        Lang::Fr => format!(
-            "Écris ces {} mots sur papier, dans l'ordre, au stylo. Pas de photo, pas de copie, pas \
-             de cloud. Quiconque lit ces mots contrôle tes fonds ; personne de légitime ne te les \
-             demandera jamais.\n\n",
-            words.len()
-        ),
-        Lang::En => format!(
-            "Write these {} words on paper, in order, in pen. No photo, no copy, no cloud. \
-             Anyone who reads these words controls your funds; no one legitimate will ever ask \
-             you for them.\n\n",
-            words.len()
-        ),
-    });
-    for (i, w) in words.iter().enumerate() {
-        out.push_str(&format!("{:>2}. {w}", i + 1));
-        out.push_str(if i % 3 == 2 { "\n" } else { "      " });
-    }
-    out.push_str(lang.pick(
-        "\nCette fenêtre appartient au système, pas à l'interface de Kyro : vérifie quand même \
-         que personne ne regarde ton écran et qu'aucun partage d'écran n'est actif.",
-        "\nThis window belongs to the system, not to Kyro's interface: still make sure nobody is \
-         watching your screen and that no screen sharing is active.",
-    ));
-    out
+    crate::phrase_window::show(app, crate::phrase_window::recovery_view(lang, &words)).await
 }
 
 fn check_password_strength(password: &str) -> AppResult<()> {
@@ -237,7 +196,7 @@ pub struct CreatedOut {
 }
 
 /// Creates the vault and keeps its phrase in Rust until the backup check passes. The phrase is
-/// NOT returned: `vault_backup_show` displays it in a native dialog.
+/// NOT returned: `vault_backup_show` displays it in the phrase window.
 #[tauri::command]
 pub async fn vault_create(
     state: State<'_, AppState>,
@@ -268,7 +227,7 @@ pub struct BackupChecks {
     checks: [usize; 3],
 }
 
-/// Shows the phrase of the vault just created in a native dialog (returns when it is closed), then
+/// Shows the phrase of the vault just created in the phrase window (returns when it is closed), then
 /// picks the three positions to check.
 #[tauri::command]
 pub async fn vault_backup_show(
@@ -281,7 +240,7 @@ pub async fn vault_backup_show(
             .unwrap_or_default())
     })?;
     let n = words.len();
-    show_words_native(&app, words).await?;
+    show_words(&app, words).await?;
     let checks = random_checks(n)?;
     state.with_pending_backup(|p| {
         if let Some(p) = p.as_mut() {
@@ -377,7 +336,7 @@ pub fn vault_lock(state: State<'_, AppState>) {
 }
 
 /// Shows the recovery phrase again: password (rate-limited), then a native confirmation, then the
-/// words in a native dialog.
+/// words in the phrase window.
 #[tauri::command]
 pub async fn vault_reveal_mnemonic(
     app: AppHandle,
@@ -401,21 +360,21 @@ pub async fn vault_reveal_mnemonic(
         lang.cancel(),
     )
     .await?;
-    show_words_native(&app, mnemonic.words()).await?;
+    show_words(&app, mnemonic.words()).await?;
     state.touch();
     Ok(())
 }
 
 pub(crate) fn reveal_text(lang: Lang) -> &'static str {
     lang.pick(
-        "Kyro va afficher ta phrase de récupération dans une fenêtre du système.\n\nQuiconque la \
-         voit peut prendre tous tes fonds. Vérifie que personne ne regarde ton écran et \
-         qu'aucun partage d'écran ni logiciel de capture n'est actif.\n\nSi tu n'as pas \
-         toi-même demandé à l'afficher, refuse.",
-        "Kyro is about to show your recovery phrase in a system window.\n\nAnyone who sees it \
-         can take all your funds. Make sure nobody is watching your screen and that no screen \
-         sharing or capture software is active.\n\nIf you did not ask to show it yourself, \
-         refuse.",
+        "Kyro va afficher ta phrase de récupération dans une fenêtre protégée, masquée des \
+         captures et des partages d'écran (Windows, macOS).\n\nQuiconque la voit peut prendre \
+         tous tes fonds. Vérifie que personne ne regarde ton écran.\n\nSi tu n'as pas toi-même \
+         demandé à l'afficher, refuse.",
+        "Kyro is about to show your recovery phrase in a protected window, hidden from \
+         screenshots and screen sharing (Windows, macOS).\n\nAnyone who sees it can take all \
+         your funds. Make sure nobody is watching your screen.\n\nIf you did not ask to show it \
+         yourself, refuse.",
     )
 }
 
@@ -1195,8 +1154,13 @@ pub fn tor_retry(state: State<'_, AppState>) -> AppResult<TorStatus> {
 }
 
 #[tauri::command]
-pub fn set_capture_protection(window: WebviewWindow, enabled: bool) -> AppResult<()> {
-    window.set_content_protected(enabled)?;
+pub fn set_capture_protection(
+    window: WebviewWindow,
+    phrase: State<'_, crate::phrase_window::PhraseState>,
+    enabled: bool,
+) -> AppResult<()> {
+    // Stays on while the phrase window is open, whatever the interface asks.
+    window.set_content_protected(phrase.main_capture(enabled))?;
     Ok(())
 }
 
@@ -1519,12 +1483,16 @@ mod tests {
     #[test]
     fn phrase_texts_in_english() {
         let words: Vec<String> = (1..=12).map(|i| format!("word{i}")).collect();
-        let t = words_text(Lang::En, &words);
-        assert!(t.starts_with("Write these 12 words on paper, in order, in pen."));
-        assert!(t.contains("no one legitimate will ever ask you for them"));
-        assert!(t.contains(" 1. word1") && t.contains("12. word12"));
-        assert!(t.contains("This window belongs to the system"));
+        let v = crate::phrase_window::recovery_view(Lang::En, &words);
+        assert_eq!(
+            v.lead,
+            "Write these words on paper, in order. Anyone with them can take your funds."
+        );
+        let t = crate::phrase_window::render(Lang::En, &v);
+        assert!(t.contains("No one legitimate will ever ask you for these words"));
+        assert!(t.contains("hidden from screenshots and screen sharing"));
         assert!(!t.contains("mots") && !t.contains("Écris"));
+        assert!(reveal_text(Lang::En).contains("in a protected window"));
         assert!(reveal_text(Lang::En).contains("Anyone who sees it can take all your funds"));
         assert!(reveal_text(Lang::En).ends_with("refuse."));
         assert!(reveal_text(Lang::Fr).contains("Quiconque la voit peut prendre tous tes fonds"));
@@ -1551,10 +1519,13 @@ mod tests {
     #[test]
     fn backup_words_and_check() {
         let words: Vec<String> = (1..=12).map(|i| format!("mot{i}")).collect();
-        let t = words_text(Lang::Fr, &words);
-        assert!(t.contains(" 1. mot1"));
-        assert!(t.contains("12. mot12"));
-        assert!(t.contains("Écris ces 12 mots"));
+        let t = crate::phrase_window::render(
+            Lang::Fr,
+            &crate::phrase_window::recovery_view(Lang::Fr, &words),
+        );
+        assert!(t.contains("<span class=\"n\">1</span><span class=\"w\">mot1</span>"));
+        assert!(t.contains("<span class=\"n\">12</span><span class=\"w\">mot12</span>"));
+        assert!(t.contains("Écris ces mots sur papier, dans l’ordre.") && t.contains("12 mots"));
         let c = random_checks(12).unwrap();
         assert!(c[0] < c[1] && c[1] < c[2] && c[2] < 12);
         let p = PendingBackup {

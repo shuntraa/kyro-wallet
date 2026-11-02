@@ -35,13 +35,13 @@ export const settings: Record<keyof typeof fr, string> = {
 
   'settings.recoveryPhrase': 'Recovery phrase',
   'settings.backupUnverified': 'Backup not verified',
-  'settings.revealDesc': 'Password required. Shown in a system window, never in the interface. Never copied.',
+  'settings.revealDesc': 'Password required. Shown in a protected window, never in the interface. Never copied.',
   'settings.changePasswordSoon': 'Password change: coming soon',
   'settings.revealWarn': 'Make sure nobody is looking at your screen and no screen sharing is active. Anyone who sees these words controls your funds.',
-  'settings.revealHow': 'After your password, Kyro asks for a confirmation in a system window, then shows the words there. If a window asks you for your phrase instead of showing it, it is a scam.',
+  'settings.revealHow': 'After your password, Kyro asks for a confirmation in a system window, then shows the words in a protected window, hidden from screenshots. If a window asks you for your phrase instead of showing it, it is a scam.',
   'settings.revealButton': 'Show the phrase',
   'settings.revealCancelled': 'Display cancelled in the system window.',
-  'settings.revealClosed': 'The system window is closed: the phrase is no longer displayed.',
+  'settings.revealClosed': 'The phrase window is closed: the phrase is no longer displayed.',
 
   'settings.useTor': 'Use Tor',
   'settings.useTorDesc': 'On by default. Every network request Kyro makes goes through Tor, built into the app.',

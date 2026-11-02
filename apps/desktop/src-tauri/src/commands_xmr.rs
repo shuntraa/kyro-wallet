@@ -5,7 +5,6 @@
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use wallet_core::{Network, XmrAddressKind, XmrDestination, XmrTxSummary, XmrWarning};
 use zeroize::Zeroizing;
 
@@ -476,52 +475,48 @@ pub async fn xmr_send_tx(
 
 // 25-word seed
 
-pub(crate) fn seed_text(
+pub(crate) fn seed_view<'a>(
     lang: Lang,
-    words: &[String],
+    words: &'a [String],
     path: &str,
     restore: Option<u64>,
-) -> Zeroizing<String> {
-    let mut out = Zeroizing::new(match lang {
-        Lang::Fr => format!(
-            "Phrase Monero de 25 mots — clé {path}\n\n\
-             Elle restaure ce portefeuille Monero dans Monero GUI, Feather ou Cake Wallet \
-             (« restaurer depuis une phrase »). Elle est calculée depuis ta phrase de récupération \
-             Kyro, qui reste ta sauvegarde principale. Quiconque lit ces mots peut prendre tes XMR.\n\n"
+) -> crate::phrase_window::PhraseView<'a> {
+    let mut notes = vec![
+        match lang {
+            Lang::Fr => format!(
+                "Elle restaure ce portefeuille Monero (clé {path}) dans Monero GUI, Feather ou Cake                  Wallet (« restaurer depuis une phrase »). Elle est calculée depuis ta phrase de                  récupération Kyro, qui reste ta sauvegarde principale."
+            ),
+            Lang::En => format!(
+                "It restores this Monero wallet (key {path}) in Monero GUI, Feather or Cake Wallet                  (“restore from seed”). It is derived from your Kyro recovery phrase, which stays                  your main backup."
+            ),
+        },
+    ];
+    notes.push(match (restore, lang) {
+        (Some(h), Lang::Fr) => format!(
+            "Hauteur de restauration : {h} (Kyro scanne à partir de ce bloc ; indique-la, ou une plus ancienne, dans l’autre portefeuille)."
         ),
-        Lang::En => format!(
-            "25-word Monero phrase — key {path}\n\n\
-             It restores this Monero wallet in Monero GUI, Feather or Cake Wallet \
-             (\"restore from seed\"). It is derived from your Kyro recovery phrase, \
-             which stays your main backup. Anyone who reads these words can take your XMR.\n\n"
+        (Some(h), Lang::En) => format!(
+            "Restore height: {h} (Kyro scans from this block; enter it, or an older one, in the other wallet)."
         ),
+        (None, _) => lang
+            .pick(
+                "Hauteur de restauration : pas encore choisie (aucun scan).",
+                "Restore height: not chosen yet (no scan).",
+            )
+            .into(),
     });
-    for (i, w) in words.iter().enumerate() {
-        out.push_str(&format!("{:>2}. {w}", i + 1));
-        out.push_str(if i % 5 == 4 { "\n" } else { "    " });
+    crate::phrase_window::PhraseView {
+        title: lang.pick("Phrase Monero (25 mots)", "Monero phrase (25 words)"),
+        lead: lang.pick(
+            "Écris ces mots sur papier, dans l’ordre. Quiconque les possède peut prendre tes XMR.",
+            "Write these words on paper, in order. Anyone with them can take your XMR.",
+        ),
+        words,
+        notes,
     }
-    match (restore, lang) {
-        (Some(h), Lang::Fr) => out.push_str(&format!(
-            "\nHauteur de restauration : {h} (Kyro scanne à partir de ce bloc ; indique-la, ou une plus ancienne, dans l'autre portefeuille).\n"
-        )),
-        (Some(h), Lang::En) => out.push_str(&format!(
-            "\nRestore height: {h} (Kyro scans from this block; enter it, or an older one, in the other wallet).\n"
-        )),
-        (None, _) => out.push_str(lang.pick(
-            "\nHauteur de restauration : pas encore choisie (aucun scan).\n",
-            "\nRestore height: not chosen yet (no scan).\n",
-        )),
-    }
-    out.push_str(lang.pick(
-        "\nCette fenêtre appartient au système, pas à l'interface de Kyro : vérifie quand même \
-         que personne ne regarde ton écran et qu'aucun partage d'écran n'est actif.",
-        "\nThis window belongs to the system, not to Kyro's interface: still check \
-         that nobody is watching your screen and that no screen sharing is active.",
-    ));
-    out
 }
 
-/// Shows the 25-word Monero seed of account `account` in a native window (password, native
+/// Shows the 25-word Monero seed of account `account` in the phrase window (password, native
 /// confirmation, then the words).
 #[tauri::command]
 pub async fn xmr_seed_show(
@@ -541,13 +536,13 @@ pub async fn xmr_seed_show(
         &app,
         lang.pick("Afficher la phrase Monero ?", "Show the Monero phrase?"),
         lang.pick(
-            "Kyro va afficher la phrase Monero de 25 mots de ce compte dans une fenêtre du système.\n\n\
-             Quiconque la voit peut prendre tes XMR. Vérifie que personne ne regarde ton écran et \
-             qu'aucun partage d'écran ni logiciel de capture n'est actif.\n\nSi tu n'as pas toi-même \
-             demandé à l'afficher, refuse.",
-            "Kyro will show this account's 25-word Monero phrase in a system window.\n\n\
-             Anyone who sees it can take your XMR. Check that nobody is watching your screen and \
-             that no screen sharing or capture software is active.\n\nIf you did not ask to \
+            "Kyro va afficher la phrase Monero de 25 mots de ce compte dans une fenêtre protégée, \
+             masquée des captures et des partages d'écran (Windows, macOS).\n\nQuiconque la voit \
+             peut prendre tes XMR. Vérifie que personne ne regarde ton écran.\n\nSi tu n'as pas \
+             toi-même demandé à l'afficher, refuse.",
+            "Kyro will show this account's 25-word Monero phrase in a protected window, hidden \
+             from screenshots and screen sharing (Windows, macOS).\n\nAnyone who sees it can \
+             take your XMR. Check that nobody is watching your screen.\n\nIf you did not ask to \
              show it yourself, refuse.",
         )
         .into(),
@@ -560,23 +555,9 @@ pub async fn xmr_seed_show(
         .and_then(|c| c.restore_height);
     let words =
         blocking(move || Ok(wallet_core::xmr_seed_words(&mnemonic.to_seed(""), a)?)).await?;
-    let body = seed_text(lang, &words, &wallet_core::xmr_path(a), restore);
+    let path = wallet_core::xmr_path(a);
     let _open = app.state::<AppState>().dialogs.enter();
-    let handle = app.clone();
-    blocking(move || {
-        handle
-            .dialog()
-            .message(body.as_str())
-            .title(lang.pick("Phrase Monero (25 mots)", "Monero phrase (25 words)"))
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCustom(
-                lang.pick("J'ai fini de noter", "I have written it down")
-                    .into(),
-            ))
-            .blocking_show();
-        Ok(())
-    })
-    .await?;
+    crate::phrase_window::show(&app, seed_view(lang, &words, &path, restore)).await?;
     state.touch();
     Ok(())
 }
@@ -663,10 +644,14 @@ mod tests {
     #[test]
     fn seed_window_text() {
         let words: Vec<String> = (0..25).map(|i| format!("w{i}")).collect();
-        let t = seed_text(Lang::Fr, &words, "m/44'/128'/0'/0/0", Some(3_500_000));
-        assert!(t.contains(" 1. w0") && t.contains("25. w24"));
-        assert!(t.contains("Hauteur de restauration : 3500000"));
-        assert!(seed_text(Lang::Fr, &words, "m", None).contains("pas encore choisie"));
-        assert!(seed_text(Lang::En, &words, "m", Some(7)).contains("Restore height: 7"));
+        let v = seed_view(Lang::Fr, &words, "m/44'/128'/0'/0/0", Some(3_500_000));
+        assert_eq!(v.words.len(), 25);
+        assert!(v.notes[0].contains("clé m/44'/128'/0'/0/0"));
+        assert!(v.notes[1].starts_with("Hauteur de restauration : 3500000"));
+        let t = crate::phrase_window::render(Lang::Fr, &v);
+        assert!(t.contains("<span class=\"n\">1</span><span class=\"w\">w0</span>"));
+        assert!(t.contains("<span class=\"n\">25</span><span class=\"w\">w24</span>"));
+        assert!(seed_view(Lang::Fr, &words, "m", None).notes[1].contains("pas encore choisie"));
+        assert!(seed_view(Lang::En, &words, "m", Some(7)).notes[1].starts_with("Restore height: 7"));
     }
 }

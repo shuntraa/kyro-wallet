@@ -54,6 +54,7 @@ mod nav_guard;
 mod near_backend;
 mod net;
 mod network;
+mod phrase_window;
 mod server_approval;
 mod servers;
 mod settings;
@@ -86,10 +87,26 @@ pub fn run() {
 
     let context = tauri::generate_context!();
     let dev_url = context.config().build.dev_url.clone();
+    // The phrase window uses the app's fonts: find them among the bundled assets (hashed names).
+    #[allow(unused_mut)]
+    let mut assets: Vec<String> = context
+        .assets()
+        .iter()
+        .map(|(k, _)| k.into_owned())
+        .collect();
+    #[cfg(debug_assertions)]
+    if let Ok(dir) = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../dist/assets")) {
+        // `tauri dev` does not embed the assets: look in the built frontend.
+        assets
+            .extend(dir.filter_map(|e| Some(format!("/assets/{}", e.ok()?.file_name().to_str()?))));
+    }
+    phrase_window::remember_fonts(assets.iter().map(String::as_str));
     tauri::Builder::default()
         .plugin(nav_guard::init(dev_url))
         .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
         .setup(|app| {
+            app.manage(phrase_window::PhraseState::default());
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(state::AppState::new(dir)?);
@@ -121,10 +138,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(
-                event,
-                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-            ) {
+            // Only the main window: closing the phrase window must not lock the session.
+            if window.label() == "main"
+                && matches!(
+                    event,
+                    tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+                )
+            {
+                if let Some(phrase) = window.app_handle().get_webview_window(phrase_window::LABEL) {
+                    let _ = phrase.destroy();
+                }
                 commands::lock_on_exit(window.app_handle());
             }
         })
