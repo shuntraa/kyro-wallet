@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Exolix public API v2 (exolix.com/api/v2, no key) for Monero, which NEAR Intents does not list.
+// Exolix public API v2 (exolix.com/api/v2, no key) for the coins NEAR Intents does not list: Monero
+// (both ways) and, as destinations only, Kaspa, Algorand and NEAR (`EXOLIX_ONLY`).
 // Like 1Click: Exolix binds a deposit address to our withdrawal address; we check the order it
 // created (amount, coins, our own withdrawal / refund address, deposit address format) and send an
 // ordinary transfer there. No affiliate program: Kyro's fee is taken on the SOURCE side — the
@@ -42,10 +43,33 @@ export const EXOLIX_ASSETS: readonly ExolixAsset[] = [
   { chain: 'solana', token: null, coin: 'SOL', network: 'SOL', decimals: 9 },
   { chain: 'solana', token: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', coin: 'USDT', network: 'SOL', decimals: 6 },
   { chain: 'solana', token: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', coin: 'USDC', network: 'SOL', decimals: 6 },
+  // Network codes from exolix.com/api/v2/currencies/{coin}/networks (checked 02/11/2026; BNB and AVAX → XMR refused there).
+  { chain: 42_161, token: null, coin: 'ETH', network: 'ARBITRUM', decimals: 18 },
+  { chain: 8_453, token: null, coin: 'ETH', network: 'BASE', decimals: 18 },
+  { chain: 10, token: null, coin: 'ETH', network: 'OPTIMISM', decimals: 18 },
+  { chain: 137, token: null, coin: 'POL', network: 'MATIC', decimals: 18 },
+  { chain: 'tron', token: null, coin: 'TRX', network: 'TRX', decimals: 6 },
+  { chain: 'tron', token: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', coin: 'USDT', network: 'TRX', decimals: 6 },
+  { chain: 'dogecoin', token: null, coin: 'DOGE', network: 'DOGE', decimals: 8 },
+  // Destinations only (no Kyro fee address on these chains: never a source).
+  { chain: 'kaspa', token: null, coin: 'KAS', network: 'KAS', decimals: 8 },
+  { chain: 'algorand', token: null, coin: 'ALGO', network: 'ALGO', decimals: 6 },
+  { chain: 'near', token: null, coin: 'NEAR', network: 'NEAR', decimals: 24 },
 ];
 
-/** Chains Exolix serves in Kyro (one side of every Exolix route is Monero). */
+/** Chains only Exolix serves in Kyro: every Exolix route has one of them on a side (the rest goes through 1Click / LI.FI). */
+export const EXOLIX_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>(['monero', 'kaspa', 'algorand', 'near']);
+/** Reached through Exolix but never left from (no Kyro fee address there). */
+export const EXOLIX_ARRIVAL_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>(['kaspa', 'algorand', 'near']);
+
+/** Chains Exolix serves in Kyro (one side of every Exolix route is in `EXOLIX_ONLY`). */
 export const EXOLIX_CHAINS: ReadonlySet<SwapChain> = new Set(EXOLIX_ASSETS.map((a) => a.chain));
+
+/** Does Exolix serve `from` → `to` at the chain level (tokens are checked by `exolixAsset`)? */
+export function exolixRoute(from: SwapChain | null, to: SwapChain | null): boolean {
+  if (from === null || to === null || from === to || !EXOLIX_CHAINS.has(from) || !EXOLIX_CHAINS.has(to)) return false;
+  return !EXOLIX_ARRIVAL_ONLY.has(from) && (EXOLIX_ONLY.has(from) || EXOLIX_ONLY.has(to));
+}
 
 const nativeOf = (chain: SwapChain, token: string) => (chain === 'solana' ? token === WSOL || token === '11111111111111111111111111111111' : typeof chain === 'string' ? token === chain : isNative(token));
 
@@ -88,6 +112,17 @@ export function validChainAddress(chain: SwapChain, a: string): boolean {
       return validFeeAddress('litecoin', a) || legacy(a, [0x05]) || segwitAny(a, 'ltc');
     case 'solana':
       return validSolanaAddress(a);
+    case 'tron':
+      return validFeeAddress('tron', a);
+    case 'dogecoin':
+      return legacy(a, [0x1e, 0x16]);
+    case 'kaspa':
+      return /^kaspa:[qp][qpzry9x8gf2tvdw0s3jn54khce6mua7l]{60,62}$/.test(a);
+    case 'algorand':
+      return /^[A-Z2-7]{58}$/.test(a);
+    case 'near':
+      // Implicit (64 hex), ETH-implicit (0x + 40 hex) or named account (NEAR account id rules).
+      return /^[0-9a-f]{64}$/.test(a) || /^0x[0-9a-f]{40}$/.test(a) || (a.length >= 2 && a.length <= 64 && /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/.test(a));
     default:
       return false;
   }
@@ -177,8 +212,8 @@ export function checkExolixTx(t: ExolixTx, e: ExolixExpect): { id: string; depos
 }
 
 /** Kyro fee recipient per source chain (the second transfer of the source coin goes there). */
-export type ExolixFeeRecipients = Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'monero', string>>;
-const feeKey = (c: SwapChain): keyof ExolixFeeRecipients | null => (typeof c === 'number' ? 'evm' : c === 'solana' || c === 'bitcoin' || c === 'litecoin' || c === 'monero' ? c : null);
+export type ExolixFeeRecipients = Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>>;
+const feeKey = (c: SwapChain): keyof ExolixFeeRecipients | null => (typeof c === 'number' ? 'evm' : c === 'solana' || c === 'bitcoin' || c === 'litecoin' || c === 'tron' || c === 'dogecoin' || c === 'monero' ? c : null);
 
 /** Splits what the user sends: the swapped part and Kyro's fee (rounded up, never 0 when a rate applies). */
 export function exolixFeeSplit(sellAmount: bigint, bps: number): { swapped: bigint; fee: bigint } {
@@ -205,10 +240,10 @@ export class ExolixProvider implements SwapProvider {
     return this.opts.fee.kind === 'unavailable' ? this.opts.fee.reason : null;
   }
 
-  /** Monero on one side, a mapped Exolix asset on the other. */
+  /** An `EXOLIX_ONLY` chain on one side (never as source when arrival-only), a mapped Exolix asset on both. */
   supports(p: QuoteParams): boolean {
     const to = p.toChain ?? p.chain;
-    if (p.chain === to || (p.chain !== 'monero' && to !== 'monero')) return false;
+    if (!exolixRoute(p.chain, to)) return false;
     return exolixAsset(p.chain, p.sell.address, p.sell.decimals) !== null && exolixAsset(to, p.buy.address, p.buy.decimals) !== null;
   }
 

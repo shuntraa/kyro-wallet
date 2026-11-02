@@ -92,12 +92,14 @@ export interface LocalCross {
 }
 
 const CHAIN_ID = /^(\d{1,20}|solana|bitcoin|litecoin|dogecoin|bitcoincash|dash|zcash|tron|xrp|cardano|sui|ton|aptos|stellar|monero)$/;
+/** Arrival-only swap chains (Exolix: Kaspa, Algorand, NEAR) are valid destinations, never sources. */
+const TO_CHAIN_ID = /^(\d{1,20}|solana|bitcoin|litecoin|dogecoin|bitcoincash|dash|zcash|tron|xrp|cardano|sui|ton|aptos|stellar|monero|kaspa|algorand|near)$/;
 function isLocalCross(x: unknown): x is LocalCross {
   if (!x || typeof x !== 'object') return false;
   const c = x as Record<string, unknown>;
   const s = (k: string, re: RegExp) => typeof c[k] === 'string' && re.test(c[k] as string);
   const opt = (k: string, re: RegExp) => c[k] === undefined || s(k, re);
-  return s('fromChain', CHAIN_ID) && s('toChain', CHAIN_ID) && s('toChainKey', /^[a-z0-9-]{1,64}$/) && s('bridge', /^[a-zA-Z0-9]{1,32}$/) && opt('status', /^[A-Z_]{1,32}$/) && opt('receivingTxHash', /^[0-9a-zA-Z+/=_-]{1,130}$/) && opt('depositAddress', /^[0-9a-zA-Z:_-]{20,130}$/) && opt('orderId', /^[A-Za-z0-9_-]{4,64}$/);
+  return s('fromChain', CHAIN_ID) && s('toChain', TO_CHAIN_ID) && s('toChainKey', /^[a-z0-9-]{1,64}$/) && s('bridge', /^[a-zA-Z0-9]{1,32}$/) && opt('status', /^[A-Z_]{1,32}$/) && opt('receivingTxHash', /^[0-9a-zA-Z+/=_-]{1,130}$/) && opt('depositAddress', /^[0-9a-zA-Z:_-]{20,130}$/) && opt('orderId', /^[A-Za-z0-9_-]{4,64}$/);
 }
 
 const DECIMAL = /^\d{1,78}$/;

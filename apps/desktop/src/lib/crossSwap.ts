@@ -6,7 +6,7 @@
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
-import { evmSwapSupported, EXOLIX_CHAINS, exolixFeeRecipients, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
+import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, exolixFeeRecipients, exolixRoute, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
@@ -23,13 +23,16 @@ const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
   ton: 'ton',
   apt: 'aptos',
   xlm: 'stellar',
-  // Exolix only (1Click does not list Monero).
+  // Exolix only (1Click does not list them). Kaspa, Algorand, NEAR: arrival only.
   xmr: 'monero',
+  kas: 'kaspa',
+  algo: 'algorand',
+  near: 'near',
 };
 
 const oneClickServes = (c: SwapChain | null) => c !== null && ONE_CLICK_CHAINS[String(c)] !== undefined;
-/** Exolix: Monero on one side, a mapped chain on the other. */
-const exolixPair = (a: SwapChain | null, b: SwapChain | null) => a !== null && b !== null && a !== b && (a === 'monero' || b === 'monero') && EXOLIX_CHAINS.has(a) && EXOLIX_CHAINS.has(b);
+/** Exolix: an Exolix-only chain (Monero, Kaspa…) on one side, a mapped chain on the other. */
+const exolixPair = exolixRoute;
 
 /** The swap id of a chain: EVM chain id, 'solana', 'bitcoin', 'litecoin'…; null when swaps don't serve it. */
 export function swapChainOf(chain: Chain | undefined): SwapChain | null {
@@ -51,7 +54,7 @@ export function canSwapFrom(chain: Chain | undefined, network: Network = 'mainne
   const c = swapChainOf(chain);
   // Monero (Exolix): source only once Kyro has a Monero fee address (never fee-free).
   if (c === 'monero') return network === 'mainnet' && !!exolixFeeRecipients().monero;
-  return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c) || EXOLIX_CHAINS.has(c));
+  return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && !EXOLIX_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c) || EXOLIX_CHAINS.has(c));
 }
 
 /** Can a swap from `from` ARRIVE on `to`? */
@@ -80,6 +83,9 @@ export interface OwnAccounts {
   aptos?: { address: string };
   stellar?: { address: string };
   xmr?: { address: string };
+  kas?: { address: string };
+  algo?: { address: string };
+  near?: { address: string };
 }
 
 /** Our own receiving address on `chain` (the selected account). */
@@ -118,6 +124,12 @@ export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): s
       return accounts.stellar?.address || null;
     case 'xmr':
       return accounts.xmr?.address || null;
+    case 'kas':
+      return accounts.kas?.address || null;
+    case 'algo':
+      return accounts.algo?.address || null;
+    case 'near':
+      return accounts.near?.address || null;
     default:
       return null;
   }
@@ -141,6 +153,12 @@ export interface BuyGroup {
   assets: AssetDef[];
 }
 
+/** Exolix arrival-only chains (Kaspa, Algorand, NEAR): only the native coin is mapped. */
+const nativeOnlyArrival = (c: Chain) => {
+  const id = swapChainOf(c);
+  return id !== null && EXOLIX_ARRIVAL_ONLY.has(id);
+};
+
 /**
  * « Tu reçois » list: the sell chain first, then every other chain a swap can arrive on, each with
  * its assets (read-only assets and the sold asset left out).
@@ -150,8 +168,30 @@ export function buyGroups(network: Network, chains: Chain[], assets: AssetDef[],
   const ordered = [...chains].sort((a, b) => (a.key === from?.key ? -1 : b.key === from?.key ? 1 : 0));
   return ordered
     .filter((c) => canSwapTo(network, from, c))
-    .map((chain) => ({ chain, assets: assets.filter((a) => a.chainKey === chain.key && a.id !== sell?.id && !a.readOnly && (a.family !== 'ada' || a.kind === 'native')) }))
+    .map((chain) => ({ chain, assets: assets.filter((a) => a.chainKey === chain.key && a.id !== sell?.id && !a.readOnly && ((a.family !== 'ada' && !nativeOnlyArrival(chain)) || a.kind === 'native')) }))
     .filter((g) => g.assets.length > 0);
+}
+
+/** A « Tu donnes » choice: an asset a swap can start from, or one shown greyed (« Bientôt »). */
+export interface SellChoice {
+  chain: Chain;
+  asset: AssetDef;
+  comingSoon: boolean;
+}
+
+/**
+ * « Tu donnes » list across chains: every asset of a chain a swap can start from, then Monero greyed
+ * while Kyro has no Monero fee address (Exolix source routes need one: never fee-free).
+ */
+export function sellChoices(network: Network, chains: Chain[], assets: AssetDef[]): SellChoice[] {
+  const out: SellChoice[] = [];
+  for (const chain of chains) {
+    const open = canSwapFrom(chain, network);
+    const soon = !open && network === 'mainnet' && chain.family === 'xmr';
+    if (!open && !soon) continue;
+    for (const asset of assets) if (asset.chainKey === chain.key && !asset.readOnly && (!soon || asset.kind === 'native')) out.push({ chain, asset, comingSoon: soon });
+  }
+  return out;
 }
 
 /** History label of a cross-chain transfer (li.quest `/v1/status`, or 1Click's own status). */

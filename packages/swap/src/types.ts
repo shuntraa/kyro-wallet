@@ -7,7 +7,7 @@ export type ProviderId = 'zerox' | 'jupiter' | 'lifi' | 'near' | 'exolix';
 
 /** EVM chain id, 'solana', or a chain reached only through NEAR Intents 1Click (providers/near.ts). */
 export type SwapChain = number | 'solana' | UtxoOrOtherChain;
-export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash' | 'zcash' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'stellar' | 'monero';
+export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash' | 'zcash' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'stellar' | 'monero' | 'kaspa' | 'algorand' | 'near';
 
 export interface SwapToken {
   /** ERC-20 address, `0xEeee…` (native), Solana mint, TRC-20 contract, or the chain name for other natives. */

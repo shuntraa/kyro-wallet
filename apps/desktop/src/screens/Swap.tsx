@@ -31,7 +31,8 @@ import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
-import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
+import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, sellChoices, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
+import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
@@ -417,13 +418,23 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   if (!sell || !buy || !chain) return <EmptyState title={t('swap.noAssets')} />;
 
-  const tokenItems = (exclude?: string) =>
-    tokens
-      .filter((t) => t.id !== exclude)
-      .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon asset={t} size={24} /> }));
-  const buyItems = groups.flatMap((g) =>
-    g.assets.map((a) => ({ value: a.id, group: g.chain.key === chainKey ? t('swap.groupSameNetwork', { chain: g.chain.label }) : t('swap.groupToYourAccount', { chain: g.chain.label }), label: a.symbol, hint: `${a.name} · ${fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals)}`, icon: <CoinIcon asset={a} size={24} /> })),
-  );
+  const pickerItem = (a: AssetDef, c: Chain, comingSoon = false): TokenPickerItem => {
+    const held = pf.balances.get(a.id) ?? 0n;
+    return { id: a.id, symbol: a.symbol, name: a.name, network: c.label, networkName: c.name, coingeckoId: a.coingeckoId, held: held > 0n, disabled: comingSoon, ...(comingSoon ? { note: t('swap.sourceComingSoon') } : {}), hint: `${a.name} · ${fmtCrypto(held, a.decimals)}`, icon: <CoinIcon asset={a} size={24} /> };
+  };
+  const sellList = sellChoices(network, allChains(network), assetsFor(network));
+  const sellItems = sellList.map((c) => pickerItem(c.asset, c.chain, c.comingSoon));
+  const buyItems = groups.flatMap((g) => g.assets.map((a) => pickerItem(a, g.chain)));
+  const selectSell = (id: string) => {
+    const c = sellList.find((x) => x.asset.id === id && !x.comingSoon);
+    if (!c) return;
+    if (id === buy.id) setBuyId(sell.id);
+    if (c.chain.key !== chainKey) {
+      setChainKey(c.chain.key);
+      setAmountStr('');
+    }
+    setSellId(id);
+  };
   const canInvert = !cross || canSwapFrom(buyChain, network);
 
   return (
@@ -437,7 +448,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               setChainKey(k);
               setAmountStr('');
             }}
-            items={chains.map((c) => ({ value: c.key, label: c.label }))}
+            items={[...chains.map((c) => ({ value: c.key, label: c.label })), ...sellList.filter((c) => c.comingSoon && c.asset.kind === 'native').map((c) => ({ value: c.chain.key, label: c.chain.label, hint: t('swap.sourceComingSoon'), disabled: true }))]}
             trigger={
               <button type="button" className="press flex h-9 items-center gap-2 rounded-ctl border border-line-2 px-3.5 text-[13px] text-text2 hover:border-line-3 hover:bg-raised hover:text-text">
                 {chain.name} <IconChevronDown size={13} />
@@ -495,7 +506,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 />
               }
               sub={sellAmount && sellPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(sellAmount, sell.decimals) * sellPrice, cur)}` : over ? t('swap.insufficient') : ' '}
-              token={<TokenButton asset={sell} items={tokenItems()} onSelect={(id) => { if (id === buy.id) setBuyId(sell.id); setSellId(id); }} />}
+              token={<TokenButton title={t('swap.pickGive')} asset={sell} items={sellItems} onSelect={selectSell} />}
             />
             <button
               type="button"
@@ -518,7 +529,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
               sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}` : ' '}
               note={<FeesIncludedLink />}
-              token={<TokenButton asset={buy} items={buyItems} onSelect={setBuyId} />}
+              token={<TokenButton title={t('swap.pickReceive')} asset={buy} items={buyItems} onSelect={setBuyId} />}
             />
           </div>
 
@@ -811,20 +822,20 @@ function TokenPanel({ label, right, amount, sub, note, token }: { label: string;
   );
 }
 
-function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array<{ value: string; label: string; hint: string; icon: React.ReactNode }>; onSelect: (id: string) => void }) {
+function TokenButton({ title, asset, items, onSelect }: { title: string; asset: AssetDef; items: TokenPickerItem[]; onSelect: (id: string) => void }) {
   return (
-    <Menu
-      align="end"
+    <TokenPicker
+      title={title}
       value={asset.id}
-      onSelect={onSelect}
       items={items}
-      trigger={
-        <button type="button" className="press flex h-11 shrink-0 items-center gap-2 rounded-ctl border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-medium tracking-[-0.01em] hover:border-line-3 hover:bg-raised">
+      onSelect={onSelect}
+      trigger={(open) => (
+        <button type="button" onClick={open} className="press flex h-11 shrink-0 items-center gap-2 rounded-ctl border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-medium tracking-[-0.01em] hover:border-line-3 hover:bg-raised">
           <CoinIcon asset={asset} size={30} />
           {asset.symbol}
           <IconChevronDown size={13} className="text-mute" />
         </button>
-      }
+      )}
     />
   );
 }

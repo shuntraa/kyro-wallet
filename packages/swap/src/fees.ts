@@ -253,9 +253,9 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
 }
 
 /** Kyro fee addresses Exolix routes pay on their source chain (only the valid ones). */
-export function exolixFeeRecipients(cfg: SwapFeeConfig = KYRO_SWAP_FEE): Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'monero', string>> {
-  const out: Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'monero', string>> = {};
-  for (const c of ['evm', 'solana', 'bitcoin', 'litecoin'] as const) {
+export function exolixFeeRecipients(cfg: SwapFeeConfig = KYRO_SWAP_FEE): Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>> {
+  const out: Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>> = {};
+  for (const c of ['evm', 'solana', 'bitcoin', 'litecoin', 'tron', 'dogecoin'] as const) {
     const a = feeRecipientFor(c, cfg);
     if (a) out[c] = a;
   }

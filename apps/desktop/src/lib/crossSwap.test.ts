@@ -63,12 +63,13 @@ describe('cross-chain swap helpers', () => {
     expect(canSwapFrom(by('xmr'))).toBe(false);
     for (const f of ['btc', 'ltc', 'sol']) expect(canSwapTo('mainnet', by(f), by('xmr')), f).toBe(true);
     expect(canSwapTo('mainnet', eth, by('xmr'))).toBe(true);
-    expect(canSwapTo('mainnet', by('doge'), by('xmr'))).toBe(false);
+    expect(canSwapTo('mainnet', by('doge'), by('xmr'))).toBe(true);
+    expect(canSwapTo('mainnet', findChain('mainnet', 'bsc'), by('xmr'))).toBe(false);
     expect(ownAddressOn({ ...accounts, xmr: { address: '44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A' } }, by('xmr'))).toMatch(/^44AF/);
-    for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'cosmos']) {
-      expect(canSwapFrom(by(f)), f).toBe(false);
-      expect(canSwapTo('mainnet', eth, by(f)), f).toBe(false);
-    }
+    for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'cosmos']) expect(canSwapFrom(by(f)), f).toBe(false);
+    // Exolix: Kaspa, Algorand, NEAR as destinations only; Hedera, Polkadot, Cosmos not at all.
+    for (const f of ['near', 'kas', 'algo']) expect(canSwapTo('mainnet', eth, by(f)), f).toBe(true);
+    for (const f of ['hbar', 'dot', 'cosmos']) expect(canSwapTo('mainnet', eth, by(f)), f).toBe(false);
     // EVM: same-chain where 0x / LI.FI has a checked contract (Flare, Kaia, HyperEVM now too), not Conflux.
     for (const k of ['flare', 'kaia', 'hyperevm', 'cronos', 'gnosis']) expect(canSwapTo('mainnet', findChain('mainnet', k), findChain('mainnet', k)), k).toBe(true);
     expect(canSwapFrom(findChain('mainnet', 'conflux'))).toBe(false);
@@ -118,6 +119,7 @@ describe('cross-chain swap helpers', () => {
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoincash', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bitcoincash:qz7xm6aahynmu0ud5y255jlxe22cdjgxpv9ra4uqyf' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'ton', toChain: 'stellar', toChainKey: 'stellar', bridge: '1click', depositAddress: 'UQD-x0XHFHtf6KcZGG7ZWrqF1oZ5NGE-guyHR4yjKL1Ivz_P' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'near', toChain: '1', toChainKey: 'ethereum', bridge: '1click' } }, 'mainnet')).toBe(false);
+    expect(isLocalTx({ ...tx, cross: { fromChain: '1', toChain: 'kaspa', toChainKey: 'kaspa', bridge: 'exolix', orderId: 'abcd1234' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: '42161', toChain: 'solana', toChainKey: 'solana', bridge: 'near', status: '<script>' } }, 'mainnet')).toBe(false);
   });
 });
