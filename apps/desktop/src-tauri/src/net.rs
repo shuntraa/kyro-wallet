@@ -338,6 +338,38 @@ pub fn redirect_hop(
     Some(hop)
 }
 
+/// Over Tor, how many extra attempts a request gets on a fresh isolated circuit (new exit) after
+/// an exit-dependent refusal. Never a fallback to clear.
+pub const TOR_FRESH_CIRCUIT_RETRIES: usize = 2;
+/// Base pause before a fresh-circuit attempt (multiplied by the attempt number).
+pub const TOR_RETRY_BACKOFF: Duration = Duration::from_millis(750);
+
+/// Whether a response received over Tor looks like a refusal tied to the exit relay (Cloudflare
+/// and others block or rate-limit some exits): 403, 429, or a 503 challenge page.
+/// `retries_done` = fresh circuits already tried for this request.
+pub fn tor_retry_on_fresh_circuit(status: u16, body: &[u8], retries_done: usize) -> bool {
+    if retries_done >= TOR_FRESH_CIRCUIT_RETRIES {
+        return false;
+    }
+    match status {
+        403 | 429 => true,
+        503 => is_challenge_page(body),
+        _ => false,
+    }
+}
+
+fn is_challenge_page(body: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&body[..body.len().min(8192)]);
+    [
+        "cf-chl",
+        "challenge-platform",
+        "Just a moment...",
+        "cf-mitigated",
+    ]
+    .iter()
+    .any(|m| head.contains(m))
+}
+
 fn cache_insert(
     cache: &mut HashMap<String, (Instant, FetchResponse)>,
     key: String,
@@ -1231,6 +1263,28 @@ mod tests {
         cap.push(&[1]).unwrap();
         assert!(cap.push(&[2]).is_err());
         assert_eq!(cap.into_inner().len(), MAX_BODY);
+    }
+
+    #[test]
+    fn net_tor_fresh_circuit_retry_decision() {
+        let challenge =
+            b"<html><title>Just a moment...</title><script src=\"/cdn-cgi/challenge-platform/x\">";
+        for status in [403, 429] {
+            assert!(tor_retry_on_fresh_circuit(status, b"", 0));
+            assert!(tor_retry_on_fresh_circuit(status, b"", 1));
+            assert!(!tor_retry_on_fresh_circuit(status, b"", 2));
+        }
+        assert!(tor_retry_on_fresh_circuit(503, challenge, 0));
+        assert!(!tor_retry_on_fresh_circuit(503, b"upstream down", 0));
+        assert!(!tor_retry_on_fresh_circuit(503, challenge, 2));
+        for status in [200, 301, 400, 401, 404, 500, 502] {
+            assert!(!tor_retry_on_fresh_circuit(status, challenge, 0));
+        }
+        let mut attempts = 1;
+        while tor_retry_on_fresh_circuit(403, b"", attempts - 1) {
+            attempts += 1;
+        }
+        assert_eq!(attempts, 1 + TOR_FRESH_CIRCUIT_RETRIES);
     }
 
     #[test]

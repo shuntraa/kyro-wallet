@@ -243,10 +243,41 @@ impl TorManager {
         ))
     }
 
+    /// Replaces `family`'s client with a brand-new isolated one (new isolation group, so new
+    /// circuits and in practice a different exit), still isolated from every other family.
+    /// If another request already rotated it since `stale` was handed out, that newer client is
+    /// reused instead.
+    fn fresh_client_for(&self, family: Family, stale: &Client) -> AppResult<Client> {
+        let base = net::lock(&self.base)
+            .clone()
+            .ok_or_else(|| AppError::TorUnavailable("Tor is not ready".into()))?;
+        let mut isolated = net::lock(&self.isolated);
+        match isolated.get(&family) {
+            Some(cur) if !Arc::ptr_eq(cur, stale) => Ok(Arc::clone(cur)),
+            _ => {
+                let fresh: Client = base.isolated_client();
+                isolated.insert(family, Arc::clone(&fresh));
+                Ok(fresh)
+            }
+        }
+    }
+
     /// Sends a request that already passed the policy, over Tor only, on `p.family`'s circuits.
+    /// An exit-dependent refusal (403/429/challenge page) is retried on a fresh isolated circuit
+    /// for the same family, up to [`net::TOR_FRESH_CIRCUIT_RETRIES`] times; never in clear.
     pub async fn send(&self, p: &Prepared) -> AppResult<(u16, Vec<u8>)> {
-        let client = self.client_for(p.family).await?;
-        self.send_following_redirects(&client, p).await
+        let mut client = self.client_for(p.family).await?;
+        let onion = p.url.host_str().is_some_and(|h| h.ends_with(".onion"));
+        let mut retries = 0;
+        loop {
+            let (status, body) = self.send_following_redirects(&client, p).await?;
+            if onion || !net::tor_retry_on_fresh_circuit(status, &body, retries) {
+                return Ok((status, body));
+            }
+            retries += 1;
+            tokio::time::sleep(net::TOR_RETRY_BACKOFF * retries as u32).await;
+            client = self.fresh_client_for(p.family, &client)?;
+        }
     }
 
     /// Opens a raw Tor stream to `host:port` on `family`'s isolated circuits (Electrum).

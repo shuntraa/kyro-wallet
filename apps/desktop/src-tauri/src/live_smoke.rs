@@ -20,6 +20,10 @@ use crate::net::FetchRequest;
 use crate::state::AppState;
 use crate::tor::TorState;
 
+/// Chains hidden in this release (mirror of `HIDDEN_FAMILIES` in `packages/chains`: `hbar`):
+/// skipped unless named in `KYRO_SMOKE_ONLY`.
+const HIDDEN: &[&str] = &["hedera"];
+
 type Check<'a> = Pin<Box<dyn Future<Output = Result<String, String>> + 'a>>;
 
 fn e<E: std::fmt::Display>(x: E) -> String {
@@ -453,7 +457,10 @@ fn live_smoke_all_chains_mainnet() {
         let all = checks(&state, &seed);
         let (names, futs): (Vec<_>, Vec<_>) = all
             .into_iter()
-            .filter(|(n, _)| only.as_ref().is_none_or(|o| o.contains(n)))
+            .filter(|(n, _)| {
+                only.as_ref()
+                    .map_or(!HIDDEN.contains(&n.as_str()), |o| o.contains(n))
+            })
             .map(|(n, f)| {
                 (n, async move {
                     let t = Instant::now();
