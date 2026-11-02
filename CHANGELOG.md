@@ -12,6 +12,10 @@
 - Charts fit the window in width and height.
 - Earn opens from its last state, without grey placeholders.
 - Notifications: one short style everywhere, starting with the update notice.
+- Asset page: "Loading activity…" until the first answer, never "No activity" before it. The
+  header wraps on narrow windows (the period selector stays whole).
+- Earn: a rate that cannot be read shows "—" after a few seconds; the page scrolls normally.
+- Token picker: Escape closes it.
 ## 1.0.4
 
 - Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools

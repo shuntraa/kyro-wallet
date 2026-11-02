@@ -98,6 +98,19 @@ describe('cross-chain swap helpers', () => {
     expect(buyGroups('testnet', allChains('testnet'), assetsFor('testnet'), sepEth).map((g) => g.chain.key)).toEqual(['sepolia']);
   });
 
+  it('Monero is a « Tu reçois » choice on mainnet from ETH, USDT, USDC, BTC, SOL and LTC (testnet: none)', () => {
+    const native = (family: string) => assets.find((a) => a.family === family && a.kind === 'native' && chains.find((c) => c.key === a.chainKey)?.family === family);
+    const onEth = (symbol: string) => assets.find((a) => a.chainKey === 'ethereum' && a.symbol === symbol);
+    const sells = [onEth('ETH'), onEth('USDT'), onEth('USDC'), native('btc'), native('sol'), native('ltc')];
+    for (const sell of sells) {
+      expect(sell).toBeDefined();
+      const xmr = buyGroups('mainnet', chains, assets, sell).find((g) => g.chain.family === 'xmr');
+      expect(xmr?.assets.some((a) => a.kind === 'native' && a.symbol === 'XMR'), sell?.id).toBe(true);
+    }
+    const sepEth = assetsFor('testnet').find((a) => a.chainKey === 'sepolia' && a.kind === 'native');
+    expect(buyGroups('testnet', allChains('testnet'), assetsFor('testnet'), sepEth).some((g) => g.chain.family === 'xmr')).toBe(false);
+  });
+
   it('token ids as the providers name them', () => {
     const find = (id: string) => assets.find((a) => a.id === id);
     expect(swapTokenAddress(find('sol') ?? assets[0]!)).toBe('So11111111111111111111111111111111111111112');

@@ -52,6 +52,8 @@ export function TokenPicker({ title, value, items, onSelect, trigger }: { title:
     else if (e.key === 'Home') setActive(move(-1, 1));
     else if (e.key === 'End') setActive(move(shown.length, -1));
     else if (e.key === 'Enter') pick(shown[active]);
+    // Escape closes from the search box too (not only from the dialog's own handler).
+    else if (e.key === 'Escape') setOpen(false);
     else return;
     e.preventDefault();
   };

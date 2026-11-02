@@ -96,15 +96,15 @@ export function AssetDetail({ id }: { id: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3.5">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-1.5">
           <IconButton label={t('common.back')} onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
           <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={40} />
-          <h1 className="screen-title truncate">{name}</h1>
-          <span className="rounded-full bg-control px-2.5 py-0.5 text-[12px] font-medium text-text2">{symbol}</span>
-          {coin?.rank && <span className="text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
+          <h1 className="screen-title min-w-0 max-w-full truncate">{name}</h1>
+          <span className="shrink-0 rounded-full bg-control px-2.5 py-0.5 text-[12px] font-medium text-text2">{symbol}</span>
+          {coin?.rank && <span className="shrink-0 whitespace-nowrap text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
           {supported && <AccountPicker family={supported.family} />}
           <button type="button" aria-label={fav ? t('portfolio.removeFavorite') : t('portfolio.addFavorite')} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press flex size-8 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
             <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
@@ -113,7 +113,7 @@ export function AssetDetail({ id }: { id: string }) {
           </button>
         </div>
         {supported && !watch ? (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="primary" size="lg" disabled={supported.readOnly} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
               <IconUp size={16} /> {t('common.send')}
             </Button>
@@ -148,8 +148,8 @@ export function AssetDetail({ id }: { id: string }) {
 
       <div className="flex min-h-0 flex-[1.15] gap-5">
         <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden border-b border-line">
-          <div className="flex items-start justify-between pt-2">
-            <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-start justify-between gap-3 pt-2">
+            <div className="flex min-w-0 flex-col gap-2.5">
               <span className="eyebrow">
                 {t('portfolio.priceOf', { symbol, currency: cur })}
               </span>
@@ -162,7 +162,7 @@ export function AssetDetail({ id }: { id: string }) {
                 </span>
               )}
             </div>
-            <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
+            <Segmented className="shrink-0" label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
           </div>
           <div className="mt-auto flex min-h-0 flex-1 flex-col justify-end">
             {values.length > 1 ? (
@@ -189,7 +189,7 @@ export function AssetDetail({ id }: { id: string }) {
           </div>
         </section>
 
-        <aside className="rise flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-6 py-6">
+        <aside className="rise flex w-[clamp(280px,34%,360px)] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-6 py-6">
           {supported && !watch ? (
             <>
               <span className="eyebrow">{t('portfolio.yourBalance')}</span>
@@ -287,8 +287,14 @@ export function AssetDetail({ id }: { id: string }) {
           <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
             {activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
               <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
+            ) : activity.length === 0 && chainPending && !chainKnown ? (
+              // No answer yet: a neutral line, never « No activity » before the first answer.
+              <div className="flex items-center gap-2 px-6 py-5 text-[12.5px] text-mute" role="status">
+                {spinWindow && <Spinner className="size-3.5 text-mute" />}
+                {t('portfolio.loadingActivity')}
+              </div>
             ) : activity.length === 0 ? (
-              <EmptyState title={t('portfolio.noActivity')} action={chainPending && !chainKnown ? (spinWindow ? <Spinner className="size-3.5 text-mute" /> : <span className="text-[12px] text-mute">{t('portfolio.updating')}</span>) : undefined}>
+              <EmptyState title={t('portfolio.noActivity')}>
                 {t('portfolio.noActivityHint')}
               </EmptyState>
             ) : (
@@ -297,7 +303,7 @@ export function AssetDetail({ id }: { id: string }) {
           </div>
         </section>
         )}
-        <section className={cn('rise flex shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5', supported ? 'w-[360px]' : 'flex-1')} style={idx(2)}>
+        <section className={cn('rise flex shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5', supported ? 'w-[clamp(280px,34%,360px)]' : 'flex-1')} style={idx(2)}>
           <div className="flex items-baseline justify-between pb-3">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.market')}</span>
           </div>

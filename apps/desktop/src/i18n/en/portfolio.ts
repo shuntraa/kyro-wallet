@@ -95,6 +95,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.unsupportedHint': 'Price only.',
   'portfolio.activityOf': '{symbol} activity',
   'portfolio.seeAll': 'See all',
+  'portfolio.loadingActivity': 'Loading activity…',
   'portfolio.noActivity': 'No activity',
   'portfolio.noActivityHint': 'Nothing yet.',
   'portfolio.updating': 'Updating…',

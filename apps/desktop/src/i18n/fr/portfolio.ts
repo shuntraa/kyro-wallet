@@ -99,6 +99,7 @@ export const portfolio = {
   'portfolio.unsupportedHint': 'Cours seulement.',
   'portfolio.activityOf': 'Activité {symbol}',
   'portfolio.seeAll': 'Tout voir',
+  'portfolio.loadingActivity': 'Chargement de l’activité…',
   'portfolio.noActivity': 'Aucune activité',
   'portfolio.noActivityHint': 'Rien pour l’instant.',
   'portfolio.updating': 'Mise à jour…',

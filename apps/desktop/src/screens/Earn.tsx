@@ -25,6 +25,13 @@ type Positions = Record<string, bigint>;
 
 type EvmGet = (chainKey: string) => EvmAdapter | undefined;
 
+/** A rate that is not in after this long shows « — » (demo, testnet, a slow or failed read). */
+const RATE_TIMEOUT_MS = 6_000;
+
+function settle(job: Promise<void>): Promise<void> {
+  return Promise.race([job, new Promise<void>((r) => window.setTimeout(r, RATE_TIMEOUT_MS))]);
+}
+
 async function readRates(evm: EvmGet): Promise<Rates> {
   const out: Rates = {};
   const jobs: Promise<void>[] = [
@@ -51,8 +58,11 @@ async function readRates(evm: EvmGet): Promise<Rates> {
         .catch(() => void (out[id] = null)),
     );
   }
-  await Promise.all(jobs);
-  return out;
+  await Promise.all(jobs.map(settle));
+  // Every option gets an answer: a missing rate is « — », never an endless spinner.
+  const done: Rates = {};
+  for (const o of EARN_OPTIONS) done[o.id] = out[o.id] ?? null;
+  return done;
 }
 
 async function tokenBalance(eth: EvmAdapter, token: string): Promise<bigint> {
@@ -111,7 +121,7 @@ export function Earn() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin [&>*]:shrink-0">
       <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="screen-title">{t('earn.title')}</h1>
@@ -153,7 +163,7 @@ export function Earn() {
                 </div>
               </div>
               <div>
-                <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{apy === undefined ? <Spinner /> : fmtPct(apy, { decimals: 2, sign: false })}</div>
+                <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{apy === undefined && !rates.error ? <Spinner /> : fmtPct(apy, { decimals: 2, sign: false })}</div>
                 <div className="text-[11.5px] text-mute">{t('earn.est')}</div>
               </div>
               <div className="text-[13px]">
