@@ -92,13 +92,7 @@ export function Portfolio() {
               ariaLabel={t('portfolio.chartAria', { period: periodLabel })}
               renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now()), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
             />
-          ) : (
-            <div className="flex h-full items-end">
-              <svg width="100%" height="60" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="1.5" strokeDasharray="3 6" vectorEffect="non-scaling-stroke" />
-              </svg>
-            </div>
-          )}
+          ) : null}
         </div>
       </section>
 

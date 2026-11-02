@@ -32,7 +32,7 @@ export function UpdateNotice() {
   if (!version) return null;
   return (
     <div role="status" className="fade-in fixed right-5 bottom-12 z-50 flex items-center gap-3 rounded-box border border-up/25 border-l-2 border-l-up bg-card px-4 py-3 text-[13px] text-text2 shadow-lg">
-      <span>{t('update.updated')}</span>
+      <span>{t('update.updated', { version })}</span>
       <button type="button" aria-label={t('update.dismiss')} onClick={() => setVersion(null)} className="text-mute hover:text-text">
         <IconX size={14} />
       </button>

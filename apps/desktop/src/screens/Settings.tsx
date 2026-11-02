@@ -15,7 +15,7 @@ import { Devices } from './settings/Devices';
 import { AccountsSection } from './settings/Accounts';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
-import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
+import { IconCheck, IconChevronRight, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
 import { TorIndicator } from '../components/Tor';
 import { torStore, useTor } from '../state/tor';
 import { useMedia } from '../components/motion';
@@ -367,8 +367,8 @@ function Display({ save }: { save: Save }) {
 }
 
 /**
- * API keys are write-only (settings_get returns `apiKeysSet` only): a saved key shows « Clé
- * enregistrée » with Remplacer / Supprimer, never its value.
+ * API keys are write-only (settings_get returns `apiKeysSet` only): a saved key shows « Saved ·
+ * Remove · Replace », never its value.
  */
 function ApiKeys() {
   const { settings, config } = useApp();
@@ -380,17 +380,19 @@ function ApiKeys() {
     { key: 'trongrid', label: 'TronGrid', desc: t('settings.apiTrongridDesc'), env: !!config?.hasTrongridKey && !settings.apiKeysSet.trongrid },
   ];
   return (
-    <Panel className="gap-4 py-5">
-      <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionApiKeys')}</span>
-      <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">{t('settings.apiKeysIntro')}</p>
-      {rows.map((r) => (
-        <ApiKeyRow key={r.key} name={r.key} label={r.label} desc={r.desc} env={r.env} saved={!!settings.apiKeysSet[r.key]} />
+    <Panel>
+      <div className="flex flex-col gap-1 border-b border-line py-4">
+        <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionApiKeys')}</span>
+        <span className="text-[13px] text-mute">{t('settings.apiKeysIntro')}</span>
+      </div>
+      {rows.map((r, i) => (
+        <ApiKeyRow key={r.key} name={r.key} label={r.label} desc={r.desc} env={r.env} saved={!!settings.apiKeysSet[r.key]} last={i === rows.length - 1} />
       ))}
     </Panel>
   );
 }
 
-function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label: string; desc: string; env: boolean; saved: boolean }) {
+function ApiKeyRow({ name, label, desc, env, saved, last }: { name: ApiKeyName; label: string; desc: string; env: boolean; saved: boolean; last: boolean }) {
   const { settings, saveSettings } = useApp();
   const [editing, setEditing] = useState(!saved);
   const [value, setValue] = useState('');
@@ -413,30 +415,48 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
       setBusy(false);
     }
   };
+  const typed = value.trim() !== '';
   return (
-    <div className="flex flex-col gap-1.5" data-api-key={name}>
-      <span className="flex items-center gap-2 text-[12px] font-medium text-mute">
-        {label} {env && <Badge tone="up">{t('settings.keyFromEnv')}</Badge>}
-      </span>
-      {saved && !editing ? (
-        <div className="flex items-center gap-2 rounded-ctl border border-line-2 bg-raised px-3 py-2">
-          <IconCheck size={14} className="text-up" />
-          <span className="flex-1 text-[13px] text-text2">{t('settings.keySaved')}</span>
-          <Button size="sm" onClick={() => setEditing(true)} disabled={busy}>
-            {t('settings.replace')}
-          </Button>
-          <Button size="sm" variant="dangerOutline" onClick={() => void write('')} disabled={busy}>
-            {busy && <Spinner />} {t('common.delete')}
-          </Button>
+    <div className={cn('flex flex-col gap-2.5 py-4', !last && 'border-b border-line')} data-api-key={name}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex items-center gap-2 text-[14.5px] font-medium">
+            {label} {env && <Badge tone="up">{t('settings.keyFromEnv')}</Badge>}
+          </span>
+          <span className="text-[13px] text-mute">{desc}</span>
         </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <Input type="password" autoComplete="off" value={value} placeholder={saved ? t('settings.newKeyPlaceholder') : desc} onChange={(e) => setValue(e.target.value)} aria-label={t('settings.apiKeyAria', { label })} className="flex-1 font-mono text-[13px]" />
-          <Button variant="primary" size="sm" disabled={busy || value.trim() === ''} onClick={() => void write(value.trim())}>
-            {busy && <Spinner />} {t('common.save')}
-          </Button>
+        {saved && !editing && (
+          <span className="flex shrink-0 items-center gap-1.5 text-[13px]">
+            <IconCheck size={14} className="text-up" />
+            <span className="text-text2">{t('settings.keySaved')}</span>
+            <span className="text-faint">·</span>
+            <button type="button" disabled={busy} onClick={() => void write('')} className="text-mute hover:text-down disabled:opacity-45">
+              {t('settings.removeKey')}
+            </button>
+            <span className="text-faint">·</span>
+            <button type="button" disabled={busy} onClick={() => setEditing(true)} className="text-mute hover:text-text disabled:opacity-45">
+              {t('settings.replace')}
+            </button>
+          </span>
+        )}
+      </div>
+      {(!saved || editing) && (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (typed && !busy) void write(value.trim());
+          }}
+        >
+          <Input type="password" autoComplete="off" spellCheck={false} value={value} placeholder={saved ? t('settings.newKeyPlaceholder') : t('settings.pasteKey')} onChange={(e) => setValue(e.target.value)} aria-label={t('settings.apiKeyAria', { label })} className="flex-1 text-[13.5px]" />
+          {typed && (
+            <Button type="submit" variant="primary" size="sm" className="fade-in" disabled={busy}>
+              {busy && <Spinner />} {t('common.save')}
+            </Button>
+          )}
           {saved && (
             <Button
+              variant="ghost"
               size="sm"
               onClick={() => {
                 setEditing(false);
@@ -447,33 +467,77 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
               {t('common.cancel')}
             </Button>
           )}
-        </div>
+        </form>
       )}
       {error && <span className="text-[12px] text-down">{error}</span>}
-      {done && !error && <span className="text-[12px] text-up">{done}</span>}
+      {done && !error && <span className="fade-in text-[12px] text-up">{done}</span>}
     </div>
   );
+}
+
+type ConnGroup = 'prices' | 'chains' | 'swap' | 'updates' | 'other';
+const CONN_GROUPS: Array<{ key: ConnGroup; label: Key }> = [
+  { key: 'prices', label: 'settings.connGroupPrices' },
+  { key: 'chains', label: 'settings.connGroupChains' },
+  { key: 'swap', label: 'settings.connGroupSwap' },
+  { key: 'updates', label: 'settings.connGroupUpdates' },
+  { key: 'other', label: 'settings.connGroupOther' },
+];
+
+/** Sorts a host of `outgoingHosts` into a group, from its host name and purpose. */
+function connGroup(h: { host: string; purpose: string }): ConnGroup {
+  const s = `${h.host} ${h.purpose}`;
+  if (/coingecko|\bprices?\b|\bprix\b/i.test(s)) return 'prices';
+  if (/swap/i.test(h.purpose)) return 'swap';
+  if (/update|mise à jour|mises à jour|github/i.test(s)) return 'updates';
+  if (/: /.test(h.purpose)) return 'chains';
+  return 'other';
+}
+
+/** "Bitcoin: balances, fees…" → "Bitcoin"; "EVM swap quotes (key required)" → "EVM swap quotes". */
+function shortPurpose(p: string): string {
+  return (p.split(/ ?: | \(/)[0] ?? p).trim();
 }
 
 function Connections({ compact }: { compact?: boolean }) {
   const { settings, network, navigate } = useApp();
   const hosts = outgoingHosts(network, settings.servers);
-  const { t } = useT();
+  const { t, tp } = useT();
+  const groups = CONN_GROUPS.map((g) => ({ ...g, hosts: hosts.filter((h) => connGroup(h) === g.key) })).filter((g) => g.hosts.length > 0);
+  const [open, setOpen] = useState<Partial<Record<ConnGroup, boolean>>>({});
   return (
     <section className="flex h-full flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
-      <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionConnections')}</span>
-      <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('settings.connectionsIntro')}</p>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-thin">
-        {hosts.map((h) => (
-          <div key={h.host + h.purpose} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
-            <span className="size-1.5 shrink-0 rounded-full bg-up" />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate font-mono text-[12px]">{h.host}</span>
-              <span className="text-[12px] text-mute">{h.purpose}</span>
-            </span>
-            {h.custom && <Badge tone="ice">{t('settings.customBadge')}</Badge>}
-          </div>
-        ))}
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionConnections')}</span>
+        <span className="text-[12px] text-mute">{tp('settings.connServers', hosts.length)}</span>
+      </div>
+      <p className="m-0 -mt-1.5 text-[13px] text-mute">{t('settings.connectionsIntro')}</p>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-thin">
+        {groups.map((g) => {
+          const isOpen = open[g.key] ?? !compact;
+          return (
+            <div key={g.key} className="border-t border-line first:border-t-0">
+              <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [g.key]: !isOpen }))} className="flex h-10 w-full items-center gap-2 text-left text-[13.5px] font-medium text-text2 hover:text-text">
+                <IconChevronRight size={14} className={cn('shrink-0 text-mute transition-transform duration-150', isOpen && 'rotate-90')} />
+                <span className="flex-1">{(t as (k: Key) => string)(g.label)}</span>
+                <span className="text-[12px] font-normal text-mute">{g.hosts.length}</span>
+              </button>
+              {isOpen && (
+                <ul className="fade-in m-0 flex list-none flex-col p-0 pb-2.5 pl-[22px]">
+                  {g.hosts.map((h) => (
+                    <li key={h.host + h.purpose} title={h.purpose} className="flex min-w-0 items-center gap-2 py-1.5">
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-[13px] text-text">{h.host}</span>
+                        <span className="truncate text-[12px] text-mute">{shortPurpose(h.purpose)}</span>
+                      </span>
+                      {h.custom && <Badge tone="ice">{t('settings.customBadge')}</Badge>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </div>
       {compact && (
         <Button variant="outline" size="lg" onClick={() => navigate({ name: 'settings', section: 'networks' })}>

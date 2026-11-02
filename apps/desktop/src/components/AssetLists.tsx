@@ -17,7 +17,7 @@ import { useTorBlocked } from './Tor';
 import { cbfPending, networkDown, serverDown, serverMissing, useCustomServer } from './ServerDown';
 import { Menu } from './ui/menu';
 import { Badge, Skeleton } from './ui/primitives';
-import { IconChevronDown, IconInfo, IconSearch, IconStar } from './icons';
+import { IconChevronDown, IconChevronRight, IconInfo, IconSearch, IconStar } from './icons';
 import { idx } from './motion';
 import { getLanguage, t, useT } from '../i18n';
 
@@ -128,7 +128,83 @@ function MineList({ sort }: { sort: Sort }) {
   };
   const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const cur = settings.currency;
-  const rows = sortHoldings(pf.accountHoldings, sort);
+  // One row per asset (every account added together); the accounts of a multi-account asset
+  // unfold under it.
+  const rows = sortHoldings(pf.holdings, sort);
+  const byAsset = useMemo(() => {
+    const m = new Map<string, Holding[]>();
+    for (const h of pf.accountHoldings) if (h.account) m.set(h.asset.id, [...(m.get(h.asset.id) ?? []), h]);
+    return m;
+  }, [pf.accountHoldings]);
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  let i = 0;
+  const line = (h: Holding, sub: boolean, accounts: number) => {
+    const n = i++;
+    const issue = problem(h.asset.chainKey);
+    return (
+      <button
+        key={h.key}
+        type="button"
+        style={idx(n)}
+        onClick={() => {
+          if (h.account) selectChainAccount(h.account.family, h.account.index);
+          navigate({ name: 'asset', id: h.asset.id });
+        }}
+        className={cn(GRID, 'group w-full border-t border-line/60 px-6 text-left transition-colors duration-150 hover:bg-white/[.03]', sub ? 'h-12 bg-black/10' : 'h-16')}
+      >
+        <span className={cn('flex min-w-0 items-center gap-3.5', sub && 'pl-[54px]')}>
+          {!sub && <CoinIcon asset={h.asset} size={40} />}
+          <span className="flex min-w-0 flex-col">
+            {sub ? (
+              <span className="truncate text-[13.5px] text-text2">{h.account?.name}</span>
+            ) : (
+              <>
+                <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{h.asset.name}</span>
+                <span className="truncate text-[13px] text-mute">
+                  {h.asset.symbol}
+                  {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL' : h.asset.kind === 'trc20' ? ' · TRC-20' : ''}
+                  {accounts > 1 ? ` · ${t('portfolio.accountCount', { n: accounts })}` : ''}
+                </span>
+              </>
+            )}
+          </span>
+        </span>
+        {sub ? (
+          <span />
+        ) : (
+          <span className="flex flex-col">
+            <span className="text-[14.5px]">{h.price !== null ? fmtFiat(h.price, cur) : '—'}</span>
+            <span className={cn('text-[13px]', trendColor(h.change24h))}>{fmtPct(h.change24h)}</span>
+          </span>
+        )}
+        {sub ? <span /> : h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
+        <span className="flex flex-col items-end">
+          <span className={sub ? 'text-[13.5px] text-text2' : 'text-[15px] font-medium'}>{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
+          <span className="flex items-center gap-1.5 text-[13px] text-mute">
+            {issue && (
+              <span title={issue} aria-label={issue} className="text-faint">
+                <IconInfo size={13} />
+              </span>
+            )}
+            <span key={hideBalances ? 'h' : h.amount.toString()} className="fade-in">{hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+          </span>
+        </span>
+        <span className="flex items-center gap-2.5">
+          <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">
+            <motion.span className="block h-full rounded-full bg-gradient-to-r from-ice to-violet" initial={{ width: 0 }} animate={{ width: `${Math.round(h.share * 100)}%` }} transition={{ duration: 0.5, delay: 0.1 + n * 0.03, ease: [0.22, 1, 0.36, 1] }} />
+          </span>
+          <span className="text-[13px] text-mute">{fmtPct(h.share * 100, { sign: false, decimals: 0 })}</span>
+        </span>
+      </button>
+    );
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn(GRID, 'eyebrow h-10 shrink-0 px-6 whitespace-nowrap')}>
@@ -139,56 +215,27 @@ function MineList({ sort }: { sort: Sort }) {
         <span>{t('portfolio.colShare')}</span>
       </div>
       <div className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">
-        {rows.map((h, i) => {
-          const issue = problem(h.asset.chainKey);
+        {rows.map((h) => {
+          const subs = byAsset.get(h.asset.id) ?? [];
+          if (subs.length < 2) return line(h, false, 1);
+          const isOpen = open.has(h.asset.id);
           return (
+            <div key={h.key} className="relative">
+              {line(h, false, subs.length)}
               <button
-                key={h.key}
                 type="button"
-                style={idx(i)}
-                onClick={() => {
-                  if (h.account) selectChainAccount(h.account.family, h.account.index);
-                  navigate({ name: 'asset', id: h.asset.id });
-                }}
-                className={cn(GRID, 'group h-16 w-full border-t border-line/60 px-6 text-left transition-colors duration-150 hover:bg-white/[.03]')}>
-
-                <span className="flex min-w-0 items-center gap-3.5">
-                  <CoinIcon asset={h.asset} size={40} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{h.asset.name}</span>
-                    <span className="truncate text-[13px] text-mute">
-                      {h.asset.symbol}
-                      {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL' : h.asset.kind === 'trc20' ? ' · TRC-20' : ''}
-                      {h.account ? ` · ${h.account.name}` : ''}
-                    </span>
-                  </span>
-                </span>
-                <span className="flex flex-col">
-                  <span className="text-[14.5px]">{h.price !== null ? fmtFiat(h.price, cur) : '—'}</span>
-                  <span className={cn('text-[13px]', trendColor(h.change24h))}>{fmtPct(h.change24h)}</span>
-                </span>
-                {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
-                <span className="flex flex-col items-end">
-                  <span className="text-[15px] font-medium">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="flex items-center gap-1.5 text-[13px] text-mute">
-                    {issue && (
-                      <span title={issue} aria-label={issue} className="text-faint">
-                        <IconInfo size={13} />
-                      </span>
-                    )}
-                    <span key={hideBalances ? 'h' : h.amount.toString()} className="fade-in">{hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
-                  </span>
-                </span>
-                <span className="flex items-center gap-2.5">
-                  <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">
-                    <motion.span className="block h-full rounded-full bg-gradient-to-r from-ice to-violet" initial={{ width: 0 }} animate={{ width: `${Math.round(h.share * 100)}%` }} transition={{ duration: 0.5, delay: 0.1 + i * 0.03, ease: [0.22, 1, 0.36, 1] }} />
-                  </span>
-                  <span className="text-[13px] text-mute">{fmtPct(h.share * 100, { sign: false, decimals: 0 })}</span>
-                </span>
+                aria-expanded={isOpen}
+                aria-label={t('portfolio.showAccounts')}
+                onClick={() => toggle(h.asset.id)}
+                className="absolute top-[22px] left-1 flex size-5 items-center justify-center rounded-ctl text-mute hover:bg-raised hover:text-text"
+              >
+                <IconChevronRight size={13} className={cn('transition-transform duration-150', isOpen && 'rotate-90')} />
               </button>
+              {isOpen && subs.map((s) => line(s, true, 1))}
+            </div>
           );
         })}
-        {WATCH_ONLY_CHAINS.map((w, i) => <WatchRow key={w.key} i={rows.length + i} coinId={w.coingeckoId} name={w.name} symbol={w.symbol} glyph={w.glyph} color={w.color} />)}
+        {WATCH_ONLY_CHAINS.map((w, j) => <WatchRow key={w.key} i={i + j} coinId={w.coingeckoId} name={w.name} symbol={w.symbol} glyph={w.glyph} color={w.color} />)}
         {pf.balancesLoaded && pf.holdings.every((h) => h.amount === 0n) && (
           <EmptyState title={t('portfolio.emptyVault')} action={<button type="button" onClick={() => navigate({ name: 'receive' })} className="text-[13px] font-semibold text-ice hover:underline">{t('portfolio.receiveFunds')}</button>}>
             {t('portfolio.emptyVaultHint')}

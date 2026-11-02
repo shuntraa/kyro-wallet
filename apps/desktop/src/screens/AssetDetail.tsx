@@ -22,7 +22,7 @@ import { idx } from '../components/motion';
 import { useT } from '../i18n';
 
 export function AssetDetail({ id }: { id: string }) {
-  const { back, settings, navigate, hideBalances, network, activeHw, isMultiAccount, selectedAccounts } = useApp();
+  const { back, settings, navigate, hideBalances, network, activeHw, isMultiAccount, selectedAccounts, selectChainAccount } = useApp();
   const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
@@ -37,6 +37,7 @@ export function AssetDetail({ id }: { id: string }) {
   const supported = asset ?? assetsFor(network).find((a) => a.coingeckoId === coinId && a.kind === 'native');
   const multi = !!supported && isMultiAccount(supported.family);
   const holding = supported ? (multi ? pf.accountHoldings.find((h) => h.asset.id === supported.id && h.account?.index === selectedAccounts[supported.family]) : pf.holdings.find((h) => h.asset.id === supported.id)) : undefined;
+  const accountRows = supported && multi ? pf.accountHoldings.filter((h) => h.asset.id === supported.id && h.account) : [];
   const chart = useCoinChart(coinId, period);
   useOnTorReady(chart.reload);
   const month = useCoinChart(coinId, '1M');
@@ -183,6 +184,29 @@ export function AssetDetail({ id }: { id: string }) {
               <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
                 <div className="h-full origin-left rounded-full bg-ice transition-[width] duration-500" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
               </div>
+              {accountRows.length > 1 && (
+                <div className="mt-2 flex flex-col">
+                  <span className="eyebrow pb-2">{t('portfolio.perAccount')}</span>
+                  {accountRows.map((h) => {
+                    const active = h.account?.index === selectedAccounts[supported.family];
+                    return (
+                      <button
+                        key={h.key}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => h.account && selectChainAccount(h.account.family, h.account.index)}
+                        className="flex h-9 items-center justify-between gap-3 border-t border-line text-left text-[13px] hover:text-text"
+                      >
+                        <span className={cn('flex min-w-0 items-center gap-2', active ? 'text-text' : 'text-text2')}>
+                          <span className={cn('size-1.5 shrink-0 rounded-full', active ? 'bg-ice' : 'bg-faint')} />
+                          <span className="truncate">{h.account?.name}</span>
+                        </span>
+                        <span className={h.amount > 0n ? 'font-medium' : 'text-mute'}>{hideBalances ? HIDDEN : fmtCrypto(h.amount, supported.decimals)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {perNetwork.length > 0 && (
                 <div className="mt-2 flex flex-col">
                   <span className="eyebrow pb-2">{t('portfolio.perNetwork')}</span>
