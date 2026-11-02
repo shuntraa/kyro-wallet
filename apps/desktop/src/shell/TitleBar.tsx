@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Integrated title bar (40 px): logo, breadcrumb, Ctrl K search, window controls.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { isTauri } from '@kyro/shared';
 import { KyroMark } from '../components/kit';
 import { IconSearch } from '../components/icons';
@@ -13,6 +13,24 @@ async function win(action: 'minimize' | 'toggleMaximize' | 'close') {
   const w = getCurrentWindow();
   await w[action]();
 }
+
+// Anything the user can interact with keeps its own clicks; the rest of the bar moves the window.
+const NO_DRAG = 'button, input, textarea, select, a, label, [role="button"], [role="menu"], [role="listbox"], [data-no-drag]';
+
+// Tauri 2's data-tauri-drag-region only reacts when the clicked element itself carries the
+// attribute, so text spans and untagged columns were dead zones. One handler on the header
+// covers every non-interactive descendant: drag on press, maximize/restore on double-click.
+function onBarMouseDown(e: MouseEvent<HTMLElement>) {
+  if (e.button !== 0 || !isTauri()) return;
+  // React bubbles portal events (account menu) up here; only the bar's own DOM counts.
+  if (!(e.target instanceof Element) || !e.currentTarget.contains(e.target) || e.target.closest(NO_DRAG)) return;
+  e.preventDefault();
+  if (e.detail === 2) void win('toggleMaximize');
+  else
+    void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().startDragging()).catch(() => {});
+}
+
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent);
 
 export function WindowControls() {
   const { t } = useT();
@@ -49,8 +67,8 @@ export function TitleBar({ crumbs, center, search, bordered = true, account }: {
   return (
     // Three columns: the side ones share what the search leaves, so the breadcrumb gets ~380 px
     // even at the 1100 px minimum (it used to be boxed in 300 px and cut to « Sola… »).
-    <header data-tauri-drag-region className={`grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center pl-4 ${bordered ? 'border-b border-rail' : ''}`}>
-      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2 pr-4">
+    <header onMouseDown={onBarMouseDown} className={`grid h-10 shrink-0 cursor-default grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center pl-4 select-none ${bordered ? 'border-b border-rail' : ''}`}>
+      <div className="flex min-w-0 items-center gap-2 pr-4">
         <KyroMark size={15} className="shrink-0" />
         <span className="shrink-0 text-[13px] font-semibold tracking-[-0.02em]">Kyro</span>
         {account && (
@@ -66,7 +84,7 @@ export function TitleBar({ crumbs, center, search, bordered = true, account }: {
           </span>
         ))}
       </div>
-      <div data-tauri-drag-region className="flex min-w-0 justify-center">
+      <div className="flex min-w-0 justify-center">
         {search ? <SearchBox search={search} /> : center}
       </div>
       <div className="flex min-w-0 justify-end">
@@ -81,6 +99,19 @@ function Slash() {
     <svg width="7" height="14" viewBox="0 0 7 14" aria-hidden="true" className="shrink-0 text-line-3">
       <path d="M6 1 1 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
+  );
+}
+
+function ShortcutHint() {
+  const keys = IS_MAC ? ['⌘', 'K'] : ['Ctrl', 'K'];
+  return (
+    <span aria-hidden="true" className="pointer-events-none flex shrink-0 items-center gap-[3px] transition-opacity duration-150 group-focus-within:opacity-0">
+      {keys.map((k) => (
+        <kbd key={k} className="flex h-[17px] min-w-[17px] items-center justify-center rounded-[4px] bg-control px-1 font-sans text-[10px] leading-none font-medium text-faint">
+          {k}
+        </kbd>
+      ))}
+    </span>
   );
 }
 
@@ -114,7 +145,7 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
 
   return (
     <div className="relative w-[clamp(260px,28vw,380px)]">
-      <label className="flex h-7 items-center gap-2 rounded-ctl border border-line bg-bg-deep px-2.5 text-[12px] text-mute transition-colors hover:border-line-2 focus-within:border-ice-line focus-within:bg-bg">
+      <label className="group flex h-7 cursor-text items-center gap-2 rounded-ctl border border-line bg-bg-deep px-2.5 text-[12px] text-mute transition-colors hover:border-line-2 focus-within:border-ice-line focus-within:bg-bg">
         <IconSearch size={14} />
         <span className="sr-only">{t('shell.search')}</span>
         <input
@@ -146,10 +177,10 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
           }}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-text"
         />
-        <kbd className="rounded-[3px] border border-line-2 px-[5px] py-px font-mono text-[10px] text-faint">Ctrl K</kbd>
+        {!q && <ShortcutHint />}
       </label>
       {open && q.trim() && (
-        <div className="pop-in absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)]">
+        <div data-no-drag className="pop-in absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)]">
           {results.length === 0 ? (
             <div className="px-3 py-2.5 text-[12px] text-mute">{t('shell.noResults')}</div>
           ) : (
