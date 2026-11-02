@@ -72,7 +72,7 @@ export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, dem
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { btcWarnings, evmWarnings } from './warnings';
-import { l10n, navigatorLang, type Lang } from './i18n';
+import { l10n, navigatorLang, sentence, type Lang } from './i18n';
 import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 import { createDemoStake } from './mock-stake';
@@ -768,14 +768,14 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       return { wordCount: words.length };
     },
     vault_backup_show: () => {
-      if (!pendingBackup) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucune phrase de récupération en attente de sauvegarde', 'Invalid input: no recovery phrase waiting to be backed up'));
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', sentence(l10n('aucune phrase de récupération en attente de sauvegarde', 'no recovery phrase waiting to be backed up')));
       const w = pendingBackup.words;
       confirmFn(l10n(`Ta phrase de récupération\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`, `Your recovery phrase\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`));
       pendingBackup.checks = randomChecks(w.length);
       return { checks: pendingBackup.checks };
     },
     vault_backup_verify: (a) => {
-      if (!pendingBackup) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucune phrase de récupération en attente de sauvegarde', 'Invalid input: no recovery phrase waiting to be backed up'));
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', sentence(l10n('aucune phrase de récupération en attente de sauvegarde', 'no recovery phrase waiting to be backed up')));
       const answers = Array.isArray(a.answers) ? (a.answers as unknown[]).map((x) => String(x).trim().toLowerCase()) : [];
       const p = pendingBackup;
       const ok = answers.length === 3 && p.checks.every((idx, i) => p.words[idx] === answers[i]);
@@ -929,7 +929,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
         throw new IpcError('INVALID_INPUT', l10n('Délai de verrouillage invalide (1 min à 4 h).', 'Invalid lock delay (1 min to 4 h).'));
       }
       const langIn: unknown = (next as { language?: unknown }).language;
-      if (langIn !== undefined && langIn !== 'auto' && langIn !== 'fr' && langIn !== 'en') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : langue : auto, fr ou en', 'Invalid input: language: auto, fr or en'));
+      if (langIn !== undefined && langIn !== 'auto' && langIn !== 'fr' && langIn !== 'en') throw new IpcError('INVALID_INPUT', sentence(l10n('langue : auto, fr ou en', 'language: auto, fr or en')));
       const torIn: unknown = (next as { tor?: unknown }).tor;
       if (torIn !== undefined && (typeof torIn !== 'object' || torIn === null || typeof (torIn as { enabled?: unknown }).enabled !== 'boolean')) {
         throw new IpcError('INVALID_INPUT', l10n('Réglages invalides (tor).', 'Invalid settings (tor).'));
@@ -943,17 +943,17 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       // API keys (settings.rs ApiKeys::apply_patch): absent or null = unchanged, "" = remove,
       const nextKeys = { ...apiKeys };
       if (keyUpdate !== undefined) {
-        if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : apiKeys : objet attendu', 'Invalid input: apiKeys: object expected'));
+        if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', sentence(l10n('apiKeys : objet attendu', 'apiKeys: object expected')));
         for (const [name, v] of Object.entries(keyUpdate as Record<string, unknown>)) {
-          if (!(API_KEY_NAMES as readonly string[]).includes(name)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API inconnue « ${name} »`, `Invalid input: unknown API key “${name}”`));
+          if (!(API_KEY_NAMES as readonly string[]).includes(name)) throw new IpcError('INVALID_INPUT', sentence(l10n(`clé API inconnue « ${name} »`, `unknown API key “${name}”`)));
           if (v === null) continue;
-          if (typeof v !== 'string') throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API « ${name} » : texte attendu`, `Invalid input: API key “${name}”: text expected`));
+          if (typeof v !== 'string') throw new IpcError('INVALID_INPUT', sentence(l10n(`clé API « ${name} » : texte attendu`, `API key “${name}”: text expected`)));
           if (v === '') {
             delete nextKeys[name as ApiKeyName];
             continue;
           }
           const t = v.trim();
-          if (!t || /\p{Cc}/u.test(t)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API « ${name} » invalide (vide ou caractères de contrôle)`, `Invalid input: API key “${name}” invalid (empty or control characters)`));
+          if (!t || /\p{Cc}/u.test(t)) throw new IpcError('INVALID_INPUT', sentence(l10n(`clé API « ${name} » invalide (vide ou caractères de contrôle)`, `API key “${name}” invalid (empty or control characters)`)));
           nextKeys[name as ApiKeyName] = t;
         }
       }
@@ -1099,7 +1099,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       // §2.9: the TRON, XRP, Stellar, NEAR, TON, Cosmos, Cardano, Algorand and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
         requireUnlocked();
-        if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'Invalid input: demo: only the address at index 0 exists (Kyro only signs that one)'));
+        if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', sentence(l10n('démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'demo: only the address at index 0 exists (Kyro only signs that one)')));
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {

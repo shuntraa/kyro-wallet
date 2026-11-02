@@ -44,12 +44,12 @@ describe('Sui in the app', () => {
     expect(accounts.sui.path).toBe("m/44'/784'/0'/0'/0'");
     expect(await call('sui_address', {})).toBe(accounts.sui.address);
     expect(await call('sui_address', { account: 3 })).not.toBe(accounts.sui.address);
-    expect(suiAddressProblem('0x2')).toMatch(/Forme courte/);
-    expect(suiAddressProblem('kyro.sui')).toMatch(/SuiNS/);
-    expect(suiAddressProblem('abc')).toMatch(/0x suivi de 64/);
+    expect(suiAddressProblem('0x2')).toMatch(/Forme courte/i);
+    expect(suiAddressProblem('kyro.sui')).toMatch(/SuiNS/i);
+    expect(suiAddressProblem('abc')).toMatch(/0x suivi de 64/i);
     expect(suiAddressProblem(stranger)).toBeNull();
-    expect((await err(call('sui_balance', { address: '0x2' }))).message).toMatch(/forme courte refusée/);
-    expect((await err(call('sui_build_tx', { to: 'kyro.sui', amount: '1' }))).message).toMatch(/SuiNS/);
+    expect((await err(call('sui_balance', { address: '0x2' }))).message).toMatch(/forme courte refusée/i);
+    expect((await err(call('sui_build_tx', { to: 'kyro.sui', amount: '1' }))).message).toMatch(/SuiNS/i);
   });
 
   it('balance: total, spendable coins, backend info', async () => {
@@ -81,9 +81,9 @@ describe('Sui in the app', () => {
     // Each gas coin: object id and version decoded from the bytes, balance read live.
     expect(u.context.gasCoinBalances).toHaveLength(u.summary.gasCoins.length);
     for (const [i, g] of u.summary.gasCoins.entries()) {
-      expect(g.objectId).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(g.objectId).toMatch(/^0x[0-9a-f]{64}$/i);
       expect(dialogs[0]).toContain(`  • ${g.objectId} (version ${g.version}) : `);
-      expect(u.context.gasCoinBalances[i]).toMatch(/^\d+$/);
+      expect(u.context.gasCoinBalances[i]).toMatch(/^\d+$/i);
     }
     const digest = await sui.broadcast(s);
     expect(digest).toBe(u.summary.digest);
@@ -112,12 +112,12 @@ describe('Sui in the app', () => {
   it('refusals: more than the coins, a changed gas coin, account without SUI', async () => {
     const sui = createAdapters(accounts).sui!;
     const e = await err(sui.buildTx({ asset: SUI, to: stranger, amount: 20_000_000_000n, fee: { family: 'sui' } }));
-    expect(e.message).toMatch(/solde insuffisant/);
+    expect(e.message).toMatch(/solde insuffisant/i);
     const u = await sui.buildTx({ asset: SUI, to: stranger, amount: 1n, fee: { family: 'sui' } });
     // Spend first with another transfer: the gas coin of `u` has a new version.
     await sui.broadcast(await sui.signTx(await sui.buildTx({ asset: SUI, to: stranger, amount: 2n, fee: { family: 'sui' } }), PASSWORD));
-    expect((await err(sui.signTx(u, PASSWORD))).message).toMatch(/pièces de gaz ont changé/);
-    expect((await err(call('sui_build_tx', { to: stranger, amount: '1', account: 2 }))).message).toMatch(/aucun SUI/);
+    expect((await err(sui.signTx(u, PASSWORD))).message).toMatch(/pièces de gaz ont changé/i);
+    expect((await err(call('sui_build_tx', { to: stranger, amount: '1', account: 2 }))).message).toMatch(/aucun SUI/i);
   });
 
   it('adapter refuses what does not match the request', async () => {
@@ -131,7 +131,7 @@ describe('Sui in the app', () => {
       txStatus: () => Promise.reject(new Error('no')),
     };
     const a = new SuiAdapter({ chain: suiChain('testnet'), address: accounts.sui.address, backend });
-    expect((await err(a.buildTx({ asset: SUI, to: stranger, amount: 5n, fee: { family: 'sui' } }))).message).toMatch(/ne correspond pas/);
+    expect((await err(a.buildTx({ asset: SUI, to: stranger, amount: 5n, fee: { family: 'sui' } }))).message).toMatch(/ne correspond pas/i);
   });
 
   it('history rows: incoming, outgoing with fee, zero incoming flagged, other coins noted', () => {

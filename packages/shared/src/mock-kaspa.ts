@@ -16,7 +16,7 @@ import {
   type Settings,
 } from './ipc';
 import { kaspaAddressDecode, kaspaAddressEncode, kaspaAddressProblem, type KaspaAddressKind } from './kaspa';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const C = 1_000_000_000_000n;
@@ -34,7 +34,7 @@ export function demoKaspaAddress(seed: Uint8Array, network: Network, account: nu
   return kaspaAddressEncode(network, 'pubKey', pk.slice(1));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const kas = (sompi: bigint | string) => {
   const v = BigInt(sompi);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');

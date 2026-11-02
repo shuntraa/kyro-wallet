@@ -52,8 +52,8 @@ describe('XrpAdapter (testnet)', () => {
     expect(parseDestinationTag('')).toBeUndefined();
     expect(parseDestinationTag(' 12345 ')).toBe(12345);
     expect(parseDestinationTag('4294967295')).toBe(4294967295);
-    expect(() => parseDestinationTag('4294967296')).toThrow(/trop grand/);
-    expect(() => parseDestinationTag('12a')).toThrow(/invalide/);
+    expect(() => parseDestinationTag('4294967296')).toThrow(/trop grand/i);
+    expect(() => parseDestinationTag('12a')).toThrow(/invalide/i);
     expect(() => parseDestinationTag('-1')).toThrow();
   });
 
@@ -70,8 +70,8 @@ describe('XrpAdapter (testnet)', () => {
     expect(u.summary.destinationTag).toBe(12345);
     const v = await a.buildPayment({ to: OTHER, amount: '5000000' });
     expect(v.summary.destinationTag).toBeNull();
-    await expect(a.buildPayment({ to: ME, amount: '1' })).rejects.toThrow(/soi-même/);
-    await expect(a.buildPayment({ to: OTHER, amount: '1.5' })).rejects.toThrow(/drops/);
+    await expect(a.buildPayment({ to: ME, amount: '1' })).rejects.toThrow(/soi-même/i);
+    await expect(a.buildPayment({ to: OTHER, amount: '1.5' })).rejects.toThrow(/drops/i);
     for (const over of [
       { build: async () => ({ blob: '', summary: summary({ destinationTag: 999 }), context: ctx }) }, // tag changed
       { build: async () => ({ blob: '', summary: summary({ amount: { kind: 'xrp', drops: '1' } }), context: ctx }) },
@@ -79,7 +79,7 @@ describe('XrpAdapter (testnet)', () => {
       { build: async () => ({ blob: '', summary: summary({ requiresExtraConfirmation: true, warnings: [{ kind: 'memo' }] }), context: ctx }) },
     ] satisfies Partial<XrpBackend>[]) {
       const x = new XrpAdapter({ chain: xrpChain('testnet'), address: ME, backend: backend(over) });
-      await expect(x.buildPayment({ to: OTHER, amount: '5000000' })).rejects.toThrow(/ne correspond pas/);
+      await expect(x.buildPayment({ to: OTHER, amount: '5000000' })).rejects.toThrow(/ne correspond pas/i);
     }
   });
 
@@ -91,7 +91,7 @@ describe('XrpAdapter (testnet)', () => {
     expect(b.submitted).toEqual(['1200AB']);
     expect(await a.txStatus(s.hash)).toEqual({ validated: true, result: 'tesSUCCESS' });
     const bad = new XrpAdapter({ chain: xrpChain('testnet'), address: ME, backend: backend({ broadcast: async () => 'EE'.repeat(32) }) });
-    await expect(bad.broadcast(s)).rejects.toThrow(/inattendu/);
+    await expect(bad.broadcast(s)).rejects.toThrow(/inattendu/i);
   });
 
   it('maps history', async () => {

@@ -17,7 +17,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const ALGO_MIN_BALANCE = 100_000n;
@@ -39,7 +39,7 @@ export function demoAlgoAddress(account: number): string {
   return algoAddressOf(sha256(new TextEncoder().encode(`kyro-demo-algorand-account-${account}`)));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 /** wallet-core `algo_address_bytes`: 58 upper-case base32 characters, checksum verified. */
 export function checkAlgoAddress(a: unknown): string {

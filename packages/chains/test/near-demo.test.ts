@@ -40,8 +40,8 @@ describe('NEAR account ids (same rules as wallet-core)', () => {
     for (const bad of ['a', '', 'Alice.near', '.near', 'alice.', 'alice..near', 'a-.b', '_a', 'alice near', 'alicé.near', 'a'.repeat(65), 'A'.repeat(64)]) {
       expect(nearAccountKind(bad), bad).toBeNull();
     }
-    expect(nearAccountIdProblem('Bob.near')).toMatch(/minuscules/);
-    expect(nearAccountIdProblem('bob..near')).toMatch(/invalide/);
+    expect(nearAccountIdProblem('Bob.near')).toMatch(/minuscules/i);
+    expect(nearAccountIdProblem('bob..near')).toMatch(/invalide/i);
     expect(nearAccountIdProblem('bob.near')).toBeNull();
   });
 
@@ -87,7 +87,7 @@ describe('NEAR in the app', () => {
   it('a named receiver must exist; an implicit one is created (higher fee bound)', async () => {
     const near = createAdapters(accounts).near!;
     const e = await err(near.buildTx({ asset: NEAR, to: 'personne-ici.testnet', amount: YOCTO, fee }));
-    expect(e.message).toMatch(/n’existe pas : un compte nommé doit déjà exister/);
+    expect(e.message).toMatch(/n’existe pas : un compte nommé doit déjà exister/i);
     const named = await near.buildTx({ asset: NEAR, to: mock.near.friend, amount: YOCTO, fee });
     expect(named.context.createsAccount).toBe(false);
     expect(named.maxFee).toBe(892_730_250_000_000_000_000n);
@@ -96,16 +96,16 @@ describe('NEAR in the app', () => {
     expect(implicit.context.createsAccount).toBe(true);
     expect(implicit.maxFee).toBeGreaterThan(named.maxFee);
     const e2 = await err(near.buildTx({ asset: NEAR, to: `0x${'2a'.repeat(20)}`, amount: YOCTO, fee }));
-    expect(e2.message).toMatch(/style Ethereum/);
-    expect((await err(near.buildTx({ asset: NEAR, to: 'Bob.testnet', amount: YOCTO, fee }))).message).toMatch(/minuscules/);
-    expect((await err(near.buildTx({ asset: NEAR, to: accounts.near.address, amount: YOCTO, fee }))).message).toMatch(/soi-même/);
+    expect(e2.message).toMatch(/style Ethereum/i);
+    expect((await err(near.buildTx({ asset: NEAR, to: 'Bob.testnet', amount: YOCTO, fee }))).message).toMatch(/minuscules/i);
+    expect((await err(near.buildTx({ asset: NEAR, to: accounts.near.address, amount: YOCTO, fee }))).message).toMatch(/soi-même/i);
   });
 
   it('amount + fee bound must fit in spendable; MAX leaves exactly the bound', async () => {
     const near = createAdapters(accounts).near!;
     const spendable = BigInt((await near.account()).spendable);
     const e = await err(near.buildTx({ asset: NEAR, to: mock.near.friend, amount: spendable, fee }));
-    expect(e.message).toMatch(/solde disponible insuffisant/);
+    expect(e.message).toMatch(/solde disponible insuffisant/i);
     const max = await near.buildTx({ asset: NEAR, to: mock.near.friend, amount: 0n, fee, max: true });
     expect(max.amount + max.maxFee).toBe(spendable);
   });
@@ -118,14 +118,14 @@ describe('NEAR in the app', () => {
     expect(dialogs[0]).toContain('Envoi NEAR (testnet)');
     expect(dialogs[0]).toContain(`À : ${mock.near.friend}\n(compte nommé)`);
     expect(dialogs[0]).toContain('Montant : 1,5 NEAR (1500000000000000000000000 yoctoNEAR)');
-    expect(dialogs[0]).toMatch(/Frais : ≈ 0,0000446365125 NEAR — au plus 0,00089273025 NEAR/);
+    expect(dialogs[0]).toMatch(/Frais : ≈ 0,0000446365125 NEAR — au plus 0,00089273025 NEAR/i);
     expect(await near.broadcast(s)).toBe(s.hash);
     expect(await near.txStatus(s.hash)).toMatchObject({ status: 'success' });
     const h = await near.getHistory();
     expect(h[0]).toMatchObject({ id: s.hash, direction: 'out', amount: 3n * YOCTO / 2n, counterparty: mock.near.friend, status: 'confirmed' });
     expect(h.some((x) => x.direction === 'in')).toBe(true);
     // The same transaction again: stale nonce.
-    expect((await err(near.signTx(u, PASSWORD))).message).toMatch(/nonce périmé/);
+    expect((await err(near.signTx(u, PASSWORD))).message).toMatch(/nonce périmé/i);
   });
 
   it('wrong password and a rejected dialog sign nothing', async () => {

@@ -24,7 +24,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 
 /** Preprod protocol parameters (Koios `epoch_params`). */
 export const ADA_PARAMS = { minFeeA: 44, minFeeB: 155_381, coinsPerByte: 4_310, maxTxSize: 16_384 };
@@ -43,7 +43,7 @@ const VERIFIED_MAINNET: Array<{ policy: string; name: string; ticker: string; de
 const hrpOf = (net: Network) => (net === 'mainnet' ? 'addr' : 'addr_test');
 const stakeHrpOf = (net: Network) => (net === 'mainnet' ? 'stake' : 'stake_test');
 const netId = (net: Network) => (net === 'mainnet' ? 1 : 0);
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {

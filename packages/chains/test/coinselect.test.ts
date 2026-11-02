@@ -64,7 +64,7 @@ describe('selectCoins (largest-first)', () => {
   });
 
   it('refuses dust amounts', () => {
-    expect(() => selectCoins([u(100_000)], 100n, 1, 'p2wpkh')).toThrow(/poussière/);
+    expect(() => selectCoins([u(100_000)], 100n, 1, 'p2wpkh')).toThrow(/poussière/i);
   });
 });
 

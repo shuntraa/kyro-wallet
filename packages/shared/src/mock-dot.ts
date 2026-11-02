@@ -5,7 +5,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { base58 } from '@scure/base';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { IpcError, type Commands, type DotAccountInfo, type DotBackendInfo, type DotContext, type DotHistoryEntry, type DotTxSummary, type Network, type Settings } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Westend Asset Hub: 12 decimals, ED 0.001 WND; Polkadot Asset Hub: 10 decimals, ED 0.01 DOT. */
@@ -49,7 +49,7 @@ export function demoDotAddress(seed: Uint8Array, account: number, network: Netwo
   return dotSs58Encode(pk, DOT_CHAINS[network === 'mainnet' ? 'mainnet' : 'testnet'].ss58);
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 interface DemoDotAccount {
   free: bigint;

@@ -70,14 +70,14 @@ describe('demo stellar_* commands', () => {
     expect(isStellarAddress(a.stellar.address)).toBe(true);
     expect(await call('stellar_address')).toBe(a.stellar.address);
     expect(await call('stellar_account', { address: a.stellar.address })).toMatchObject({ exists: true, balance: '1250000000', reserve: '15000000', spendable: '1235000000', baseReserve: '5000000' });
-    expect(await code(call('stellar_account', { address: 'MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAACJUQ' }))).toMatch(/adresses M…/);
-    expect(await code(call('stellar_account', { address: 'SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN' }))).toMatch(/CLÉ SECRÈTE/);
+    expect(await code(call('stellar_account', { address: 'MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAACJUQ' }))).toMatch(/adresses M…/i);
+    expect(await code(call('stellar_account', { address: 'SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN' }))).toMatch(/CLÉ SECRÈTE/i);
     expect(await call('stellar_backend_info')).toEqual({ kind: 'default', network: 'testnet', label: 'horizon-testnet.stellar.org', tor: false });
   });
 
   it('memo required, CreateAccount for an unfunded destination, payment, history', async () => {
     const st = mock.stellar;
-    expect(await code(call('stellar_build_tx', { to: st.exchange, amount: '10000000' }))).toMatch(/exige un mémo/);
+    expect(await code(call('stellar_build_tx', { to: st.exchange, amount: '10000000' }))).toMatch(/exige un mémo/i);
     const built = await call('stellar_build_tx', { to: st.exchange, amount: '10000000', memo: { kind: 'id', value: '804539585' } });
     expect(built.summary.operation).toEqual({ kind: 'payment', destination: st.exchange, asset: { kind: 'native' }, amount: '10000000' });
     expect(built.summary.memo).toEqual({ kind: 'id', id: '804539585' });
@@ -86,16 +86,16 @@ describe('demo stellar_* commands', () => {
     expect(await call('stellar_broadcast', { envelope: signed.envelope })).toBe(signed.hash);
     expect(await call('stellar_tx_status', { hash: signed.hash })).toEqual({ found: true, successful: true });
     // Same envelope again: the sequence number is used.
-    expect(await code(call('stellar_sign_tx', { envelope: built.envelope, password: 'x' }))).toMatch(/séquence périmé/);
+    expect(await code(call('stellar_sign_tx', { envelope: built.envelope, password: 'x' }))).toMatch(/séquence périmé/i);
     // Unfunded destination: at least 1 XLM, then a CreateAccount.
     const fresh = stellarAddressOfKey(new Uint8Array(32).fill(7));
-    expect(await code(call('stellar_build_tx', { to: fresh, amount: '9999999' }))).toMatch(/au moins 1 XLM/);
+    expect(await code(call('stellar_build_tx', { to: fresh, amount: '9999999' }))).toMatch(/au moins 1 XLM/i);
     const create = await call('stellar_build_tx', { to: fresh, amount: '20000000' });
     expect(create.summary.operation.kind).toBe('createAccount');
     await call('stellar_sign_tx', { envelope: create.envelope, password: 'correct horse battery' });
-    expect(dialogs.at(-1)).toMatch(/création de compte[\s\S]*AUCUN MÉMO[\s\S]*1 XLM de réserve y reste bloqué/);
+    expect(dialogs.at(-1)).toMatch(/création de compte[\s\S]*AUCUN MÉMO[\s\S]*1 XLM de réserve y reste bloqué/i);
     // Too much: spendable (balance − reserve) minus the fee.
-    expect(await code(call('stellar_build_tx', { to: st.friend, amount: '9999999999' }))).toMatch(/solde disponible insuffisant/);
+    expect(await code(call('stellar_build_tx', { to: st.friend, amount: '9999999999' }))).toMatch(/solde disponible insuffisant/i);
     const h = await call('stellar_txs', { address: (await call('accounts_get')).stellar.address });
     expect(h[0]).toMatchObject({ type: 'payment', to: st.exchange, memo: { kind: 'id', id: '804539585' } });
   });

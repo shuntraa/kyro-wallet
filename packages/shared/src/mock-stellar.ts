@@ -19,7 +19,7 @@ import {
   type StellarTxSummary,
 } from './ipc';
 import { stellarAddressKind, stellarAddressOfKey } from './stellar';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const STELLAR_BASE_RESERVE = 5_000_000n;
@@ -35,7 +35,7 @@ export function demoStellarAddress(seed: Uint8Array, account: number): string {
   return stellarAddressOfKey(sha256(new Uint8Array([...seed, ...enc(`kyro-demo-stellar-${account}`)])));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 /** `12.5 XLM` / `12,5 XLM`: stroops with the decimal mark of the language, trailing zeros removed. */
 export function demoXlmText(stroops: bigint | string): string {

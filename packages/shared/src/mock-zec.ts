@@ -7,7 +7,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Network, type UtxoAccountInfo, type ZecSendArgs, type ZecTxSummary } from './ipc';
 import { zecDestinationKind, zecP2pkhAddress, zecShieldedRefusal } from './zcash';
 import type { DemoTor } from './mock-tor';
-import { intlLocale, l10n } from './i18n';
+import { intlLocale, l10n, sentence } from './i18n';
 import type { DemoAccountHooks } from './mock-accounts';
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -89,7 +89,7 @@ export function createDemoZec(d: DemoZecDeps) {
   };
   const checkAddress = (a: unknown): string => {
     const addr = String(a ?? '').trim();
-    if (zecDestinationKind(addr, d.network) === 'tex' || !zecDestinationKind(addr, d.network)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : adresse Zcash invalide', 'Invalid input: invalid Zcash address'));
+    if (zecDestinationKind(addr, d.network) === 'tex' || !zecDestinationKind(addr, d.network)) throw new IpcError('INVALID_INPUT', sentence(l10n('adresse Zcash invalide', 'invalid Zcash address')));
     return addr;
   };
   const stats = (n: number, sum: number) => ({ funded_txo_count: n, funded_txo_sum: sum, spent_txo_count: 0, spent_txo_sum: 0, tx_count: n });
@@ -98,22 +98,22 @@ export function createDemoZec(d: DemoZecDeps) {
     d.requireUnlocked();
     const account = d.accounts.arg(args.account);
     const req = args.request as ZecSendArgs | undefined;
-    if (!req || typeof req.to !== 'string' || !Array.isArray(req.coins)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : requête Zcash', 'Invalid input: Zcash request'));
+    if (!req || typeof req.to !== 'string' || !Array.isArray(req.coins)) throw new IpcError('INVALID_INPUT', sentence(l10n('requête Zcash', 'Zcash request')));
     const refusal = zecShieldedRefusal(req.to);
-    if (refusal) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${refusal}`, `Invalid input: ${refusal}`));
+    if (refusal) throw new IpcError('INVALID_INPUT', sentence(refusal));
     const kind = zecDestinationKind(req.to, d.network);
-    if (!kind) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : adresse Zcash invalide', 'Invalid input: invalid Zcash address'));
+    if (!kind) throw new IpcError('INVALID_INPUT', sentence(l10n('adresse Zcash invalide', 'invalid Zcash address')));
     const node = nodeOf(account);
     const candidates: Array<{ owner: string; coin: Coin }> = [];
     for (const c of req.coins) {
       const owner = demoZecAddress(node, d.network, c.change ? 1 : 0, c.index);
       const coin = (utxos.get(owner) ?? []).find((u) => u.txid === c.txid && u.vout === c.vout);
-      if (!coin) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : pièce ${c.txid}:${c.vout} : la sortie ne paie pas l’adresse ${c.change ? 1 : 0}/${c.index} de ce compte`, `Invalid input: coin ${c.txid}:${c.vout}: the output does not pay address ${c.change ? 1 : 0}/${c.index} of this account`));
+      if (!coin) throw new IpcError('INVALID_INPUT', sentence(l10n(`pièce ${c.txid}:${c.vout} : la sortie ne paie pas l’adresse ${c.change ? 1 : 0}/${c.index} de ce compte`, `coin ${c.txid}:${c.vout}: the output does not pay address ${c.change ? 1 : 0}/${c.index} of this account`)));
       candidates.push({ owner, coin });
     }
     candidates.sort((a, b) => b.coin.value - a.coin.value);
     const amount = req.max ? 0 : Number(req.amount);
-    if (!req.max && (!Number.isSafeInteger(amount) || amount < 54)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : montant sous la limite de poussière du réseau (54 zatoshis)', 'Invalid input: amount below the network dust limit (54 zatoshis)'));
+    if (!req.max && (!Number.isSafeInteger(amount) || amount < 54)) throw new IpcError('INVALID_INPUT', sentence(l10n('montant sous la limite de poussière du réseau (54 zatoshis)', 'amount below the network dust limit (54 zatoshis)')));
     let total = 0;
     const spend: Array<{ owner: string; coin: Coin }> = [];
     let result: { amount: number; change: number; fee: number; folded: number; conv: number } | null = null;
@@ -134,10 +134,10 @@ export function createDemoZec(d: DemoZecDeps) {
     }
     if (req.max) {
       const fee1 = zip317(spend.length, 1);
-      if (total - fee1 < 54) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : solde trop faible pour couvrir les frais du réseau', 'Invalid input: balance too low to cover the network fee'));
+      if (total - fee1 < 54) throw new IpcError('INVALID_INPUT', sentence(l10n('solde trop faible pour couvrir les frais du réseau', 'balance too low to cover the network fee')));
       result = { amount: total - fee1, change: 0, fee: fee1, folded: 0, conv: fee1 };
     }
-    if (!result) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : solde insuffisant : ${total} zatoshis dans ${spend.length} pièce(s), il en faut plus pour le montant et les frais`, `Invalid input: insufficient balance: ${total} zatoshis in ${spend.length} coin(s), more is needed for the amount and the fee`));
+    if (!result) throw new IpcError('INVALID_INPUT', sentence(l10n(`solde insuffisant : ${total} zatoshis dans ${spend.length} pièce(s), il en faut plus pour le montant et les frais`, `insufficient balance: ${total} zatoshis in ${spend.length} coin(s), more is needed for the amount and the fee`)));
     const changeAddress = demoZecAddress(node, d.network, 1, req.changeIndex);
     const highFee = result.fee > result.conv * 10 || result.fee > result.amount;
     const summary: ZecTxSummary = {
@@ -242,7 +242,7 @@ export function createDemoZec(d: DemoZecDeps) {
       await gate();
       const hex = String(a.hex ?? '');
       const b = pending.get(hex);
-      if (!b) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction Zcash mal formée', 'Invalid input: malformed Zcash transaction'));
+      if (!b) throw new IpcError('INVALID_INPUT', sentence(l10n('transaction Zcash mal formée', 'malformed Zcash transaction')));
       pending.delete(hex);
       for (const { owner, coin } of b.spend) utxos.set(owner, (utxos.get(owner) ?? []).filter((u) => u !== coin));
       const s = b.summary;

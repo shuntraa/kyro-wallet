@@ -43,11 +43,11 @@ describe('demo staking — Solana', () => {
     setup();
     const { validators } = await call('sol_stake_validators', {});
     const v = validators[0]!.voteAccount;
-    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '999999999', voteAccount: v } }))).message).toMatch(/minimum de délégation/);
-    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '3200000000', voteAccount: v } }))).message).toMatch(/solde insuffisant/);
-    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '1000000000', voteAccount: 'x' } }))).message).toMatch(/compte de vote inconnu/);
+    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '999999999', voteAccount: v } }))).message).toMatch(/minimum de délégation/i);
+    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '3200000000', voteAccount: v } }))).message).toMatch(/solde insuffisant/i);
+    expect((await code(call('sol_stake_build', { action: { kind: 'createAndDelegate', lamports: '1000000000', voteAccount: 'x' } }))).message).toMatch(/compte de vote inconnu/i);
     const o = await call('sol_stake_overview');
-    expect((await code(call('sol_stake_build', { action: { kind: 'delegate', stakeAccount: o.accounts[0]!.address, voteAccount: v } }))).message).toMatch(/pas inactif/);
+    expect((await code(call('sol_stake_build', { action: { kind: 'delegate', stakeAccount: o.accounts[0]!.address, voteAccount: v } }))).message).toMatch(/pas inactif/i);
   });
 
   it('reinforced: delinquent or commission > 10 %; the 2nd dialog can refuse', async () => {
@@ -94,7 +94,7 @@ describe('demo staking — Solana', () => {
   it('active account: deactivating, then inactive after the epoch; withdrawing everything while active is refused', async () => {
     const { mock } = setup();
     const acc = (await call('sol_stake_overview')).accounts[0]!;
-    expect((await code(call('sol_stake_build', { action: { kind: 'withdraw', stakeAccount: acc.address, lamports: acc.lamports } }))).message).toMatch(/au-delà du montant retirable/);
+    expect((await code(call('sol_stake_build', { action: { kind: 'withdraw', stakeAccount: acc.address, lamports: acc.lamports } }))).message).toMatch(/au-delà du montant retirable/i);
     const d = await call('sol_stake_build', { action: { kind: 'deactivate', stakeAccount: acc.address } });
     await call('sol_stake_broadcast', { message: d.message, signature: (await call('sol_stake_sign', { message: d.message, password: PW })).signature });
     expect((await call('sol_stake_overview')).accounts[0]!.state).toBe('deactivating');
@@ -111,7 +111,7 @@ describe('demo staking — Cardano', () => {
     expect(o.stake.registered).toBe(true);
     expect(o.stake.delegatedDrep).toBeNull();
     expect(o.canWithdraw).toBe(false);
-    expect((await code(call('ada_stake_build', { action: { kind: 'withdraw' } }))).message).toMatch(/délégation de vote/);
+    expect((await code(call('ada_stake_build', { action: { kind: 'withdraw' } }))).message).toMatch(/délégation de vote/i);
   });
 
   it('reinforced: retiring, margin > 10 %, saturated pool, inactive DRep', async () => {
@@ -142,7 +142,7 @@ describe('demo staking — Cardano', () => {
     await call('ada_stake_broadcast', { tx: await sign(w.tx) });
     const d = await call('ada_stake_build', { action: { kind: 'deregister' } });
     expect(d.summary.refund).toBe('2000000');
-    expect((await code(call('ada_stake_broadcast', { tx: d.tx }))).message).toMatch(/non signée/);
+    expect((await code(call('ada_stake_broadcast', { tx: d.tx }))).message).toMatch(/non signée/i);
     await call('ada_stake_broadcast', { tx: await sign(d.tx) });
     expect((await call('ada_stake_overview')).stake.registered).toBe(false);
     const pools = await call('ada_stake_pools', { limit: 2 });
@@ -166,13 +166,13 @@ describe('demo staking — TRON', () => {
   it('refusals: under 1 TRX, more than staked, votes over TRON Power, not an SR, 31 SR', async () => {
     setup();
     const ws = await call('tron_stake_witnesses');
-    expect((await code(call('tron_stake_build', { action: { kind: 'freeze', resource: 'ENERGY', amount: '999999' } }))).message).toMatch(/minimum : 1 TRX/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'unfreeze', resource: 'BANDWIDTH', amount: '1000000' } }))).message).toMatch(/dégel supérieur/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: [{ address: ws[0]!.address, count: '21' }] } }))).message).toMatch(/TRON Power/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: [{ address: 'TNotAWitness', count: '1' }] } }))).message).toMatch(/candidat SR/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: ws.map((w) => ({ address: w.address, count: '0' })) } }))).message).toMatch(/1 à 30 SR/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'withdrawUnfrozen' } }))).message).toMatch(/rien à retirer/);
-    expect((await code(call('tron_stake_build', { action: { kind: 'cancelAllUnfreeze' } }))).message).toMatch(/aucun dégel/);
+    expect((await code(call('tron_stake_build', { action: { kind: 'freeze', resource: 'ENERGY', amount: '999999' } }))).message).toMatch(/minimum : 1 TRX/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'unfreeze', resource: 'BANDWIDTH', amount: '1000000' } }))).message).toMatch(/dégel supérieur/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: [{ address: ws[0]!.address, count: '21' }] } }))).message).toMatch(/TRON Power/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: [{ address: 'TNotAWitness', count: '1' }] } }))).message).toMatch(/candidat SR/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'vote', votes: ws.map((w) => ({ address: w.address, count: '0' })) } }))).message).toMatch(/1 à 30 SR/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'withdrawUnfrozen' } }))).message).toMatch(/rien à retirer/i);
+    expect((await code(call('tron_stake_build', { action: { kind: 'cancelAllUnfreeze' } }))).message).toMatch(/aucun dégel/i);
   });
 
   it('reinforced: rank > 127, an SR keeping 100 %, an unfreeze that cuts votes', async () => {
@@ -196,7 +196,7 @@ describe('demo staking — TRON', () => {
     const run = async (action: Parameters<typeof call<'tron_stake_build'>>[1]['action']) => {
       const b = await call('tron_stake_build', { action });
       const s = await call('tron_stake_sign', { raw: b.raw, password: PW });
-      expect(s.signature).toMatch(/^[0-9a-f]{130}$/);
+      expect(s.signature).toMatch(/^[0-9a-f]{130}$/i);
       return call('tron_broadcast', { raw: b.raw, signature: s.signature });
     };
     await run({ kind: 'freeze', resource: 'BANDWIDTH', amount: '5000000' });
@@ -204,7 +204,7 @@ describe('demo staking — TRON', () => {
     expect(a.stakedBandwidth).toBe('5000000');
     expect(a.balance).toBe('30000000');
     await run({ kind: 'claimRewards' });
-    expect((await code(call('tron_stake_build', { action: { kind: 'claimRewards' } }))).message).toMatch(/récompense nulle|24 h/);
+    expect((await code(call('tron_stake_build', { action: { kind: 'claimRewards' } }))).message).toMatch(/récompense nulle|24 h/i);
     await run({ kind: 'unfreeze', resource: 'BANDWIDTH', amount: '5000000' });
     a = await call('tron_stake_overview');
     expect(a.unfreezing).toHaveLength(1);

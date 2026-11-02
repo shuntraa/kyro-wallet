@@ -79,6 +79,6 @@ describe('Hedera USDC', () => {
     const usdc = h.filter((x) => x.assetId === `hts:${USDC}`);
     expect(usdc.map((x) => [x.direction, x.amount])).toEqual([['in', 3_000_000n]]);
     expect(h.some((x) => x.assetId.includes('731861'))).toBe(false);
-    expect(h.find((x) => x.id === '0.0.5005-1-2')?.note).toMatch(/ssociat/);
+    expect(h.find((x) => x.id === '0.0.5005-1-2')?.note).toMatch(/ssociat/i);
   });
 });

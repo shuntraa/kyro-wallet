@@ -18,7 +18,7 @@ import {
   type Settings,
 } from './ipc';
 import { nearAccountKind } from './near';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const YOCTO = 10n ** 24n;
@@ -33,7 +33,7 @@ export function demoNearAddress(account: number): string {
   return bytesToHex(sha256(new TextEncoder().encode(`kyro-demo-near-account-${account}`)));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 export const nearText = (yocto: bigint | string): string => {
   const v = BigInt(yocto);

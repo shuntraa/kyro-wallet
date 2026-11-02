@@ -21,7 +21,7 @@ import {
   type XmrWarning,
 } from './ipc';
 import { checkServerUrl } from './servers';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const PICO = 1_000_000_000_000n;
@@ -56,7 +56,7 @@ export function demoXmrIntegrated(network: Network, account: number, paymentId: 
   return encodeAddress(BYTES[network][1], keyOf(`xmr-spend-${account}-0`), keyOf(`xmr-view-${account}-0`), paymentId);
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {

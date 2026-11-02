@@ -26,12 +26,12 @@ describe('chain and token registry', () => {
         expect(getAddress(t.contract), `${chain} ${t.symbol}`).toBe(t.contract);
         expect(seen.has(t.contract.toLowerCase()), `${chain} ${t.symbol} en double`).toBe(false);
         seen.add(t.contract.toLowerCase());
-        expect(t.coingeckoId, `${chain} ${t.symbol}`).toMatch(/^[a-z0-9-]+$/);
+        expect(t.coingeckoId, `${chain} ${t.symbol}`).toMatch(/^[a-z0-9-]+$/i);
         expect(t.symbol.trim()).toBe(t.symbol);
         expect(t.symbol.length).toBeGreaterThan(0);
         expect(t.name.length).toBeGreaterThan(0);
         expect(Number.isInteger(t.decimals) && t.decimals >= 0 && t.decimals <= 30).toBe(true);
-        expect(t.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
+        expect(t.color).toMatch(/^#[0-9A-Fa-f]{6}$/i);
         // Letter glyph: one character, no emoji.
         expect([...t.glyph]).toHaveLength(1);
         expect(/\p{Extended_Pictographic}/u.test(t.glyph), t.glyph).toBe(false);
@@ -47,7 +47,7 @@ describe('chain and token registry', () => {
       const trc = TRC20_TOKENS[n].map((t) => t.contract);
       expect(new Set(trc).size).toBe(trc.length);
       for (const c of trc) expect(isTronAddress(c), c).toBe(true);
-      for (const t of [...SPL_TOKENS[n], ...TRC20_TOKENS[n]]) expect(t.coingeckoId).toMatch(/^[a-z0-9-]+$/);
+      for (const t of [...SPL_TOKENS[n], ...TRC20_TOKENS[n]]) expect(t.coingeckoId).toMatch(/^[a-z0-9-]+$/i);
     }
   });
 

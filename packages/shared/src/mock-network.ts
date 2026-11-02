@@ -2,7 +2,7 @@
 // DEMO ONLY — network choice (docs/IPC.md §2.10), mirroring src-tauri/src/network.rs: `?network=`
 
 import { IpcError, type Network, type NetworkInfo, type NetworkSource } from './ipc';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 
 export const DEMO_NETWORK_STORAGE_KEY = 'kyro.demo.network';
 /** The demo behaves like a debug build. */
@@ -97,9 +97,9 @@ export function createDemoNetwork(deps: DemoNetworkDeps) {
       network_get: (): NetworkInfo => info(),
       network_set: (a: Record<string, unknown>): boolean => {
         const n = parseNetwork(a.network);
-        if (!n) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : réseau inconnu « ${String(a.network)} » (mainnet ou testnet)`, `Invalid input: unknown network “${String(a.network)}” (mainnet or testnet)`));
+        if (!n) throw new IpcError('INVALID_INPUT', sentence(l10n(`réseau inconnu « ${String(a.network)} » (mainnet ou testnet)`, `unknown network “${String(a.network)}” (mainnet or testnet)`)));
         if (deps.source === 'env') {
-          throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : le réseau est imposé par l’adresse de la page (?network=) : retire-la pour choisir depuis l’application', 'Invalid input: the network is forced by the page address (?network=): remove it to choose from the app'));
+          throw new IpcError('INVALID_INPUT', sentence(l10n('le réseau est imposé par l’adresse de la page (?network=) : retire-la pour choisir depuis l’application', 'the network is forced by the page address (?network=): remove it to choose from the app')));
         }
         deps.store.set(n);
         if (n === deps.network) return false;

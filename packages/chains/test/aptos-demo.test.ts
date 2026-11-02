@@ -52,7 +52,7 @@ describe('Aptos in the app', () => {
     expect(u.context.recipientNew).toBe(false);
     expect(await err(apt.signTx(u, 'wrong'))).toMatchObject({ code: 'WRONG_PASSWORD' });
     const signed = await apt.signTx(u, PASSWORD);
-    expect(dialogs.at(-1)).toMatch(/Confirmer l'envoi d'APT[\s\S]*Montant : 1 APT[\s\S]*0x1::aptos_account::transfer/);
+    expect(dialogs.at(-1)).toMatch(/Confirmer l'envoi d'APT[\s\S]*Montant : 1 APT[\s\S]*0x1::aptos_account::transfer/i);
     const hash = await apt.broadcast(signed);
     expect(hash).toBe(signed.hash);
     expect(await apt.txStatus(hash)).toMatchObject({ committed: false });

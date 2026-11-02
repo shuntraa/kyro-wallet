@@ -75,8 +75,8 @@ describe('TronAdapter (Nile)', () => {
     expect(u.estimate.activationFee).toBe('1100000');
     const t = await a.buildTransfer({ to: OTHER, amount: 1_500_000n, token: USDT });
     expect(t.token).toBe(USDT);
-    await expect(a.buildTransfer({ to: ME, amount: 1n })).rejects.toThrow(/soi-même/);
-    await expect(a.buildTransfer({ to: 'bad', amount: 1n })).rejects.toThrow(/invalide/);
+    await expect(a.buildTransfer({ to: ME, amount: 1n })).rejects.toThrow(/soi-même/i);
+    await expect(a.buildTransfer({ to: 'bad', amount: 1n })).rejects.toThrow(/invalide/i);
     // Rust built something else (amount, recipient, unknown call): refused.
     for (const over of [
       { build: async (to: string) => ({ raw: '', txid: 'ab'.repeat(32), summary: summary({ type: 'trxTransfer', to, amount: '2' }), estimate }) },
@@ -86,7 +86,7 @@ describe('TronAdapter (Nile)', () => {
       { build: async (to: string, amount: string) => ({ raw: '', txid: 'ab'.repeat(32), summary: summary({ type: 'trxTransfer', to, amount }, { warnings: [{ kind: 'memo' }] }), estimate }) },
     ]) {
       const x = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend: backend(over) });
-      await expect(x.buildTransfer({ to: OTHER, amount: 1_000_000n })).rejects.toThrow(/ne correspond pas/);
+      await expect(x.buildTransfer({ to: OTHER, amount: 1_000_000n })).rejects.toThrow(/ne correspond pas/i);
     }
   });
 
@@ -99,7 +99,7 @@ describe('TronAdapter (Nile)', () => {
     expect(await a.broadcast(s)).toBe('ab'.repeat(32));
     expect(b.broadcasts).toEqual(['0a02cab8']);
     const bad = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend: backend({ sign: async () => ({ signature: '00', txid: 'ab'.repeat(32), summary: u.summary, estimate }) }) });
-    await expect(bad.signTx(u, 'pw')).rejects.toThrow(/Signature/);
+    await expect(bad.signTx(u, 'pw')).rejects.toThrow(/Signature/i);
   });
 
   it('maps history', async () => {

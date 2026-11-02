@@ -98,7 +98,7 @@ describe('TRON in the app', () => {
     const first = await tron.buildTx({ asset: usdt, to: demoTronAddress(new Uint8Array(64).fill(9), 0), amount: 1_000_000n, fee: { family: 'tron' } });
     expect(first.estimate.energyNeeded).toBe(64_895);
     // More USDT than held: the simulation reverts, nothing is built.
-    await expect(tron.buildTx({ asset: usdt, to: friend(), amount: 999_000_000n, fee: { family: 'tron' } })).rejects.toThrow(/solde de token insuffisant/);
+    await expect(tron.buildTx({ asset: usdt, to: friend(), amount: 999_000_000n, fee: { family: 'tron' } })).rejects.toThrow(/solde de token insuffisant/i);
   });
 
   it('coverage: the TRX balance must pay what is burned (warning / block in the UI)', async () => {

@@ -33,6 +33,14 @@ export function l10n(fr: string, en: string): string {
   return current === 'fr' ? fr : en;
 }
 
+/** An error detail as a sentence: capital first letter, final period (« Invalid input: » is never shown). */
+export function sentence(detail: string): string {
+  const t = detail.trim();
+  if (!t) return t;
+  const s = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?…]$/.test(s) ? s : `${s}.`;
+}
+
 /** French when the first preferred language is French, English otherwise (`fr`, `fr-CA`, `fr_BE`…). */
 export function langFromLocales(locales: readonly string[] | undefined | null): Lang {
   const first = locales?.find((l) => typeof l === 'string' && l.trim() !== '');

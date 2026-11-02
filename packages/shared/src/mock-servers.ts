@@ -29,7 +29,7 @@ import type { createDemoUtxo } from './mock-utxo';
 import type { createDemoTron } from './mock-tron';
 import type { createDemoXrp } from './mock-xrp';
 import type { createDemoCardano } from './mock-cardano';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 import type { createDemoXmr } from './mock-xmr';
 
 const BTC_GENESIS: Record<BtcNetworkKey, string> = {
@@ -297,7 +297,7 @@ export function createDemoServers(d: DemoServersDeps) {
     try {
       bitcoin.address.toOutputScript(addr, d.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
     } catch {
-      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : adresse Bitcoin invalide pour ce réseau « ${addr} »`, `Invalid input: invalid Bitcoin address for this network “${addr}”`));
+      throw new IpcError('INVALID_INPUT', sentence(l10n(`adresse Bitcoin invalide pour ce réseau « ${addr} »`, `invalid Bitcoin address for this network “${addr}”`)));
     }
     return addr;
   };
@@ -332,10 +332,10 @@ export function createDemoServers(d: DemoServersDeps) {
     /** Raw transaction, as Rust returns it after checking its txid. */
     async txHex(txid: unknown) {
       const t = String(txid ?? '');
-      if (!/^[0-9a-f]{64}$/.test(t)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : txid : 64 caractères hexadécimaux attendus', 'Invalid input: txid: 64 hexadecimal characters expected'));
+      if (!/^[0-9a-f]{64}$/.test(t)) throw new IpcError('INVALID_INPUT', sentence(l10n('txid : 64 caractères hexadécimaux attendus', 'txid: 64 hexadecimal characters expected')));
       await backend();
       const hex = d.chain.rawTx.get(t);
-      if (!hex) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : transaction ${t.slice(0, 10)}… inconnue du serveur`, `Invalid input: transaction ${t.slice(0, 10)}… unknown to the server`));
+      if (!hex) throw new IpcError('INVALID_INPUT', sentence(l10n(`transaction ${t.slice(0, 10)}… inconnue du serveur`, `transaction ${t.slice(0, 10)}… unknown to the server`)));
       return hex;
     },
     async broadcast(hex: unknown) {
@@ -344,7 +344,7 @@ export function createDemoServers(d: DemoServersDeps) {
       try {
         txid = bitcoin.Transaction.fromHex(raw).getId();
       } catch {
-        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction hexadécimale invalide', 'Invalid input: invalid hexadecimal transaction'));
+        throw new IpcError('INVALID_INPUT', sentence(l10n('transaction hexadécimale invalide', 'invalid hexadecimal transaction')));
       }
       await backend();
       return txid;
@@ -358,7 +358,7 @@ export function createDemoServers(d: DemoServersDeps) {
 
   const coreServer = (): Extract<BtcServer, { kind: 'core' }> => {
     const s = current();
-    if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucun nœud Bitcoin Core n’est configuré pour ce réseau', 'Invalid input: no Bitcoin Core node is configured for this network'));
+    if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', sentence(l10n('aucun nœud Bitcoin Core n’est configuré pour ce réseau', 'no Bitcoin Core node is configured for this network')));
     return s;
   };
 
@@ -390,7 +390,7 @@ export function createDemoServers(d: DemoServersDeps) {
     const s = coreServer();
     d.requireUnlocked();
     if (rescanFrom !== 'now' && !(typeof rescanFrom === 'number' && Number.isInteger(rescanFrom) && rescanFrom >= 0)) {
-      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`, `Invalid input: rescanFrom: “now” or a UNIX timestamp expected (got “${String(rescanFrom)}”)`));
+      throw new IpcError('INVALID_INPUT', sentence(l10n(`rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`, `rescanFrom: “now” or a UNIX timestamp expected (got “${String(rescanFrom)}”)`)));
     }
     // Synchronous pre-flight, like Rust: reachable, auth, chain, watch wallet. Only the import runs in the background.
     await gate(coreIsLocal(s.url));

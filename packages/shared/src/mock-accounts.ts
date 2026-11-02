@@ -39,7 +39,7 @@ import { demoCosmosAddress } from './mock-cosmos';
 import { demoAptosAddress } from './mock-aptos';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -100,7 +100,7 @@ export interface DemoAccounts extends DemoAccountHooks {
   remove(chain: unknown, account: unknown): VaultAccountLists;
 }
 
-const invalid = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalid = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 function toChecksumAddress(hex40: string): string {
   const lower = hex40.toLowerCase();

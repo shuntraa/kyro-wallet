@@ -97,7 +97,7 @@ describe('Litecoin and Dogecoin in the app', () => {
     const forged = prev.clone();
     forged.outs[psbt.txInputs[0]!.index]!.value += 1_000_000n;
     psbt.data.inputs[0]!.nonWitnessUtxo = forged.toBuffer();
-    await expect(call('doge_sign_psbt', { psbt: psbt.toBase64(), password: PASSWORD })).rejects.toThrow(/ne correspond pas à l’outpoint/);
+    await expect(call('doge_sign_psbt', { psbt: psbt.toBase64(), password: PASSWORD })).rejects.toThrow(/ne correspond pas à l’outpoint/i);
   });
 
   it('Dogecoin dust: recipient < 0.01 DOGE refused; change < 0.01 DOGE goes to fees (no change output)', async () => {
@@ -111,7 +111,7 @@ describe('Litecoin and Dogecoin in the app', () => {
     const doge = createAdapters(accounts).doge!;
     const asset = findAsset('testnet', 'doge')!;
     const fee = (await doge.estimateFees()).options.normal.params;
-    await expect(doge.buildTx({ asset, to: accounts.doge.address, amount: DOGE_SOFT_DUST - 1n, fee })).rejects.toThrow(/poussière/);
+    await expect(doge.buildTx({ asset, to: accounts.doge.address, amount: DOGE_SOFT_DUST - 1n, fee })).rejects.toThrow(/poussière/i);
     // Spend the 1.5 DOGE coin leaving a remainder under 0.01 DOGE: folded into the fee.
     const total = 150_000_000n;
     const feeNoChange = 192n * 1000n; // 10 + 148 + 34 bytes (1 input, 1 output P2PKH) × 1000 koinus/byte

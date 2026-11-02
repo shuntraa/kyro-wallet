@@ -20,7 +20,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const HBAR_TINYBARS = 100_000_000n;
@@ -72,7 +72,7 @@ export function hbarChecksum(network: Network, num: number | bigint): string {
   return out;
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const hbarText = (t: bigint | string | number) => {
   const v = BigInt(t);
   const frac = (v % HBAR_TINYBARS).toString().padStart(8, '0').replace(/0+$/, '');

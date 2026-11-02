@@ -28,7 +28,7 @@ import { emitDemoEvent } from './events';
 import { btcWarnings } from './warnings';
 import { demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -329,7 +329,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   };
 
   const readKeys = async (id: string, chain: HwChain, account: number): Promise<HwXpub> => {
-    if (!Number.isInteger(account) || account < 0 || account > 100) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : numéro de compte : 0 à 100', 'Invalid input: account number: 0 to 100'));
+    if (!Number.isInteger(account) || account < 0 || account > 100) throw new IpcError('INVALID_INPUT', sentence(l10n('numéro de compte : 0 à 100', 'account number: 0 to 100')));
     return run(id, async (wait) => {
       requirePaired();
       await ensure(chain, wait);
@@ -340,7 +340,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
 
   const find = (accountId: unknown): WatchOnlyAccount => {
     const a = accounts.find((x) => x.id === accountId);
-    if (!a) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : compte hardware wallet inconnu', 'Invalid input: unknown hardware wallet account'));
+    if (!a) throw new IpcError('INVALID_INPUT', sentence(l10n('compte hardware wallet inconnu', 'unknown hardware wallet account')));
     return a;
   };
 
@@ -378,7 +378,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   };
 
   const resolvePath = (acc: WatchOnlyAccount, chain: HwChain, path: string): string => {
-    const wrong = () => new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce chemin n’appartient pas à ce compte hardware wallet', 'Invalid input: this path does not belong to this hardware wallet account'));
+    const wrong = () => new IpcError('INVALID_INPUT', sentence(l10n('ce chemin n’appartient pas à ce compte hardware wallet', 'this path does not belong to this hardware wallet account')));
     if (chain === 'btc') {
       const m = /^(m\/(84|86)'\/[01]'\/\d+')\/([01])\/(\d+)$/.exec(path.trim());
       if (!m) throw wrong();
@@ -422,7 +422,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     },
     thpPairingCode(id: unknown, code: unknown) {
       const c = String(code ?? '');
-      if (!/^[0-9]{6}$/.test(c)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : code d’appairage : 6 chiffres', 'Invalid input: pairing code: 6 digits'));
+      if (!/^[0-9]{6}$/.test(c)) throw new IpcError('INVALID_INPUT', sentence(l10n('code d’appairage : 6 chiffres', 'pairing code: 6 digits')));
       if (!device || id !== device.id || !thpCodeWaiter) throw new IpcError('HW_BAD_RESPONSE', l10n('Réponse de l’appareil refusée par Kyro : aucun appairage en attente', 'Device response refused by Kyro: no pairing pending'));
       thpCodeWaiter(c);
     },
@@ -436,7 +436,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     },
     pinMatrix(id: unknown, positions: unknown) {
       const p = String(positions ?? '');
-      if (!p || p.length > 50 || !/^[1-9]+$/.test(p)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : positions : chiffres 1 à 9', 'Invalid input: positions: digits 1 to 9'));
+      if (!p || p.length > 50 || !/^[1-9]+$/.test(p)) throw new IpcError('INVALID_INPUT', sentence(l10n('positions : chiffres 1 à 9', 'positions: digits 1 to 9')));
       if (!device || id !== device.id || !pinWaiter) throw new IpcError('HW_BAD_RESPONSE', l10n('Réponse de l’appareil refusée par Kyro : aucune saisie de PIN en attente', 'Device response refused by Kyro: no PIN entry pending'));
       pinWaiter(p);
     },
@@ -455,7 +455,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       if (typeof a.accountId === 'string') {
         acc = structuredClone(find(a.accountId));
         checkBrand(acc);
-        if (acc.account !== account) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : numéro de compte différent de celui du compte existant', 'Invalid input: account number differs from the existing account'));
+        if (acc.account !== account) throw new IpcError('INVALID_INPUT', sentence(l10n('numéro de compte différent de celui du compte existant', 'account number differs from the existing account')));
       } else {
         acc = { id: `hw-${(0xa1b2c3d400000000n + BigInt(nextId++)).toString(16).padStart(16, '0')}`, label: '', device: device.kind, model: device.model, network: d.network, account };
       }
@@ -504,13 +504,13 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.btc?.length) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clés Bitcoin', 'Invalid input: this account has no Bitcoin keys'));
+      if (!acc.btc?.length) throw new IpcError('INVALID_INPUT', sentence(l10n('ce compte n’a pas de clés Bitcoin', 'this account has no Bitcoin keys')));
       const net = testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
       let psbt: bitcoin.Psbt;
       try {
         psbt = bitcoin.Psbt.fromBase64(String(a.psbt ?? ''), { network: net });
       } catch {
-        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : PSBT invalide', 'Invalid input: invalid PSBT'));
+        throw new IpcError('INVALID_INPUT', sentence(l10n('PSBT invalide', 'invalid PSBT')));
       }
       const kinds = new Set<BtcKind>();
       psbt.data.inputs.forEach((input, i) => {
@@ -518,7 +518,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
         const seg = (input.bip32Derivation?.length ?? 0) > 0;
         if (!input.witnessUtxo || (!tap && !seg)) throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : transaction avec des entrées qui n’appartiennent pas à ce compte', 'Not supported: transaction with inputs that do not belong to this account'), { min: null });
         if (seg && !input.nonWitnessUtxo) {
-          throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : la PSBT doit inclure la transaction précédente (non_witness_utxo) de l’entrée ${i} pour une signature sur hardware wallet`, `Invalid input: the PSBT must include the previous transaction (non_witness_utxo) of input ${i} for a hardware wallet signature`));
+          throw new IpcError('INVALID_INPUT', sentence(l10n(`la PSBT doit inclure la transaction précédente (non_witness_utxo) de l’entrée ${i} pour une signature sur hardware wallet`, `the PSBT must include the previous transaction (non_witness_utxo) of input ${i} for a hardware wallet signature`)));
         }
         kinds.add(tap ? 'taproot' : 'segwit');
       });
@@ -560,7 +560,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.evm) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clé EVM', 'Invalid input: this account has no EVM key'));
+      if (!acc.evm) throw new IpcError('INVALID_INPUT', sentence(l10n('ce compte n’a pas de clé EVM', 'this account has no EVM key')));
       const tx = a.tx as EvmTxRequest;
       const s = d.decodeEvm(tx);
       const from = evmAddressFromNode(HDKey.fromExtendedKey(acc.evm.xpub), acc.account);
@@ -586,15 +586,15 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.sol) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clé Solana', 'Invalid input: this account has no Solana key'));
+      if (!acc.sol) throw new IpcError('INVALID_INPUT', sentence(l10n('ce compte n’a pas de clé Solana', 'this account has no Solana key')));
       let message: Uint8Array;
       try {
         message = base64.decode(String(a.message ?? ''));
       } catch {
-        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : message Solana invalide', 'Invalid input: invalid Solana message'));
+        throw new IpcError('INVALID_INPUT', sentence(l10n('message Solana invalide', 'invalid Solana message')));
       }
       const summary = demoDecodeSolMessage(message, acc.sol.address);
-      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : cette transaction ne demande pas la signature de cette adresse Solana', 'Invalid input: this transaction does not ask for this Solana address’s signature'));
+      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', sentence(l10n('cette transaction ne demande pas la signature de cette adresse Solana', 'this transaction does not ask for this Solana address’s signature')));
       return run(String(a.id), async (wait) => {
         requirePaired();
         await sameDevice(acc, 'sol', wait);

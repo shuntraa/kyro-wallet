@@ -2,7 +2,7 @@
 // rules (min-UTxO, fee a·size + b, coin selection, change keeping every token), refused address
 // types with Rust's French messages, CIP-20 memo, live re-checks before signing, servers.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { call, IpcError, setBackend, type Accounts } from '@kyro/shared';
+import { call, IpcError, sentence, setBackend, type Accounts } from '@kyro/shared';
 import { cardanoAddressOf, createMockBackend, type MockBackend } from '@kyro/shared/mock';
 import { cardanoAddressProblem, createAdapters, findAsset, outgoingHosts, WATCH_ONLY_CHAINS } from '../src';
 
@@ -69,7 +69,7 @@ describe('Cardano in the app', () => {
   it('ADA payment: min-UTxO, fee = a·size + b, change back to our address', async () => {
     const ada = createAdapters(accounts).cardano!;
     const low = await err(ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 500_000n, fee: { family: 'ada' } }));
-    expect(low.message).toBe('Entrée invalide : montant trop faible : cette sortie doit porter au moins 0,96975 ADA (min-UTxO)');
+    expect(low.message).toBe('Montant trop faible : cette sortie doit porter au moins 0,96975 ADA (min-UTxO).');
     const u = await ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 10_000_000n, fee: { family: 'ada' } });
     const [dest, change] = u.summary.outputs;
     expect(dest).toMatchObject({ address: mock.cardano.friend, isChange: false, lovelace: '10000000', tokens: [], minLovelace: '969750' });
@@ -102,8 +102,8 @@ describe('Cardano in the app', () => {
     await ada.signTx(u, PASSWORD);
     expect(dialogs[0]).toContain('minimum obligatoire avec les tokens');
     expect(dialogs[0]).toContain('⚠ NON VÉRIFIÉ');
-    expect(dialogs[1]).toMatch(/Signer quand même/);
-    expect((await err(ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 0n, fee: { family: 'ada' }, cardanoToken: { ...t, quantity: '6000' } }))).message).toBe('Entrée invalide : token insuffisant : 5000 disponible(s), 6000 demandé(s)');
+    expect(dialogs[1]).toMatch(/Signer quand même/i);
+    expect((await err(ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 0n, fee: { family: 'ada' }, cardanoToken: { ...t, quantity: '6000' } }))).message).toBe('Token insuffisant : 5000 disponible(s), 6000 demandé(s).');
   });
 
   it('CIP-20 memo: public, in the summary and the dialog, reinforced confirmation', async () => {
@@ -127,7 +127,7 @@ describe('Cardano in the app', () => {
     ];
     for (const [to, msg] of cases) {
       expect(cardanoAddressProblem(to, 'testnet')).toBe(msg);
-      expect((await err(call('ada_build_tx', { to, lovelace: '2000000' }))).message).toBe(`Entrée invalide : ${msg}`);
+      expect((await err(call('ada_build_tx', { to, lovelace: '2000000' }))).message).toBe(sentence(msg));
     }
     // Enterprise addresses are accepted.
     const enterprise = addrOfHeader(0x60, 29);
@@ -138,11 +138,11 @@ describe('Cardano in the app', () => {
 
   it('balance rules: not enough ADA; spent inputs refused at signing (live re-check); MAX keeps the change', async () => {
     const ada = createAdapters(accounts).cardano!;
-    expect((await err(ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 2_000_000_000n, fee: { family: 'ada' } }))).message).toMatch(/^Entrée invalide : solde insuffisant : .* ADA en entrée, il faut .* ADA \(montant \+ frais\)$/);
+    expect((await err(ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 2_000_000_000n, fee: { family: 'ada' } }))).message).toMatch(/^Solde insuffisant : .* ADA en entrée, il faut .* ADA \(montant \+ frais\)\.$/i);
     const first = await ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 5_000_000n, fee: { family: 'ada' } });
     const second = await ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 6_000_000n, fee: { family: 'ada' } });
     await ada.broadcast(await ada.signTx(second, PASSWORD));
-    expect((await err(ada.signTx(first, PASSWORD))).message).toMatch(/inconnue ou déjà dépensée : reconstruis la transaction/);
+    expect((await err(ada.signTx(first, PASSWORD))).message).toMatch(/inconnue ou déjà dépensée : reconstruis la transaction/i);
     const max = await ada.buildTx({ asset: ADA, to: mock.cardano.friend, amount: 0n, fee: { family: 'ada' }, max: true });
     const change = max.summary.outputs.find((o) => o.isChange)!;
     expect(BigInt(change.lovelace) >= BigInt(change.minLovelace)).toBe(true);

@@ -34,9 +34,9 @@ describe('Hedera helpers', () => {
     expect(hbarChecksum('mainnet', 123)).toBe('vfmkw');
     expect(hbarChecksum('testnet', 123)).toBe('esxsf');
     expect(parseHbarRecipient('0.0.123-esxsf', 'testnet')).toEqual({ to: '0.0.123', isEvm: false, num: 123 });
-    expect(() => parseHbarRecipient('0.0.123-vfmkw', 'testnet')).toThrow(/somme de contrôle/);
+    expect(() => parseHbarRecipient('0.0.123-vfmkw', 'testnet')).toThrow(/somme de contrôle/i);
     expect(parseHbarRecipient('0x0000000000000000000000000000000000000320', 'mainnet')).toMatchObject({ to: '0.0.800', isEvm: false });
-    expect(() => parseHbarRecipient('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96046', 'mainnet')).toThrow(/EIP-55/);
+    expect(() => parseHbarRecipient('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96046', 'mainnet')).toThrow(/EIP-55/i);
     expect(isHbarRecipient('0.0.98')).toBe(true);
     expect(isHbarRecipient('0.0.98-abcde')).toBe(true);
     expect(isHbarRecipient('0.0.098')).toBe(false);
@@ -50,9 +50,9 @@ describe('Hedera helpers', () => {
   it('memo rules = Rust’s: ≤ 100 bytes, no control / invisible / bidi character', () => {
     expect(hbarMemoError('104857')).toBeNull();
     expect(hbarMemoError('é'.repeat(50))).toBeNull();
-    expect(hbarMemoError('é'.repeat(51))).toMatch(/100 octets/);
-    expect(hbarMemoError('a\nb')).toMatch(/contrôle/);
-    expect(hbarMemoError('a‮b')).toMatch(/contrôle/);
+    expect(hbarMemoError('é'.repeat(51))).toMatch(/100 octets/i);
+    expect(hbarMemoError('a\nb')).toMatch(/contrôle/i);
+    expect(hbarMemoError('a‮b')).toMatch(/contrôle/i);
   });
 
   it('poisoning: 0x compared lowercase, 0.0.x by number (checksum dropped)', () => {
@@ -94,12 +94,12 @@ describe('Hedera in the app', () => {
 
   it('refuses unknown, deleted or signature-requiring recipients before building', async () => {
     const hbar = createAdapters(accounts).hbar!;
-    expect((await err(hbar.buildTransfer({ to: '0.0.424242', amount: 100n }))).message).toMatch(/n’existe pas/);
-    expect((await err(hbar.buildTransfer({ to: mock.hbar.guarded, amount: 100n }))).message).toMatch(/signature du destinataire/);
-    expect((await err(hbar.buildTransfer({ to: `0.0.${mock.hbar.num}`, amount: 100n }))).message).toMatch(/soi-même/);
-    expect((await err(hbar.buildTransfer({ to: accounts.hbar.address, amount: 100n }))).message).toMatch(/soi-même/);
-    expect((await err(hbar.buildTransfer({ to: mock.hbar.friend, amount: 4_250_000_000n }))).message).toMatch(/solde insuffisant/);
-    expect((await err(hbar.buildTransfer({ to: mock.hbar.friend, amount: 1n, memo: 'a\u0000b' }))).message).toMatch(/contrôle/);
+    expect((await err(hbar.buildTransfer({ to: '0.0.424242', amount: 100n }))).message).toMatch(/n’existe pas/i);
+    expect((await err(hbar.buildTransfer({ to: mock.hbar.guarded, amount: 100n }))).message).toMatch(/signature du destinataire/i);
+    expect((await err(hbar.buildTransfer({ to: `0.0.${mock.hbar.num}`, amount: 100n }))).message).toMatch(/soi-même/i);
+    expect((await err(hbar.buildTransfer({ to: accounts.hbar.address, amount: 100n }))).message).toMatch(/soi-même/i);
+    expect((await err(hbar.buildTransfer({ to: mock.hbar.friend, amount: 4_250_000_000n }))).message).toMatch(/solde insuffisant/i);
+    expect((await err(hbar.buildTransfer({ to: mock.hbar.friend, amount: 1n, memo: 'a\u0000b' }))).message).toMatch(/contrôle/i);
   });
 
   it('sends with a memo: one body per node, dialog with the memo framed after the amount, consensus follow-up', async () => {
@@ -149,6 +149,6 @@ describe('Hedera in the app', () => {
     const hbar = createAdapters(accounts).hbar!;
     const u = await hbar.buildTransfer({ to: mock.hbar.friend, amount: 1_000n });
     expect((await err(hbar.signTx(u, 'nope'))).code).toBe('WRONG_PASSWORD');
-    expect((await err(call('hbar_build_tx', { to: mock.hbar.friend, amount: '1000', account: 1 }))).message).toMatch(/Mode démo/);
+    expect((await err(call('hbar_build_tx', { to: mock.hbar.friend, amount: '1000', account: 1 }))).message).toMatch(/Mode démo/i);
   });
 });

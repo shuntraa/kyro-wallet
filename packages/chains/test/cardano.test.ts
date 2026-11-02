@@ -99,7 +99,7 @@ describe('CardanoAdapter (preprod)', () => {
     expect(adaToLovelace('1')).toBe(1_000_000n);
     expect(adaToLovelace('1,5')).toBe(1_500_000n);
     expect(adaToLovelace('0.000001')).toBe(1n);
-    expect(() => adaToLovelace('0.0000001')).toThrow(/invalide/);
+    expect(() => adaToLovelace('0.0000001')).toThrow(/invalide/i);
     expect(() => adaToLovelace('-1')).toThrow();
   });
 
@@ -114,13 +114,13 @@ describe('CardanoAdapter (preprod)', () => {
     expect(u.amount).toBe(2_000_000n);
     expect(u.maxFee).toBe(172_497n);
     expect(u.summary.memo).toEqual(['merci']);
-    await expect(adapter().buildPayment({ to: 'Ae2tdPwUPEZCanmBz5g2GEwFqKTKpNJcGYPKfDxoNeKZ8bRHr8366kseiK2', lovelace: 1n })).rejects.toThrow(/Byron/);
-    await expect(adapter().buildPayment({ to: OTHER })).rejects.toThrow(/manquant/);
+    await expect(adapter().buildPayment({ to: 'Ae2tdPwUPEZCanmBz5g2GEwFqKTKpNJcGYPKfDxoNeKZ8bRHr8366kseiK2', lovelace: 1n })).rejects.toThrow(/Byron/i);
+    await expect(adapter().buildPayment({ to: OTHER })).rejects.toThrow(/manquant/i);
     // Rust returning another amount, recipient or an extra foreign output: refused.
     const lying = backend({ build: async (to) => ({ tx: '84', summary: summary({ outputs: [{ ...summary().outputs[0]!, address: to, lovelace: '3000000' }] }), context: ctx }) });
-    await expect(adapter(lying).buildPayment({ to: OTHER, lovelace: 2_000_000n })).rejects.toThrow(/ne correspond pas/);
+    await expect(adapter(lying).buildPayment({ to: OTHER, lovelace: 2_000_000n })).rejects.toThrow(/ne correspond pas/i);
     const extra = backend({ build: async () => ({ tx: '84', summary: summary({ outputs: [...summary().outputs, { ...summary().outputs[0]!, address: ENTERPRISE }] }), context: ctx }) });
-    await expect(adapter(extra).buildPayment({ to: OTHER, lovelace: 2_000_000n })).rejects.toThrow(/ne correspond pas/);
+    await expect(adapter(extra).buildPayment({ to: OTHER, lovelace: 2_000_000n })).rejects.toThrow(/ne correspond pas/i);
   });
 
   it('builds a token payment carrying its min-ADA', async () => {
@@ -137,7 +137,7 @@ describe('CardanoAdapter (preprod)', () => {
     expect(await a.broadcast(s)).toBe('ab'.repeat(32));
     expect(b.submitted).toEqual(['84a4a1']);
     const other = backend({ broadcast: async () => 'ff'.repeat(32) });
-    await expect(adapter(other).broadcast(s)).rejects.toThrow(/inattendu/);
+    await expect(adapter(other).broadcast(s)).rejects.toThrow(/inattendu/i);
     const h = await a.historyEntries();
     expect(h[0]).toMatchObject({ direction: 'out', amount: 2_172_497n, fee: 172_497n, memo: 'merci' });
     expect(h[1]).toMatchObject({ direction: 'in', amount: 10_000_000n });
@@ -145,6 +145,6 @@ describe('CardanoAdapter (preprod)', () => {
   });
 
   it('refuses an invalid own address', () => {
-    expect(() => new CardanoAdapter({ chain: cardanoChain('mainnet'), address: ME, backend: backend() })).toThrow(/invalide/);
+    expect(() => new CardanoAdapter({ chain: cardanoChain('mainnet'), address: ME, backend: backend() })).toThrow(/invalide/i);
   });
 });

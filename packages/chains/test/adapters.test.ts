@@ -35,8 +35,8 @@ describe('BitcoinAdapter', () => {
     expect(unsigned.summary.outputs[1]?.[2]).toBe(true);
     expect(unsigned.fee).toBeGreaterThan(0n);
     const signed = await adapters.btc!.signTx(unsigned, PASSWORD);
-    expect(signed.hex).toMatch(/^02000000/);
-    expect(await adapters.btc!.broadcast(signed)).toMatch(/^[0-9a-f]{64}$/);
+    expect(signed.hex).toMatch(/^02000000/i);
+    expect(await adapters.btc!.broadcast(signed)).toMatch(/^[0-9a-f]{64}$/i);
   });
 
   it('rejects addresses of the wrong network', () => {

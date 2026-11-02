@@ -57,7 +57,7 @@ describe('Algorand tokens', () => {
     const u = await adapter(backend()).buildOptIn(USDC);
     expect(u.summary.asset?.optIn).toBe(true);
     expect(u.recipient).toBe(ME);
-    await expect(adapter(backend()).buildOptIn(1234)).rejects.toThrow(/inconnu|Unknown/);
+    await expect(adapter(backend()).buildOptIn(1234)).rejects.toThrow(/inconnu|Unknown/i);
     const lying = backend({}, () => summary({ receiver: OTHER }));
     await expect(adapter(lying).buildOptIn(USDC)).rejects.toThrow();
     const otherAsset = backend({}, () => summary({ asset: { assetId: USDT, symbol: 'USDT', name: 'Tether', decimals: 6, amount: '0', optIn: true } }));
@@ -87,6 +87,6 @@ describe('Algorand tokens', () => {
       ['asa:312769', 'self', 0n],
       ['algo', 'in', 0n],
     ]);
-    expect(h[1]!.note).toMatch(/USDT/);
+    expect(h[1]!.note).toMatch(/USDT/i);
   });
 });

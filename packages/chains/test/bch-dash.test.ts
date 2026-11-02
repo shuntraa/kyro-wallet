@@ -64,7 +64,7 @@ describe('Bitcoin Cash and Dash: official vectors on the TypeScript side', () =>
     expect(dash.isValidAddress('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')).toBe(false);
     expect(dash.isValidAddress('xdash1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq')).toBe(false);
     // A wrong first address (vault and xpub disagree): refused at construction.
-    expect(() => new DashAdapter({ chain: dashChain('mainnet'), account: { ...acc, address: 'XpTc36DPAeWmaueNBA9JqCg2GC8XDLKSYe' }, backend: noBackend })).toThrow(/incohérente/);
+    expect(() => new DashAdapter({ chain: dashChain('mainnet'), account: { ...acc, address: 'XpTc36DPAeWmaueNBA9JqCg2GC8XDLKSYe' }, backend: noBackend })).toThrow(/incohérente/i);
   });
 
   it('dust 546 for P2PKH (Bitcoin Cash Node / Dash Core), 540 for P2SH', () => {
@@ -115,8 +115,8 @@ describe('Bitcoin Cash and Dash in the app (demo backend)', () => {
     expect(await bch.broadcast(signed)).toBe(signed.txid);
     expect((await bch.getHistory()).length).toBeGreaterThan(0);
     // Below the dust limit: refused before anything is built.
-    expect(await code(bch.buildTx({ asset, to, amount: 545n, fee: fees.options.normal.params }))).toMatch(/poussière/);
-    expect(await code(bch.buildTx({ asset, to: '1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu', amount: 10_000n, fee: fees.options.normal.params }))).toMatch(/invalide/);
+    expect(await code(bch.buildTx({ asset, to, amount: 545n, fee: fees.options.normal.params }))).toMatch(/poussière/i);
+    expect(await code(bch.buildTx({ asset, to: '1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu', amount: 10_000n, fee: fees.options.normal.params }))).toMatch(/invalide/i);
   });
 
   it('Dash testnet: no default server → SERVER_INVALID; works once configured; mainnet out of the box', async () => {

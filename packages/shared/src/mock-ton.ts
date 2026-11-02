@@ -19,7 +19,7 @@ import {
   type TonWarning,
 } from './ipc';
 import { parseTonAddress, tonAddressProblem, tonFriendly } from './ton-address';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Demo fee of a transfer (nanotons), and of a first transfer that deploys the wallet. */
@@ -37,7 +37,7 @@ export function demoTonAddress(account: number, network: Network): string {
   return tonFriendly(0, hashOfLabel(`kyro-demo-ton-${network}-${account}`), false, network === 'testnet');
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const tonText = (nano: bigint | string) => {
   const v = BigInt(nano);
   const frac = (v % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '');

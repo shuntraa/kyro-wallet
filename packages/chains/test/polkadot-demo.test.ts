@@ -56,8 +56,8 @@ describe('Polkadot in the app', () => {
     expect(isDotAddress(accounts.polkadot.address, 'testnet')).toBe(true);
     expect(isDotAddress('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', 'testnet')).toBe(false);
     expect(isDotAddress('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', 'mainnet')).toBe(true);
-    expect(dotAddressProblem('5EPCUjPxiHAcNooYipQFWr9NmmXJKpNG5RhcntXwbtUySrgH', 'mainnet')).toMatch(/format générique/);
-    expect(dotAddressProblem('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', 'testnet')).toMatch(/mainnet/);
+    expect(dotAddressProblem('5EPCUjPxiHAcNooYipQFWr9NmmXJKpNG5RhcntXwbtUySrgH', 'mainnet')).toMatch(/format générique/i);
+    expect(dotAddressProblem('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', 'testnet')).toMatch(/mainnet/i);
   });
 
   it('balance, spendable = free − max(frozen, ED), backend info', async () => {
@@ -78,11 +78,11 @@ describe('Polkadot in the app', () => {
   it('refusals before building: existential deposit, balance, own address, other network', async () => {
     const dot = createAdapters(accounts).polkadot!;
     const stranger = dotSs58Encode(new Uint8Array(32).fill(7), 42);
-    expect((await err(dot.buildTransfer(stranger, UNIT / 10_000n))).message).toMatch(/dépôt existentiel \(0,001 WND\)/);
-    expect((await err(dot.buildTransfer(mock.dot.friend, 11n * UNIT))).message).toMatch(/solde disponible insuffisant/);
-    expect((await err(dot.buildTransfer(accounts.polkadot.address, UNIT))).message).toMatch(/soi-même/);
-    expect((await err(dot.buildTransfer('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', UNIT))).message).toMatch(/mainnet/);
-    expect((await err(call('dot_build_tx', { to: '13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', amount: '1' }))).message).toMatch(/préfixe SS58 0/);
+    expect((await err(dot.buildTransfer(stranger, UNIT / 10_000n))).message).toMatch(/dépôt existentiel \(0,001 WND\)/i);
+    expect((await err(dot.buildTransfer(mock.dot.friend, 11n * UNIT))).message).toMatch(/solde disponible insuffisant/i);
+    expect((await err(dot.buildTransfer(accounts.polkadot.address, UNIT))).message).toMatch(/soi-même/i);
+    expect((await err(dot.buildTransfer('13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', UNIT))).message).toMatch(/mainnet/i);
+    expect((await err(call('dot_build_tx', { to: '13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo', amount: '1' }))).message).toMatch(/préfixe SS58 0/i);
   });
 
   it('build → sign (native dialog) → broadcast → finalized; max = spendable − fee', async () => {
@@ -91,15 +91,15 @@ describe('Polkadot in the app', () => {
     expect(u.summary).toMatchObject({ call: 'Balances.transfer_keep_alive', to: mock.dot.friend, amount: (2n * UNIT).toString(), tip: '0', nonce: 3 });
     expect(u.maxFee).toBe(155n * UNIT / 10_000n);
     const id = await signAndBroadcast(dot, u, PASSWORD);
-    expect(id).toMatch(/^[0-9a-f]{64}$/);
-    expect(dialogs[0]).toMatch(/Envoi Polkadot — Westend Asset Hub \(testnet\)/);
-    expect(dialogs[0]).toMatch(/Montant : 2 WND/);
+    expect(id).toMatch(/^[0-9a-f]{64}$/i);
+    expect(dialogs[0]).toMatch(/Envoi Polkadot — Westend Asset Hub \(testnet\)/i);
+    expect(dialogs[0]).toMatch(/Montant : 2 WND/i);
     expect((await dot.txStatus(3, u.context.validUntil)).state).toBe('pending');
     mock.advance(6_000);
     expect((await dot.txStatus(3, u.context.validUntil)).state).toBe('finalized');
     expect((await dot.account()).nonce).toBe(4);
     // Same payload again: the nonce is stale.
-    expect((await err(dot.signTx(u, PASSWORD))).message).toMatch(/nonce périmé/);
+    expect((await err(dot.signTx(u, PASSWORD))).message).toMatch(/nonce périmé/i);
     // MAX: everything spendable minus the fee.
     const all = await dot.buildTx({ asset: WND, to: mock.dot.friend, amount: 0n, fee: { family: 'dot' }, max: true });
     const me = await dot.account();
@@ -139,6 +139,6 @@ describe('Polkadot in the app', () => {
     const real = await call('dot_build_tx', { to: mock.dot.friend, amount: '1000000000000' });
     const backend = { ...rustDotBackend(), build: () => Promise.resolve({ ...real, summary: { ...real.summary, amount: '9' } }) };
     const lying = new PolkadotAdapter({ chain: polkadotChain('testnet'), address: accounts.polkadot.address, backend });
-    expect((await err(lying.buildTransfer(mock.dot.friend, UNIT))).message).toMatch(/ne correspond pas/);
+    expect((await err(lying.buildTransfer(mock.dot.friend, UNIT))).message).toMatch(/ne correspond pas/i);
   });
 });

@@ -63,7 +63,7 @@ describe('XmrAdapter', () => {
     expect(isXmrAddress(`${MAIN.slice(0, -1)}0`, 'mainnet')).toBe(false); // '0' is not base58
     expect(isXmrAddress(demoXmrIntegrated('mainnet', 0, new Uint8Array(8)), 'mainnet')).toBe(true);
     expect(isXmrAddress('bc1qxyz', 'mainnet')).toBe(false);
-    expect(() => new XmrAdapter({ chain: xmrChain('testnet'), address: MAIN, backend: backend() })).toThrow(/invalide/);
+    expect(() => new XmrAdapter({ chain: xmrChain('testnet'), address: MAIN, backend: backend() })).toThrow(/invalide/i);
   });
 
   it('balance = everything not spent, spendable = unlocked; a scanned account is caught up', async () => {
@@ -90,10 +90,10 @@ describe('XmrAdapter', () => {
     expect(b.calls.filter((c) => c.startsWith('send'))).toEqual(['send:id1']);
     // Rust built something else: refused.
     const liar = new XmrAdapter({ chain: xmrChain('testnet'), address: STAGE, backend: backend({ prepare: async (to) => ({ id: 'x', summary: summary(to, '999') }) }) });
-    await expect(liar.buildTx({ asset: XMR, to: SUB_STAGE, amount: 1_000n, fee })).rejects.toThrow(/ne correspond pas/);
+    await expect(liar.buildTx({ asset: XMR, to: SUB_STAGE, amount: 1_000n, fee })).rejects.toThrow(/ne correspond pas/i);
     const other = new XmrAdapter({ chain: xmrChain('testnet'), address: STAGE, backend: backend({ prepare: async () => ({ id: 'x', summary: summary(STAGE, '1000') }) }) });
-    await expect(other.buildTx({ asset: XMR, to: SUB_STAGE, amount: 1_000n, fee })).rejects.toThrow(/ne correspond pas/);
-    await expect(a.buildTx({ asset: XMR, to: MAIN, amount: 1n, fee })).rejects.toThrow(/invalide/);
+    await expect(other.buildTx({ asset: XMR, to: SUB_STAGE, amount: 1_000n, fee })).rejects.toThrow(/ne correspond pas/i);
+    await expect(a.buildTx({ asset: XMR, to: MAIN, amount: 1n, fee })).rejects.toThrow(/invalide/i);
   });
 
   it('history: pending sends, locked receptions', async () => {
@@ -155,7 +155,7 @@ describe('Monero in the app (demo backend)', () => {
     expect(xmr.getAddress()).toBe(accounts.xmr.address);
     // Not scanned yet: no restore height, nothing to send.
     expect((await xmr.status()).restoreHeight).toBeNull();
-    expect((await err(call('xmr_prepare_tx', { to: demoXmrAddress('testnet', 9, 1), amount: '1' }))).message).toMatch(/synchronisation incomplète/);
+    expect((await err(call('xmr_prepare_tx', { to: demoXmrAddress('testnet', 9, 1), amount: '1' }))).message).toMatch(/synchronisation incomplète/i);
     let s = await xmr.sync();
     for (let i = 0; i < 10 && (s.running || s.progress < 1); i++) s = await xmr.status();
     expect(s.progress).toBe(1);
@@ -171,17 +171,17 @@ describe('Monero in the app (demo backend)', () => {
     // Destinations decoded like Rust.
     expect(await call('xmr_validate_address', { address: mock.xmr.friend })).toMatchObject({ kind: 'subaddress' });
     expect(checkXmrAddress(demoXmrIntegrated('testnet', 3, new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])), 'testnet')).toMatchObject({ kind: 'integrated', paymentId: '0102030405060708' });
-    expect((await err(call('xmr_validate_address', { address: MAIN }))).message).toMatch(/mainnet : Kyro est sur stagenet/);
+    expect((await err(call('xmr_validate_address', { address: MAIN }))).message).toMatch(/mainnet : Kyro est sur stagenet/i);
     // Above the unlocked balance: refused.
-    expect((await err(call('xmr_prepare_tx', { to: mock.xmr.friend, amount: '2600000000000' }))).message).toMatch(/fonds insuffisants/);
+    expect((await err(call('xmr_prepare_tx', { to: mock.xmr.friend, amount: '2600000000000' }))).message).toMatch(/fonds insuffisants/i);
     const fee = (await xmr.estimateFees()).options.normal.params;
     const u = await xmr.buildTx({ asset: XMR, to: mock.xmr.friend, amount: 1_000_000_000_000n, fee });
     expect(u.summary).toMatchObject({ inputCount: 1, ringSize: 16, inputsTotal: '2400000000000', change: '1399880000000' });
     const signed = await xmr.signTx(u, PASSWORD);
-    expect(dialogs.at(-1)).toMatch(/Envoi Monero \(stagenet\)/);
+    expect(dialogs.at(-1)).toMatch(/Envoi Monero \(stagenet\)/i);
     expect(await xmr.broadcast(signed)).toBe(signed.txid);
     // Single use.
-    expect((await err(call('xmr_send_tx', { id: u.id, password: PASSWORD }))).message).toMatch(/inconnu ou expiré/);
+    expect((await err(call('xmr_send_tx', { id: u.id, password: PASSWORD }))).message).toMatch(/inconnu ou expiré/i);
     const h = await xmr.getHistory();
     expect(h[0]).toMatchObject({ direction: 'out', status: 'pending', counterparty: mock.xmr.friend });
     s = await xmr.status();

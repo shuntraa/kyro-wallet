@@ -24,7 +24,7 @@ import { CASHADDR_PREFIX, cashaddrToScript, scriptToCashaddr } from './cashaddr'
 import { demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, type DemoChainState } from './mock-net';
 import type { DemoTor } from './mock-tor';
 import type { DemoAccountHooks } from './mock-accounts';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -173,7 +173,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     try {
       demoUtxoScript(coin, d.network, addr);
     } catch {
-      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : adresse ${NAME[coin]} invalide pour ce réseau « ${addr} »`, `Invalid input: invalid ${NAME[coin]} address for this network “${addr}”`));
+      throw new IpcError('INVALID_INPUT', sentence(l10n(`adresse ${NAME[coin]} invalide pour ce réseau « ${addr} »`, `invalid ${NAME[coin]} address for this network “${addr}”`)));
     }
     return addr;
   };
@@ -216,24 +216,24 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     try {
       psbt = bitcoin.Psbt.fromBase64(String(a.psbt ?? ''), { network: net(coin) });
     } catch {
-      throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : PSBT invalide', 'Invalid input: invalid PSBT'));
+      throw new IpcError('INVALID_INPUT', sentence(l10n('PSBT invalide', 'invalid PSBT')));
     }
     let inSum = 0n;
     psbt.data.inputs.forEach((input, i) => {
-      if (!input.bip32Derivation?.length) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i} sans dérivation`, `Invalid input: input ${i} without derivation`));
+      if (!input.bip32Derivation?.length) throw new IpcError('INVALID_INPUT', sentence(l10n(`entrée ${i} sans dérivation`, `input ${i} without derivation`)));
       if (coin !== 'ltc') {
-        if (!input.nonWitnessUtxo || input.witnessUtxo) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${NAME[coin]}, l’entrée ${i} doit porter la transaction précédente (non_witness_utxo) et pas de witness_utxo`, `Invalid input: ${NAME[coin]}, input ${i} must carry the previous transaction (non_witness_utxo) and no witness_utxo`));
+        if (!input.nonWitnessUtxo || input.witnessUtxo) throw new IpcError('INVALID_INPUT', sentence(l10n(`${NAME[coin]}, l’entrée ${i} doit porter la transaction précédente (non_witness_utxo) et pas de witness_utxo`, `${NAME[coin]}, input ${i} must carry the previous transaction (non_witness_utxo) and no witness_utxo`)));
         // Amount and script ONLY from the previous transaction, checked against the outpoint.
         const prev = bitcoin.Transaction.fromBuffer(input.nonWitnessUtxo);
         const txIn = psbt.txInputs[i]!;
-        if (prev.getId() !== bytesToHex(Uint8Array.from(txIn.hash).reverse())) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, la transaction précédente ne correspond pas à l’outpoint`, `Invalid input: input ${i}, the previous transaction does not match the outpoint`));
+        if (prev.getId() !== bytesToHex(Uint8Array.from(txIn.hash).reverse())) throw new IpcError('INVALID_INPUT', sentence(l10n(`entrée ${i}, la transaction précédente ne correspond pas à l’outpoint`, `input ${i}, the previous transaction does not match the outpoint`)));
         const spent = prev.outs[txIn.index];
-        if (!spent) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, sortie précédente absente`, `Invalid input: input ${i}, previous output missing`));
+        if (!spent) throw new IpcError('INVALID_INPUT', sentence(l10n(`entrée ${i}, sortie précédente absente`, `input ${i}, previous output missing`)));
         const payee = addressOf(coin, spent.script);
-        if (!payee || !own(coin, d.accounts.arg(a.account)).has(payee)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, la pièce dépensée ne paie pas ce portefeuille`, `Invalid input: input ${i}, the spent coin does not pay this wallet`));
+        if (!payee || !own(coin, d.accounts.arg(a.account)).has(payee)) throw new IpcError('INVALID_INPUT', sentence(l10n(`entrée ${i}, la pièce dépensée ne paie pas ce portefeuille`, `input ${i}, the spent coin does not pay this wallet`)));
         inSum += spent.value;
       } else {
-        if (!input.witnessUtxo) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : Litecoin, l’entrée ${i} doit porter witness_utxo`, `Invalid input: Litecoin, input ${i} must carry witness_utxo`));
+        if (!input.witnessUtxo) throw new IpcError('INVALID_INPUT', sentence(l10n(`Litecoin, l’entrée ${i} doit porter witness_utxo`, `Litecoin, input ${i} must carry witness_utxo`)));
         inSum += input.witnessUtxo.value;
       }
     });
@@ -242,8 +242,8 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     const outputs = psbt.txOutputs.map((o, index) => {
       const address = addressOf(coin, o.script);
       if (!address) warnings.push({ kind: 'unknownOutput', index });
-      if ((coin === 'bch' || coin === 'dash') && o.value < BigInt(BCH_DASH_DUST)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : sortie ${index} sous ${BCH_DASH_DUST} ${UNIT[coin]} (poussière, non standard)`, `Invalid input: output ${index} below ${BCH_DASH_DUST} ${UNIT[coin]} (dust, non-standard)`));
-      if (coin === 'doge' && o.value < BigInt(DOGE_HARD_DUST)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : sortie ${index} sous 0,001 DOGE (non standard)`, `Invalid input: output ${index} below 0.001 DOGE (non-standard)`));
+      if ((coin === 'bch' || coin === 'dash') && o.value < BigInt(BCH_DASH_DUST)) throw new IpcError('INVALID_INPUT', sentence(l10n(`sortie ${index} sous ${BCH_DASH_DUST} ${UNIT[coin]} (poussière, non standard)`, `output ${index} below ${BCH_DASH_DUST} ${UNIT[coin]} (dust, non-standard)`)));
+      if (coin === 'doge' && o.value < BigInt(DOGE_HARD_DUST)) throw new IpcError('INVALID_INPUT', sentence(l10n(`sortie ${index} sous 0,001 DOGE (non standard)`, `output ${index} below 0.001 DOGE (non-standard)`)));
       if (coin === 'doge' && o.value < BigInt(DOGE_SOFT_DUST)) warnings.push({ kind: 'softDust', index });
       // Rust: change = key origin on the output + derived key + script match (not just « one of our addresses »).
       const isChange = !!address && mine.has(address) && (psbt.data.outputs[index]?.bip32Derivation?.length ?? 0) > 0;
@@ -325,10 +325,10 @@ ${text}`)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Sign
     },
     tx_hex: async (a: Record<string, unknown>) => {
       const txid = String(a.txid ?? '');
-      if (!/^[0-9a-f]{64}$/.test(txid)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : txid : 64 caractères hexadécimaux attendus', 'Invalid input: txid: 64 hexadecimal characters expected'));
+      if (!/^[0-9a-f]{64}$/.test(txid)) throw new IpcError('INVALID_INPUT', sentence(l10n('txid : 64 caractères hexadécimaux attendus', 'txid: 64 hexadecimal characters expected')));
       await backend(coin);
       const hex = d.chain.rawTx.get(txid);
-      if (!hex) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : transaction ${txid.slice(0, 10)}… inconnue du serveur`, `Invalid input: transaction ${txid.slice(0, 10)}… unknown to the server`));
+      if (!hex) throw new IpcError('INVALID_INPUT', sentence(l10n(`transaction ${txid.slice(0, 10)}… inconnue du serveur`, `transaction ${txid.slice(0, 10)}… unknown to the server`)));
       return hex;
     },
     fee_rates: async (): Promise<UtxoFeeRates> => {
@@ -347,7 +347,7 @@ ${text}`)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Sign
       try {
         txid = bitcoin.Transaction.fromHex(String(a.hex ?? '').trim()).getId();
       } catch {
-        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction hexadécimale invalide', 'Invalid input: invalid hexadecimal transaction'));
+        throw new IpcError('INVALID_INPUT', sentence(l10n('transaction hexadécimale invalide', 'invalid hexadecimal transaction')));
       }
       await backend(coin);
       return txid;

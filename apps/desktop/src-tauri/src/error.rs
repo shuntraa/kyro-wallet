@@ -16,7 +16,8 @@ pub enum AppError {
     UserRejected,
     #[error("Server not allowed: {0}")]
     HostNotAllowed(String),
-    #[error("Invalid input: {0}")]
+    /// Shown as the detail alone, as a sentence (see [`sentence`]): no « Invalid input: » prefix.
+    #[error("{0}")]
     InvalidInput(String),
     #[error("Internal error: {0}")]
     Internal(String),
@@ -63,6 +64,20 @@ pub enum AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
+/// An error detail as a sentence: capital first letter, final period.
+fn sentence(detail: &str) -> String {
+    let d = detail.trim();
+    let mut chars = d.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let mut out: String = first.to_uppercase().chain(chars).collect();
+    if !out.ends_with(['.', '!', '?', '…']) {
+        out.push('.');
+    }
+    out
+}
+
 impl AppError {
     fn code(&self) -> &'static str {
         match self {
@@ -99,7 +114,10 @@ impl AppError {
     pub fn message(&self, lang: crate::i18n::Lang) -> String {
         use crate::i18n::Lang;
         if lang == Lang::En {
-            return self.to_string();
+            return match self {
+                AppError::InvalidInput(d) => sentence(d),
+                _ => self.to_string(),
+            };
         }
         let detail = |d: &str| crate::i18n::detail_fr(d);
         match self {
@@ -108,7 +126,7 @@ impl AppError {
             AppError::RateLimited(s) => format!("Trop de tentatives. Réessaie dans {s} s."),
             AppError::UserRejected => "Action annulée.".into(),
             AppError::HostNotAllowed(h) => format!("Serveur non autorisé : {h}"),
-            AppError::InvalidInput(d) => format!("Entrée invalide : {}", detail(d)),
+            AppError::InvalidInput(d) => sentence(&detail(d)),
             AppError::Internal(d) => format!("Erreur interne : {}", detail(d)),
             AppError::TorUnavailable(d) => format!("Tor indisponible : {}", detail(d)),
             AppError::ServerInvalid(d) => format!("Serveur invalide : {}", detail(d)),
@@ -264,24 +282,31 @@ mod tests {
         assert_eq!(
             AppError::InvalidInput("a vault already exists on this device".into())
                 .message(Lang::Fr),
-            "Entrée invalide : un coffre existe déjà sur cet appareil"
+            "Un coffre existe déjà sur cet appareil."
         );
         assert_eq!(
             AppError::InvalidInput("a vault already exists on this device".into())
                 .message(Lang::En),
-            "Invalid input: a vault already exists on this device"
+            "A vault already exists on this device."
+        );
+        assert_eq!(
+            AppError::InvalidInput("the password must be at least 10 characters long".into())
+                .message(Lang::Fr),
+            "Le mot de passe doit faire au moins 10 caractères."
         );
         assert_eq!(
             AppError::InvalidInput("invalid settings: x".into()).message(Lang::Fr),
-            "Entrée invalide : réglages invalides : x"
+            "Réglages invalides : x."
         );
         assert_eq!(
             AppError::InvalidInput("xyz".into()).message(Lang::En),
-            "Invalid input: xyz"
+            "Xyz."
         );
         assert_eq!(
-            AppError::InvalidInput("xyz".into()).message(Lang::Fr),
-            "Entrée invalide : xyz"
+            AppError::InvalidInput("ends already.".into()).message(Lang::En),
+            "Ends already."
         );
+        assert_eq!(AppError::InvalidInput("".into()).message(Lang::Fr), "");
+        assert_eq!(AppError::InvalidInput("xyz".into()).code(), "INVALID_INPUT");
     }
 }

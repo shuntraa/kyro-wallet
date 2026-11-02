@@ -57,9 +57,9 @@ describe('AptosAdapter (testnet)', () => {
     expect(isAptosAddress('0x1')).toBe(false);
     expect(isAptosAddress(ME.replace('0x0', '0x'))).toBe(false);
     expect(isAptosAddress(ME.slice(2))).toBe(false);
-    expect(aptosAddressProblem('0x1')).toMatch(/Forme courte/);
-    expect(aptosAddressProblem('kyro.apt')).toMatch(/ANS/);
-    expect(aptosAddressProblem(`${ME}00`)).toMatch(/trop longue/);
+    expect(aptosAddressProblem('0x1')).toMatch(/Forme courte/i);
+    expect(aptosAddressProblem('kyro.apt')).toMatch(/ANS/i);
+    expect(aptosAddressProblem(`${ME}00`)).toMatch(/trop longue/i);
     expect(aptosAddressProblem(ME)).toBeNull();
     expect(() => new AptosAdapter({ chain: aptosChain('testnet'), address: '0x1' })).toThrow();
     expect(aptosChain('mainnet')).toMatchObject({ chainId: 1, nativeDecimals: 8, coingeckoId: 'aptos' });
@@ -73,14 +73,14 @@ describe('AptosAdapter (testnet)', () => {
     expect((await a.estimateFees()).options.normal.params).toEqual({ family: 'apt' });
     const u = await a.buildTx({ asset: APT, to: OTHER.toUpperCase().replace('0X', '0x'), amount: 150_000_000n, fee: { family: 'apt' } });
     expect(u).toMatchObject({ family: 'apt', recipient: OTHER, amount: 150_000_000n, maxFee: 20_000n, estimatedFee: 1_100n });
-    await expect(a.buildTx({ asset: APT, to: ME, amount: 1n, fee: { family: 'apt' } })).rejects.toThrow(/soi-même/);
-    await expect(a.buildTx({ asset: APT, to: '0x1', amount: 1n, fee: { family: 'apt' } })).rejects.toThrow(/Forme courte/);
+    await expect(a.buildTx({ asset: APT, to: ME, amount: 1n, fee: { family: 'apt' } })).rejects.toThrow(/soi-même/i);
+    await expect(a.buildTx({ asset: APT, to: '0x1', amount: 1n, fee: { family: 'apt' } })).rejects.toThrow(/Forme courte/i);
   });
 
   it('refuses anything Rust built that was not asked', async () => {
     for (const bad of [{ recipient: ME }, { amount: '1' }, { function: '0x1::coin::transfer' }, { chainId: 1 }, { requiresExtraConfirmation: true }, { sender: OTHER }]) {
       const a = make(backend({ build: async (to, amount) => ({ raw: 'ab', summary: summary({ recipient: to, amount, ...bad }), context: ctx }) }));
-      await expect(a.buildTx({ asset: APT, to: OTHER, amount: 150_000_000n, fee: { family: 'apt' } })).rejects.toThrow(/ne correspond pas/);
+      await expect(a.buildTx({ asset: APT, to: OTHER, amount: 150_000_000n, fee: { family: 'apt' } })).rejects.toThrow(/ne correspond pas/i);
     }
   });
 
@@ -99,9 +99,9 @@ describe('AptosAdapter (testnet)', () => {
     expect(await a.broadcast(s)).toBe(`0x${'cd'.repeat(32)}`);
     expect(b.submitted).toEqual(['abcd']);
     const liar = make(backend({ broadcast: async () => `0x${'ee'.repeat(32)}` }));
-    await expect(liar.broadcast(s)).rejects.toThrow(/inattendu/);
+    await expect(liar.broadcast(s)).rejects.toThrow(/inattendu/i);
     const badHash = make(backend({ sign: async () => ({ signed: 'abcd', hash: 'nope', summary: summary(), context: ctx }) }));
-    await expect(badHash.signTx(u, 'pw')).rejects.toThrow(/Hash/);
+    await expect(badHash.signTx(u, 'pw')).rejects.toThrow(/Hash/i);
   });
 
   it('history: fee only on our sends, poisoning lures flagged', async () => {

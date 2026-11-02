@@ -17,7 +17,7 @@ import {
   type SuiTxSummary,
   type SuiWarning,
 } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const MIST = 1_000_000_000n;
@@ -42,7 +42,7 @@ export function demoSuiAddress(account: number): string {
   return suiAddressOf(sha256(enc(`kyro-demo-sui-account-${account}`)));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 /** wallet-core `sui_parse_address`, same messages. */
 export function checkSuiAddress(a: unknown): string {

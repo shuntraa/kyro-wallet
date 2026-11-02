@@ -26,7 +26,7 @@ describe('units', () => {
   it('rejects garbage and too many decimals', () => {
     expect(() => parseUnits('1,2,3', 6)).toThrow();
     expect(() => parseUnits('abc', 6)).toThrow();
-    expect(() => parseUnits('0.0000001', 6)).toThrow(/décimales/);
+    expect(() => parseUnits('0.0000001', 6)).toThrow(/décimales/i);
     expect(tryParseUnits('', 6)).toBeNull();
   });
   it('formats without floats', () => {
@@ -84,7 +84,7 @@ describe('validateEvmCustomFee', () => {
   it('warns below the network base fee', () => {
     const v = validateEvmCustomFee({ maxFeeGwei: '3', priorityGwei: '1' }, est);
     expect(v.ok).toBe(true);
-    expect(v.warnings.join()).toMatch(/minimum du réseau/);
+    expect(v.warnings.join()).toMatch(/minimum du réseau/i);
   });
 });
 

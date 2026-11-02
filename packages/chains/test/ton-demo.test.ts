@@ -93,7 +93,7 @@ describe('TON in the app', () => {
     const h = await ton.getHistory();
     expect(h[0]).toMatchObject({ direction: 'out', amount: 1_500_000_000n, status: 'confirmed', note: 'Commentaire : 7239104' });
     // Same seqno again: refused (stale).
-    expect((await err(ton.signTx(u, PASSWORD))).message).toMatch(/seqno/);
+    expect((await err(ton.signTx(u, PASSWORD))).message).toMatch(/seqno/i);
   });
 
   it('bounceable address of an inactive account: sent without bounce, said in the dialog', async () => {
@@ -118,15 +118,15 @@ describe('TON in the app', () => {
   it('refusals: Rust’s and the adapter’s', async () => {
     const ton = createAdapters(accounts).ton!;
     // Raw form, mainnet-only check, masterchain, comment limits.
-    expect(tonRecipientProblem(`0:${'ab'.repeat(32)}`, 'testnet')).toMatch(/brute/);
-    expect(tonRecipientProblem(tonFriendly(0, 'ab'.repeat(32), false, true), 'mainnet')).toMatch(/testnet/);
-    expect(tonRecipientProblem(tonFriendly(-1, 'ab'.repeat(32), true, false), 'mainnet')).toMatch(/masterchain/);
-    expect(tonCommentProblem('x'.repeat(124))).toMatch(/trop long/);
+    expect(tonRecipientProblem(`0:${'ab'.repeat(32)}`, 'testnet')).toMatch(/brute/i);
+    expect(tonRecipientProblem(tonFriendly(0, 'ab'.repeat(32), false, true), 'mainnet')).toMatch(/testnet/i);
+    expect(tonRecipientProblem(tonFriendly(-1, 'ab'.repeat(32), true, false), 'mainnet')).toMatch(/masterchain/i);
+    expect(tonCommentProblem('x'.repeat(124))).toMatch(/trop long/i);
     expect(tonCommentProblem('é'.repeat(61))).toBeNull();
-    expect(tonCommentProblem('a‮b')).toMatch(/invisibles/);
-    expect((await err(ton.buildTx({ asset: TON, to: accounts.ton.address, amount: 1n, fee }))).message).toMatch(/soi-même/);
+    expect(tonCommentProblem('a‮b')).toMatch(/invisibles/i);
+    expect((await err(ton.buildTx({ asset: TON, to: accounts.ton.address, amount: 1n, fee }))).message).toMatch(/soi-même/i);
     // More than the balance (amount + fee).
-    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 42_750_000_000n, fee }))).message).toMatch(/solde GRAM insuffisant/);
+    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 42_750_000_000n, fee }))).message).toMatch(/solde GRAM insuffisant/i);
     // Rust refuses a raw address on its own too.
     expect((await err(call('ton_account', { address: `0:${'ab'.repeat(32)}` }))).code).toBe('INVALID_INPUT');
     // Wrong password: nothing signed.
@@ -148,7 +148,7 @@ describe('TON in the app', () => {
       txStatus: (hash) => call('ton_tx_status', { hash }),
     };
     const ton = new TonAdapter({ chain: tonChain('testnet'), address: real.getAddress(), backend: lying });
-    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 5n, fee, memo: 'memo' }))).message).toMatch(/ne correspond pas/);
+    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 5n, fee, memo: 'memo' }))).message).toMatch(/ne correspond pas/i);
   });
 
   it('poisoning: EQ… and UQ… of one account are the same address, look-alikes still caught', () => {

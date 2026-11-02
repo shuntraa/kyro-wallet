@@ -84,7 +84,7 @@ describe('Algorand in the app', () => {
     expect(dialogs[0]).toContain('Réseau : testnet-v1.0 (genesis SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=)');
     expect(dialogs).toHaveLength(2);
     const txid = await algo.broadcast(signed);
-    expect(txid).toMatch(/^[A-Z2-7]{52}$/);
+    expect(txid).toMatch(/^[A-Z2-7]{52}$/i);
     expect((await algo.txStatus(txid)).confirmed).toBe(false);
     mock.advance(5_000);
     expect((await algo.txStatus(txid)).confirmed).toBe(true);

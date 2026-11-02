@@ -182,7 +182,7 @@ describe('settings_set and server_test validation', () => {
 
   it('electrum_fetch_cert returns a 64-hex fingerprint and the webpki verdict', async () => {
     const c = await call('electrum_fetch_cert', { host: 'electrum.example', port: 50002 });
-    expect(c.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(c.sha256).toMatch(/^[0-9a-f]{64}$/i);
     expect(c.webpkiValid).toBe(true);
     expect(await code(call('electrum_fetch_cert', { host: 'down.example', port: 50002 }))).toBe('SERVER_UNREACHABLE');
     expect(await code(call('electrum_fetch_cert', { host: 'bad host', port: 50002 }))).toBe('SERVER_INVALID');

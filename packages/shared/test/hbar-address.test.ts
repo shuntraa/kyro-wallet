@@ -15,7 +15,7 @@ describe('Hedera demo keys', () => {
     expect(pk(W24, 'some pass', 0)).toBe('0357d69bb36fee569838fe7b325c07ca511e8c1b222873cde93fc6bb541eb7ecea');
     expect(pk(W12, '', 0)).toBe('0294bf84a54806989a74ca4b76291d386914610b40b610d303162b9e495bc06416');
     const seed = mnemonicToSeedSync(W24);
-    expect(demoHbarAddress(seed, 0)).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(demoHbarAddress(seed, 0)).toMatch(/^0x[0-9a-fA-F]{40}$/i);
     expect(demoHbarAddress(seed, 0)).not.toBe(demoHbarAddress(seed, 1));
   });
 
@@ -23,9 +23,9 @@ describe('Hedera demo keys', () => {
     expect(hbarChecksum('mainnet', 123)).toBe('vfmkw');
     expect(hbarChecksum('testnet', 123)).toBe('esxsf');
     expect(parseHbarRecipient('0.0.123-vfmkw', 'mainnet')).toEqual({ to: '0.0.123', isEvm: false, num: 123 });
-    expect(() => parseHbarRecipient('0.0.123-esxsf', 'mainnet')).toThrow(/somme de contrôle/);
+    expect(() => parseHbarRecipient('0.0.123-esxsf', 'mainnet')).toThrow(/somme de contrôle/i);
     expect(() => parseHbarRecipient('0.0.0123', 'mainnet')).toThrow();
-    expect(() => parseHbarRecipient('0x0000000000000000000000000000000000000000', 'mainnet')).toThrow(/nulle/);
+    expect(() => parseHbarRecipient('0x0000000000000000000000000000000000000000', 'mainnet')).toThrow(/nulle/i);
     expect(parseHbarRecipient('0xd8da6bf26964af9d7eed9e03e53415d37aa96045', 'mainnet')).toEqual({ to: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', isEvm: true, num: null });
   });
 });

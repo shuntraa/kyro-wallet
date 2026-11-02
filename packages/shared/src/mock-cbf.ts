@@ -4,7 +4,7 @@
 import { IpcError, type CbfStatus, type Network } from './ipc';
 import { emitDemoEvent } from './events';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { l10n, sentence } from './i18n';
 
 export const DEMO_CBF_CONNECT_MS = 600;
 export const DEMO_CBF_HEADERS_MS = 2000;
@@ -100,7 +100,7 @@ export function createDemoCbf(d: DemoCbfDeps): DemoCbf {
     },
     sync() {
       if (!d.enabled) throw cbfDisabled();
-      if (!d.server()) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : le serveur Bitcoin n’est pas en mode filtres compacts', 'Invalid input: the Bitcoin server is not in compact-filter mode'));
+      if (!d.server()) throw new IpcError('INVALID_INPUT', sentence(l10n('le serveur Bitcoin n’est pas en mode filtres compacts', 'the Bitcoin server is not in compact-filter mode')));
       d.requireUnlocked();
       start();
       return structuredClone(st);

@@ -45,9 +45,9 @@ describe('Cosmos Hub in the app', () => {
     // Real vectors (cosmjs, and « abandon … about », cross-checked in wallet-core's tests).
     expect(isCosmosAddress('cosmos1jhg0e7s6gn44tfc5k37kr04sznyhedtc9rzys5')).toBe(true);
     expect(isCosmosAddress('COSMOS19RL4CM2HMR8AFY4KLDPXZ3FKA4JGUQ0AUQDAL4')).toBe(true);
-    expect(cosmosAddressProblem('cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal5')).toMatch(/somme de contrôle/);
-    expect(cosmosAddressProblem('Cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal4')).toMatch(/mélangées/);
-    expect(cosmosAddressProblem('osmo19rl4cm2hmr8afy4kldpxz3fka4jguq0a3jf0ss')).toMatch(/somme de contrôle|autre chaîne/);
+    expect(cosmosAddressProblem('cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal5')).toMatch(/somme de contrôle/i);
+    expect(cosmosAddressProblem('Cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal4')).toMatch(/mélangées/i);
+    expect(cosmosAddressProblem('osmo19rl4cm2hmr8afy4kldpxz3fka4jguq0a3jf0ss')).toMatch(/somme de contrôle|autre chaîne/i);
     expect(cosmosAddressProblem(fresh('x').replace(/^cosmos/, 'cosmos'))).toBeNull();
     expect(cosmosAddressProblem('')).toBe('Adresse vide');
     expect(sameAddress('COSMOS19RL4CM2HMR8AFY4KLDPXZ3FKA4JGUQ0AUQDAL4', 'cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal4', 'cosmos')).toBe(true);
@@ -55,8 +55,8 @@ describe('Cosmos Hub in the app', () => {
     expect(atomToUatom('0,000001')).toBe(1n);
     expect(() => atomToUatom('0.0000001')).toThrow();
     expect(cosmosMemoProblem('a'.repeat(256))).toBeNull();
-    expect(cosmosMemoProblem('a'.repeat(257))).toMatch(/trop long/);
-    expect(cosmosMemoProblem('a\nb')).toMatch(/contrôle/);
+    expect(cosmosMemoProblem('a'.repeat(257))).toMatch(/trop long/i);
+    expect(cosmosMemoProblem('a\nb')).toMatch(/contrôle/i);
   });
 
   it('vault account: address, balance, history, backend info', async () => {
@@ -111,18 +111,18 @@ describe('Cosmos Hub in the app', () => {
 
   it('refusals: self-send, over balance, stale sequence, wrong password, rejected dialog', async () => {
     const atom = createAdapters(accounts).cosmos!;
-    expect((await err(atom.buildTx({ asset: ATOM, to: accounts.cosmos.address, amount: 1n, fee: { family: 'cosmos' } }))).message).toMatch(/soi-même/);
-    expect((await err(atom.buildTx({ asset: ATOM, to: fresh('a'), amount: 42_350_000n, fee: { family: 'cosmos' } }))).message).toMatch(/insuffisant/);
+    expect((await err(atom.buildTx({ asset: ATOM, to: accounts.cosmos.address, amount: 1n, fee: { family: 'cosmos' } }))).message).toMatch(/soi-même/i);
+    expect((await err(atom.buildTx({ asset: ATOM, to: fresh('a'), amount: 42_350_000n, fee: { family: 'cosmos' } }))).message).toMatch(/insuffisant/i);
     const u = await atom.buildTx({ asset: ATOM, to: fresh('a'), amount: 1_000n, fee: { family: 'cosmos' } });
     expect((await err(atom.signTx(u, 'wrong password!'))).code).toBe('WRONG_PASSWORD');
     // Another send consumes the sequence: the first one is stale.
     const v = await atom.buildTx({ asset: ATOM, to: fresh('b'), amount: 1_000n, fee: { family: 'cosmos' } });
     await atom.broadcast(await atom.signTx(v, PASSWORD));
-    expect((await err(atom.signTx(u, PASSWORD))).message).toMatch(/séquence périmé/);
+    expect((await err(atom.signTx(u, PASSWORD))).message).toMatch(/séquence périmé/i);
     // Timeout height passed (100 blocks ≈ 10 min).
     const w = await atom.buildTx({ asset: ATOM, to: fresh('c'), amount: 1_000n, fee: { family: 'cosmos' } });
     mock.advance(11 * 60_000);
-    expect((await err(atom.signTx(w, PASSWORD))).message).toMatch(/expirée/);
+    expect((await err(atom.signTx(w, PASSWORD))).message).toMatch(/expirée/i);
     // Rejected in the native dialog.
     const rejecting = createMockBackend({ network: 'testnet', torEnabled: false, confirm: () => false, preset: { password: PASSWORD, unlocked: true } });
     setBackend(rejecting.invoke);
@@ -130,7 +130,7 @@ describe('Cosmos Hub in the app', () => {
     const x = await r.buildTx({ asset: ATOM, to: fresh('d'), amount: 1_000n, fee: { family: 'cosmos' } });
     expect((await err(r.signTx(x, PASSWORD))).code).toBe('USER_REJECTED');
     // A memo with a line break never reaches Rust.
-    expect((await err(atom.buildTx({ asset: ATOM, to: fresh('e'), amount: 1n, fee: { family: 'cosmos' }, memo: 'a\nb' }))).message).toMatch(/contrôle/);
+    expect((await err(atom.buildTx({ asset: ATOM, to: fresh('e'), amount: 1n, fee: { family: 'cosmos' }, memo: 'a\nb' }))).message).toMatch(/contrôle/i);
   });
 
   it('a failed transaction in its block is reported (fee taken, amount not delivered)', async () => {
@@ -146,6 +146,6 @@ describe('Cosmos Hub in the app', () => {
 
   it('demo: other accounts are not simulated for signing', async () => {
     const e = await err(call('cosmos_build_tx', { to: fresh('g'), amount: '1', account: 1 }));
-    expect(e.message).toMatch(/Cosmos/);
+    expect(e.message).toMatch(/Cosmos/i);
   });
 });

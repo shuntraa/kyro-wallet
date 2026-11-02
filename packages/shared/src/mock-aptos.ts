@@ -16,7 +16,7 @@ import {
   type Settings,
 } from './ipc';
 import type { DemoTor } from './mock-tor';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 
 export const APTOS_TRANSFER_FUNCTION = '0x1::aptos_account::transfer';
 const GAS_PRICE = 100n;
@@ -34,7 +34,7 @@ export function demoAptosAddress(account: number): string {
   return `0x${bytesToHex(sha3_256(new TextEncoder().encode(`kyro-demo-aptos-account-${account}`)))}`;
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const aptText = (octas: bigint | string) => {
   const v = BigInt(octas);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');

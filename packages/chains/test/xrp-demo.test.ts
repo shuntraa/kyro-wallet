@@ -68,7 +68,7 @@ describe('XRP Ledger in the app', () => {
     expect((await xrp.destinationInfo(ex)).requireDestTag).toBe(true);
     const e = await err(xrp.buildTx({ asset: XRP, to: ex, amount: 10_000_000n, fee: { family: 'xrp' } }));
     expect(e.code).toBe('INVALID_INPUT');
-    expect(e.message).toMatch(/exige un tag de destination \(lsfRequireDestTag\)/);
+    expect(e.message).toMatch(/exige un tag de destination \(lsfRequireDestTag\)/i);
     const u = await xrp.buildTx({ asset: XRP, to: ex, amount: 10_000_000n, fee: { family: 'xrp' }, destinationTag: 104857 });
     expect(u.summary).toMatchObject({ destinationTag: 104857, fee: '12', amount: { kind: 'xrp', drops: '10000000' } });
     expect(u.maxFee).toBe(12n);
@@ -88,19 +88,19 @@ describe('XRP Ledger in the app', () => {
     const xrp = createAdapters(accounts).xrp!;
     const to = fresh('kyro-new');
     expect((await xrp.destinationInfo(to)).exists).toBe(false);
-    expect((await err(xrp.buildTx({ asset: XRP, to, amount: 500_000n, fee: { family: 'xrp' } }))).message).toMatch(/au moins la réserve de base \(1 XRP\).*tecNO_DST_INSUF_XRP/);
+    expect((await err(xrp.buildTx({ asset: XRP, to, amount: 500_000n, fee: { family: 'xrp' } }))).message).toMatch(/au moins la réserve de base \(1 XRP\).*tecNO_DST_INSUF_XRP/i);
     const u = await xrp.buildTx({ asset: XRP, to, amount: 1_000_000n, fee: { family: 'xrp' } });
     expect(u.context.destination.exists).toBe(false);
     await xrp.broadcast(await xrp.signTx(u, PASSWORD));
     expect(dialogs[0]).toContain("Ce compte n'existe pas encore : ce paiement le crée");
     expect((await xrp.destinationInfo(to)).exists).toBe(true);
     // An issued currency cannot go to an unfunded account (tecNO_DST).
-    expect((await err(xrp.buildPayment({ to: fresh('kyro-new-2'), amount: '1', issued: { currency: 'USD', issuer: mock.xrp.friend } }))).message).toMatch(/tecNO_DST/);
+    expect((await err(xrp.buildPayment({ to: fresh('kyro-new-2'), amount: '1', issued: { currency: 'USD', issuer: mock.xrp.friend } }))).message).toMatch(/tecNO_DST/i);
   });
 
   it('amount + fee above the spendable part is refused; MAX = spendable − fee', async () => {
     const xrp = createAdapters(accounts).xrp!;
-    expect((await err(xrp.buildTx({ asset: XRP, to: mock.xrp.friend, amount: 84_000_000n, fee: { family: 'xrp' } }))).message).toMatch(/solde disponible insuffisant : 83,6 XRP disponibles \(solde − réserve\)/);
+    expect((await err(xrp.buildTx({ asset: XRP, to: mock.xrp.friend, amount: 84_000_000n, fee: { family: 'xrp' } }))).message).toMatch(/solde disponible insuffisant : 83,6 XRP disponibles \(solde − réserve\)/i);
     const max = await xrp.buildTx({ asset: XRP, to: mock.xrp.friend, amount: 0n, fee: { family: 'xrp' }, max: true });
     expect(max.amount).toBe(83_600_000n - 12n);
   });
@@ -109,7 +109,7 @@ describe('XRP Ledger in the app', () => {
     const xa = 'XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8yuPT7y4xaEHi';
     expect(isXAddress(xa)).toBe(true);
     expect(isXrpAddress(xa)).toBe(false);
-    expect((await err(call('xrp_account', { address: xa }))).message).toMatch(/les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination/);
+    expect((await err(call('xrp_account', { address: xa }))).message).toMatch(/les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination/i);
     const base = { account: accounts.xrp.address, destination: mock.xrp.friend, destinationTag: null, amount: { kind: 'xrp', drops: '1000000' }, fee: '12', sequence: 4_812_307, lastLedgerSequence: 99_999_999, flags: 0x80000000 };
     for (const [over, msg] of [
       [{ paths: [[{ currency: 'USD' }]] }, /les chemins \(Paths\) ne sont pas pris en charge/],
@@ -137,7 +137,7 @@ describe('XRP Ledger in the app', () => {
     // Expired payment (LastLedgerSequence passed): rebuild needed.
     const old = await xrp.buildTx({ asset: XRP, to: mock.xrp.friend, amount: 1_000_000n, fee: { family: 'xrp' } });
     mock.advance(120_000);
-    expect((await err(xrp.signTx(old, PASSWORD))).message).toMatch(/LastLedgerSequence dépassé/);
+    expect((await err(xrp.signTx(old, PASSWORD))).message).toMatch(/LastLedgerSequence dépassé/i);
   });
 
   it('servers: default rippled, wrong network refused, custom rippled saved', async () => {

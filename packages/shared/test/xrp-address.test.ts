@@ -12,7 +12,7 @@ describe('demo XRP address', () => {
 
   it('checks the checksum and refuses X-addresses with the French messages of wallet-core', () => {
     expect(checkXrpAddress('rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H')).toBe('rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H');
-    expect(() => checkXrpAddress('rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4J')).toThrow(/adresse XRP invalide \(somme de contrôle\)/);
-    expect(() => checkXrpAddress('XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8yuPT7y4xaEHi')).toThrow(/les X-addresses ne sont pas prises en charge/);
+    expect(() => checkXrpAddress('rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4J')).toThrow(/adresse XRP invalide \(somme de contrôle\)/i);
+    expect(() => checkXrpAddress('XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8yuPT7y4xaEHi')).toThrow(/les X-addresses ne sont pas prises en charge/i);
   });
 });

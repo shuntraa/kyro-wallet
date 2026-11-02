@@ -58,7 +58,7 @@ describe('Stellar in the app', () => {
     const st = mock.stellar;
     const dest = await xlm.destinationInfo(st.exchange);
     expect(dest.memoRequired).toBe(true);
-    await expect(xlm.buildTx({ asset: XLM, to: st.exchange, amount: 25_000_000n, fee: { family: 'xlm' } })).rejects.toThrow(/exige un mémo/);
+    await expect(xlm.buildTx({ asset: XLM, to: st.exchange, amount: 25_000_000n, fee: { family: 'xlm' } })).rejects.toThrow(/exige un mémo/i);
     const memo = parseStellarMemo('id', ' 804539585 ');
     const u = await xlm.buildTx({ asset: XLM, to: st.exchange, amount: 25_000_000n, fee: { family: 'xlm' }, ...(memo ? { stellarMemo: memo } : {}) });
     expect(u).toMatchObject({ family: 'xlm', amount: 25_000_000n, createsAccount: false, maxFee: 100n, memo: { kind: 'id', value: '804539585' } });
@@ -73,7 +73,7 @@ describe('Stellar in the app', () => {
   it('unfunded destination: CreateAccount (≥ 1 XLM); max = spendable − fee', async () => {
     const xlm = createAdapters(accounts).stellar!;
     const fresh = stellarAddressOfKey(new Uint8Array(32).fill(9));
-    await expect(xlm.buildPayment({ to: fresh, stroops: 5_000_000n })).rejects.toThrow(/au moins 1 XLM/);
+    await expect(xlm.buildPayment({ to: fresh, stroops: 5_000_000n })).rejects.toThrow(/au moins 1 XLM/i);
     const u = await xlm.buildPayment({ to: fresh, stroops: 10_000_000n });
     expect(u.createsAccount).toBe(true);
     expect(u.summary.operation).toEqual({ kind: 'createAccount', destination: fresh, startingBalance: '10000000' });
@@ -84,8 +84,8 @@ describe('Stellar in the app', () => {
 
 describe('Stellar adapter checks', () => {
   it('addresses, amounts and memos', () => {
-    expect(stellarAddressProblem('MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAACJUQ')).toMatch(/M…/);
-    expect(stellarAddressProblem('SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN')).toMatch(/CLÉ SECRÈTE/);
+    expect(stellarAddressProblem('MA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJUAAAAAAAAAAAACJUQ')).toMatch(/M…/i);
+    expect(stellarAddressProblem('SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN')).toMatch(/CLÉ SECRÈTE/i);
     expect(stellarAddressProblem('GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ')).toBeNull();
     expect(xlmToStroops('12,5')).toBe(125_000_000n);
     expect(xlmToStroops('0.0000001')).toBe(1n);
@@ -93,7 +93,7 @@ describe('Stellar adapter checks', () => {
     expect(() => xlmToStroops('-1')).toThrow();
     expect(parseStellarMemo('text', '')).toBeUndefined();
     expect(parseStellarMemo('id', '')).toBeUndefined();
-    expect(() => parseStellarMemo('text', 'é'.repeat(15))).toThrow(/28 octets/);
+    expect(() => parseStellarMemo('text', 'é'.repeat(15))).toThrow(/28 octets/i);
     expect(() => parseStellarMemo('id', '18446744073709551616')).toThrow();
     expect(parseStellarMemo('hash', 'AB'.repeat(32))).toEqual({ kind: 'hash', value: 'ab'.repeat(32) });
     expect(sameMemo(undefined, { kind: 'none' })).toBe(true);
@@ -133,7 +133,7 @@ describe('Stellar adapter checks', () => {
       { ...base(), requiresExtraConfirmation: true },
     ]) {
       summary = bad;
-      await expect(xlm.buildPayment(ask)).rejects.toThrow(/ne correspond pas/);
+      await expect(xlm.buildPayment(ask)).rejects.toThrow(/ne correspond pas/i);
     }
   });
 });

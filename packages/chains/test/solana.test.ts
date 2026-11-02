@@ -117,9 +117,9 @@ describe('mint parsing', () => {
     expect(parseMintAccount({ owner: TOKEN_2022_PROGRAM, lamports: 1, data: mintData(9) }).tokenProgram).toBe(TOKEN_2022_PROGRAM);
   });
   it('rejects non-mints', () => {
-    expect(() => parseMintAccount(null)).toThrow(/introuvable/);
+    expect(() => parseMintAccount(null)).toThrow(/introuvable/i);
     expect(() => parseMintAccount({ owner: SYSTEM_PROGRAM, lamports: 1, data: mintData(6) })).toThrow();
-    expect(() => parseMintAccount({ owner: TOKEN_PROGRAM, lamports: 1, data: mintData(6, 0) })).toThrow(/initialisé/);
+    expect(() => parseMintAccount({ owner: TOKEN_PROGRAM, lamports: 1, data: mintData(6, 0) })).toThrow(/initialisé/i);
   });
 });
 
@@ -161,8 +161,8 @@ describe('signature placement', () => {
   });
 
   it('refuses a slot that is not ours or out of range', () => {
-    expect(() => placeSignature(tx, 0, sig, DEVNET.authority)).toThrow(/notre adresse/);
-    expect(() => placeSignature(tx, 2, sig, DEVNET.authority)).toThrow(/hors limites/);
+    expect(() => placeSignature(tx, 0, sig, DEVNET.authority)).toThrow(/notre adresse/i);
+    expect(() => placeSignature(tx, 2, sig, DEVNET.authority)).toThrow(/hors limites/i);
     expect(() => placeSignature(tx, 1, new Uint8Array(10) as SignatureBytes, DEVNET.authority)).toThrow();
   });
 });
@@ -208,13 +208,13 @@ describe('SolanaAdapter against the demo backend', () => {
     const unsigned = await adapters.sol!.buildTx({ asset: usdc, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1_000_000n, fee: { family: 'sol', microLamports: 0n } });
     const s = await adapters.sol!.decode(unsigned);
     const tampered: SolTxSummary = { ...s, instructions: s.instructions.map((i) => (i.type === 'tokenTransfer' ? { ...i, amount: '999999999' } : i)) };
-    expect(checkSolSummary(unsigned, tampered, accounts.sol.address)).toMatch(/différent/);
-    expect(checkSolSummary(unsigned, { ...s, feePayer: DEVNET.feePayer }, accounts.sol.address)).toMatch(/payeur/);
+    expect(checkSolSummary(unsigned, tampered, accounts.sol.address)).toMatch(/différent/i);
+    expect(checkSolSummary(unsigned, { ...s, feePayer: DEVNET.feePayer }, accounts.sol.address)).toMatch(/payeur/i);
   });
 
   it('refuses decimals that disagree with the mint', async () => {
     const usdc = findAsset('testnet', 'spl:4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')!;
-    await expect(adapters.sol!.buildTx({ asset: { ...usdc, decimals: 9 }, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1n, fee: { family: 'sol', microLamports: 0n } })).rejects.toThrow(/Décimales/);
+    await expect(adapters.sol!.buildTx({ asset: { ...usdc, decimals: 9 }, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1n, fee: { family: 'sol', microLamports: 0n } })).rejects.toThrow(/Décimales/i);
   });
 
   it('signs a foreign transaction at our index (1) with a second confirmation', async () => {

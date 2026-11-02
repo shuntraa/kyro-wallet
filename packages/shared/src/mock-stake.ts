@@ -34,9 +34,9 @@ import {
   type TronStakeWarning,
   type TronWitness,
 } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 
-const invalid = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalid = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 const units = (v: bigint | string, dec: number) => {
   const b = BigInt(v);
   const p = 10n ** BigInt(dec);

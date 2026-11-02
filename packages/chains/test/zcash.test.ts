@@ -30,15 +30,15 @@ describe('Zcash transparent address helpers', () => {
     expect(zecDestinationKind(TEX, 'mainnet')).toBe('tex');
     expect(zecDestinationKind(T1, 'testnet')).toBeNull();
     expect(zecDestinationKind(SAPLING, 'mainnet')).toBeNull();
-    expect(zecShieldedRefusal(SAPLING)).toMatch(/protégée Sapling.*pas encore prise en charge/);
-    expect(zecShieldedRefusal(UNIFIED)).toMatch(/unifiée.*pas encore prise en charge/);
+    expect(zecShieldedRefusal(SAPLING)).toMatch(/protégée Sapling.*pas encore prise en charge/i);
+    expect(zecShieldedRefusal(UNIFIED)).toMatch(/unifiée.*pas encore prise en charge/i);
     expect(zecShieldedRefusal(T1)).toBeNull();
-    expect(zecAddressProblem(SAPLING, 'mainnet')).toMatch(/protégée/);
-    expect(zecAddressProblem(UNIFIED, 'mainnet')).toMatch(/unifiée/);
-    expect(zecAddressProblem(T1, 'testnet')).toMatch(/mainnet/);
-    expect(zecAddressProblem(T1.slice(0, -1) + 'D', 'mainnet')).toMatch(/invalide/);
+    expect(zecAddressProblem(SAPLING, 'mainnet')).toMatch(/protégée/i);
+    expect(zecAddressProblem(UNIFIED, 'mainnet')).toMatch(/unifiée/i);
+    expect(zecAddressProblem(T1, 'testnet')).toMatch(/mainnet/i);
+    expect(zecAddressProblem(T1.slice(0, -1) + 'D', 'mainnet')).toMatch(/invalide/i);
     expect(zecAddressProblem(T1, 'mainnet')).toBeNull();
-    expect(zecAddressProblem('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', 'mainnet')).toMatch(/invalide/);
+    expect(zecAddressProblem('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', 'mainnet')).toMatch(/invalide/i);
   });
 
   it('derives t1 / tm addresses like Rust (BIP44 m/44\'/133\'/0\', hash160, prefix 0x1cb8)', () => {
@@ -103,7 +103,7 @@ describe('Zcash in the app (demo backend)', () => {
     expect(zec.isValidAddress(SAPLING)).toBe(false);
     expect(zec.isValidAddress(UNIFIED)).toBe(false);
     expect(zec.isValidAddress(TEX)).toBe(true);
-    await expect(zec.buildTx({ asset: findAsset('mainnet', 'zec')!, to: SAPLING, amount: 1_000n, fee: { family: 'zec' } })).rejects.toThrow(/protégée/);
+    await expect(zec.buildTx({ asset: findAsset('mainnet', 'zec')!, to: SAPLING, amount: 1_000n, fee: { family: 'zec' } })).rejects.toThrow(/protégée/i);
     const coins = [{ txid: '00'.repeat(32), vout: 0, change: false, index: 0 }];
     expect(await code(call('zec_send_preview', { request: { to: UNIFIED, amount: '1000', max: false, coins, changeIndex: 0 } }))).toBe('INVALID_INPUT');
   });

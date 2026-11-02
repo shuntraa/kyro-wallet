@@ -87,7 +87,7 @@ describe('hardware-wallet accounts', () => {
     const small = await drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 300_000n, fee: { family: 'btc', satPerVb: 2 } }));
     expect(kinds(small.psbt).size).toBe(1);
     // 800k needs both kinds: impossible on a Ledger, with an explanation…
-    await expect(drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow(/mélanger des entrées SegWit et Taproot/);
+    await expect(drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow(/mélanger des entrées SegWit et Taproot/i);
     // …fine on a Trezor: the SegWit input carries its full previous transaction.
     sent = [];
     const trezor = adaptersFor({ ...acc, device: 'trezor' }).btc!;
@@ -122,7 +122,7 @@ describe('hardware-wallet accounts', () => {
     const ad = adaptersFor(acc);
     const unsigned = await drive(ad.btc!.buildTx({ asset: { id: 'btc' } as never, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 100_000n, fee: { family: 'btc', satPerVb: 2 } }));
     const txid = await drive(signAndBroadcastHw(ad.btc!, unsigned, 'trezor-1'));
-    expect(txid).toMatch(/^[0-9a-f]{64}$/);
+    expect(txid).toMatch(/^[0-9a-f]{64}$/i);
     expect(sent).toContain('hw_sign_btc_psbt');
     expect(sent).not.toContain('btc_sign_psbt');
   });

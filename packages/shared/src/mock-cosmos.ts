@@ -17,7 +17,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
-import { decimalMark, l10n } from './i18n';
+import { decimalMark, l10n, sentence } from './i18n';
 import type { DemoTor } from './mock-tor';
 import { cosmosAddressOfBytes, cosmosAddressProblem } from './cosmos';
 
@@ -34,7 +34,7 @@ export function demoCosmosAddress(seed: Uint8Array, account: number): string {
   return cosmosAddressOfBytes(bitcoin.crypto.hash160(pk));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', sentence(m));
 
 /** wallet-core `cosmos_normalize_address`: bech32 checksum, prefix `cosmos`, 20 or 32 bytes. */
 export function checkCosmosAddress(a: unknown): string {
