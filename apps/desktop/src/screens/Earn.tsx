@@ -11,7 +11,7 @@ import { useApp, useVault } from '../state/app';
 import { useCachedAsync } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
 import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
-import { AAVE_POOL, AAVE_RESERVES, EARN_OPTIONS, LIDO_STETH, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, filterOptions, lidoAprPercent, parseReserveData, parseUint, type AaveAsset, type EarnFilter, type EarnOption } from '../lib/earn';
+import { AAVE_MARKETS, EARN_OPTIONS, LIDO_STETH, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
@@ -23,7 +23,9 @@ type Hex = `0x${string}`;
 type Rates = Record<string, number | null>;
 type Positions = Record<string, bigint>;
 
-async function readRates(eth: EvmAdapter | undefined): Promise<Rates> {
+type EvmGet = (chainKey: string) => EvmAdapter | undefined;
+
+async function readRates(evm: EvmGet): Promise<Rates> {
   const out: Rates = {};
   const jobs: Promise<void>[] = [
     lidoAprPercent().then(
@@ -35,19 +37,19 @@ async function readRates(eth: EvmAdapter | undefined): Promise<Rates> {
       () => void (out.near = null),
     ),
   ];
-  if (eth) {
-    for (const [sym, r] of Object.entries(AAVE_RESERVES) as [AaveAsset, (typeof AAVE_RESERVES)[AaveAsset]][]) {
-      jobs.push(
-        eth.client
-          .call({ to: AAVE_POOL as Hex, data: `${SEL_GET_RESERVE_DATA}${addrArg(r.asset)}` as Hex })
-          .then(({ data }) => {
-            const d = parseReserveData(data ?? '0x');
-            // Pinning check: the pool must report the aToken Kyro expects.
-            out[`${sym.toLowerCase()}-aave`] = d.aToken === r.aToken ? aaveApyPercent(d.liquidityRate) : null;
-          })
-          .catch(() => void (out[`${sym.toLowerCase()}-aave`] = null)),
-      );
-    }
+  for (const [id, m] of Object.entries(AAVE_MARKETS)) {
+    const a = evm(m.chainKey);
+    if (!a) continue;
+    jobs.push(
+      a.client
+        .call({ to: m.pool as Hex, data: `${SEL_GET_RESERVE_DATA}${addrArg(m.asset)}` as Hex })
+        .then(({ data }) => {
+          const d = parseReserveData(data ?? '0x');
+          // Pinning check: the pool must report the aToken Kyro expects.
+          out[id] = d.aToken === m.aToken ? aaveApyPercent(d.liquidityRate) : null;
+        })
+        .catch(() => void (out[id] = null)),
+    );
   }
   await Promise.all(jobs);
   return out;
@@ -58,13 +60,16 @@ async function tokenBalance(eth: EvmAdapter, token: string): Promise<bigint> {
   return parseUint(data);
 }
 
-async function readPositions(eth: EvmAdapter): Promise<Positions> {
-  const bal = (token: string) => tokenBalance(eth, token);
-  const entries = await Promise.all([
-    bal(LIDO_STETH).then((v) => ['eth-lido', v] as const),
-    ...(Object.entries(AAVE_RESERVES) as [AaveAsset, (typeof AAVE_RESERVES)[AaveAsset]][]).map(([sym, r]) => bal(r.aToken).then((v) => [`${sym.toLowerCase()}-aave`, v] as const)),
-  ]);
-  return Object.fromEntries(entries);
+async function readPositions(evm: EvmGet): Promise<Positions> {
+  const out: Positions = {};
+  const eth = evm('ethereum');
+  const jobs: Promise<unknown>[] = eth ? [tokenBalance(eth, LIDO_STETH).then((v) => (out['eth-lido'] = v))] : [];
+  for (const [id, m] of Object.entries(AAVE_MARKETS)) {
+    const a = evm(m.chainKey);
+    if (a) jobs.push(tokenBalance(a, m.aToken).then((v) => (out[id] = v), () => undefined));
+  }
+  await Promise.all(jobs);
+  return out;
 }
 
 export function Earn() {
@@ -73,10 +78,11 @@ export function Earn() {
   const { t } = useT();
   const [filter, setFilter] = useState<EarnFilter>('all');
   const [flow, setFlow] = useState<{ opt: EarnOption; mode: 'in' | 'out' } | null>(null);
-  const eth = network === 'mainnet' ? adapters.evm.get('ethereum') : undefined;
+  const evm: EvmGet = (k) => (network === 'mainnet' ? adapters.evm.get(k) : undefined);
+  const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
-  const rates = useCachedAsync<Rates>(`earn.rates.${network}`, () => readRates(eth), [network, !!eth], { intervalMs: 300_000 });
-  const pos = useCachedAsync<Positions>(eth && !activeHw ? `earn.pos.${ethKey}` : null, eth && !activeHw ? () => readPositions(eth) : null, [ethKey, !!activeHw]);
+  const rates = useCachedAsync<Rates>(`earn.rates.${network}`, () => readRates(evm), [network, !!eth], { intervalMs: 300_000 });
+  const pos = useCachedAsync<Positions>(eth && !activeHw ? `earn.pos.${ethKey}` : null, eth && !activeHw ? () => readPositions(evm) : null, [ethKey, !!activeHw]);
   useOnTorReady(() => {
     rates.reload();
     pos.reload();
@@ -85,10 +91,11 @@ export function Earn() {
   const typeLabel = { staking: t('earn.typeStaking'), liquid: t('earn.typeLiquid'), lending: t('earn.typeLending') } as const;
   const list = filterOptions(EARN_OPTIONS, filter);
 
+  const adapterFor = (o: EarnOption): EvmAdapter | undefined => (o.target.kind === 'aave' ? evm(AAVE_MARKETS[o.target.market]!.chainKey) : o.target.kind === 'lido' ? eth : undefined);
   const unavailable = (o: EarnOption): string | null => {
     if (o.target.kind === 'tab') return activeHw ? t('earn.hw') : has[o.target.chain] ? null : t('earn.noAccount');
     if (activeHw) return t('earn.hw');
-    return eth ? null : t('earn.mainnetOnly');
+    return adapterFor(o) ? null : t('earn.mainnetOnly');
   };
 
   return (
@@ -164,11 +171,11 @@ export function Earn() {
         <IconShield size={16} className="mt-0.5 shrink-0 text-ice" />
         <span>{t('earn.risk')}</span>
       </p>
-      {flow && eth && (
+      {flow && adapterFor(flow.opt) && (
         <EvmEarnDialog
           opt={flow.opt}
           mode={flow.mode}
-          eth={eth}
+          eth={adapterFor(flow.opt)!}
           apy={rates.data?.[flow.opt.id] ?? null}
           position={pos.data?.[flow.opt.id] ?? 0n}
           onClose={() => setFlow(null)}
@@ -192,8 +199,10 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, onClose, onDone }: { opt
   const [wrongPw, setWrongPw] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const isLido = opt.target.kind === 'lido';
-  const aave = opt.target.kind === 'aave' ? opt.target.asset : null;
-  const reserve = aave ? AAVE_RESERVES[aave] : null;
+  const reserve = opt.target.kind === 'aave' ? AAVE_MARKETS[opt.target.market]! : null;
+  const aave = reserve?.symbol ?? null;
+  const chainId = reserve?.chainId ?? 1;
+  const pool = reserve?.pool ?? '';
   const balance = useCachedAsync<bigint>(`earn.bal.${opt.id}.${eth.getAddress()}`, () =>
     mode === 'out' ? Promise.resolve(position) : isLido ? eth.client.getBalance({ address: eth.getAddress() as Hex }) : tokenBalance(eth, reserve!.asset),
   [opt.id, mode]);
@@ -201,11 +210,11 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, onClose, onDone }: { opt
   const over = amount !== null && balance.data !== undefined && amount > balance.data;
   const unit = (v: bigint) => fmtCrypto(v, opt.decimals, opt.symbol, opt.decimals);
   const action: EarnEvmAction | null =
-    amount === null || amount <= 0n ? null : isLido ? { kind: 'lidoStake', amount: amount.toString() } : mode === 'in' ? { kind: 'aaveSupply', asset: aave!, amount: amount.toString() } : all ? { kind: 'aaveWithdraw', asset: aave! } : { kind: 'aaveWithdraw', asset: aave!, amount: amount.toString() };
+    amount === null || amount <= 0n ? null : isLido ? { kind: 'lidoStake', amount: amount.toString() } : mode === 'in' ? { kind: 'aaveSupply', asset: aave!, amount: amount.toString(), chainId } : all ? { kind: 'aaveWithdraw', asset: aave!, chainId } : { kind: 'aaveWithdraw', asset: aave!, amount: amount.toString(), chainId };
   const title = isLido ? t('earn.stakeTitle', { symbol: opt.symbol }) : t(mode === 'in' ? 'earn.supplyTitle' : 'earn.withdrawTitle', { symbol: opt.symbol });
-  const contract = isLido ? `Lido stETH · ${LIDO_STETH}` : `Aave v3 Pool · ${AAVE_POOL}`;
+  const contract = isLido ? `Lido stETH · ${LIDO_STETH}` : `Aave v3 Pool · ${pool}`;
   const fn = isLido ? 'submit' : mode === 'in' ? 'supply' : 'withdraw';
-  const asset: AssetDef = { id: isLido ? 'evm:1' : `erc20:1:${reserve!.asset.toLowerCase()}`, chainKey: 'ethereum', family: 'evm', kind: isLido ? 'native' : 'erc20', symbol: opt.symbol, name: opt.name, decimals: opt.decimals, ...(isLido ? {} : { contract: reserve!.asset }) } as AssetDef;
+  const asset: AssetDef = { id: isLido ? 'evm:1' : `erc20:${chainId}:${reserve!.asset}`, chainKey: reserve?.chainKey ?? 'ethereum', family: 'evm', kind: isLido ? 'native' : 'erc20', symbol: opt.symbol, name: opt.name, decimals: opt.decimals, ...(isLido ? {} : { contract: reserve!.asset }) } as AssetDef;
 
   const run = async () => {
     if (!action || amount === null) return;
@@ -221,14 +230,14 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, onClose, onDone }: { opt
         if (!(await eth.waitForReceipt(h))) throw new Error(t('earn.errFailed'));
       };
       if (aave && mode === 'in') {
-        const current = await eth.allowance(reserve!.asset, AAVE_POOL);
+        const current = await eth.allowance(reserve!.asset, pool);
         if (current < amount) {
           setStep(t('earn.stepApproving'));
-          if (requiresZeroAllowanceFirst(1, reserve!.asset, current)) {
-            const r = buildRevoke(reserve!.asset, AAVE_POOL);
+          if (requiresZeroAllowanceFirst(chainId, reserve!.asset, current)) {
+            const r = buildRevoke(reserve!.asset, pool);
             await send(r.to, r.data, 0n, 'approval');
           }
-          const ap = buildApproval({ token: reserve!.asset, spender: AAVE_POOL, amount });
+          const ap = buildApproval({ token: reserve!.asset, spender: pool, amount });
           await send(ap.to, ap.data, 0n, 'approval');
         }
       }
@@ -237,7 +246,7 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, onClose, onDone }: { opt
       const value = BigInt(built.valueWei);
       const u = await eth.buildCall({ to: built.to, data: built.data as Hex, value, fee, kind: 'swap', asset, amount });
       const decoded = await eth.decode(u);
-      if (decoded.to.toLowerCase() !== (isLido ? LIDO_STETH : AAVE_POOL) || BigInt(decoded.valueWei) !== (isLido ? amount : 0n)) throw new Error(t('earn.errDecode'));
+      if (decoded.to.toLowerCase() !== (isLido ? LIDO_STETH : pool) || BigInt(decoded.valueWei) !== (isLido ? amount : 0n)) throw new Error(t('earn.errDecode'));
       const h = await eth.broadcast(await eth.signTx(u, password));
       setStep(t('earn.stepWaiting'));
       if (!(await eth.waitForReceipt(h))) throw new Error(t('earn.errFailed'));

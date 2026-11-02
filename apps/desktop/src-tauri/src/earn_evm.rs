@@ -13,16 +13,31 @@ use crate::error::{AppError, AppResult};
 use crate::i18n::Lang;
 use crate::state::AppState;
 
-/// Ethereum mainnet: the only chain where Earn options are offered for now.
+/// Ethereum mainnet (Lido; Aave core market).
 pub const EARN_CHAIN_ID: u64 = 1;
 /// Lido stETH (ERC-20 + `submit(address)` entry point).
 pub const LIDO_STETH: &str = "0xae7ab96520de3a18e5e111b5eaab095312d7fe84";
 /// Aave v3 Pool, Ethereum core market.
 pub const AAVE_V3_POOL: &str = "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2";
+/// Aave v3 Pool on Arbitrum One and Polygon PoS (same deployment address on both).
+pub const AAVE_V3_POOL_ARB_POLYGON: &str = "0x794a61358d6845594f94dc1db02a252b5b4814ad";
+/// Aave v3 Pool on Base.
+pub const AAVE_V3_POOL_BASE: &str = "0xa238dd80c259a72e81d7e4664a9801593f98d1c5";
+
+/// The pinned Aave v3 Pool of `chain_id`.
+pub fn aave_pool(chain_id: u64) -> Option<&'static str> {
+    match chain_id {
+        1 => Some(AAVE_V3_POOL),
+        42_161 | 137 => Some(AAVE_V3_POOL_ARB_POLYGON),
+        8_453 => Some(AAVE_V3_POOL_BASE),
+        _ => None,
+    }
+}
 
 /// An Aave v3 reserve Kyro offers: underlying token and its aToken (pinned, checked on-chain).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AaveReserve {
+    pub chain_id: u64,
     pub symbol: &'static str,
     pub decimals: u8,
     pub asset: &'static str,
@@ -31,28 +46,67 @@ pub struct AaveReserve {
 
 pub const AAVE_V3_RESERVES: &[AaveReserve] = &[
     AaveReserve {
+        chain_id: 1,
         symbol: "USDT",
         decimals: 6,
         asset: "0xdac17f958d2ee523a2206206994597c13d831ec7",
         a_token: "0x23878914efe38d27c4d67ab83ed1b93a74d4086a",
     },
     AaveReserve {
+        chain_id: 1,
         symbol: "USDC",
         decimals: 6,
         asset: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
         a_token: "0x98c23e9d8f34fefb1b7bd6a91b7ff122f4e16f5c",
     },
     AaveReserve {
+        chain_id: 1,
         symbol: "DAI",
         decimals: 18,
         asset: "0x6b175474e89094c44da98b954eedeac495271d0f",
         a_token: "0x018008bfb33d285247a21d44e50697654f754e63",
     },
     AaveReserve {
+        chain_id: 1,
         symbol: "WETH",
         decimals: 18,
         asset: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
         a_token: "0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8",
+    },
+    AaveReserve {
+        chain_id: 42_161,
+        symbol: "USDT",
+        decimals: 6,
+        asset: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+        a_token: "0x6ab707aca953edaefbc4fd23ba73294241490620",
+    },
+    AaveReserve {
+        chain_id: 42_161,
+        symbol: "USDC",
+        decimals: 6,
+        asset: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        a_token: "0x724dc807b04555b71ed48a6896b6f41593b8c637",
+    },
+    AaveReserve {
+        chain_id: 8_453,
+        symbol: "USDC",
+        decimals: 6,
+        asset: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        a_token: "0x4e65fe4dba92790696d040ac24aa414708f5c0ab",
+    },
+    AaveReserve {
+        chain_id: 137,
+        symbol: "USDT",
+        decimals: 6,
+        asset: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+        a_token: "0x6ab707aca953edaefbc4fd23ba73294241490620",
+    },
+    AaveReserve {
+        chain_id: 137,
+        symbol: "USDC",
+        decimals: 6,
+        asset: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+        a_token: "0xa4d94019934d8333ef880abffbf2fdd611c762bd",
     },
 ];
 
@@ -65,26 +119,31 @@ pub const SEL_AAVE_WITHDRAW: [u8; 4] = [0x69, 0x32, 0x8d, 0xec];
 
 /// Name of a pinned Earn contract (spender label in approvals), `None` otherwise.
 pub fn contract_name(chain_id: u64, address: &str) -> Option<&'static str> {
-    if chain_id != EARN_CHAIN_ID {
-        return None;
-    }
     let a = address.to_ascii_lowercase();
-    if a == AAVE_V3_POOL {
+    if aave_pool(chain_id) == Some(a.as_str()) {
         Some("Aave v3 Pool")
-    } else if a == LIDO_STETH {
+    } else if chain_id == EARN_CHAIN_ID && a == LIDO_STETH {
         Some("Lido stETH")
     } else {
         None
     }
 }
 
-fn reserve_by_symbol(symbol: &str) -> Option<&'static AaveReserve> {
-    AAVE_V3_RESERVES.iter().find(|r| r.symbol == symbol)
+fn reserve_by_symbol(chain_id: u64, symbol: &str) -> Option<&'static AaveReserve> {
+    AAVE_V3_RESERVES
+        .iter()
+        .find(|r| r.chain_id == chain_id && r.symbol == symbol)
 }
 
-fn reserve_by_asset(asset: &str) -> Option<&'static AaveReserve> {
+fn reserve_by_asset(chain_id: u64, asset: &str) -> Option<&'static AaveReserve> {
     let a = asset.to_ascii_lowercase();
-    AAVE_V3_RESERVES.iter().find(|r| r.asset == a)
+    AAVE_V3_RESERVES
+        .iter()
+        .find(|r| r.chain_id == chain_id && r.asset == a)
+}
+
+fn default_chain() -> u64 {
+    EARN_CHAIN_ID
 }
 
 /// What the interface asks Rust to build.
@@ -98,11 +157,18 @@ pub enum EarnAction {
     /// Stake `amount` wei of ETH with Lido (receives stETH).
     LidoStake { amount: String },
     /// Supply `amount` raw units of `asset` (symbol) to Aave v3.
-    AaveSupply { asset: String, amount: String },
+    AaveSupply {
+        asset: String,
+        amount: String,
+        #[serde(default = "default_chain")]
+        chain_id: u64,
+    },
     /// Withdraw `amount` raw units (`None` = everything) of `asset` from Aave v3.
     AaveWithdraw {
         asset: String,
         amount: Option<String>,
+        #[serde(default = "default_chain")]
+        chain_id: u64,
     },
 }
 
@@ -184,18 +250,26 @@ pub fn build(action: &EarnAction, owner: &str) -> AppResult<EarnBuilt> {
             data.extend_from_slice(&[0u8; 32]); // no referral
             (LIDO_STETH, v)
         }
-        EarnAction::AaveSupply { asset, amount } => {
-            let r = reserve_by_symbol(asset)
+        EarnAction::AaveSupply {
+            asset,
+            amount,
+            chain_id,
+        } => {
+            let r = reserve_by_symbol(*chain_id, asset)
                 .ok_or_else(|| AppError::InvalidInput("unknown Aave asset".into()))?;
             data.extend_from_slice(&SEL_AAVE_SUPPLY);
             data.extend_from_slice(&addr_word(r.asset)?);
             data.extend_from_slice(&u128_word(parse_amount(amount)?));
             data.extend_from_slice(&addr_word(&owner)?);
             data.extend_from_slice(&[0u8; 32]); // referralCode 0
-            (AAVE_V3_POOL, 0)
+            (aave_pool(r.chain_id).unwrap_or_default(), 0)
         }
-        EarnAction::AaveWithdraw { asset, amount } => {
-            let r = reserve_by_symbol(asset)
+        EarnAction::AaveWithdraw {
+            asset,
+            amount,
+            chain_id,
+        } => {
+            let r = reserve_by_symbol(*chain_id, asset)
                 .ok_or_else(|| AppError::InvalidInput("unknown Aave asset".into()))?;
             data.extend_from_slice(&SEL_AAVE_WITHDRAW);
             data.extend_from_slice(&addr_word(r.asset)?);
@@ -204,7 +278,7 @@ pub fn build(action: &EarnAction, owner: &str) -> AppResult<EarnBuilt> {
                 None => data.extend_from_slice(&[0xffu8; 32]),
             }
             data.extend_from_slice(&addr_word(&owner)?);
-            (AAVE_V3_POOL, 0)
+            (aave_pool(r.chain_id).unwrap_or_default(), 0)
         }
     };
     Ok(EarnBuilt {
@@ -227,9 +301,6 @@ fn word_u128(w: &[u8]) -> Option<u128> {
 
 /// Recognises a pinned Earn call (strict ABI shape), `None` for anything else.
 pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Option<EarnCall> {
-    if chain_id != EARN_CHAIN_ID {
-        return None;
-    }
     let to = to.to_ascii_lowercase();
     let data = hex::decode(data_hex.strip_prefix("0x").unwrap_or(data_hex)).ok()?;
     if data.len() < 4 {
@@ -240,7 +311,7 @@ pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Optio
     if args.len() % 32 != 0 {
         return None;
     }
-    if to == LIDO_STETH && sel == SEL_LIDO_SUBMIT && words.len() == 1 {
+    if chain_id == EARN_CHAIN_ID && to == LIDO_STETH && sel == SEL_LIDO_SUBMIT && words.len() == 1 {
         // Referral must be the zero address (what Kyro builds).
         if words[0].iter().any(|b| *b != 0) {
             return None;
@@ -248,11 +319,11 @@ pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Optio
         let v = value_wei.parse::<u128>().ok().filter(|v| *v > 0)?;
         return Some(EarnCall::LidoSubmit { amount_wei: v });
     }
-    if to != AAVE_V3_POOL || value_wei != "0" {
+    if aave_pool(chain_id) != Some(to.as_str()) || value_wei != "0" {
         return None;
     }
     if sel == SEL_AAVE_SUPPLY && words.len() == 4 {
-        let reserve = reserve_by_asset(&word_addr(words[0])?)?;
+        let reserve = reserve_by_asset(chain_id, &word_addr(words[0])?)?;
         let amount = word_u128(words[1]).filter(|v| *v > 0)?;
         let on_behalf_of = word_addr(words[2])?;
         if words[3].iter().any(|b| *b != 0) {
@@ -265,7 +336,7 @@ pub fn decode(chain_id: u64, to: &str, value_wei: &str, data_hex: &str) -> Optio
         });
     }
     if sel == SEL_AAVE_WITHDRAW && words.len() == 3 {
-        let reserve = reserve_by_asset(&word_addr(words[0])?)?;
+        let reserve = reserve_by_asset(chain_id, &word_addr(words[0])?)?;
         let amount = if words[1].iter().all(|b| *b == 0xff) {
             None
         } else {
@@ -304,7 +375,7 @@ pub fn describe(lang: Lang, c: &EarnCall) -> String {
         EarnCall::AaveSupply { reserve, amount, on_behalf_of } => format!(
             "{}Aave v3 Pool ({})\n{}supply\n{}{} {} ({})\n{}{}\n",
             lang.pick("Contrat : ", "Contract: "),
-            checksum(AAVE_V3_POOL),
+            checksum(aave_pool(reserve.chain_id).unwrap_or_default()),
             lang.pick("Fonction : ", "Function: "),
             lang.pick("Dépôt : ", "Deposit: "),
             units(*amount, reserve.decimals),
@@ -316,7 +387,7 @@ pub fn describe(lang: Lang, c: &EarnCall) -> String {
         EarnCall::AaveWithdraw { reserve, amount, to } => format!(
             "{}Aave v3 Pool ({})\n{}withdraw\n{}{} {} ({})\n{}{}\n",
             lang.pick("Contrat : ", "Contract: "),
-            checksum(AAVE_V3_POOL),
+            checksum(aave_pool(reserve.chain_id).unwrap_or_default()),
             lang.pick("Fonction : ", "Function: "),
             lang.pick("Retrait : ", "Withdraw: "),
             amount.map_or_else(
@@ -379,6 +450,7 @@ mod tests {
         assert_eq!(AAVE_V3_POOL, "0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2");
         let pinned: Vec<(&str, &str, &str, u8)> = AAVE_V3_RESERVES
             .iter()
+            .filter(|r| r.chain_id == 1)
             .map(|r| (r.symbol, r.asset, r.a_token, r.decimals))
             .collect();
         assert_eq!(
@@ -421,6 +493,56 @@ mod tests {
             Some("Aave v3 Pool")
         );
         assert_eq!(contract_name(137, AAVE_V3_POOL), None);
+        // L2 markets, checked on-chain 2026-11-03 (Pool.getReserveData(asset).aTokenAddress).
+        let l2: Vec<(u64, &str, &str, &str)> = AAVE_V3_RESERVES
+            .iter()
+            .filter(|r| r.chain_id != 1)
+            .map(|r| (r.chain_id, r.symbol, r.asset, r.a_token))
+            .collect();
+        assert_eq!(
+            l2,
+            vec![
+                (
+                    42_161,
+                    "USDT",
+                    "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+                    "0x6ab707aca953edaefbc4fd23ba73294241490620"
+                ),
+                (
+                    42_161,
+                    "USDC",
+                    "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+                    "0x724dc807b04555b71ed48a6896b6f41593b8c637"
+                ),
+                (
+                    8_453,
+                    "USDC",
+                    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                    "0x4e65fe4dba92790696d040ac24aa414708f5c0ab"
+                ),
+                (
+                    137,
+                    "USDT",
+                    "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+                    "0x6ab707aca953edaefbc4fd23ba73294241490620"
+                ),
+                (
+                    137,
+                    "USDC",
+                    "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+                    "0xa4d94019934d8333ef880abffbf2fdd611c762bd"
+                ),
+            ]
+        );
+        assert_eq!(
+            aave_pool(42_161),
+            Some("0x794a61358d6845594f94dc1db02a252b5b4814ad")
+        );
+        assert_eq!(
+            aave_pool(8_453),
+            Some("0xa238dd80c259a72e81d7e4664a9801593f98d1c5")
+        );
+        assert_eq!(aave_pool(10), None);
     }
 
     #[test]
@@ -454,6 +576,7 @@ mod tests {
             &EarnAction::AaveSupply {
                 asset: "USDT".into(),
                 amount: "25000000".into(),
+                chain_id: 1,
             },
             ME,
         )
@@ -499,6 +622,7 @@ mod tests {
             &EarnAction::AaveWithdraw {
                 asset: "USDC".into(),
                 amount: None,
+                chain_id: 1,
             },
             ME,
         )
@@ -517,6 +641,7 @@ mod tests {
             &EarnAction::AaveWithdraw {
                 asset: "DAI".into(),
                 amount: Some("5".into()),
+                chain_id: 1,
             },
             ME,
         )
@@ -528,6 +653,54 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn aave_l2_fixture() {
+        // Polygon USDC: pinned pool of that chain, reserve of that chain only.
+        let b = build(
+            &EarnAction::AaveSupply {
+                asset: "USDC".into(),
+                amount: "1000000".into(),
+                chain_id: 137,
+            },
+            ME,
+        )
+        .unwrap();
+        assert_eq!(b.to, AAVE_V3_POOL_ARB_POLYGON);
+        assert!(b.data.contains("3c499c542cef5e3811e1192ce70d8cc03d5c3359"));
+        assert!(matches!(
+            decode(137, &b.to, "0", &b.data),
+            Some(EarnCall::AaveSupply { reserve, .. }) if reserve.chain_id == 137
+        ));
+        // Same calldata on another chain or to the Ethereum pool: not recognised.
+        assert_eq!(decode(42_161, &b.to, "0", &b.data), None);
+        assert_eq!(decode(1, AAVE_V3_POOL, "0", &b.data), None);
+        let base = build(
+            &EarnAction::AaveWithdraw {
+                asset: "USDC".into(),
+                amount: None,
+                chain_id: 8_453,
+            },
+            ME,
+        )
+        .unwrap();
+        assert_eq!(base.to, AAVE_V3_POOL_BASE);
+        assert!(decode(8_453, &base.to, "0", &base.data).is_some());
+        // No USDT reserve on Base (getReserveData returns a zero aToken): refused.
+        assert!(build(
+            &EarnAction::AaveSupply {
+                asset: "USDT".into(),
+                amount: "1".into(),
+                chain_id: 8_453,
+            },
+            ME,
+        )
+        .is_err());
+        assert_eq!(
+            contract_name(42_161, AAVE_V3_POOL_ARB_POLYGON),
+            Some("Aave v3 Pool")
+        );
     }
 
     #[test]
@@ -543,7 +716,8 @@ mod tests {
         assert!(build(
             &EarnAction::AaveSupply {
                 asset: "SHIB".into(),
-                amount: "1".into()
+                amount: "1".into(),
+                chain_id: 1,
             },
             ME
         )

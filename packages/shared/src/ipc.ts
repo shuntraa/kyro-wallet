@@ -1921,11 +1921,11 @@ export interface TorStatus {
   message?: string;
 }
 
-/** `earn_evm_build` action: amounts in raw units (decimal string); `asset` = Aave reserve symbol. */
+/** `earn_evm_build` action: amounts in raw units (decimal string); `asset` = Aave reserve symbol; `chainId` 1 (default), 42161, 8453 or 137. */
 export type EarnEvmAction =
   | { kind: 'lidoStake'; amount: string }
-  | { kind: 'aaveSupply'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount: string }
-  | { kind: 'aaveWithdraw'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount?: string };
+  | { kind: 'aaveSupply'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount: string; chainId?: number }
+  | { kind: 'aaveWithdraw'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount?: string; chainId?: number };
 
 export interface EvmTxRequest {
   chainId: number;
