@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { ACCOUNT_CHAINS, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT, call, toIpcError, type AccountChain, type VaultAccountEntry } from '@kyro/shared';
-import { assetsFor, createAdapters, type Balance } from '@kyro/chains';
+import { assetsFor, createAdapters, isHiddenFamily, type Balance } from '@kyro/chains';
 import { useApp } from '../../state/app';
 import { useAsync } from '../../lib/useAsync';
 import { fmtCrypto, shortAddress } from '../../lib/format';
@@ -45,7 +45,7 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
         {activeHw && <Notice tone="info">{t('settings.accountsActiveHw')}</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
       </section>
-      {ACCOUNT_CHAINS.map((c) => (
+      {ACCOUNT_CHAINS.filter((c) => !isHiddenFamily(c)).map((c) => (
         <ChainAccounts key={c} family={c} list={vaultLists[c]} onAdd={() => setAdding(c)} onBulk={() => setBulk(c)} onRename={(entry) => setRenaming({ family: c, entry })} onRemove={(entry) => setRemoving({ family: c, entry })} />
       ))}
       {adding && <AddAccountDialog family={adding} list={vaultLists[adding]} onClose={() => setAdding(null)} />}

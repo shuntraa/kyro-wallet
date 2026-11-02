@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { aptosChain, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
+import { aptosChain, isHiddenFamily, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
 import { AlgoTokens } from '../components/AlgoSend';
 import { HbarTokens } from '../components/HbarSend';
 import { useAsync } from '../lib/useAsync';
@@ -363,7 +363,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['cosmos', 'Cosmos', '⚛', '#2E3148'],
               ['apt', 'Aptos', 'A', '#1C1C1C'],
             ] as const
-          ).map(([f, label, glyph, color]) => (
+          ).filter(([f]) => !isHiddenFamily(f)).map(([f, label, glyph, color]) => (
             <button
               key={f}
               type="button"

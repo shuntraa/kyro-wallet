@@ -1,6 +1,6 @@
 # Kyro Wallet: full text of kyrowallet.com
 
-Generated 2026-11-01 from the published pages. Short index: https://kyrowallet.com/llms.txt
+Generated 2026-11-02 from the published pages. Short index: https://kyrowallet.com/llms.txt
 
 ================================================================
 Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
@@ -11,7 +11,7 @@ URL: https://kyrowallet.com/
 
 # Your keys. Your crypto.
 
-A desktop wallet for Bitcoin, Ethereum, Solana and 34 more blockchains. Send, swap and stake, with your keys kept on your own computer.
+A desktop wallet for Bitcoin, Ethereum, Solana and 33 more blockchains. Send, swap and stake, with your keys kept on your own computer.
 
 Download Kyro  Windows, macOS and Linux
 
@@ -128,7 +128,7 @@ Rust coreEncryption, keys and signing.
 
 Blockchains
 
-## 37 blockchains. 220+ tokens.
+## 36 blockchains. 220+ tokens.
 
 All in the same wallet, from the same recovery phrase.
 
@@ -181,7 +181,7 @@ Q: Is Kyro custodial?
 A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
 
 Q: Does Kyro support hardware wallets?
-A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
 
 Q: Is Kyro open source? Has it been audited?
 A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
@@ -219,7 +219,7 @@ Features
 
 # What Kyro does
 
-Send, receive, swap and stake on 37 blockchains from one recovery phrase. Every transaction is decoded and confirmed in a system window before it is signed.
+Send, receive, swap and stake on 36 blockchains from one recovery phrase. Every transaction is decoded and confirmed in a system window before it is signed.
 
 Portfolio
 
@@ -279,7 +279,7 @@ Hardware wallets
 
 Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.
 
-- Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+- Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
 
 - Software accounts and hardware accounts side by side.
 
@@ -311,7 +311,7 @@ Point each blockchain at your own node or server. Kyro checks it is on the right
 
 The vault panel shows whether any unlimited token approval is active.
 
-### 37 blockchains
+### 36 blockchains
 
 Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. See the list.
 
@@ -671,7 +671,7 @@ Q: Is Kyro custodial?
 A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
 
 Q: Which blockchains does Kyro support?
-A: 37 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. Plus 220+ tokens on them. What works on each one.
+A: 36 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa and Zcash. Plus 220+ tokens on them. What works on each one.
 
 Q: Which computers does Kyro run on?
 A: Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). Download.
@@ -690,7 +690,7 @@ A: Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your c
 ## Security
 
 Q: Does Kyro support hardware wallets?
-A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
 
 Q: What happens if I lose my recovery phrase?
 A: If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.
@@ -739,13 +739,13 @@ Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 One-line install, all files and checksums
 
 ================================================================
-37 supported blockchains | Kyro Wallet
+36 supported blockchains | Kyro Wallet
 URL: https://kyrowallet.com/chains/
 ================================================================
 
 Blockchains
 
-# 37 blockchains, one wallet
+# 36 blockchains, one wallet
 
 Every blockchain below works from the same recovery phrase. Pick one to see what you can do on it.
 
@@ -827,8 +827,6 @@ Every blockchain below works from the same recovery phrase. Pick one to see what
 
 - AlgorandALGO
 
-- HederaHBAR
-
 Compare
 
 ## What works where
@@ -908,8 +906,6 @@ What Kyro supports on each blockchain
 | Algorand |  |  |  |
 
 | Kaspa |  |  |  |
-
-| Hedera |  |  |  |
 
 | Zcash |  |  |  |
 
@@ -1032,7 +1028,7 @@ Details
 
 - Bitcoin has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1056,7 +1052,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Bitcoin
 
@@ -1111,7 +1107,7 @@ Details
 
 - Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1135,7 +1131,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Ethereum
 
@@ -1186,7 +1182,7 @@ Details
 
 - Network fees are paid in BNB.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1210,7 +1206,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for BNB Chain
 
@@ -1261,7 +1257,7 @@ Details
 
 - Network fees are paid in POL.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1285,7 +1281,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Polygon
 
@@ -1336,7 +1332,7 @@ Details
 
 - Same address as your Ethereum account. Network fees are paid in ETH.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1360,7 +1356,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Arbitrum
 
@@ -1411,7 +1407,7 @@ Details
 
 - Same address as your Ethereum account. Network fees are paid in ETH.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1435,7 +1431,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Optimism
 
@@ -1486,7 +1482,7 @@ Details
 
 - Same address as your Ethereum account. Network fees are paid in ETH.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1510,7 +1506,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Base
 
@@ -1561,7 +1557,7 @@ Details
 
 - Same address as your Ethereum account. Network fees are paid in AVAX.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1585,7 +1581,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Avalanche
 
@@ -1636,7 +1632,7 @@ Details
 
 - Network fees are paid in CRO.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1660,7 +1656,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - MantleMNT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Cronos
 
@@ -1711,7 +1707,7 @@ Details
 
 - Network fees are paid in MNT.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1735,7 +1731,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Mantle
 
@@ -1786,7 +1782,7 @@ Details
 
 - Network fees are paid in S.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1810,7 +1806,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Sonic
 
@@ -1861,7 +1857,7 @@ Details
 
 - Network fees are paid in FLR.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1885,7 +1881,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Flare
 
@@ -1936,7 +1932,7 @@ Details
 
 - Network fees are paid in KAIA.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -1960,7 +1956,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Kaia
 
@@ -2011,7 +2007,7 @@ Details
 
 - Network fees are paid in xDAI.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2035,7 +2031,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Gnosis
 
@@ -2086,7 +2082,7 @@ Details
 
 - Network fees are paid in HYPE.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2110,7 +2106,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for HyperEVM
 
@@ -2161,7 +2157,7 @@ Details
 
 - Network fees are paid in SEI.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2185,7 +2181,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Sei
 
@@ -2236,7 +2232,7 @@ Details
 
 - Same address as your Ethereum account. Network fees are paid in CFX.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2260,7 +2256,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - CronosCRO
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Conflux
 
@@ -2313,7 +2309,7 @@ Delegate SOL to a validator from a stake account in your name. Activation and co
 
 - Versioned (v0) transactions and address lookup tables are decoded before you sign.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2337,7 +2333,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AvalancheAVAX
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Solana
 
@@ -2390,7 +2386,7 @@ Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representativ
 
 - Energy and bandwidth from staking lower the cost of TRC-20 transfers.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2414,7 +2410,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AvalancheAVAX
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for TRON
 
@@ -2467,7 +2463,7 @@ Delegate to a stake pool. Your ADA stays on your address and remains spendable. 
 
 - Standard Shelley addresses (addr1...).
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2491,7 +2487,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AvalancheAVAX
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Cardano
 
@@ -2546,7 +2542,7 @@ Details
 
 - The XRP Ledger has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2570,7 +2566,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for XRP Ledger
 
@@ -2621,7 +2617,7 @@ Details
 
 - Litecoin has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2645,7 +2641,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Litecoin
 
@@ -2698,7 +2694,7 @@ Details
 
 - Dogecoin has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2722,7 +2718,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Dogecoin
 
@@ -2771,7 +2767,7 @@ Details
 
 - Bitcoin Cash has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2795,7 +2791,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Bitcoin Cash
 
@@ -2844,7 +2840,7 @@ Details
 
 - Standard Dash addresses (X...).
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2868,7 +2864,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Dash
 
@@ -2921,7 +2917,7 @@ Details
 
 - Stellar has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -2945,7 +2941,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Stellar
 
@@ -2996,7 +2992,7 @@ Details
 
 - USDC and USDT on NEAR are supported.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3020,7 +3016,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for NEAR
 
@@ -3071,7 +3067,7 @@ Details
 
 - USDC on Sui is supported.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3095,7 +3091,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Sui
 
@@ -3150,7 +3146,7 @@ Details
 
 - Monero has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3174,7 +3170,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Monero
 
@@ -3229,7 +3225,7 @@ Details
 
 - The wallet contract is deployed on your first send.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3253,7 +3249,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for TON
 
@@ -3306,7 +3302,7 @@ Details
 
 - Staking is not available yet.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3330,7 +3326,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Cosmos Hub
 
@@ -3381,7 +3377,7 @@ Details
 
 - The system confirmation window shows the existential deposit, the minimum balance an account must keep.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3405,7 +3401,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - AptosAPT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Polkadot
 
@@ -3456,7 +3452,7 @@ Details
 
 - USDC and USDT on Aptos are supported.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3480,7 +3476,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - PolkadotDOT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Aptos
 
@@ -3531,7 +3527,7 @@ Details
 
 - Same address as the Ledger Algorand app for the same recovery phrase.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3555,7 +3551,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - PolkadotDOT
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Algorand
 
@@ -3606,7 +3602,7 @@ Details
 
 - Kaspa has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3630,82 +3626,9 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Kaspa
-
-Version 1.0.0 · Free · Windows, macOS and Linux
-
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
-
-One-line install, all files and checksums
-
-================================================================
-Hedera wallet for Windows, macOS and Linux | Kyro
-URL: https://kyrowallet.com/chains/hedera/
-================================================================
-
-Hedera · HBAR
-
-# Hedera wallet for Windows, macOS and Linux
-
-Send and receive HBAR, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
-
-Download Kyro All blockchains
-
-### Send and receive
-
-Send and receive HBAR, with address-poisoning alerts and clipboard checks.
-Yes
-
-### Swap
-
-Swaps are not available on Hedera yet.
-No
-
-### Staking
-
-Kyro does not offer staking for HBAR.
-No
-
-### Hardware wallet
-
-Sign Hedera transactions with a Ledger. The account must be created with Ledger Live or HashPack first; it is a different account than the software wallet.
-Yes
-
-Details
-
-## Hedera in Kyro
-
-- Receive on the EVM-style address (0x...). The 0.0.x account is created when the first deposit arrives.
-
-- Same recovery phrase as your other 36 blockchains.
-
-- Keys encrypted on your computer; every signature confirmed in a system window.
-
-## Also in Kyro
-
-Every blockchain lives in the same app, under the same recovery phrase.
-
-- XRP LedgerXRP
-
-- StellarXLM
-
-- NEARNEAR
-
-- SuiSUI
-
-- MoneroXMR
-
-- TONGRAM
-
-- Cosmos HubATOM
-
-- PolkadotDOT
-
-All 37 blockchains
-
-## Get Kyro for Hedera
 
 Version 1.0.0 · Free · Windows, macOS and Linux
 
@@ -3754,7 +3677,7 @@ Details
 
 - Zcash has no native staking.
 
-- Same recovery phrase as your other 36 blockchains.
+- Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
@@ -3778,7 +3701,7 @@ Every blockchain lives in the same app, under the same recovery phrase.
 
 - BNB ChainBNB
 
-All 37 blockchains
+All 36 blockchains
 
 ## Get Kyro for Zcash
 

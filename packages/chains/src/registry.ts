@@ -10,6 +10,10 @@ export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
 export const isUtxoFamily = (f: Family): f is UtxoFamily => (UTXO_FAMILIES as readonly Family[]).includes(f);
 
+/** Chains kept in the code but hidden from users. Hedera: its public mirror node answers HTTP 403 over Tor (1.0.0). Empty the list to bring a chain back. */
+export const HIDDEN_FAMILIES: readonly Family[] = ['hbar'];
+export const isHiddenFamily = (f: string): boolean => (HIDDEN_FAMILIES as readonly string[]).includes(f);
+
 interface ChainBase {
   key: string;
   name: string;
@@ -817,7 +821,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), zecChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network), aptosChain(network)];
+  return ([btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), zecChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network), aptosChain(network)] as Chain[]).filter((c) => !isHiddenFamily(c.family));
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -1028,7 +1032,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   list.push({ host: network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org', purpose: l10n(`Stellar${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (Horizon de la SDF)`, `Stellar${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (SDF Horizon)`) });
   list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: balance, access key, fees, broadcast (FastNEAR RPC)`) });
   list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: transaction history (FastNEAR API)`) });
-  list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: account, balance, history, exchange rate (mirror node)`) });
+  if (!isHiddenFamily('hbar')) list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: account, balance, history, exchange rate (mirror node)`) });
   list.push({
     host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
     purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: broadcast of signed transfers (consensus nodes’ gRPC-web proxies)`),

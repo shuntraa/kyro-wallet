@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { call, toIpcError, type AccountChain, type ApiKeyName, type Settings } from '@kyro/shared';
-import { findLookalike, outgoingHosts, type KnownAddress } from '@kyro/chains';
+import { findLookalike, isHiddenFamily, outgoingHosts, type KnownAddress } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
@@ -531,7 +531,7 @@ function Contacts() {
         <span className="text-[13px] font-semibold">{t('common.add')}</span>
         <div className="flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.name')} className="w-[160px]" />
-          <Segmented label={t('common.network')} value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'bch', label: 'BCH' }, { value: 'dash', label: 'DASH' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }, { value: 'zec', label: 'ZEC' }, { value: 'apt', label: 'APT' }, { value: 'cosmos', label: 'ATOM' }, { value: 'ton', label: 'TON' }, { value: 'xmr', label: 'XMR' }, { value: 'algo', label: 'ALGO' }, { value: 'dot', label: 'DOT' }, { value: 'kas', label: 'KAS' }, { value: 'hbar', label: 'HBAR' }, { value: 'sui', label: 'SUI' }, { value: 'xlm', label: 'XLM' }, { value: 'near', label: 'NEAR' }]} />
+          <Segmented label={t('common.network')} value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'bch', label: 'BCH' }, { value: 'dash', label: 'DASH' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }, { value: 'zec', label: 'ZEC' }, { value: 'apt', label: 'APT' }, { value: 'cosmos', label: 'ATOM' }, { value: 'ton', label: 'TON' }, { value: 'xmr', label: 'XMR' }, { value: 'algo', label: 'ALGO' }, { value: 'dot', label: 'DOT' }, { value: 'kas', label: 'KAS' }, { value: 'hbar', label: 'HBAR' }, { value: 'sui', label: 'SUI' }, { value: 'xlm', label: 'XLM' }, { value: 'near', label: 'NEAR' }].filter((o) => !isHiddenFamily(o.value))} />
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('common.address')} className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">{t('settings.invalidAddress')}</span>}

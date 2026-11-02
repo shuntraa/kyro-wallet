@@ -13,6 +13,7 @@ import { LITECOIN_SPEC } from './litecoin/adapter';
 import { DOGECOIN_SPEC } from './dogecoin/adapter';
 import { BITCOINCASH_SPEC } from './bitcoincash/adapter';
 import { DASH_SPEC } from './dash/adapter';
+import { isHiddenFamily } from './registry';
 
 import { l10n, zecP2pkhAddress } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
@@ -119,7 +120,7 @@ const UTXO_PREFIX = { litecoin: 'ltc', dogecoin: 'doge', bitcoincash: 'bch', das
 const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc: LITECOIN_SPEC, doge: DOGECOIN_SPEC, bch: BITCOINCASH_SPEC, dash: DASH_SPEC };
 
 /** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
-export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton', 'hbar'];
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = (['sui', 'apt', 'algo', 'near', 'cosmos', 'ton', 'hbar'] as const).filter((c) => !isHiddenFamily(c));
 
 /** Chains a hardware-wallet brand can hold (mirror of `hw/chains.rs`). */
 export const HW_CHAINS: Record<HwDeviceKind, readonly HwChain[]> = {

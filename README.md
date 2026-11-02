@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A free, open-source, non-custodial desktop wallet.</b><br>
-  One recovery phrase for 37 blockchains. Keys stay in the Rust core. Traffic goes over Tor.
+  One recovery phrase for 36 blockchains. Keys stay in the Rust core. Traffic goes over Tor.
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your recovery phrase is encrypted on your own computer, and nobody else — the developers included — can move your funds.
 
-- **37 blockchains, one recovery phrase**, with **220+ tokens**.
+- **36 blockchains, one recovery phrase**, with **220+ tokens**.
 - **Send, receive and swap** from the same window. Swaps carry a service fee from 0.7%, included in the rate — see [fees](https://kyrowallet.com/fees/).
 - **Staking** where available, from accounts that stay in your name: SOL, ADA and TRX.
 - **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
@@ -48,9 +48,9 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 |---|---|
 | **Bitcoin & UTXO** | Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash (transparent addresses), Kaspa |
 | **Ethereum & EVM** | Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux |
-| **Other networks** | Solana, TRON, Cardano, XRP Ledger, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Hedera |
+| **Other networks** | Solana, TRON, Cardano, XRP Ledger, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand |
 
-Tokens include ERC-20 and other EVM standards, SPL (Solana), TRC-20 (TRON), Cardano native tokens and XRP Ledger issued currencies. Stablecoins are also supported on non-EVM chains: USDT on TON, USDC on Sui, USDC and USDT on Aptos, USDC on Stellar (the account needs a USDC trustline) USDC and USDT on NEAR, USDC and USDT on Algorand (after an opt-in), USDT and USDC on Polkadot Asset Hub and USDC on Hedera (after a token association). TON's native coin is now named **Gram** (GRAM). Per-chain details: [kyrowallet.com/chains](https://kyrowallet.com/chains/).
+Tokens include ERC-20 and other EVM standards, SPL (Solana), TRC-20 (TRON), Cardano native tokens and XRP Ledger issued currencies. Stablecoins are also supported on non-EVM chains: USDT on TON, USDC on Sui, USDC and USDT on Aptos, USDC on Stellar (the account needs a USDC trustline) USDC and USDT on NEAR, USDC and USDT on Algorand (after an opt-in) and USDT and USDC on Polkadot Asset Hub. TON's native coin is now named **Gram** (GRAM). Per-chain details: [kyrowallet.com/chains](https://kyrowallet.com/chains/).
 
 ## Why Kyro
 
@@ -79,10 +79,10 @@ Your keys stay in the device and every transaction is confirmed on its screen. K
 | Device | Chains |
 |---|---|
 | **Ledger and Trezor** | Bitcoin, all EVM chains, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, Cardano (not the Trezor One) |
-| **Ledger only** | XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON, NEAR, Hedera |
+| **Ledger only** | XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON, NEAR |
 | **Trezor only** | Zcash (transparent) |
 
-Caveats: on NEAR and TON the Ledger account is a different account than the software wallet for the same phrase; on Hedera the Ledger account must first be created with Ledger Live or HashPack. Not available on hardware wallets: Monero, Polkadot, Kaspa. From a hardware account, token sends are supported on EVM chains only for now (native coins elsewhere). Details in [SECURITY.md](SECURITY.md).
+Caveats: on NEAR and TON the Ledger account is a different account than the software wallet for the same phrase. Not available on hardware wallets: Monero, Polkadot, Kaspa. From a hardware account, token sends are supported on EVM chains only for now (native coins elsewhere). Details in [SECURITY.md](SECURITY.md).
 
 ## Automatic updates
 

@@ -770,7 +770,7 @@
         "staking": false,
         "hardware": true
       },
-      "status": "live",
+      "status": "hidden",
       "notes": [
         "Receive on the EVM-style address (0x…). The 0.0.x account is created when the first deposit arrives."
       ],

@@ -2,232 +2,227 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://kyrowallet.com/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/features/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/security/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/fees/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/download/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/faq/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/privacy/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/code-signing-policy/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/bitcoin/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/ethereum/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/bnb-chain/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/polygon/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/arbitrum/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/optimism/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/base/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/avalanche/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/cronos/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/mantle/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/sonic/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/flare/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/kaia/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/gnosis/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/hyperevm/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/sei/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/conflux/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/solana/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/tron/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/cardano/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/xrp/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/litecoin/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/dogecoin/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/bitcoin-cash/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/dash/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/stellar/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/near/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/sui/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/monero/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/ton/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/cosmos/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/polkadot/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/aptos/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/algorand/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/kaspa/</loc>
-    <lastmod>2026-11-01</lastmod>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://kyrowallet.com/chains/hedera/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://kyrowallet.com/chains/zcash/</loc>
-    <lastmod>2026-11-01</lastmod>
+    <lastmod>2026-11-02</lastmod>
     <priority>0.6</priority>
   </url>
 </urlset>
