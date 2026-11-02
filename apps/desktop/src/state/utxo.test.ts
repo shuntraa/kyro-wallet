@@ -10,7 +10,7 @@ describe('Litecoin / Dogecoin in the UI', () => {
     const accounts = await call('accounts_get');
     const e = await createAdapters(accounts).doge!.getBalance().catch((x: unknown) => x);
     expect(serverMissing(e)).toBe(true);
-    expect(serverDown(e)).toBe(false);
+    expect(serverDown(e, true)).toBe(false);
     expect(serverMissing('Serveur injoignable : node.example : délai')).toBe(false);
   });
 

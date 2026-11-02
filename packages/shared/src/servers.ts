@@ -181,3 +181,59 @@ export function mergeServerSecrets(next: Servers, stored: Servers): Servers {
   }
   return out;
 }
+
+/** The chain fields `hasCustomServer` needs (a `Chain` of @kyro/chains fits). */
+export interface CustomServerChain {
+  family: string;
+  network: Network;
+  chainId?: number;
+  cluster?: SolanaCluster;
+}
+
+/**
+ * True when the user configured their own server for `chain`. Only then may a `SERVER_UNREACHABLE`
+ * be shown as "your server is not responding": Rust uses the same code for a default server that
+ * failed, which is a network hiccup, not the user's server.
+ */
+export function hasCustomServer(servers: Servers, chain: CustomServerChain): boolean {
+  const net = chain.network === 'mainnet' ? 'mainnet' : 'testnet';
+  const set = (s: { kind: string } | undefined) => s !== undefined && s.kind !== 'default';
+  switch (chain.family) {
+    case 'btc':
+      return set(servers.bitcoin[btcNetworkKey(chain.network)]);
+    case 'evm':
+      return chain.chainId !== undefined && servers.evm[String(chain.chainId)] !== undefined;
+    case 'sol':
+      return servers.solana[chain.cluster ?? solanaCluster(chain.network)] !== undefined;
+    case 'ltc':
+      return set(servers.litecoin[net]);
+    case 'doge':
+      return set(servers.dogecoin[net]);
+    case 'bch':
+      return set(servers.bitcoincash[net]);
+    case 'dash':
+      return set(servers.dash[net]);
+    case 'tron':
+      return set(servers.tron[net]);
+    case 'xrp':
+      return set(servers.xrp[net]);
+    case 'ada':
+      return set(servers.cardano[net]);
+    case 'xmr':
+      return set(servers.monero?.[net]);
+    default:
+      return false;
+  }
+}
+
+/** True when any chain of `network` uses a custom server (for errors without a known chain). */
+export function anyCustomServer(servers: Servers, network: Network): boolean {
+  const net = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const set = (s: { kind: string } | undefined) => s !== undefined && s.kind !== 'default';
+  return (
+    set(servers.bitcoin[btcNetworkKey(network)]) ||
+    Object.keys(servers.evm).length > 0 ||
+    servers.solana[solanaCluster(network)] !== undefined ||
+    [servers.litecoin, servers.dogecoin, servers.bitcoincash, servers.dash, servers.tron, servers.xrp, servers.cardano, servers.monero].some((m) => set(m?.[net]))
+  );
+}

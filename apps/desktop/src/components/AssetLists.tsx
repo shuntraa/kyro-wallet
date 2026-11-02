@@ -14,7 +14,7 @@ import { usePortfolio, type Holding } from '../state/portfolio';
 import { CoinIcon, EmptyState, ErrorLine, HIDDEN, trendColor, trendHex } from './kit';
 import { Sparkline } from './charts';
 import { useTorBlocked } from './Tor';
-import { ServerDownLine, ServerMissingLine, cbfPending, serverDown, serverMissing } from './ServerDown';
+import { NetworkDownLine, ServerDownLine, ServerMissingLine, cbfPending, networkDown, serverDown, serverMissing, useCustomServer } from './ServerDown';
 import { findChain } from '@kyro/chains';
 import { Menu } from './ui/menu';
 import { Badge, Skeleton } from './ui/primitives';
@@ -113,8 +113,12 @@ function MineList({ sort }: { sort: Sort }) {
   const pf = usePortfolio();
   const torBlocked = useTorBlocked(Object.values(pf.chainErrors).join(' ') || undefined);
   const { network } = useApp();
+  const customServer = useCustomServer();
   const downChains = Object.entries(pf.chainErrors)
-    .filter(([, m]) => serverDown(m))
+    .filter(([k, m]) => serverDown(m, customServer(k)))
+    .map(([k]) => findChain(network, k)?.label ?? k);
+  const netDownChains = Object.entries(pf.chainErrors)
+    .filter(([k, m]) => networkDown(m, customServer(k)))
     .map(([k]) => findChain(network, k)?.label ?? k);
   const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const { t } = useT();
@@ -172,7 +176,7 @@ function MineList({ sort }: { sort: Sort }) {
                 {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
                 <span className="flex flex-col items-end">
                   <span className="text-[14px] font-medium">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">{t('portfolio.rowWaitingTor')}</span> : serverMissing(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowNoServer')}</span> : serverDown(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowServerDown')}</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">{t('portfolio.rowSyncingFilters')}</span> : <span className="text-warn">{t('portfolio.rowBalanceUnavailable')}</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">{t('portfolio.rowWaitingTor')}</span> : serverMissing(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">{t('portfolio.rowNoServer')}</span> : serverDown(pf.chainErrors[h.asset.chainKey], customServer(h.asset.chainKey)) ? <span className="text-warn">{t('portfolio.rowServerDown')}</span> : networkDown(pf.chainErrors[h.asset.chainKey], customServer(h.asset.chainKey)) ? <span className="text-mute">{t('portfolio.rowNetworkDown')}</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">{t('portfolio.rowSyncingFilters')}</span> : <span className="text-warn">{t('portfolio.rowBalanceUnavailable')}</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
                 </span>
                 <span className="flex items-center gap-2.5">
                   <span className="h-[3px] w-16 overflow-hidden rounded-full bg-control-2">
@@ -189,6 +193,7 @@ function MineList({ sort }: { sort: Sort }) {
           </EmptyState>
         )}
         {!torBlocked && downChains.length > 0 && <ServerDownLine className="px-5 py-3" what={downChains.join(', ')} />}
+        {!torBlocked && netDownChains.length > 0 && <NetworkDownLine className="px-5 py-3" what={netDownChains.join(', ')} />}
         {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'dogecoin' && serverMissing(m)) && <ServerMissingLine className="px-5 py-3" coin="Dogecoin" />}
         {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'dash' && serverMissing(m)) && <ServerMissingLine className="px-5 py-3" coin="Dash" />}
         {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'zcash' && serverMissing(m)) && (

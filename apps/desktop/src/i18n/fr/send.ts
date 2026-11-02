@@ -85,6 +85,7 @@ export const send = {
   'send.waitingTor': 'En attente de Tor…',
   'send.noServer': 'Aucun serveur configuré',
   'send.serverDown': 'Ton serveur ne répond pas',
+  'send.networkDown': 'Réseau injoignable pour l’instant, nouvel essai…',
   'send.feesUnavailable': 'Frais indisponibles',
   'send.estimating': 'Estimation…',
   'send.feeCustom': 'Personnalisé',

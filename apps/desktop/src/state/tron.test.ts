@@ -17,7 +17,7 @@ describe('TRON in the UI', () => {
     const accounts = await call('accounts_get');
     const e = await createAdapters(accounts).tron!.getHistory().catch((x: unknown) => x);
     expect(tronNoHistory(e)).toBe(true);
-    expect(serverDown(e)).toBe(false);
+    expect(serverDown(e, true)).toBe(false);
     const down = 'Serveur injoignable : tron-down.example : délai de connexion dépassé';
     expect(tronNoHistory(down)).toBe(false);
   });

@@ -81,7 +81,7 @@ import { dedupeByGroup, groupTotal, networkSiblings, otherNetworksForAddress } f
 import { NetworkPicker, WrongNetworkLine } from '../components/NetworkPicker';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
-import { ServerDownLine, ServerMissingLine, serverDown, serverMissing } from '../components/ServerDown';
+import { NetworkDownLine, ServerDownLine, ServerMissingLine, networkDown, serverDown, serverMissing, useCustomServer } from '../components/ServerDown';
 import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { useOnTorReady } from '../state/tor';
@@ -159,6 +159,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const balanceOf = (a: AssetDef) => pf.balances.get(a.id) ?? 0n;
   const adapter = asset ? adapterFor(asset, adapters) : undefined;
   const chain = asset ? findChain(network, asset.chainKey) : undefined;
+  const custom = useCustomServer()(asset?.chainKey);
   const nativeAsset = chain ? assetsFor(network).find((a) => a.chainKey === chain.key && a.kind === 'native') : undefined;
   const balance = asset ? pf.balances.get(asset.id) ?? 0n : 0n;
   const price = asset ? pf.price(asset.coingeckoId)?.price ?? null : null;
@@ -1060,7 +1061,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="eyebrow">{t('send.networkFees')}</span>
-              <span className="text-[12px] text-faint">{fees.data ? t('send.currentNetwork', { hint: getLanguage() === 'fr' ? fees.data.hint.replace('.', ',') : fees.data.hint }) : fees.error ? (feesTorBlocked ? t('send.waitingTor') : serverMissing(fees.error) ? <span className="text-warn">{t('send.noServer')}</span> : serverDown(fees.error) ? <span className="text-warn">{t('send.serverDown')}</span> : <span className="text-down">{t('send.feesUnavailable')}</span>) : t('send.estimating')}</span>
+              <span className="text-[12px] text-faint">{fees.data ? t('send.currentNetwork', { hint: getLanguage() === 'fr' ? fees.data.hint.replace('.', ',') : fees.data.hint }) : fees.error ? (feesTorBlocked ? t('send.waitingTor') : serverMissing(fees.error) ? <span className="text-warn">{t('send.noServer')}</span> : serverDown(fees.error, custom) ? <span className="text-warn">{t('send.serverDown')}</span> : networkDown(fees.error, custom) ? <span className="text-mute">{t('send.networkDown')}</span> : <span className="text-down">{t('send.feesUnavailable')}</span>) : t('send.estimating')}</span>
             </div>
             <div role="radiogroup" aria-label={t('send.networkFees')} className="flex gap-2">
               {LEVELS.map(({ level, label }) => {
@@ -1194,7 +1195,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <Spinner /> {t('send.preparing')}
             </span>
           )}
-          {buildError && (serverMissing(buildError) && !isZec ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
+          {buildError && (serverMissing(buildError) && !isZec ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError, custom) ? <ServerDownLine /> : networkDown(buildError, custom) ? <NetworkDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
               {rt('send.clearTron', { b: (c) => <strong>{c}</strong> }, {
@@ -1387,7 +1388,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             />
           )}
           {hwError !== null && <HwErrorNotice error={hwError} onRetry={() => void sign()} />}
-          {signError && (serverDown(signError) ? <ServerDownLine /> : <Notice tone="error">{signError}</Notice>)}
+          {signError && (serverDown(signError, custom) ? <ServerDownLine /> : networkDown(signError, custom) ? <NetworkDownLine /> : <Notice tone="error">{signError}</Notice>)}
           <Button variant="primary" size="xl" disabled={!canSign} onClick={() => void sign()}>
             {signing && <Spinner />} {activeHw ? t('send.signHw') : t('send.sign')}
           </Button>
