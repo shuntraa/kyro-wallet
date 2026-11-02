@@ -154,12 +154,13 @@ export function AssetDetail({ id }: { id: string }) {
             </div>
             <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
           </div>
-          <div className="mt-auto">
+          <div className="mt-auto flex min-h-0 flex-1 flex-col justify-end">
             {values.length > 1 ? (
               <SmoothChart
                 key={period}
                 values={values}
                 height={250}
+                fit
                 defaultPoint="max"
                 defaultLabel={t('portfolio.highest')}
                 ariaLabel={t('portfolio.priceChartAria', { name })}

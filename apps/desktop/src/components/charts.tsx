@@ -13,7 +13,9 @@ const VB_W = 1000;
 export interface SmoothChartProps {
   values: number[];
   times?: number[];
+  /** Height in px; with `fit`, the maximum: the chart then fills its flex parent and follows it. */
   height: number;
+  fit?: boolean;
   renderTooltip?: (i: number) => { label: string; value: string };
   defaultPoint?: 'last' | 'max' | 'none';
   defaultLabel?: string;
@@ -24,29 +26,40 @@ export interface SmoothChartProps {
   stroke?: string;
 }
 
-export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF' }: SmoothChartProps) {
+export function SmoothChart({ values, height: maxH, fit = false, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF' }: SmoothChartProps) {
   const gid = useId().replace(/:/g, '');
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   // Draw in real pixels: a stretched viewBox squeezed the curve sideways in a narrow window and
   // parts of the stroke went missing. One point per ~2 px, re-measured on every resize.
+  // Width and height both followed (`fit`): a smaller window recomputes the y scale too, so the
+  // line always stays inside the plot area instead of being cut by the card.
   const [vbW, setVbW] = useState(VB_W);
+  const [fitH, setFitH] = useState(maxH);
+  const height = fit ? fitH : maxH;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = () => {
-      const w = Math.round(el.getBoundingClientRect().width);
+      const b = el.getBoundingClientRect();
+      const w = Math.round(b.width);
       if (w > 0) setVbW(w);
+      const h = Math.round(b.height);
+      if (fit && h > 0) setFitH(Math.min(maxH, h));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fit, maxH]);
+  // The top padding (room for the tooltip) shrinks with a short chart, never below a usable plot.
+  const top = Math.min(padTop, Math.round(height * 0.3));
+  const bottom = Math.min(padBottom, Math.round(height * 0.1));
   const data = useMemo(() => downsample(values, chartPointBudget(vbW)), [values, vbW]);
   const ratio = values.length > 1 ? (values.length - 1) / Math.max(1, data.length - 1) : 1;
-  const pts = useMemo(() => fitSeries(data, { width: vbW, height, padTop, padBottom }), [data, vbW, height, padTop, padBottom]);
+  // 2 px inset on each side: the stroke and the end point never get clipped at the edges.
+  const pts = useMemo(() => fitSeries(data, { width: Math.max(1, vbW - 4), height, padTop: top, padBottom: bottom }).map((q) => ({ x: q.x + 2, y: q.y })), [data, vbW, height, top, bottom]);
   const line = useMemo(() => smoothPath(pts), [pts]);
   const area = useMemo(() => areaPath(line, pts, height), [line, pts, height]);
 
@@ -72,8 +85,8 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
   };
 
   return (
-    <div ref={ref} className={className} style={{ position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
-      <svg width="100%" height={height} viewBox={`0 0 ${vbW} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
+    <div ref={ref} className={className} style={fit ? { position: 'relative', flex: '1 1 0', minHeight: 0, maxHeight: maxH } : { position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+      <svg width="100%" height={height} style={{ display: 'block' }} viewBox={`0 0 ${vbW} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
         <defs>
           <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={stroke} stopOpacity="0.16" />
