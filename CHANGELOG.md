@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.4
+
+- Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools
+  from the official factories and checks the pool's code before each transaction.
+- Swap: search by name or ticker in the coin picker. Monero shows in the list and can be bought
+  from more coins (ETH on Arbitrum, Base, Optimism, POL, DOGE, TRX, USDT on TRON). Kaspa,
+  Algorand and NEAR can now be received from a swap.
+- Faster: charts are kept on your computer and only the recent part is refreshed. Each
+  blockchain shows as soon as it answers. Staking opens from its last state.
+- My assets: one row per crypto, with every account under it.
+- Tokens from the top 250 (Quant and others) open as supported assets instead of "price only".
+- Charts stay continuous at any window size. No more endless "Loading" on asset pages.
+- Updates install when you close the window.
+- Simpler texts in Settings, recovery phrase checks and update notices. Cleaner outgoing
+  connections and API key screens.
 ## 1.0.3
 
 - Swap: Monero. Swap BTC, LTC, ETH, SOL, USDT or USDC to XMR through Exolix (no account,
