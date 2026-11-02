@@ -49,6 +49,7 @@
       "webviewInstallMode": { "type": "embedBootstrapper" },
       "nsis": {
         "installMode": "currentUser",
+        "template": "installer/installer.nsi",
         "languages": ["French"],
         "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico",
