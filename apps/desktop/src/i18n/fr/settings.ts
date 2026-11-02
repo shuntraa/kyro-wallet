@@ -24,7 +24,7 @@ export const settings = {
 
   // Security
   'settings.autoLock': 'Verrouillage automatique',
-  'settings.autoLockDesc': 'Après une période d’inactivité, et à la mise en veille.',
+  'settings.autoLockDesc': 'Après inactivité ou mise en veille.',
   'settings.autoLockDelay': 'Délai de verrouillage',
   'settings.passwordEachTx': 'Mot de passe à chaque transaction',
   'settings.passwordEachTxDesc': 'Toujours actif. Ne peut pas être désactivé.',
@@ -76,7 +76,7 @@ export const settings = {
   'settings.apiKeyAria': 'Clé API {label}',
 
   // Outgoing connections
-  'settings.connectionsIntro': 'La liste complète des serveurs que Kyro contacte. Tout le reste est bloqué par le coffre.',
+  'settings.connectionsIntro': 'Seuls ces serveurs sont contactés.',
   'settings.customBadge': 'perso',
   'settings.useOwnServers': 'Utiliser mes propres serveurs',
 
@@ -177,4 +177,5 @@ export const settings = {
   'settings.thpKey': 'clé {key} · appairé le {date}',
   'settings.forget': 'Oublier',
   'settings.forgetAll': 'Tout oublier',
+  'settings.diagnostics': 'Diagnostic réseau',
 } as const;

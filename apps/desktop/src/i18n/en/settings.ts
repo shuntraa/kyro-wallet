@@ -22,7 +22,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.saved': 'Setting saved on this device',
 
   'settings.autoLock': 'Auto-lock',
-  'settings.autoLockDesc': 'After a period of inactivity, and when the computer sleeps.',
+  'settings.autoLockDesc': 'After inactivity or sleep.',
   'settings.autoLockDelay': 'Lock delay',
   'settings.passwordEachTx': 'Password for every transaction',
   'settings.passwordEachTxDesc': 'Always on. Cannot be turned off.',
@@ -69,7 +69,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.newKeyPlaceholder': 'New key (replaces the current one)',
   'settings.apiKeyAria': '{label} API key',
 
-  'settings.connectionsIntro': 'The complete list of servers Kyro contacts. Everything else is blocked by the core.',
+  'settings.connectionsIntro': 'Only these servers are contacted.',
   'settings.customBadge': 'custom',
   'settings.useOwnServers': 'Use my own servers',
 
@@ -166,4 +166,5 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.thpKey': 'key {key} · paired on {date}',
   'settings.forget': 'Forget',
   'settings.forgetAll': 'Forget all',
+  'settings.diagnostics': 'Network diagnostics',
 };
