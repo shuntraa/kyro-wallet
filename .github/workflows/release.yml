@@ -44,7 +44,7 @@ jobs:
             os: windows-2022
             args: --bundles nsis,msi
           - id: macos
-            os: macos-15
+            os: macos-15-intel
             # One universal binary (Apple Silicon + Intel): one .dmg, one update package.
             args: --target universal-apple-darwin --bundles app,dmg
           - id: linux
