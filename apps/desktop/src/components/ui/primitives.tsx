@@ -10,19 +10,19 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' | 'dange
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-primary text-on-primary hover:bg-primary-hover disabled:bg-control-2 disabled:text-faint',
-  secondary: 'border border-line-2 bg-control/60 text-text hover:border-line-3 hover:bg-control disabled:text-faint',
+  primary: 'btn-primary bg-primary text-on-primary hover:-translate-y-px disabled:bg-control-2 disabled:text-faint',
+  secondary: 'border border-line-2 bg-white/[.03] text-text hover:border-line-3 hover:bg-white/[.07] disabled:text-faint',
   ghost: 'bg-transparent text-mute hover:text-text hover:bg-raised',
-  outline: 'bg-transparent text-text border border-line-2 hover:border-line-3 hover:bg-raised',
+  outline: 'bg-white/[.02] text-text border border-line-2 hover:border-line-3 hover:bg-white/[.06]',
   danger: 'bg-down text-[#1a0b0b] hover:brightness-110',
   dangerOutline: 'bg-transparent text-down border border-down/50 hover:bg-down/10',
-  ice: 'border border-ice/25 bg-ice/[.07] text-ice-text hover:border-ice/40 hover:bg-ice/[.12]',
+  ice: 'border border-ice/25 bg-ice/[.08] text-ice-text hover:border-ice/45 hover:bg-ice/[.14]',
 };
 const sizes: Record<Size, string> = {
-  sm: 'h-8 px-3 text-[12px] gap-1.5',
-  md: 'h-9 px-3.5 text-[13px] gap-2',
-  lg: 'h-10 pl-3.5 pr-4 text-[13.5px] gap-2',
-  xl: 'h-11 px-5 text-[14px] gap-2',
+  sm: 'h-8 px-3.5 text-[13px] gap-1.5',
+  md: 'h-10 px-4 text-[13.5px] gap-2',
+  lg: 'h-11 pl-4 pr-5 text-[14px] gap-2',
+  xl: 'h-12 px-6 text-[15px] gap-2.5',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -56,7 +56,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
       ref={ref}
       spellCheck={false}
       autoComplete="off"
-      className={cn('h-10 w-full rounded-ctl border border-line-2 bg-bg px-3 text-[14px] text-text transition-colors placeholder:text-faint hover:border-line-3 focus:border-ice-line', className)}
+      className={cn('h-11 w-full rounded-ctl border border-line-2 bg-black/30 px-3.5 text-[14.5px] text-text transition-colors placeholder:text-faint hover:border-line-3 focus:border-ice-line', className)}
       {...rest}
     />
   );
@@ -89,7 +89,7 @@ const tones: Record<Tone, string> = {
 };
 export function Badge({ tone = 'mute', children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
   return (
-    <span className={cn('inline-flex h-5 shrink-0 items-center gap-1 rounded-[4px] border px-1.5 text-[11.5px] leading-none font-medium whitespace-nowrap', tones[tone], className)}>
+    <span className={cn('inline-flex h-[22px] shrink-0 items-center gap-1 rounded-full border px-2 text-[12px] leading-none font-medium whitespace-nowrap', tones[tone], className)}>
       {children}
     </span>
   );
@@ -119,7 +119,7 @@ export interface SegmentOption<T extends string | number> {
 export function Segmented<T extends string | number>({ options, value, onChange, label, className, size = 'md' }: { options: SegmentOption<T>[]; value: T; onChange: (v: T) => void; label: string; className?: string; size?: 'sm' | 'md' }) {
   const id = useId();
   return (
-    <div role="group" aria-label={label} className={cn('flex rounded-[7px] border border-line bg-bg p-[2px]', className)}>
+    <div role="group" aria-label={label} className={cn('flex rounded-[11px] border border-line bg-black/30 p-[3px]', className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -129,9 +129,9 @@ export function Segmented<T extends string | number>({ options, value, onChange,
             aria-pressed={active}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={cn('relative rounded-[5px] whitespace-nowrap transition-colors duration-150', size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[12px]', active ? 'font-medium text-text' : 'font-medium text-mute hover:text-text2', o.disabled && 'opacity-40')}
+            className={cn('relative rounded-[8px] whitespace-nowrap transition-colors duration-150', size === 'sm' ? 'h-7 px-2.5 text-[12.5px]' : 'h-8 px-3.5 text-[13px]', active ? 'font-medium text-text' : 'font-medium text-mute hover:text-text2', o.disabled && 'opacity-40')}
           >
-            {active && <motion.span layoutId={`seg-${id}`} aria-hidden="true" className="absolute inset-0 rounded-[5px] border border-line-3 bg-control-2" transition={{ type: 'spring', stiffness: 520, damping: 40, mass: 0.7 }} />}
+            {active && <motion.span layoutId={`seg-${id}`} aria-hidden="true" className="absolute inset-0 rounded-[8px] border border-line-3 bg-control-2 shadow-[0_2px_8px_-2px_rgba(0,0,0,.6)]" transition={{ type: 'spring', stiffness: 520, damping: 40, mass: 0.7 }} />}
             <span className="relative z-10">{o.label}</span>
           </button>
         );
@@ -157,7 +157,7 @@ export function Notice({ tone = 'info', children, className, icon }: { tone?: 'i
     success: 'border-up/25 border-l-up bg-up/[.05] text-[#b8f3d8]',
   }[tone];
   return (
-    <div role={tone === 'error' ? 'alert' : 'status'} className={cn('fade-in flex items-start gap-3 rounded-box border border-l-2 px-4 py-3 text-[13px] leading-[1.5]', cls, className)}>
+    <div role={tone === 'error' ? 'alert' : 'status'} className={cn('fade-in flex items-start gap-3 rounded-box border px-4 py-3 text-[13.5px] leading-[1.5]', cls, className)}>
       {icon}
       <div className="min-w-0 flex-1">{children}</div>
     </div>

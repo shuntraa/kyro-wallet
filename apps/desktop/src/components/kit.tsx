@@ -33,7 +33,7 @@ export function AddressBlocks({ address, size = 'lg', className, wrap = true }: 
   return (
     <div className={cn('flex gap-1.5 font-mono', wrap ? 'flex-wrap' : 'flex-nowrap', fs, className)} aria-label={t('shell.addressAria', { address })}>
       {addressChunks(address).map((c, i) => (
-        <span key={i} className={cn('rounded-[4px] px-1.5 py-[3px]', c.highlight ? 'bg-ice/[.12] text-ice-text shadow-[inset_0_-1px_0_rgba(124,196,255,.35)]' : 'text-mute')}>
+        <span key={i} className={cn('rounded-[6px] px-1.5 py-[3px]', c.highlight ? 'bg-ice/[.12] text-ice-text shadow-[inset_0_-1px_0_rgba(124,196,255,.35)]' : 'text-mute')}>
           {c.text}
         </span>
       ))}
@@ -58,9 +58,9 @@ export function AddressShort({ address, className }: { address: string; classNam
 export function EnClair({ children, className, tone = 'ice' }: { children: ReactNode; className?: string; tone?: 'ice' | 'warn' }) {
   const { t } = useT();
   return (
-    <div className={cn('fade-in flex flex-col gap-1.5 rounded-box border border-l-2 px-4 py-3.5', tone === 'ice' ? 'border-ice/20 border-l-ice bg-ice/[.05]' : 'border-warn/30 border-l-warn bg-warn/[.06]', className)}>
-      <span className={cn('text-[12px] font-medium', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>{t('shell.inPlainWords')}</span>
-      <p className="m-0 text-[14px] leading-[1.5]">{children}</p>
+    <div className={cn('fade-in flex flex-col gap-1.5 rounded-box border px-4 py-3.5', tone === 'ice' ? 'border-ice/20 bg-ice/[.06]' : 'border-warn/30 bg-warn/[.07]', className)}>
+      <span className={cn('text-[12.5px] font-medium', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>{t('shell.inPlainWords')}</span>
+      <p className="m-0 text-[14.5px] leading-[1.5]">{children}</p>
     </div>
   );
 }
@@ -139,7 +139,7 @@ export function PasswordField({
       <label htmlFor={id} className="eyebrow">
         {label ?? t('shell.vaultPassword')}
       </label>
-      <div className={cn('flex h-11 items-center rounded-ctl border bg-bg pr-1.5 pl-3.5 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
+      <div className={cn('flex h-12 items-center rounded-ctl border bg-black/30 pr-1.5 pl-4 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
         <input
           id={id}
           type={show ? 'text' : 'password'}
@@ -154,7 +154,7 @@ export function PasswordField({
           }}
           className="min-w-0 flex-1 bg-transparent text-[15px]"
         />
-        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? t('shell.hidePassword') : t('shell.showPassword')} className="press flex size-8 items-center justify-center rounded-[5px] text-mute hover:bg-raised hover:text-text">
+        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? t('shell.hidePassword') : t('shell.showPassword')} className="press flex size-9 items-center justify-center rounded-[8px] text-mute hover:bg-raised hover:text-text">
           {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
         </button>
       </div>
@@ -169,8 +169,8 @@ export function EmptyState({ title, children, action, className }: { title: stri
         <circle cx="14" cy="14" r="12.5" fill="none" stroke="currentColor" strokeDasharray="2 3" />
         <rect x="11" y="11" width="6" height="6" fill="currentColor" />
       </svg>
-      <span className="text-[14px] font-medium text-text2">{title}</span>
-      {children && <span className="max-w-[360px] text-[13px] leading-[1.5] text-mute">{children}</span>}
+      <span className="text-[15px] font-medium text-text2">{title}</span>
+      {children && <span className="max-w-[360px] text-[13.5px] leading-[1.5] text-mute">{children}</span>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   );
@@ -196,7 +196,7 @@ export function ErrorLine({ children, onRetry, className, error }: { children: R
     );
   }
   return (
-    <div role="alert" className={cn('flex items-center gap-2 text-[12px] text-down', className)}>
+    <div role="alert" className={cn('flex items-center gap-2 text-[13px] text-down', className)}>
       <IconWarn size={14} />
       <span className="min-w-0 flex-1">{children}</span>
       {onRetry && (
@@ -223,7 +223,7 @@ export function TrendPill({ change, children }: { change: number | null; childre
   const up = (change ?? 0) >= 0;
   const flat = change === null || Math.abs(change) < 0.005;
   return (
-    <span className={cn('inline-flex h-6 items-center gap-[6px] text-[13px] font-medium', flat ? 'text-mute' : up ? 'text-up' : 'text-down')}>
+    <span className={cn('inline-flex h-7 items-center gap-[6px] rounded-full px-2.5 text-[13.5px] font-medium', flat ? 'bg-white/[.04] text-mute' : up ? 'bg-up/10 text-up' : 'bg-down/10 text-down')}>
       {!flat && (
         <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">
           <path d={up ? 'M5 1l4 6H1z' : 'M5 9l4-6H1z'} fill="currentColor" />
