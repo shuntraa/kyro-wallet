@@ -6,7 +6,7 @@ import { AppProvider, useApp, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
 import { NavRail } from './shell/NavRail';
-import { StatusBar, StatusFrame } from './shell/StatusBar';
+import { StatusFrame } from './shell/StatusBar';
 import { Welcome } from './screens/Welcome';
 import { Unlock } from './screens/Unlock';
 import { Portfolio } from './screens/Portfolio';
@@ -23,7 +23,6 @@ import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { UpdateNotice } from './components/UpdateNotice';
 import { AccountSwitcher } from './components/AccountSwitcher';
-import { networkDown, serverDown, serverMissing, useCustomServer } from './components/ServerDown';
 import { screenEnter } from './components/motion';
 import { t, useT } from './i18n';
 
@@ -112,7 +111,6 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 function Unlocked() {
   const { route, navigate } = useApp();
   const pf = usePortfolio();
-  const customServer = useCustomServer();
   const { lang } = useT();
 
   const assetName = useCallback(
@@ -184,7 +182,6 @@ function Unlocked() {
     }
   }, [route, lang]);
 
-  const failed = Object.entries(pf.chainErrors).filter(([, m]) => !serverMissing(m)).map(([k]) => k);
 
   return (
     <div className="app-backdrop flex h-full flex-col text-text">
@@ -203,7 +200,6 @@ function Unlocked() {
           {screen}
         </motion.main>
       </div>
-      <StatusBar syncing={pf.balancesLoading && !pf.balancesLoaded} failedChains={failed} serverDownChains={Object.entries(pf.chainErrors).filter(([k, m]) => serverDown(m, customServer(k))).map(([k]) => k)} networkDownChains={Object.entries(pf.chainErrors).filter(([k, m]) => networkDown(m, customServer(k))).map(([k]) => k)} />
     </div>
   );
 }
