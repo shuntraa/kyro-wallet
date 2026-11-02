@@ -85,6 +85,7 @@ export const send: Record<keyof typeof fr, string> = {
   'send.waitingTor': 'Waiting for Tor…',
   'send.noServer': 'No server configured',
   'send.serverDown': 'Your server is not responding',
+  'send.networkDown': 'Can’t reach the network right now, retrying…',
   'send.feesUnavailable': 'Fees unavailable',
   'send.estimating': 'Estimating…',
   'send.feeCustom': 'Custom',

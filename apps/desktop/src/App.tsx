@@ -23,7 +23,7 @@ import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { UpdateNotice } from './components/UpdateNotice';
 import { AccountSwitcher } from './components/AccountSwitcher';
-import { serverDown, serverMissing } from './components/ServerDown';
+import { networkDown, serverDown, serverMissing, useCustomServer } from './components/ServerDown';
 import { screenEnter } from './components/motion';
 import { t, useT } from './i18n';
 
@@ -112,6 +112,7 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 function Unlocked() {
   const { route, navigate } = useApp();
   const pf = usePortfolio();
+  const customServer = useCustomServer();
   const { lang } = useT();
 
   const assetName = useCallback(
@@ -202,7 +203,7 @@ function Unlocked() {
           {screen}
         </motion.main>
       </div>
-      <StatusBar syncing={pf.balancesLoading && !pf.balancesLoaded} failedChains={failed} serverDownChains={Object.entries(pf.chainErrors).filter(([, m]) => serverDown(m)).map(([k]) => k)} />
+      <StatusBar syncing={pf.balancesLoading && !pf.balancesLoaded} failedChains={failed} serverDownChains={Object.entries(pf.chainErrors).filter(([k, m]) => serverDown(m, customServer(k))).map(([k]) => k)} networkDownChains={Object.entries(pf.chainErrors).filter(([k, m]) => networkDown(m, customServer(k))).map(([k]) => k)} />
     </div>
   );
 }

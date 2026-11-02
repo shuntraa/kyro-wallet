@@ -53,7 +53,7 @@ fn ton(lang: Lang, nano: &str) -> String {
     format!("{} GRAM", format_units_in(lang, nano, 9))
 }
 
-fn parse_user_address(s: &str, net: Network) -> AppResult<wallet_core::TonFriendly> {
+pub(crate) fn parse_user_address(s: &str, net: Network) -> AppResult<wallet_core::TonFriendly> {
     let f = wallet_core::ton_parse_address(s)?;
     if f.testnet && net == Network::Mainnet {
         return Err(AppError::InvalidInput(

@@ -45,7 +45,7 @@ fn fingerprint(state: &AppState) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::btc_account(seed, net, BtcKind::Segwit, 0)?.fingerprint))
 }
 
-fn ctx<'a>(state: &'a AppState, settings: &Settings) -> AppResult<Ctx<'a>> {
+pub(crate) fn ctx<'a>(state: &'a AppState, settings: &Settings) -> AppResult<Ctx<'a>> {
     let server = settings.servers.bitcoin_for(state.network);
     let fingerprint = match server {
         BtcServer::Core { .. } => Some(fingerprint(state)?),

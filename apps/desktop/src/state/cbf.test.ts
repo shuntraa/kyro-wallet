@@ -70,7 +70,7 @@ describe('CBF helpers', () => {
   it('« pas encore synchronisé » is a running sync, not a server down', () => {
     const m = 'Serveur injoignable : filtres compacts : pas encore synchronisé (synchronisation en cours)';
     expect(cbfPending(m)).toBe(true);
-    expect(serverDown(m)).toBe(false);
-    expect(serverDown('Serveur injoignable : node.example : délai')).toBe(true);
+    expect(serverDown(m, true)).toBe(false);
+    expect(serverDown('Serveur injoignable : node.example : délai', true)).toBe(true);
   });
 });

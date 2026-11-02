@@ -9,6 +9,7 @@ import { computeHoldings, type Holding } from '../lib/holdings';
 import { useVault, type AccountSource } from './app';
 import { useOnTorReady } from './tor';
 import { useOnCbfSynced } from './cbf';
+import { BALANCE_REFRESH_MS, balanceRetryDelay } from '../lib/retry';
 
 export type { Holding } from '../lib/holdings';
 
@@ -42,7 +43,6 @@ export function usePortfolio(): PortfolioValue {
   return v;
 }
 
-const BALANCE_REFRESH_MS = 30_000;
 const MARKET_REFRESH_MS = 60_000;
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
@@ -69,7 +69,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    let failures = 0;
+    let retry: number | undefined;
     const load = async () => {
+      window.clearTimeout(retry);
       setBalancesLoading(true);
       const jobs = sourcesRef.current.flatMap((src) => src.adapters.map((a) => ({ key: `${src.family}:${src.index}`, a })));
       const results = await Promise.allSettled(jobs.map((j) => j.a.getBalance()));
@@ -99,12 +102,17 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setBalancesLoaded(true);
       setBalancesLoading(false);
       setUpdatedAt(Date.now());
+      // A chain failed (default server hiccup, a Tor circuit that timed out): try again soon with backoff, not only at the next poll.
+      failures = Object.keys(errors).length > 0 ? failures + 1 : 0;
+      const delay = balanceRetryDelay(failures);
+      if (delay !== null) retry = window.setTimeout(load, delay);
     };
     void load();
     const id = window.setInterval(load, BALANCE_REFRESH_MS);
     return () => {
       alive = false;
       window.clearInterval(id);
+      window.clearTimeout(retry);
     };
   }, [sourcesKey, tick]);
 

@@ -45,7 +45,7 @@ interface NetStat {
 }
 
 /** Live status bar of the unlocked app. */
-export function StatusBar({ syncing, failedChains, serverDownChains = [], extra }: { syncing: boolean; failedChains: string[]; serverDownChains?: string[]; extra?: ReactNode }) {
+export function StatusBar({ syncing, failedChains, serverDownChains = [], networkDownChains = [], extra }: { syncing: boolean; failedChains: string[]; serverDownChains?: string[]; networkDownChains?: string[]; extra?: ReactNode }) {
   const { adapters, accounts, settings, network } = useApp();
   const { t, tp } = useT();
   const custom = {
@@ -129,6 +129,8 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
                 ? t('shell.syncing')
                 : serverDownChains.length > 0
                   ? t('shell.serverDownChains', { chains: serverDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ') })
+                  : networkDownChains.length > 0
+                  ? t('shell.networkDownChains', { chains: networkDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ') })
                   : degraded
                     ? failedChains.length
                       ? t('shell.partialUnreachable', { chains: failedChains.join(', ') })

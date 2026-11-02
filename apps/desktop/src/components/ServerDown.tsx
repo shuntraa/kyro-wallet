@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Inline state when the user's own server does not answer (SERVER_UNREACHABLE) or the UI hit a
-// replaced default (DEFAULT_SERVER_DISABLED).
+// Inline state when a server does not answer. Rust answers SERVER_UNREACHABLE for any server, custom
+// or default: "your server is not responding" only when the user configured one for that chain,
+// otherwise a neutral "network unreachable, retrying…" (the default server just failed this time).
 
-import { isCustomServerDown } from '@kyro/shared';
+import { useCallback } from 'react';
+import { findChain } from '@kyro/chains';
+import { anyCustomServer, hasCustomServer, isCustomServerDown } from '@kyro/shared';
 import { useApp } from '../state/app';
 import { cn } from '../lib/cn';
 import { IconWarn } from './icons';
@@ -73,9 +76,46 @@ export function TronNoHistoryLine({ className }: { className?: string }) {
   );
 }
 
-/** True when `error` (an error, or a message) means "your custom server is down". */
-export function serverDown(error: unknown): boolean {
+/** A server (custom or default) did not answer: SERVER_UNREACHABLE / DEFAULT_SERVER_DISABLED, minus the special cases above. */
+function unreachable(error: unknown): boolean {
   return error !== undefined && error !== null && error !== '' && isCustomServerDown(error) && !cbfPending(error) && !tronNoHistory(error);
+}
+
+/** True when `error` means "your custom server is down": only when `custom` (the chain has a custom server). */
+export function serverDown(error: unknown, custom: boolean): boolean {
+  return custom && unreachable(error);
+}
+
+/** True when a default server did not answer (`custom` false): a neutral, retried "network unreachable". */
+export function networkDown(error: unknown, custom: boolean): boolean {
+  return !custom && unreachable(error);
+}
+
+/**
+ * `(chainKey?) => boolean`: whether that chain of the current network uses a custom server. Without
+ * a chain key (an error whose chain is unknown), whether any chain does.
+ */
+export function useCustomServer(): (chainKey?: string) => boolean {
+  const { settings, network } = useApp();
+  return useCallback(
+    (chainKey?: string) => {
+      if (chainKey === undefined) return anyCustomServer(settings.servers, network);
+      const chain = findChain(network, chainKey);
+      return chain ? hasCustomServer(settings.servers, chain) : false;
+    },
+    [settings.servers, network],
+  );
+}
+
+/** A default server did not answer: honest and neutral, the next refresh retries on its own. */
+export function NetworkDownLine({ className, what }: { className?: string; what?: string }) {
+  const { t } = useT();
+  return (
+    <div role="status" className={cn('flex items-center gap-2 text-[12px] text-mute', className)}>
+      <span aria-hidden="true" className="inline-block size-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+      <span className="min-w-0 flex-1">{what ? t('shell.networkDownWhat', { what }) : t('shell.networkDown')}</span>
+    </div>
+  );
 }
 
 export function ServerDownLine({ className, what }: { className?: string; what?: string }) {

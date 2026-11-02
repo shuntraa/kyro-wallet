@@ -11,7 +11,7 @@ import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
 import { useTicker } from './motion';
 import { TorWait, useTorBlocked } from './Tor';
-import { ServerDownLine, ServerMissingLine, TronNoHistoryLine, cbfPending, serverDown, serverMissing, tronNoHistory } from './ServerDown';
+import { NetworkDownLine, ServerDownLine, ServerMissingLine, TronNoHistoryLine, cbfPending, networkDown, serverDown, serverMissing, tronNoHistory, useCustomServer } from './ServerDown';
 import { useT } from '../i18n';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
@@ -180,13 +180,15 @@ export function EmptyState({ title, children, action, className }: { title: stri
  * Network data error. While Tor (enabled) is not ready, or when `error` is TOR_UNAVAILABLE, it
  * shows "En attente de Tor…" instead: nothing failed, Kyro is refusing to go out in clear.
  */
-export function ErrorLine({ children, onRetry, className, error }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown }) {
+export function ErrorLine({ children, onRetry, className, error, chainKey }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown; chainKey?: string }) {
   const torBlocked = useTorBlocked(error);
+  const custom = useCustomServer()(chainKey);
   const { t } = useT();
   if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
   if (serverMissing(error)) return <ServerMissingLine {...(className ? { className } : {})} />;
   if (tronNoHistory(error)) return <TronNoHistoryLine {...(className ? { className } : {})} />;
-  if (serverDown(error)) return <ServerDownLine {...(className ? { className } : {})} />;
+  if (serverDown(error, custom)) return <ServerDownLine {...(className ? { className } : {})} />;
+  if (networkDown(error, custom)) return <NetworkDownLine {...(className ? { className } : {})} />;
   if (cbfPending(error)) {
     return (
       <div role="status" className={cn('flex items-center gap-2 text-[12px] text-mute', className)}>

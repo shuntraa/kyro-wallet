@@ -50,6 +50,8 @@ mod hw;
 mod i18n;
 mod kaspa_backend;
 mod known_tokens;
+#[cfg(test)]
+mod live_smoke;
 mod nav_guard;
 mod near_backend;
 mod net;

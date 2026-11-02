@@ -53,6 +53,7 @@ export const portfolio = {
   'portfolio.rowWaitingTor': 'en attente de Tor…',
   'portfolio.rowNoServer': 'aucun serveur : à configurer',
   'portfolio.rowServerDown': 'ton serveur ne répond pas',
+  'portfolio.rowNetworkDown': 'réseau injoignable, nouvel essai…',
   'portfolio.rowSyncingFilters': 'synchronisation des filtres…',
   'portfolio.rowBalanceUnavailable': 'solde indisponible',
   'portfolio.emptyVault': 'Ton coffre est vide pour l’instant',

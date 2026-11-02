@@ -35,6 +35,7 @@ export const shell = {
   'shell.syncingFilters': 'Synchronisation des filtres…',
   'shell.syncing': 'Synchronisation…',
   'shell.serverDownChains': 'Ton serveur ne répond pas · {chains}',
+  'shell.networkDownChains': 'Réseau injoignable pour l’instant, nouvel essai… · {chains}',
   'shell.partial': 'Partiel',
   'shell.partialUnreachable': 'Partiel · {chains} injoignable',
   'shell.synced': 'Synchronisé',
@@ -80,6 +81,8 @@ export const shell = {
   'shell.serverNotResponding': 'Ton serveur ne répond pas.',
   'shell.serverNotRespondingWhat': 'Ton serveur ne répond pas ({what}).',
   'shell.serverNoFallback': 'Kyro n’interroge jamais le serveur par défaut à sa place.',
+  'shell.networkDown': 'Réseau injoignable pour l’instant, nouvel essai…',
+  'shell.networkDownWhat': 'Réseau injoignable pour l’instant ({what}), nouvel essai…',
   'shell.openSettings': 'Ouvrir les réglages',
   // Tor
   'shell.torReading': 'État de Tor en cours de lecture',

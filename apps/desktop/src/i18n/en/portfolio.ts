@@ -50,6 +50,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.rowWaitingTor': 'waiting for Tor…',
   'portfolio.rowNoServer': 'no server: set one up',
   'portfolio.rowServerDown': 'your server is not responding',
+  'portfolio.rowNetworkDown': 'network unreachable, retrying…',
   'portfolio.rowSyncingFilters': 'syncing filters…',
   'portfolio.rowBalanceUnavailable': 'balance unavailable',
   'portfolio.emptyVault': 'Your vault is empty for now',
