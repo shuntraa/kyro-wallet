@@ -16,6 +16,7 @@ export function Unlock() {
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [wrong, setWrong] = useState(0);
 
   const submit = async () => {
     if (!pw || busy) return;
@@ -27,7 +28,9 @@ export function Unlock() {
       await enterVault();
     } catch (e) {
       const err = toIpcError(e);
-      setError({ code: err.code, message: err.message });
+      // Wrong password: a calm hint under the field (PasswordField), not an error box.
+      if (err.code === 'WRONG_PASSWORD') setWrong((n) => n + 1);
+      else setError({ code: err.code, message: err.message });
       setBusy(false);
     }
   };
@@ -50,7 +53,7 @@ export function Unlock() {
             void submit();
           }}
         >
-          <PasswordField id="unlock-pw" value={pw} onChange={setPw} autoFocus invalid={error?.code === 'WRONG_PASSWORD'} />
+          <PasswordField id="unlock-pw" value={pw} onChange={setPw} autoFocus wrong={wrong} />
           {error && <Notice tone={error.code === 'RATE_LIMITED' ? 'warn' : 'error'}>{error.message}</Notice>}
           {demo && <p className="m-0 text-[12px] text-ice-text2">{demoPasswordHint()}</p>}
           <Button type="submit" variant="primary" size="xl" disabled={!pw || busy}>

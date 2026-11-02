@@ -127,6 +127,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [password, setPassword] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [execError, setExecError] = useState<string | null>(null);
+  const [wrongPw, setWrongPw] = useState(0);
   const [doneId, setDoneId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reviewed, setReviewed] = useState<Quote | null>(null);
@@ -382,7 +383,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       pf.refresh();
     } catch (e) {
       const err = toIpcError(e);
-      setExecError(err.code === 'USER_REJECTED' ? t('swap.signCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setExecError(err.code === 'USER_REJECTED' ? t('swap.signCancelled') : err.message);
       setPhase('idle');
       allowance.reload();
     }
@@ -719,7 +721,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </span>
             )}
             {execError && <Notice tone="error">{execError}</Notice>}
-            <PasswordField id="swap-pw" value={password} onChange={setPassword} onEnter={() => canSwap && void execute()} />
+            <PasswordField id="swap-pw" value={password} onChange={setPassword} wrong={wrongPw} onEnter={() => canSwap && void execute()} />
             <div className="flex justify-end gap-2">
               <Button disabled={busy} onClick={() => setConfirmOpen(false)}>{t('common.cancel')}</Button>
               <Button variant="primary" disabled={!canSwap} onClick={() => void execute()}>

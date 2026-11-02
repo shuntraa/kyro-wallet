@@ -257,6 +257,7 @@ function RevokeDialog({ approval, onClose }: { approval: LiveApproval; onClose: 
   const { network } = useApp();
   const { adapters } = useVault();
   const [pw, setPw] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ad = adapters.evm.get(approval.chainKey);
@@ -282,7 +283,8 @@ function RevokeDialog({ approval, onClose }: { approval: LiveApproval; onClose: 
       onClose(true);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('history.signatureCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('history.signatureCancelled') : err.message);
       setBusy(false);
     }
   };
@@ -292,7 +294,7 @@ function RevokeDialog({ approval, onClose }: { approval: LiveApproval; onClose: 
       <p className="m-0 text-[13px] leading-[1.55] text-text2">
         {rt('history.revokeExplain', { code: (c) => <span className="font-mono">{c}</span> })}
       </p>
-      <PasswordField id="revoke-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void revoke()} />
+      <PasswordField id="revoke-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && void revoke()} />
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={() => onClose(false)} disabled={busy}>

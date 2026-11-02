@@ -210,6 +210,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
   const [busy, setBusy] = useState<'build' | 'sign' | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [password, setPassword] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [txid, setTxid] = useState<string | null>(null);
   const { t } = useT();
 
@@ -240,7 +241,8 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
       setStep('done');
       onDone();
     } catch (e) {
-      setError(e);
+      if (toIpcError(e).code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(e);
     } finally {
       setBusy(null);
     }
@@ -279,7 +281,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
               <dl className="m-0 flex flex-col text-[13px]">{spec.review(built)}</dl>
               <SecondConfirmNotice lines={warnings} />
               <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('staking.reviewNote')}</p>
-              <PasswordField id="stake-password" value={password} onChange={setPassword} autoFocus onEnter={() => password && busy === null && void sign()} invalid={toIpcError(error).code === 'WRONG_PASSWORD'} />
+              <PasswordField id="stake-password" value={password} onChange={setPassword} autoFocus onEnter={() => password && busy === null && void sign()} wrong={wrongPw} />
               {error !== null && <ErrorLine error={error}>{errText(error)}</ErrorLine>}
               <div className="flex justify-end gap-2">
                 {spec.form ? (

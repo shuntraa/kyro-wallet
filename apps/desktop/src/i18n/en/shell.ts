@@ -129,6 +129,7 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.inPlainWords': 'In plain words',
   'shell.copyFailed': 'Copy failed',
   'shell.vaultPassword': 'Vault password',
+  'shell.wrongPassword': 'Wrong password.',
   'shell.hidePassword': 'Hide password',
   'shell.showPassword': 'Show password',
   'shell.cbfSyncingData': 'Bitcoin: compact filters are syncing, the data will follow.',

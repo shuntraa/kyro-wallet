@@ -2,7 +2,7 @@
 // Kyro signature components: mark, coin icons, address blocks, "En clair", big amounts, copy
 // button, password field, empty / error states.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
 import { addressChunks, splitFiat } from '../lib/format';
@@ -121,6 +121,7 @@ export function PasswordField({
   placeholder,
   autoComplete = 'current-password',
   invalid,
+  wrong = 0,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -131,24 +132,51 @@ export function PasswordField({
   placeholder?: string;
   autoComplete?: string;
   invalid?: boolean;
+  /**
+   * Bumped by the parent after each wrong password: a calm hint under the field and a gentle
+   * shake, the text selected so it can be typed again (no error box).
+   */
+  wrong?: number;
 }) {
   const [show, setShow] = useState(false);
+  const [hint, setHint] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const { t } = useT();
+  useEffect(() => {
+    if (wrong <= 0) return;
+    setHint(true);
+    const input = inputRef.current;
+    input?.focus();
+    input?.select();
+    const box = boxRef.current;
+    if (box) {
+      box.classList.remove('shake');
+      void box.offsetWidth; // restart the animation on a second wrong attempt
+      box.classList.add('shake');
+    }
+  }, [wrong]);
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={id} className="eyebrow">
         {label ?? t('shell.vaultPassword')}
       </label>
-      <div className={cn('flex h-12 items-center rounded-ctl border bg-black/30 pr-1.5 pl-4 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
+      <div ref={boxRef} onAnimationEnd={(e) => e.currentTarget.classList.remove('shake')} className={cn('flex h-12 items-center rounded-ctl border bg-black/30 pr-1.5 pl-4 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
         <input
+          ref={inputRef}
           id={id}
+          aria-invalid={hint || undefined}
+          aria-describedby={hint ? `${id}-hint` : undefined}
           type={show ? 'text' : 'password'}
           value={value}
           autoFocus={autoFocus}
           autoComplete={autoComplete}
           spellCheck={false}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            setHint(false);
+            onChange(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && onEnter) onEnter();
           }}
@@ -158,6 +186,11 @@ export function PasswordField({
           {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
         </button>
       </div>
+      {hint && (
+        <span id={`${id}-hint`} role="status" className="fade-in text-[13px] text-mute">
+          {t('shell.wrongPassword')}
+        </span>
+      )}
     </div>
   );
 }

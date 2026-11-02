@@ -213,6 +213,7 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
   const me = useAsync(() => adapter.account(), [adapter, tick]);
   const [target, setTarget] = useState<{ id: number; symbol: string } | null>(null);
   const [pw, setPw] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ txid: string; symbol: string } | null>(null);
@@ -232,7 +233,8 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
       setTarget(null);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('algo.optInCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('algo.optInCancelled') : err.message);
     } finally {
       setBusy(false);
     }
@@ -276,7 +278,7 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
             <p className="m-0 text-text2">{t('algo.enableExplain', { symbol: target.symbol })}</p>
             <Notice tone="info">{t('algo.enableMinBalance', { spendable: spendable !== null ? ALGO(spendable) : '…' })}</Notice>
             {spendable !== null && spendable < ALGO_ACTIVATION + 1_000n && <span className="text-down">{t('algo.enableTooPoor')}</span>}
-            <PasswordField id="algo-optin-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && !busy && void enable()} />
+            <PasswordField id="algo-optin-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void enable()} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
               <Button onClick={() => setTarget(null)} disabled={busy}>

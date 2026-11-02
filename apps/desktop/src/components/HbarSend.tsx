@@ -219,6 +219,7 @@ export function HbarTokens({ adapter, account, onChanged }: { adapter: HbarAdapt
   const holdings = useAsync(id ? () => adapter.tokenHoldings(id) : null, [adapter, id, tick]);
   const [target, setTarget] = useState<{ id: string; symbol: string } | null>(null);
   const [pw, setPw] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
@@ -237,7 +238,8 @@ export function HbarTokens({ adapter, account, onChanged }: { adapter: HbarAdapt
       setTarget(null);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('hbar.associateCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('hbar.associateCancelled') : err.message);
     } finally {
       setBusy(false);
     }
@@ -272,7 +274,7 @@ export function HbarTokens({ adapter, account, onChanged }: { adapter: HbarAdapt
           <div className="flex flex-col gap-3 text-[13px] leading-[1.5]">
             <p className="m-0 text-text2">{t('hbar.associateExplain')}</p>
             <Notice tone="info">{t('hbar.associateFee', { balance: HBAR(account.balance) })}</Notice>
-            <PasswordField id="hbar-assoc-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && !busy && void associate()} />
+            <PasswordField id="hbar-assoc-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void associate()} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
               <Button onClick={() => setTarget(null)} disabled={busy}>

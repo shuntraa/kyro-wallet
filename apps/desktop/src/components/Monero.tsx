@@ -299,6 +299,7 @@ export function XmrWalletSection({ adapter }: { adapter: XmrAdapter | null }) {
   useT();
   const [open, setOpen] = useState<'seed' | 'height' | null>(null);
   const [pw, setPw] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -323,7 +324,8 @@ export function XmrWalletSection({ adapter }: { adapter: XmrAdapter | null }) {
       setOpen(null);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('xmr.seedCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('xmr.seedCancelled') : err.message);
     } finally {
       setBusy(false);
     }
@@ -375,7 +377,7 @@ export function XmrWalletSection({ adapter }: { adapter: XmrAdapter | null }) {
           {t('xmr.seedWarn')}
         </Notice>
         <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('xmr.seedHow')}</p>
-        <PasswordField id="xmr-seed-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void showSeed()} />
+        <PasswordField id="xmr-seed-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && void showSeed()} />
         {error && <Notice tone="error">{error}</Notice>}
         <div className="flex justify-end gap-2">
           <Button onClick={close}>{t('common.cancel')}</Button>

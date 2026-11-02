@@ -260,6 +260,7 @@ function RevealPhrase() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState(false);
+  const [wrong, setWrong] = useState(0);
   const { t } = useT();
   const backup = getBackupState();
 
@@ -280,7 +281,8 @@ function RevealPhrase() {
       setShown(true);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('settings.revealCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrong((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('settings.revealCancelled') : err.message);
     } finally {
       setBusy(false);
     }
@@ -310,7 +312,7 @@ function RevealPhrase() {
               {t('settings.revealWarn')}
             </Notice>
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.revealHow')}</p>
-            <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void reveal()} />
+            <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus wrong={wrong} onEnter={() => pw && void reveal()} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
               <Button onClick={close}>{t('common.cancel')}</Button>

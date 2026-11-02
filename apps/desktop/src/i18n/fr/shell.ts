@@ -138,6 +138,7 @@ export const shell = {
   'shell.inPlainWords': 'En clair',
   'shell.copyFailed': 'Échec de la copie',
   'shell.vaultPassword': 'Mot de passe du coffre',
+  'shell.wrongPassword': 'Mot de passe incorrect.',
   'shell.hidePassword': 'Masquer le mot de passe',
   'shell.showPassword': 'Afficher le mot de passe',
   'shell.cbfSyncingData': 'Bitcoin : synchronisation des filtres compacts en cours, les données arrivent ensuite.',

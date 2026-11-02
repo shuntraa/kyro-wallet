@@ -523,6 +523,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [password, setPassword] = useState('');
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  const [wrongPw, setWrongPw] = useState(0);
   const [hwDevice, setHwDevice] = useState<string | null>(null);
   const [hwError, setHwError] = useState<unknown>(null);
   const [done, setDone] = useState<{ id: string; dot?: { nonce: number; validUntil: number } } | null>(null);
@@ -573,6 +574,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     } catch (e) {
       const err = toIpcError(e);
       if (activeHw && (err.code.startsWith('HW_') || err.code === 'USER_REJECTED')) setHwError(e);
+      else if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
       else setSignError(err.code === 'USER_REJECTED' ? t('send.signCancelled') : err.message);
       if (isXmr) {
         setBuilt(null);
@@ -1378,7 +1380,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <span>{t('send.hwNoPassword')}</span>
             </div>
           ) : (
-            <PasswordField id="send-pw" value={password} onChange={setPassword} onEnter={() => canSign && void sign()} />
+            <PasswordField id="send-pw" value={password} onChange={setPassword} wrong={wrongPw} onEnter={() => canSign && void sign()} />
           )}
           {signing && activeHw && hwDevice && (
             <HwWaiting

@@ -75,6 +75,7 @@ export function StellarTrustPanel({ adapter, hidden }: { adapter: StellarAdapter
 function StellarTrustDialog({ adapter, contract, symbol, enable, reserve, onClose }: { adapter: StellarAdapter; contract: string; symbol: string; enable: boolean; reserve: string; onClose: (done: boolean) => void }) {
   useT();
   const [pw, setPw] = useState('');
+  const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const go = async () => {
@@ -87,14 +88,15 @@ function StellarTrustDialog({ adapter, contract, symbol, enable, reserve, onClos
       onClose(true);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? t('stellar.trustCancelled') : err.message);
+      if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
+      else setError(err.code === 'USER_REJECTED' ? t('stellar.trustCancelled') : err.message);
       setBusy(false);
     }
   };
   return (
     <Dialog open onOpenChange={() => !busy && onClose(false)} title={enable ? t('stellar.trustEnable', { symbol }) : t('stellar.trustRemove', { symbol })}>
       <p className="m-0 text-[13px] leading-[1.55] text-text2">{enable ? t('stellar.trustEnableExplain', { symbol, reserve: XLM(reserve) }) : t('stellar.trustRemoveExplain', { symbol, reserve: XLM(reserve) })}</p>
-      <PasswordField id="xlm-trust-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && !busy && void go()} />
+      <PasswordField id="xlm-trust-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void go()} />
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={() => onClose(false)} disabled={busy}>
