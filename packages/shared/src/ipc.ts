@@ -135,6 +135,8 @@ export interface Settings {
   language: LanguagePref;
   /** Automatic updates from Kyro's signed GitHub releases (default `true`, docs/IPC.md `update_status`). */
   autoUpdate: boolean;
+  /** Anonymous weekly count (default `true`): once per ISO week, over Tor only, downloads `ping.txt` of the latest release. */
+  weeklyCount: boolean;
 }
 
 /** `update_status`: the running version, and (once, after a start that applied an update) the new one. */

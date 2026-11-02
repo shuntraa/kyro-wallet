@@ -48,6 +48,8 @@ export const settings = {
 
   // Privacy
   'settings.useTor': 'Passer par Tor',
+  'settings.weeklyCount': 'Compteur anonyme hebdomadaire',
+  'settings.weeklyCountDesc': 'Une fois par semaine, Kyro télécharge un petit fichier via Tor pour que le compteur de GitHub estime les portefeuilles actifs. Aucune donnée personnelle.',
   'settings.useTorDesc': 'Activé par défaut. Toutes les requêtes réseau de Kyro passent par Tor, intégré à l’app.',
   'settings.connectionState': 'État de la connexion',
   'settings.torHides': 'Ce que Tor cache',

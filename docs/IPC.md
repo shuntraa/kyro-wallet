@@ -647,7 +647,7 @@ Reference TypeScript types: `packages/shared/src/ipc.ts`. Names in `snake_case`,
 | `vault_backup_show` | — | `{ checks: [i, j, k] }` | shows the phrase of the just-created vault in the **phrase window** (returns when it is closed), then randomly draws (OS) the 3 positions (0-based) to verify; `INVALID_INPUT` if there is no pending phrase anymore |
 | `vault_backup_verify` | `{ answers: string[3] }` | `{ ok, attemptsLeft }` | compares against the positions drawn by Rust; answers only yes/no; on the 5th failure the pending phrase is forgotten (`attemptsLeft: 0`: show it again from Settings › Security) |
 | `vault_import` | `{ password, phrase, xmrRestore? }` | `void` | `xmrRestore`: start of the first Monero scan — `{ kind: 'kyro' }` (default, Kyro's first release), `{ kind: 'date', date }` or `{ kind: 'genesis' }` (phrase already used with Monero on a Ledger); kept in `monero/<network>-restore-<key>.json` |
-| `vault_unlock` | `{ password }` | `void` | 5 attempts then an increasing delay; each attempt is **reserved** (counted) under the same lock as the delay check, before Argon2id (parallel calls do not get around the limit), and the counter + `retry_after` are saved next to the vault (`coffre-<network>.attempts`): restarting the app does not reset the delay. Same rule for any command that asks for the password |
+| `vault_unlock` | `{ password }` | `void` | 5 attempts then an increasing delay; each attempt is **reserved** (counted) under the same lock as the delay check, before Argon2id (parallel calls do not get around the limit), and the counter + `retry_after` are saved next to the vault (`coffre-<network>.attempts`): restarting the app does not reset the delay. Same rule for any command that asks for the password. After a successful unlock, Rust may schedule the anonymous weekly count in the background (`weekly_count.rs`, docs/NETWORK.md); nothing is returned to the UI |
 | `vault_lock` | — | `void` | zeroize the session |
 | `vault_reveal_mnemonic` | `{ password }` | `void` | password (rate-limited as above, 10 s between two requests), then **native confirmation** ("Show" / "Cancel" → `USER_REJECTED`; French: « Afficher » / « Annuler »), then the words in the **phrase window** (separate, capture-protected; see the rules at the top); nothing is returned to the interface (which knows the password it had typed in). Screen-capture blocking does not apply to the native confirmation dialog |
 | `session_touch` | — | `void` | user activity → postpones the auto-lock |
@@ -770,7 +770,8 @@ type Settings = { currency: Currency /* FIAT_CURRENCIES (26 CoinGecko currencies
                   apiKeysSet: { [K in ApiKeyName]: boolean };   // key saved or not; NEVER the value (no `apiKeys` field)
                   tor: { enabled: boolean };     // default: { enabled: true }
                   language: 'auto' | 'fr' | 'en';   // default: 'auto' (see below)
-                  autoUpdate: boolean };   // default: true; false = no check, a pending update is removed
+                  autoUpdate: boolean;     // default: true; false = no check, a pending update is removed
+                  weeklyCount: boolean };  // default: true; false = the anonymous weekly count (weekly_count.rs, docs/NETWORK.md) is never sent
 // `language`: language of the interface AND of the native windows (signature, warnings, phrase,
 // servers, .cookie picker). `auto` = the computer's language (French if it is French,
 // English otherwise), read by Rust (crate `sys-locale`) and returned by `config_get.systemLanguage`.

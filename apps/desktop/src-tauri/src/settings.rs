@@ -132,6 +132,9 @@ pub struct Settings {
     /// Automatic updates (`updater.rs`): ON by default; off = no check, a staged update is
     /// discarded.
     pub auto_update: bool,
+    /// Anonymous weekly count (`weekly_count.rs`): ON by default; once per ISO week, over Tor,
+    /// downloads `ping.txt` from the latest release. Off = never.
+    pub weekly_count: bool,
     /// The vault's account lists (see `accounts.rs`).
     pub accounts: VaultAccounts,
 }
@@ -157,6 +160,7 @@ impl Default for Settings {
             tor: TorSettings::default(),
             language: crate::i18n::LanguagePref::Auto,
             auto_update: true,
+            weekly_count: true,
             accounts: VaultAccounts::default(),
         }
     }
@@ -468,6 +472,19 @@ mod tests {
         assert_eq!(Settings::default().for_ui()["autoUpdate"], true);
         let s: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
         assert!(!s.auto_update);
+    }
+
+    #[test]
+    fn weekly_count_defaults_to_on_and_can_be_turned_off() {
+        let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
+        assert!(s.weekly_count, "older file: on");
+        assert_eq!(Settings::default().for_ui()["weeklyCount"], true);
+        let s: Settings = serde_json::from_str(r#"{"weeklyCount":false}"#).unwrap();
+        assert!(!s.weekly_count);
+        let mut ui = Settings::default().for_ui();
+        ui["weeklyCount"] = false.into();
+        let s = Settings::from_ui(ui, &ApiKeys::default()).unwrap();
+        assert!(!s.weekly_count);
     }
 
     #[test]

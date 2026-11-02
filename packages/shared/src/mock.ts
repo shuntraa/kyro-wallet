@@ -106,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tor: { enabled: true },
   language: 'auto',
   autoUpdate: true,
+  weeklyCount: true,
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };

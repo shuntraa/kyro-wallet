@@ -44,6 +44,8 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.revealClosed': 'The phrase window is closed: the phrase is no longer displayed.',
 
   'settings.useTor': 'Use Tor',
+  'settings.weeklyCount': 'Anonymous weekly count',
+  'settings.weeklyCountDesc': 'Once a week, Kyro downloads a tiny file over Tor so GitHub’s download counter can estimate active wallets. No personal data.',
   'settings.useTorDesc': 'On by default. Every network request Kyro makes goes through Tor, built into the app.',
   'settings.connectionState': 'Connection status',
   'settings.torHides': 'What Tor hides',

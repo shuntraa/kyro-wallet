@@ -316,7 +316,11 @@ pub async fn vault_import(
 }
 
 #[tauri::command]
-pub async fn vault_unlock(state: State<'_, AppState>, password: String) -> AppResult<()> {
+pub async fn vault_unlock(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    password: String,
+) -> AppResult<()> {
     let m = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
     let (seed, cardano, polkadot) = blocking(move || {
         Ok((
@@ -327,6 +331,7 @@ pub async fn vault_unlock(state: State<'_, AppState>, password: String) -> AppRe
     })
     .await?;
     state.start_session(seed, cardano, polkadot);
+    crate::weekly_count::after_unlock(&app);
     Ok(())
 }
 

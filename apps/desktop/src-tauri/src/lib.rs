@@ -72,6 +72,7 @@ mod tor;
 mod tron_backend;
 mod updater;
 mod utxo_backend;
+mod weekly_count;
 mod xmr_backend;
 mod xrp_backend;
 mod zcash_backend;

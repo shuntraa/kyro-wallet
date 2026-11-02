@@ -202,7 +202,7 @@ function Privacy() {
   return (
     <>
       <Panel>
-        <SettingRow title={t('settings.useTor')} desc={t('settings.useTorDesc')} last>
+        <SettingRow title={t('settings.useTor')} desc={t('settings.useTorDesc')}>
           <Switch
             label={t('settings.useTor')}
             checked={enabled}
@@ -212,6 +212,9 @@ function Privacy() {
               else torStore.requestDisable('settings');
             }}
           />
+        </SettingRow>
+        <SettingRow title={t('settings.weeklyCount')} desc={t('settings.weeklyCountDesc')} last>
+          <Switch label={t('settings.weeklyCount')} checked={settings.weeklyCount} onCheckedChange={(v) => void saveSettings({ ...settings, weeklyCount: v })} />
         </SettingRow>
       </Panel>
       <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">

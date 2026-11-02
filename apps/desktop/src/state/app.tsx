@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS: Settings = {
   tor: { enabled: true },
   language: 'auto',
   autoUpdate: true,
+  weeklyCount: true,
 };
 
 interface AppContextValue {
