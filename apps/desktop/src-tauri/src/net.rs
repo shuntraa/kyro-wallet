@@ -121,6 +121,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "1click.chaindefuser.com",
     // Exolix public API v2 (no key): Monero swaps (`/api/v2/rate`, `/api/v2/transactions`).
     "exolix.com",
+    // Lido API (keyless): stETH APR (7-day average) for the Earn screen; Tor family `market`.
+    "eth-api.lido.fi",
     // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages) and
     // the release-asset CDN GitHub redirects downloads to.
     "github.com",
@@ -526,7 +528,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Evm
     } else if host.ends_with(".solana.com") {
         Family::Solana
-    } else if host.ends_with("coingecko.com") {
+    } else if host.ends_with("coingecko.com") || host == "eth-api.lido.fi" {
         Family::Market
     } else if matches!(
         host,
@@ -1337,6 +1339,7 @@ mod tests {
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
         assert_eq!(family_for("exolix.com", &c), Family::Swap);
+        assert_eq!(family_for("eth-api.lido.fi", &c), Family::Market);
         assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
         assert_eq!(family_for("nile.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);

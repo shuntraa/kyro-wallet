@@ -1921,6 +1921,12 @@ export interface TorStatus {
   message?: string;
 }
 
+/** `earn_evm_build` action: amounts in raw units (decimal string); `asset` = Aave reserve symbol. */
+export type EarnEvmAction =
+  | { kind: 'lidoStake'; amount: string }
+  | { kind: 'aaveSupply'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount: string }
+  | { kind: 'aaveWithdraw'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount?: string };
+
 export interface EvmTxRequest {
   chainId: number;
   nonce: number;
@@ -2515,6 +2521,8 @@ export interface Commands {
   near_stake_build: { args: { action: NearStakeRequest } & WithAccount; ret: { tx: string; summary: NearStakeSummary; context: NearStakeContext } };
   near_stake_sign: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearStakeSummary; context: NearStakeContext } };
   near_stake_broadcast: { args: { signed: string } & WithAccount; ret: NearTxOutcome };
+  /** Earn on Ethereum mainnet (Lido, Aave v3): Rust builds the call to a pinned contract (docs/IPC.md). */
+  earn_evm_build: { args: { action: EarnEvmAction } & WithAccount; ret: { to: string; data: string; valueWei: string } };
   /** Native file picker for Bitcoin Core's `.cookie` (checked: name, no symlink, <= 256 bytes,
    * `__cookie__:<64 hex>`). The only new cookie path `settings_set` / `server_test` accept.
    * `path: null` = cancelled. */

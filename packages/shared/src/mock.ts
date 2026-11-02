@@ -842,6 +842,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       return btcAddressFor(kind, pk, testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
     },
     evm_decode_tx: (a) => decodeEvm(a.tx as EvmTxRequest),
+    earn_evm_build: () => {
+      requireUnlocked();
+      throw new IpcError('INVALID_INPUT', l10n('Earn (Lido, Aave) : mainnet uniquement, indisponible en démo.', 'Earn (Lido, Aave): mainnet only, not available in the demo.'));
+    },
     evm_sign_tx: (a) => {
       requireUnlocked();
       const account = accts.arg(a.account);

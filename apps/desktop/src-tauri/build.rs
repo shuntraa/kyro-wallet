@@ -255,6 +255,8 @@ const COMMANDS: &[&str] = &[
     "near_stake_build",
     "near_stake_sign",
     "near_stake_broadcast",
+    // Earn on Ethereum (Lido, Aave v3): Rust builds the calldata.
+    "earn_evm_build",
     "set_capture_protection",
     // Opens https://kyrowallet.com/frais (fixed in Rust) in the system browser: Swap screen.
     "open_fees_page",

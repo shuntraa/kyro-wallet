@@ -42,6 +42,7 @@ mod cosmos_backend;
 mod dialog_text;
 mod dot_backend;
 mod dot_history;
+mod earn_evm;
 mod electrum;
 mod error;
 mod fiat;
@@ -397,6 +398,7 @@ pub fn run() {
             stake_near::near_stake_overview,
             stake_near::near_stake_validators,
             stake_near::near_stake_build,
+            earn_evm::earn_evm_build,
             stake_near::near_stake_sign,
             stake_near::near_stake_broadcast,
             commands::set_capture_protection,

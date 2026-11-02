@@ -737,7 +737,14 @@ pub(crate) fn describe_evm(
             } else {
                 evm_token_amount(lang, &s.amount, token)
             };
-            let spender = s.spender.as_deref().unwrap_or("?");
+            let spender = match s
+                .spender
+                .as_deref()
+                .and_then(|a| crate::earn_evm::contract_name(s.chain_id, a).map(|n| (a, n)))
+            {
+                Some((a, n)) => format!("{n} ({a})"),
+                None => s.spender.clone().unwrap_or_else(|| "?".into()),
+            };
             out += &match lang {
                 Lang::Fr => format!(
                     "AUTORISATION de dépense{unknown}\nContrat du token : {contract}\nBénéficiaire : {spender}\nMontant : {amount}\n"
@@ -895,22 +902,51 @@ pub async fn evm_sign_tx(
     let token = evm_token_label(state.network, &summary);
     let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
     let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
+    // Pinned Earn call (Lido, Aave v3): named contract + function; its beneficiary must be us.
+    let earn = crate::earn_evm::decode(summary.chain_id, &tx.to, &tx.value_wei, &tx.data);
+    if let Some(b) = earn.as_ref().and_then(|c| c.beneficiary()) {
+        if !b.eq_ignore_ascii_case(&from) {
+            return Err(AppError::InvalidInput(
+                "Earn: the position must belong to the signing account".into(),
+            ));
+        }
+    }
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
+    let body = match &earn {
+        Some(c) => format!(
+            "{}{}\n\n{}\n{}{} {}",
+            lang.pick("Réseau : ", "Network: "),
+            chain_name(lang, summary.chain_id),
+            crate::earn_evm::describe(lang, c),
+            lang.pick("Frais maximum : ", "Maximum fee: "),
+            format_units_in(lang, &summary.max_fee_wei, 18),
+            native_symbol(lang, summary.chain_id)
+        ),
+        None => describe_evm(lang, &summary, token.as_ref()),
+    };
     confirm_native(
         &app,
         lang.confirm_tx_title(),
         signer.body(
             lang,
-            &format!(
-                "{}{from}\n{}",
-                lang.pick("De : ", "From: "),
-                describe_evm(lang, &summary, token.as_ref())
-            ),
+            &format!("{}{from}\n{body}", lang.pick("De : ", "From: ")),
         ),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
+    let mut summary = summary;
+    if earn.is_some() {
+        // Decoded above: the call and its attached stake are known, not an "unknown action".
+        summary.warnings.retain(|w| {
+            !matches!(
+                w,
+                wallet_core::EvmWarning::ContractCall
+                    | wallet_core::EvmWarning::ValueToContract { .. }
+            )
+        });
+        summary.requires_extra_confirmation = !summary.warnings.is_empty();
+    }
     if evm_needs_extra(&summary, token.as_ref()) {
         confirm_native(
             &app,
