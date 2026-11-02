@@ -27,6 +27,7 @@ import { screenEnter } from './components/motion';
 import { t, useT } from './i18n';
 
 const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
+const Earn = lazy(() => import('./screens/Earn').then((m) => ({ default: m.Earn })));
 
 export function App() {
   return (
@@ -102,7 +103,7 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
     case 'history':
       return [t('common.history')];
     case 'staking':
-      return r.chain ? ['Staking', { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR' }[r.chain]] : ['Staking'];
+      return r.chain ? [t('shell.earn'), { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR' }[r.chain]] : [t('shell.earn')];
     case 'settings':
       return [t('common.settings')];
   }
@@ -174,7 +175,7 @@ function Unlocked() {
               </div>
             }
           >
-            <Staking {...(route.chain ? { chain: route.chain } : {})} />
+            {route.chain ? <Staking chain={route.chain} /> : <Earn />}
           </Suspense>
         );
       case 'settings':

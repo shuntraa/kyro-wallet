@@ -52,7 +52,7 @@ export function NavRail() {
       <RailItem active={k === 'portfolio'} label={t('shell.portfolio')} icon={<IconWallet size={23} sw={1.7} />} onClick={() => navigate({ name: 'portfolio' })} />
       <RailItem active={k === 'assets'} label={t('shell.assets')} icon={<IconLayers size={23} sw={1.7} />} onClick={() => navigate({ name: 'assets' })} />
       <RailItem active={k === 'swap'} label="Swap" icon={<IconSwap size={23} sw={1.7} />} onClick={() => navigate({ name: 'swap' })} />
-      <RailItem active={k === 'staking'} label="Staking" icon={<IconStake size={23} sw={1.7} />} onClick={() => navigate({ name: 'staking' })} />
+      <RailItem active={k === 'staking'} label={t('shell.earn')} icon={<IconStake size={23} sw={1.7} />} onClick={() => navigate({ name: 'staking' })} />
       <RailItem active={k === 'history'} label={t('common.history')} icon={<IconClock size={23} sw={1.7} />} onClick={() => navigate({ name: 'history' })} />
       <div className="flex-1" />
       <RailItem active={k === 'settings'} label={t('common.settings')} icon={<IconSliders size={23} sw={1.7} />} onClick={() => navigate({ name: 'settings' })} />

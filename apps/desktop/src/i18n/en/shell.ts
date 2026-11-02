@@ -6,6 +6,7 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.startFailed': 'Kyro could not start',
   'shell.assets': 'Assets',
   'shell.portfolio': 'Portfolio',
+  'shell.earn': 'Earn',
   'shell.searchMine': '{symbol} · my assets',
   'shell.searchRank': '{symbol} · rank {rank}',
   'shell.searchSoon': 'Coming soon',

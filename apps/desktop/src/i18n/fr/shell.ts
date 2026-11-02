@@ -7,6 +7,7 @@ export const shell = {
   'shell.startFailed': 'Kyro n’a pas pu démarrer',
   'shell.assets': 'Actifs',
   'shell.portfolio': 'Portefeuille',
+  'shell.earn': 'Gagner',
   'shell.searchMine': '{symbol} · mes actifs',
   'shell.searchRank': '{symbol} · rang {rank}',
   'shell.searchSoon': 'Bientôt',
