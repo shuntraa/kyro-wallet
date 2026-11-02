@@ -3715,7 +3715,7 @@ dependencies = [
 
 [[package]]
 name = "kyro-desktop"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "arti-client",
  "base64 0.22.1",
@@ -9185,7 +9185,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-core"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "alloy-rlp",
  "argon2",
