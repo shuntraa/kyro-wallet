@@ -10,6 +10,7 @@ import { BRAND, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevic
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
 import { useApp } from '../state/app';
+import { CoinIcon } from './coins/CoinIcon';
 import { Dialog } from './ui/dialog';
 import { Badge, Button, Input, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconPhoneKey, IconRefresh, IconUsbKey, IconWarn, IconX } from './icons';
@@ -311,6 +312,13 @@ const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = {
   sui: 'Sui', apt: 'Aptos', algo: 'Algorand', near: 'NEAR', cosmos: 'Cosmos Hub', dot: 'Polkadot', hbar: 'Hedera', kas: 'Kaspa', ton: 'TON',
 };
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
+/** Ticker of each chain, for its coin icon. */
+const CHAIN_SYMBOL: Record<HwChain, string> = {
+  btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', bch: 'BCH', dash: 'DASH', tron: 'TRX', cardano: 'ADA', xrp: 'XRP', stellar: 'XLM', zec: 'ZEC', xmr: 'XMR',
+  sui: 'SUI', apt: 'APT', algo: 'ALGO', near: 'NEAR', cosmos: 'ATOM', dot: 'DOT', hbar: 'HBAR', kas: 'KAS', ton: 'TON',
+};
+/** Accounts offered in the setup select (index 0 = "Account 1"). */
+const ACCOUNT_CHOICES = Array.from({ length: Math.min(MAX_HW_ACCOUNT, 19) + 1 }, (_, i) => i);
 /** Chains of the add-device flow: xpub / address chains, then the Ledger single-key chains (`hw_key_add`). */
 type SetupChain = HwImplementedChain | HwKeyChain;
 const IMPLEMENTED: SetupChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano', 'zec', ...HW_KEY_CHAINS];
@@ -328,7 +336,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [chains, setChains] = useState<Set<SetupChain>>(new Set(['btc', 'evm']));
-  const [account, setAccount] = useState('0');
+  const [account, setAccount] = useState(0);
   const [label, setLabel] = useState('');
   const [progress, setProgress] = useState<Partial<Record<SetupChain, 'todo' | 'reading' | 'ok' | 'error'>>>({});
   const [saved, setSaved] = useState<WatchOnlyAccount | null>(null);
@@ -372,8 +380,8 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
     }
   };
 
-  const accountNumber = /^\d+$/.test(account) ? Number(account) : NaN;
-  const accountValid = Number.isInteger(accountNumber) && accountNumber >= 0 && accountNumber <= MAX_HW_ACCOUNT;
+  const accountNumber = account;
+  const accountValid = Number.isInteger(account) && account >= 0 && account <= MAX_HW_ACCOUNT;
 
   /** Per chain: read the public keys (hw_get_xpub), then save them (hw_account_add), while the right app is open. */
   const read = async (from?: SetupChain) => {
@@ -483,23 +491,31 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               )}
               <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label={t('hw.setup.chains')}>
                 {IMPLEMENTED.filter((c) => status.chains.some((x) => x.chain === c)).map((c) => (
-                  <ChainRow key={c} st={status.chains.find((x) => x.chain === c)} chain={c} checked={chains.has(c)} onToggle={(on) => setChains((s) => { const n = new Set(s); if (on) n.add(c); else n.delete(c); return n; })} />
+                  <ChainRow key={c} st={status.chains.find((x) => x.chain === c)} chain={c} device={device} failed={progress[c] === 'error'} checked={chains.has(c)} onToggle={(on) => setChains((s) => { const n = new Set(s); if (on) n.add(c); else n.delete(c); return n; })} />
                 ))}
               </ul>
-              <span className="text-[12px] text-faint">{t('hw.setup.notYet')}</span>
-              {device.kind === 'ledger' && <span className="text-[12px] text-faint">{t('hw.setup.keyChainsHint')}</span>}
+              {device.kind === 'ledger' && <span className="text-[12px] text-faint">{t('hw.setup.autoOpen')}</span>}
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">{t('hw.setup.accountNumber')}</span>
-                  <Input value={account} inputMode="numeric" onChange={(e) => setAccount(e.target.value.replace(/\D/g, '').slice(0, 3))} className="font-mono" />
+                  <span className="eyebrow flex items-center gap-1">
+                    {t('hw.setup.accountNumber')}
+                    <span title={t('hw.setup.accountTip')} aria-label={t('hw.setup.accountTip')} className="inline-flex cursor-help text-faint">
+                      <IconInfo size={12} />
+                    </span>
+                  </span>
+                  <select value={account} onChange={(e) => setAccount(Number(e.target.value))} className="h-9 rounded-ctl border border-line-2 bg-raised px-2.5 text-[13px] text-text">
+                    {ACCOUNT_CHOICES.map((i) => (
+                      <option key={i} value={i}>
+                        {t('hw.setup.accountOption', { n: i + 1 })}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="flex flex-col gap-1.5">
                   <span className="eyebrow">{t('hw.setup.nameOptional')}</span>
                   <Input value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} placeholder={`${device.model} ${(accountValid ? accountNumber : 0) + 1}`} />
                 </label>
               </div>
-              {!accountValid && <span className="text-[12px] text-down">{t('hw.setup.accountRange', { max: MAX_HW_ACCOUNT })}</span>}
-              <span className="text-[12px] leading-[1.5] text-faint">{t('hw.setup.accountHint')}</span>
             </>
           )}
           {error !== null && <HwErrorNotice error={error} onRetry={() => void open(device)} />}
@@ -552,31 +568,23 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   );
 }
 
-function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: SetupChain; checked: boolean; onToggle: (on: boolean) => void }) {
+function ChainRow({ st, chain, device, failed, checked, onToggle }: { st: HwChainStatus | undefined; chain: SetupChain; device: HwDeviceInfo; failed: boolean; checked: boolean; onToggle: (on: boolean) => void }) {
   const { t } = useT();
   const unsupported = st?.state === 'unsupported';
+  // Rust reasons start with the chain name, already shown on the row.
   const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar|Cardano|Zcash|Sui|Aptos|Algorand|NEAR|Cosmos Hub|TON|Hedera)\s*:\s*/, '');
-  const hint =
-    !st
-      ? null
-      : st.state === 'ready'
-        ? t('hw.chainRow.ready')
-        : st.state === 'open-app'
-          ? st.min
-            ? t('hw.chainRow.openAppMin', { app: st.app ?? '', min: st.min })
-            : t('hw.chainRow.openApp', { app: st.app ?? '' })
-          : st.state === 'unlock'
-            ? t('hw.chainRow.unlock')
-            : // Rust reasons start with the chain name, already shown on the row.
-              st.min
-              ? t('hw.chainRow.min', { reason, min: st.min })
-              : reason;
+  const tip = unsupported ? (st?.min ? t('hw.chainRow.min', { reason, min: st.min }) : reason) : st?.app && st.min ? t('hw.chainRow.minTip', { app: st.app, min: st.min }) : undefined;
   return (
     <li>
-      <label className={cn('flex items-center gap-3 rounded-ctl border px-4 py-2.5', unsupported ? 'border-line bg-card opacity-60' : 'cursor-pointer border-line bg-raised hover:border-line-3')}>
+      <label title={tip} className={cn('flex items-center gap-3 rounded-ctl border px-3.5 py-2', unsupported ? 'border-line bg-card opacity-55' : 'cursor-pointer border-line bg-raised hover:border-line-3')}>
+        <CoinIcon symbol={CHAIN_SYMBOL[chain]} size={26} className={unsupported ? 'grayscale' : undefined} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[13px] font-semibold">{chainLabel(chain)}</span>
+          {device.kind === 'ledger' && st?.app && !unsupported && <span className="text-[12px] text-mute">{t('hw.chainRow.ledgerApp', { app: st.app })}</span>}
+        </span>
+        {unsupported && <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-faint">{t('hw.chainRow.notOn', { device: device.kind === 'ledger' ? 'Ledger' : 'Trezor' })}</span>}
+        {failed && !unsupported && <span className="text-[12px] text-warn">{t('hw.chainRow.failed')}</span>}
         <input type="checkbox" checked={checked && !unsupported} disabled={unsupported} onChange={(e) => onToggle(e.target.checked)} className="size-4 accent-[#7cc4ff]" />
-        <span className="flex-1 text-[13px] font-semibold">{chainLabel(chain)}</span>
-        <span className={cn('text-[12px]', st?.state === 'ready' ? 'text-up' : st?.state === 'unsupported' ? 'text-faint' : 'text-warn')}>{hint}</span>
       </label>
     </li>
   );
