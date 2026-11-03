@@ -21,9 +21,9 @@ use super::ledger::ApduLink;
 use super::ledger_apdu::{self as apdu, SwContext, SW_OK};
 use super::trezor::{decode, TrezorDevice};
 use super::{
-    ledger_cardano, ledger_coins, ledger_utxo, path_string, trezor_cardano, trezor_coins,
-    trezor_zcash, version_at_least, Chain, ChainState, ChainStatus, Ctl, HardwareWallet, HwError,
-    HwResult, Prompt, RawDevice, H,
+    ledger_cardano, ledger_coins, ledger_utxo, ledger_utxo_v2, path_string, trezor_cardano,
+    trezor_coins, trezor_zcash, version_at_least, Chain, ChainState, ChainStatus, Ctl,
+    HardwareWallet, HwError, HwResult, Prompt, RawDevice, H,
 };
 use wallet_core::{CardanoHwPlan, ZecAccount, ZecHwPlan};
 
@@ -159,12 +159,23 @@ pub fn ledger_call(
     if sw == SW_OK {
         return Ok(data);
     }
+    Err(ledger_sw_error(link, ctl, sw, ctx, expected))
+}
+
+/// Typed error of a non-`9000` status word (wrong-app codes completed with the open app's name).
+pub fn ledger_sw_error(
+    link: &dyn ApduLink,
+    ctl: &Ctl,
+    sw: u16,
+    ctx: SwContext,
+    expected: &str,
+) -> HwError {
     if expected == ledger_cardano::APP {
         if let Some(e) = ledger_cardano::sw_error(sw) {
-            return Err(e);
+            return e;
         }
     }
-    Err(match (sw, apdu::sw_error(sw, ctx)) {
+    match (sw, apdu::sw_error(sw, ctx)) {
         (_, HwError::WrongApp { .. }) => HwError::WrongApp {
             expected: expected.into(),
             open: ledger_open_app(link, ctl)
@@ -176,7 +187,7 @@ pub fn ledger_call(
         }
         (0xB004, _) => HwError::unsupported("transaction too large for the Stellar app"),
         (_, e) => e,
-    })
+    }
 }
 
 fn ledger_open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
@@ -230,7 +241,15 @@ fn ledger_wallet_key(
         SwContext::General
     };
     let cmd = ledger_utxo::get_wallet_public_key(path, display, ledger_utxo::address_format(coin))?;
-    ledger_utxo::parse_wallet_public_key(&ledger_call(link, ctl, &cmd, ctx, app)?)
+    let (data, sw) = link.exchange(ctl, &cmd)?;
+    if sw == SW_OK {
+        return ledger_utxo::parse_wallet_public_key(&data);
+    }
+    // The right app is open (checked before): a "not understood" status is a protocol mismatch.
+    if ledger_utxo_v2::may_be_v2(coin) && ledger_utxo_v2::is_protocol_mismatch(sw) {
+        return Err(ledger_utxo_v2::outdated(coin));
+    }
+    Err(ledger_sw_error(link, ctl, sw, ctx, app))
 }
 
 fn fingerprint_of(pubkey: &[u8; 33]) -> [u8; 4] {
@@ -250,6 +269,9 @@ fn ledger_utxo_account(
     account: u32,
 ) -> HwResult<UtxoAccount> {
     let path = utxo_account_path(coin, net, account);
+    if let Some(fp) = ledger_utxo_v2::probe(link, ctl, coin)? {
+        return ledger_utxo_v2::account(link, ctl, app, coin, fp, &path);
+    }
     let master = ledger_wallet_key(link, ctl, app, coin, &[], false)?;
     let parent = ledger_wallet_key(link, ctl, app, coin, &path[..2], false)?;
     let node = ledger_wallet_key(link, ctl, app, coin, &path, false)?;
@@ -626,6 +648,22 @@ pub fn display_address(
     match (dev.raw(), target) {
         (RawDevice::Ledger(link), Target::Utxo { coin, path }) => {
             let app = ledger_ensure(link, ctl, chain_of(*coin), net)?;
+            if ledger_utxo_v2::probe(link, ctl, *coin)?.is_some() {
+                let stored = acc
+                    .utxo_account(*coin)
+                    .ok_or_else(|| HwError::bad("missing account"))?;
+                let [.., change, index] = path.as_slice() else {
+                    return Err(HwError::bad("invalid address path"));
+                };
+                return ledger_utxo_v2::display_address(
+                    link,
+                    ctl,
+                    app,
+                    stored,
+                    *change == 1,
+                    *index,
+                );
+            }
             let k = ledger_wallet_key(link, ctl, app, *coin, path, true)?;
             Ok(if without_prefix(&k.address) == without_prefix(expected) {
                 expected.to_string()
@@ -689,12 +727,16 @@ pub fn sign_utxo(
     ctl: &Ctl,
     net: Network,
     coin: UtxoCoin,
+    account: &UtxoAccount,
     psbt: &bitcoin::psbt::Psbt,
     plan: &UtxoHwPlan,
 ) -> HwResult<Vec<HwBtcSignature>> {
     match dev.raw() {
         RawDevice::Ledger(link) => {
             let app = ledger_ensure(link, ctl, chain_of(coin), net)?;
+            if ledger_utxo_v2::probe(link, ctl, coin)?.is_some() {
+                return ledger_utxo_v2::sign(link, ctl, app, account, psbt);
+            }
             let mut call = ledger_utxo::caller(link, ctl, app);
             ledger_utxo::sign(&mut call, ctl, coin, psbt, plan)
         }
@@ -1046,6 +1088,65 @@ mod tests {
             read_keys(&mut l, &ctl(), Network::Testnet, Chain::Doge, 0),
             Err(HwError::Unsupported { .. })
         ));
+    }
+
+    /// Current Litecoin app (Bitcoin app v2 code base): fingerprint + GET EXTENDED PUBKEY (an
+    /// `Ltub` answer) give Kyro's own account; a legacy app answering `6F00` gets a clear message.
+    #[test]
+    fn ledger_litecoin_v2_and_outdated_app() {
+        let seed = wallet_core::Mnemonic::parse(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+        .unwrap()
+        .to_seed("");
+        let secp = bitcoin::secp256k1::Secp256k1::new();
+        let master =
+            bitcoin::bip32::Xpriv::new_master(bitcoin::NetworkKind::Main, &seed[..]).unwrap();
+        let path = utxo_account_path(UtxoCoin::Litecoin, Network::Mainnet, 0);
+        let dp = bitcoin::bip32::DerivationPath::from(
+            path.iter()
+                .map(|i| bitcoin::bip32::ChildNumber::from(*i))
+                .collect::<Vec<_>>(),
+        );
+        let x = bitcoin::bip32::Xpub::from_priv(&secp, &master.derive_priv(&secp, &dp).unwrap());
+        let mut raw = x.encode().to_vec();
+        raw[..4].copy_from_slice(&[0x01, 0x9D, 0xA4, 0x62]);
+        let mut xpub_resp = bitcoin::base58::encode_check(&raw).into_bytes();
+        xpub_resp.extend([0x90, 0x00]);
+        let fp = master.fingerprint(&secp).to_bytes();
+        let mut fp_resp = fp.to_vec();
+        fp_resp.extend([0x90, 0x00]);
+        let probe = ledger_utxo_v2::master_fingerprint_apdu().unwrap();
+        let mut l = Ledger::with_link(Replay(Mutex::new(vec![
+            app("Litecoin", "2.4.0"),
+            (probe.clone(), fp_resp),
+            (
+                ledger_utxo_v2::extended_pubkey_apdu(&path, false).unwrap(),
+                xpub_resp,
+            ),
+        ])));
+        let got = read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Ltc, 0)
+            .unwrap()
+            .utxo
+            .unwrap();
+        let want =
+            wallet_core::utxo_account(&seed, Network::Mainnet, UtxoCoin::Litecoin, 0).unwrap();
+        assert_eq!(got, want);
+
+        let mut l = Ledger::with_link(Replay(Mutex::new(vec![
+            app("Litecoin", "2.1.0"),
+            (probe, vec![0x6E, 0x00]),
+            (
+                ledger_utxo::get_wallet_public_key(&[], false, 0x02).unwrap(),
+                vec![0x6F, 0x00],
+            ),
+        ])));
+        let Err(HwError::Unsupported { what, .. }) =
+            read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Ltc, 0)
+        else {
+            panic!("6F00 must be reported as an outdated app");
+        };
+        assert!(what.starts_with("The Litecoin app on your Ledger is outdated"));
     }
 
     #[test]

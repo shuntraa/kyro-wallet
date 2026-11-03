@@ -338,6 +338,32 @@ fn client_err(e: ledger_bitcoin_client::error::BitcoinClientError<HwError>) -> H
     }
 }
 
+/// Signatures yielded by SIGN PSBT (ECDSA or Taproot key path only).
+pub(super) fn yielded_signatures(
+    yielded: Vec<(usize, SignPsbtYieldedObject)>,
+) -> HwResult<Vec<HwBtcSignature>> {
+    let mut out = Vec::with_capacity(yielded.len());
+    for (input, obj) in yielded {
+        match obj {
+            SignPsbtYieldedObject::Partial(PartialSignature::Sig(pk, sig)) => {
+                out.push(HwBtcSignature {
+                    input,
+                    pubkey: Some(pk.to_bytes()),
+                    signature: sig.to_vec(),
+                })
+            }
+            SignPsbtYieldedObject::Partial(PartialSignature::TapScriptSig(x, None, sig)) => out
+                .push(HwBtcSignature {
+                    input,
+                    pubkey: Some(x.serialize().to_vec()),
+                    signature: sig.to_vec(),
+                }),
+            _ => return Err(HwError::bad("unexpected object returned during signing")),
+        }
+    }
+    Ok(out)
+}
+
 fn default_policy(acc: &BtcAccount) -> HwResult<WalletPolicy> {
     let xpub = Xpub::from_str(&acc.xpub).map_err(|_| HwError::bad("invalid saved xpub"))?;
     let fp = Fingerprint::from_str(&acc.fingerprint)
@@ -486,26 +512,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
             .btc_client(ctl, net)
             .sign_psbt(req.psbt, &policy, None)
             .map_err(client_err)?;
-        let mut out = Vec::with_capacity(yielded.len());
-        for (input, obj) in yielded {
-            match obj {
-                SignPsbtYieldedObject::Partial(PartialSignature::Sig(pk, sig)) => {
-                    out.push(HwBtcSignature {
-                        input,
-                        pubkey: Some(pk.to_bytes()),
-                        signature: sig.to_vec(),
-                    })
-                }
-                SignPsbtYieldedObject::Partial(PartialSignature::TapScriptSig(x, None, sig)) => out
-                    .push(HwBtcSignature {
-                        input,
-                        pubkey: Some(x.serialize().to_vec()),
-                        signature: sig.to_vec(),
-                    }),
-                _ => return Err(HwError::bad("unexpected object returned during signing")),
-            }
-        }
-        Ok(out)
+        yielded_signatures(yielded)
     }
 
     fn evm_node(&mut self, ctl: &Ctl) -> HwResult<String> {

@@ -161,10 +161,11 @@ pub async fn hw_sign_utxo_psbt(
     let parsed = bitcoin::psbt::Psbt::from_str(psbt.trim())
         .map_err(|_| AppError::InvalidInput("invalid PSBT".into()))?;
     let plan2 = plan.clone();
+    let account2 = account.clone();
     let sigs = state
         .hw
         .run(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
-            chains::sign_utxo(dev, ctl, net, coin, &parsed, &plan2)
+            chains::sign_utxo(dev, ctl, net, coin, &account2, &parsed, &plan2)
         })
         .await?;
     let (signed, again) = wallet_core::utxo_hw_finalize(net, coin, &account, &psbt, &sigs)?;

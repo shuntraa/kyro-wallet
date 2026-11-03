@@ -12,6 +12,8 @@
 - Search: one result per coin, with its icon and your balance or its rank.
 - Receive: a quieter network note.
 - Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.
+- Ledger: Litecoin works with the current Litecoin app (keys, address on screen, signing over the
+  new protocol); an app that does not understand Kyro now says to update it in Ledger Live.
 
 ## 1.0.5
 

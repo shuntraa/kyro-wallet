@@ -14,6 +14,7 @@ pub mod ledger_near;
 pub mod ledger_sui;
 pub mod ledger_ton;
 pub mod ledger_utxo;
+pub mod ledger_utxo_v2;
 pub mod store;
 pub mod thp;
 #[cfg(test)]
