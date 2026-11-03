@@ -13,7 +13,7 @@ import { bech32, bech32m, createBase58check } from '@scure/base';
 import { sha256 } from 'viem';
 import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import type { DepositPlan, Quote, QuoteParams, SwapChain, SwapProvider } from '../types';
-import { feeForQuote, validFeeAddress, validSolanaAddress, type ProviderFee } from '../fees';
+import { exolixFeeRecipients, feeForQuote, validFeeAddress, validSolanaAddress, type ExolixFeeChain, type ProviderFee } from '../fees';
 import { applySlippage } from '../compare';
 import { SwapCheckError } from '../verify';
 import { isNative, providerError } from './common';
@@ -60,7 +60,7 @@ export const EXOLIX_ASSETS: readonly ExolixAsset[] = [
 /** Chains only Exolix serves in Kyro: every Exolix route has one of them on a side (the rest goes through 1Click / LI.FI). */
 export const EXOLIX_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>(['monero', 'kaspa', 'algorand', 'near']);
 /** Reached through Exolix but never left from (no Kyro fee address there). */
-export const EXOLIX_ARRIVAL_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>(['kaspa', 'algorand', 'near']);
+export const EXOLIX_ARRIVAL_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>((['kaspa', 'algorand', 'near'] as const).filter((c) => !exolixFeeRecipients()[c]));
 
 /** Chains Exolix serves in Kyro (one side of every Exolix route is in `EXOLIX_ONLY`). */
 export const EXOLIX_CHAINS: ReadonlySet<SwapChain> = new Set(EXOLIX_ASSETS.map((a) => a.chain));
@@ -212,8 +212,9 @@ export function checkExolixTx(t: ExolixTx, e: ExolixExpect): { id: string; depos
 }
 
 /** Kyro fee recipient per source chain (the second transfer of the source coin goes there). */
-export type ExolixFeeRecipients = Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>>;
-const feeKey = (c: SwapChain): keyof ExolixFeeRecipients | null => (typeof c === 'number' ? 'evm' : c === 'solana' || c === 'bitcoin' || c === 'litecoin' || c === 'tron' || c === 'dogecoin' || c === 'monero' ? c : null);
+export type ExolixFeeRecipients = Partial<Record<ExolixFeeChain, string>>;
+const FEE_KEYS: ReadonlySet<string> = new Set(['solana', 'bitcoin', 'litecoin', 'tron', 'dogecoin', 'monero', 'kaspa', 'algorand', 'near']);
+const feeKey = (c: SwapChain): keyof ExolixFeeRecipients | null => (typeof c === 'number' ? 'evm' : FEE_KEYS.has(c) ? (c as keyof ExolixFeeRecipients) : null);
 
 /** Splits what the user sends: the swapped part and Kyro's fee (rounded up, never 0 when a rate applies). */
 export function exolixFeeSplit(sellAmount: bigint, bps: number): { swapped: bigint; fee: bigint } {

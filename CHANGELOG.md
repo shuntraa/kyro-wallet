@@ -9,6 +9,7 @@
   hidden for coins without a long history instead of repeating 1Y.
 - Search: one result per coin, with its icon and your balance or its rank.
 - Receive: a quieter network note.
+- Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.
 
 ## 1.0.5
 

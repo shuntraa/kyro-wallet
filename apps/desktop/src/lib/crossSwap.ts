@@ -6,7 +6,7 @@
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
-import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, exolixFeeRecipients, exolixRoute, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
+import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, EXOLIX_ONLY, exolixFeeRecipients, exolixRoute, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
@@ -153,10 +153,10 @@ export interface BuyGroup {
   assets: AssetDef[];
 }
 
-/** Exolix arrival-only chains (Kaspa, Algorand, NEAR): only the native coin is mapped. */
+/** Exolix-only chains (Monero, Kaspa, Algorand, NEAR): only the native coin is mapped, both ways. */
 const nativeOnlyArrival = (c: Chain) => {
   const id = swapChainOf(c);
-  return id !== null && EXOLIX_ARRIVAL_ONLY.has(id);
+  return id !== null && EXOLIX_ONLY.has(id);
 };
 
 /**
@@ -189,7 +189,8 @@ export function sellChoices(network: Network, chains: Chain[], assets: AssetDef[
     const open = canSwapFrom(chain, network);
     const soon = !open && network === 'mainnet' && chain.family === 'xmr';
     if (!open && !soon) continue;
-    for (const asset of assets) if (asset.chainKey === chain.key && !asset.readOnly && (!soon || asset.kind === 'native')) out.push({ chain, asset, comingSoon: soon });
+    const nativeOnly = soon || nativeOnlyArrival(chain);
+    for (const asset of assets) if (asset.chainKey === chain.key && !asset.readOnly && (!nativeOnly || asset.kind === 'native')) out.push({ chain, asset, comingSoon: soon });
   }
   return out;
 }
@@ -322,6 +323,25 @@ export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<Depo
       if (s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
       return s.recipient.toLowerCase() === to.toLowerCase() && s.function === '0x1::aptos_account::transfer' && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
     }
+    case 'kas': {
+      // One payment to the deposit address, the rest back to us as change; nothing else.
+      const s = u.summary;
+      if (s.warnings.length > 0 || s.requiresExtraConfirmation) return t('swap.depUnexpectedOutput');
+      const pay = s.outputs.filter((o) => !o.isChange);
+      return pay.length === 1 && pay[0]?.address === to && pay[0].amount === plan.amountIn.toString() ? null : t('swap.depNotExactPayment');
+    }
+    case 'algo': {
+      // A plain ALGO payment: no note (a deposit memo is never needed by Exolix), no asset transfer.
+      const s = u.summary;
+      if (u.note || s.noteLen > 0 || s.asset || s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
+      return s.receiver === to && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
+    }
+    case 'near': {
+      // One `Transfer` action of exactly the amount, no token call.
+      const s = u.summary;
+      if (s.token || s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
+      return s.receiverId === to && s.deposit === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
+    }
     case 'xmr': {
       // One payment to the deposit address (Rust built it; Rust decodes it again in the native dialog).
       const s = u.summary;
@@ -339,7 +359,7 @@ export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<Depo
 }
 
 /** The adapters a NEAR Intents deposit may go through. */
-export type DepositAdapters = Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'xmr'>;
+export type DepositAdapters = Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'xmr'> & Partial<Pick<AdapterSet, 'kaspa' | 'algo' | 'near'>>;
 
 /** The vault adapter that sends `asset` (a NEAR Intents deposit is an ordinary transfer). */
 export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): AnyAdapter | undefined {
@@ -372,6 +392,12 @@ export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): A
       return adapters.aptos ?? undefined;
     case 'xmr':
       return adapters.xmr ?? undefined;
+    case 'kas':
+      return adapters.kaspa ?? undefined;
+    case 'algo':
+      return adapters.algo ?? undefined;
+    case 'near':
+      return adapters.near ?? undefined;
     case 'evm':
       return adapters.evm.get(asset.chainKey);
     default:

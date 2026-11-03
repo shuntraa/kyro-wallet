@@ -67,12 +67,12 @@ describe('Exolix Kyro fee (source side)', () => {
     expect(exolixFeeSplit(1_000n, 0)).toEqual({ swapped: 1_000n, fee: 0n });
   });
 
-  it('uses the existing fee addresses, and no Monero source without a valid Monero fee address', () => {
+  it('uses the configured fee addresses, and no Monero source without a valid Monero fee address', () => {
     const r = exolixFeeRecipients(KYRO_SWAP_FEE);
     expect(r.bitcoin).toBe(KYRO_SWAP_FEE.recipients.bitcoin);
     expect(r.litecoin).toBe(KYRO_SWAP_FEE.recipients.litecoin);
     expect(r.evm).toBe(KYRO_SWAP_FEE.recipients.evm);
-    expect(r.monero).toBeUndefined();
+    expect(r.monero).toBe(KYRO_SWAP_FEE.recipients.monero);
     expect(exolixFeeRecipients({ ...KYRO_SWAP_FEE, recipients: { ...KYRO_SWAP_FEE.recipients, monero: 'nope' } }).monero).toBeUndefined();
     expect(exolixFeeRecipients({ ...KYRO_SWAP_FEE, recipients: { ...KYRO_SWAP_FEE.recipients, monero: OWN_XMR } }).monero).toBe(OWN_XMR);
   });
@@ -97,8 +97,10 @@ describe('Exolix Kyro fee (source side)', () => {
     expect(plan.amountIn).toBe(991_000n);
     expect(plan.kyroFee).toEqual({ recipient: KYRO_SWAP_FEE.recipients.bitcoin, amount: 9_000n });
     expect(plan.orderId).toBe(CREATE.response.id);
-    // Monero source: no Kyro fee address on Monero → no quote (never fee-free).
-    await expect(p.quote({ ...params, chain: 'monero', toChain: 'bitcoin', recipient: OWN_BTC, taker: OWN_XMR, sell: params.buy, buy: params.sell, sellAmount: 10n ** 12n })).rejects.toThrow(/fee address|adresse des frais/);
+    // Monero source without a Kyro fee address on Monero → no quote (never fee-free).
+    const { monero: _xmr, ...noXmr } = exolixFeeRecipients(KYRO_SWAP_FEE);
+    const p2 = new ExolixProvider({ fetch, fee: providerFee('exolix', KYRO_SWAP_FEE), recipients: noXmr });
+    await expect(p2.quote({ ...params, chain: 'monero', toChain: 'bitcoin', recipient: OWN_BTC, taker: OWN_XMR, sell: params.buy, buy: params.sell, sellAmount: 10n ** 12n })).rejects.toThrow(/fee address|adresse des frais/);
   });
 
   it('is registered with the other providers, for Monero pairs only', () => {

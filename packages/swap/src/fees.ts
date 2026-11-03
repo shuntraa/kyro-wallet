@@ -5,7 +5,9 @@
 // collect it is left out of the quotes: never fee-free, never to an unvalidated address.
 
 import { isAddress, sha256 } from 'viem';
-import { base58, base58xrp, bech32, createBase58check } from '@scure/base';
+import { base32, base58, base58xrp, bech32, createBase58check } from '@scure/base';
+import { keccak_256 } from '@noble/hashes/sha3';
+import { sha512_256 } from '@noble/hashes/sha2';
 import type { ProviderId, QuoteParams } from './types';
 import { intlLocale, l10n } from '@kyro/shared';
 
@@ -49,8 +51,12 @@ export interface SwapFeeConfig extends FeeSchedule {
     tron?: string;
     xrp?: string;
     cardano?: string;
-    /** Exolix Monero sends (second output / transfer). Empty: no route FROM Monero (never fee-free). */
+    /** Exolix sends FROM these chains (a second transfer on the source chain). Empty: no route from it (never fee-free). */
     monero?: string;
+    kaspa?: string;
+    algorand?: string;
+    /** NEAR implicit account (64 lowercase hex). */
+    near?: string;
   };
   /** THORChain affiliate THORName. Empty means no THORChain route (never fee-free). */
   thorname?: string;
@@ -73,6 +79,10 @@ export const KYRO_SWAP_FEE: SwapFeeConfig = {
     tron: 'TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES',
     xrp: 'rBxjMcoZ3X6Q89MjBxvuJBrZq6CctimSZf',
     cardano: 'addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3',
+    monero: '49DAQ21kb2eAjpNKAYsg6hJVJGqoj3fRdHBEyUqG1zydPbCvLmt3WyxUKVYKYMpjSqUKeruBo3YuSdyjoFG5TvQ3JcBze6A',
+    kaspa: 'kaspa:qqxazzgtyn5352uzj2nzugg6cr3pct8rzpxphc2q73m67km7zrdv6dh8ctekt',
+    algorand: 'F6X4KFXUPNMILGKMTDRT3CN76DJFKMOJYVV7ENOAZPCUAZCGWCDPR2HLL4',
+    near: '8a8b179c1ac354da90b8d16bf7661ab7fe60de3fd7c99cd37f1150cd884cfbc4',
   },
   thorname: '',
   solanaFeeMints: [
@@ -183,7 +193,74 @@ const segwit = (a: string, hrp: string) => {
   }
 };
 
-export type FeeChain = 'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'dogecoin' | 'tron' | 'xrp' | 'cardano';
+export type FeeChain = 'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'dogecoin' | 'tron' | 'xrp' | 'cardano' | 'monero' | 'kaspa' | 'algorand' | 'near';
+
+const XMR_B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+/** Encoded length (chars) of a Monero base58 block of `i` bytes. */
+const XMR_BLOCK_CHARS = [0, 2, 3, 5, 6, 7, 9, 10, 11];
+
+/** Monero base58 (8-byte blocks of 11 chars, the last one shorter), `null` when malformed. */
+function xmrBase58(a: string): Uint8Array | null {
+  const out: number[] = [];
+  for (let i = 0; i < a.length; i += 11) {
+    const chunk = a.slice(i, i + 11);
+    const bytes = XMR_BLOCK_CHARS.indexOf(chunk.length);
+    if (bytes <= 0) return null;
+    let n = 0n;
+    for (const ch of chunk) {
+      const d = XMR_B58.indexOf(ch);
+      if (d < 0) return null;
+      n = n * 58n + BigInt(d);
+    }
+    if (n >> BigInt(bytes * 8) !== 0n) return null;
+    for (let b = bytes - 1; b >= 0; b--) out.push(Number((n >> BigInt(b * 8)) & 0xffn));
+  }
+  return Uint8Array.from(out);
+}
+
+/** Standard (18) or subaddress (42) mainnet Monero address, keccak-256 checksum. */
+function validMonero(a: string): boolean {
+  if (a.length !== 95) return false;
+  const b = xmrBase58(a);
+  if (!b || b.length !== 69 || (b[0] !== 18 && b[0] !== 42)) return false;
+  const h = keccak_256(b.subarray(0, 65));
+  return h.subarray(0, 4).every((x, i) => x === b[65 + i]);
+}
+
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const CASHADDR_GEN = [0x98f2bc8e61n, 0x79b76d99e2n, 0xf33e5fb3c4n, 0xae2eabe2a8n, 0x1e4f43e470n];
+
+/** Kaspa mainnet address (`kaspa:` + cashaddr-style 40-bit checksum): Schnorr, ECDSA or P2SH payload. */
+function validKaspa(a: string): boolean {
+  const m = /^kaspa:([qpzry9x8gf2tvdw0s3jn54khce6mua7l]+)$/.exec(a);
+  if (!m?.[1]) return false;
+  const data = [...m[1]].map((c) => BECH32_CHARSET.indexOf(c));
+  let c = 1n;
+  for (const d of [...[...'kaspa'].map((ch) => ch.charCodeAt(0) & 31), 0, ...data]) {
+    const c0 = c >> 35n;
+    c = ((c & 0x07ffffffffn) << 5n) ^ BigInt(d);
+    CASHADDR_GEN.forEach((g, i) => {
+      if ((c0 >> BigInt(i)) & 1n) c ^= g;
+    });
+  }
+  if ((c ^ 1n) !== 0n) return false;
+  const version = (data[0] ?? 0) >> 2;
+  const bytes = Math.floor(((data.length - 8) * 5) / 8) - 1;
+  return ((version === 0 || version === 8) && bytes === 32) || (version === 1 && bytes === 33);
+}
+
+/** Algorand address: base32 of the public key (32 B) + the last 4 bytes of its SHA-512/256. */
+function validAlgorand(a: string): boolean {
+  if (!/^[A-Z2-7]{58}$/.test(a)) return false;
+  try {
+    const b = base32.decode(`${a}======`);
+    if (b.length !== 36) return false;
+    const h = sha512_256(b.subarray(0, 32));
+    return h.subarray(28).every((x, i) => x === b[32 + i]);
+  } catch {
+    return false;
+  }
+}
 
 /** Mainnet address check (format + checksum) per chain. */
 export function validFeeAddress(chain: FeeChain, a: string): boolean {
@@ -208,6 +285,15 @@ export function validFeeAddress(chain: FeeChain, a: string): boolean {
       } catch {
         return false;
       }
+    case 'monero':
+      return validMonero(a);
+    case 'kaspa':
+      return validKaspa(a);
+    case 'algorand':
+      return validAlgorand(a);
+    case 'near':
+      // Implicit account only: 64 lowercase hex (an ed25519 public key).
+      return /^[0-9a-f]{64}$/.test(a);
     case 'cardano':
       try {
         const d = bech32.decode(a as `${string}1${string}`, 200);
@@ -253,14 +339,13 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
 }
 
 /** Kyro fee addresses Exolix routes pay on their source chain (only the valid ones). */
-export function exolixFeeRecipients(cfg: SwapFeeConfig = KYRO_SWAP_FEE): Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>> {
-  const out: Partial<Record<'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero', string>> = {};
-  for (const c of ['evm', 'solana', 'bitcoin', 'litecoin', 'tron', 'dogecoin'] as const) {
+export type ExolixFeeChain = 'evm' | 'solana' | 'bitcoin' | 'litecoin' | 'tron' | 'dogecoin' | 'monero' | 'kaspa' | 'algorand' | 'near';
+export function exolixFeeRecipients(cfg: SwapFeeConfig = KYRO_SWAP_FEE): Partial<Record<ExolixFeeChain, string>> {
+  const out: Partial<Record<ExolixFeeChain, string>> = {};
+  for (const c of ['evm', 'solana', 'bitcoin', 'litecoin', 'tron', 'dogecoin', 'monero', 'kaspa', 'algorand', 'near'] as const) {
     const a = feeRecipientFor(c, cfg);
     if (a) out[c] = a;
   }
-  const xmr = cfg.recipients.monero ?? '';
-  if (/^[48][1-9A-HJ-NP-Za-km-z]{94}$/.test(xmr)) out.monero = xmr;
   return out;
 }
 

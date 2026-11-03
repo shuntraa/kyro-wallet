@@ -46,20 +46,19 @@ describe('Monero in the swap picker', () => {
     }
   });
 
-  it('shows XMR as a greyed « coming soon » source while no Monero fee address is configured', () => {
-    expect(canSwapFrom(chains.find((c) => c.family === 'xmr'))).toBe(false);
+  it('offers swaps FROM Monero, Kaspa, Algorand and NEAR (native coin only) now that Kyro has fee addresses there', () => {
     const sell = sellChoices('mainnet', chains, assets);
-    const x = sell.filter((c) => c.chain.family === 'xmr');
-    expect(x.map((c) => [c.asset.symbol, c.comingSoon])).toEqual([['XMR', true]]);
-    expect(sell.filter((c) => c.comingSoon)).toHaveLength(1);
-    const entries = sell.map((c) => ({ id: c.asset.id, symbol: c.asset.symbol, name: c.asset.name, network: c.chain.label, disabled: c.comingSoon }));
-    expect(searchTokens(entries, 'monero').map((x) => [x.symbol, x.disabled])).toEqual([['XMR', true]]);
-    // Arrival-only Exolix chains never show up as sources.
-    expect(sell.some((c) => ['kas', 'algo', 'near'].includes(c.chain.family))).toBe(false);
+    for (const f of ['xmr', 'kas', 'algo', 'near'] as const) {
+      expect(canSwapFrom(chains.find((c) => c.family === f)), f).toBe(true);
+      const x = sell.filter((c) => c.chain.family === f);
+      expect(x.length, f).toBeGreaterThan(0);
+      expect(x.every((c) => !c.comingSoon && c.asset.kind === 'native'), f).toBe(true);
+    }
+    expect(sell.some((c) => c.comingSoon)).toBe(false);
     expect(sellChoices('testnet', allChains('testnet'), assetsFor('testnet')).some((c) => c.comingSoon)).toBe(false);
   });
 
-  it('reaches Kaspa, Algorand and NEAR as destinations (Exolix), not as sources', () => {
+  it('reaches Kaspa, Algorand and NEAR as destinations (Exolix)', () => {
     const eth = assets.find((a) => a.chainKey === 'ethereum' && a.kind === 'native');
     const keys = buyGroups('mainnet', chains, assets, eth).map((g) => g.chain.key);
     for (const k of ['monero', 'kaspa', 'algorand', 'near']) expect(keys, k).toContain(k);

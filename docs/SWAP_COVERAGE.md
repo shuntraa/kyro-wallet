@@ -26,14 +26,14 @@ therefore need a Kyro fee address on the source chain.
 | TRX, USDT (TRC-20) | yes | yes | 1Click; Exolix (**new**: to XMR / KAS / ALGO / NEAR) |
 | XRP, ADA, BCH, DASH, ZEC (transparent), SUI, GRAM (TON), APT | yes | yes | 1Click |
 | XLM | no | yes | 1Click (arrival only: a Stellar deposit needs a memo) |
-| XMR | coming soon | yes | Exolix. As a source it shows greyed until `recipients.monero` is set in `packages/swap/src/fees.ts` |
-| KAS (Kaspa) | no | **yes (new)** | Exolix |
-| ALGO (Algorand) | no | **yes (new)** | Exolix |
-| NEAR (native) | no | **yes (new)** | Exolix |
+| XMR | **yes (1.0.6)** | yes | Exolix (Kyro fee: a second transfer to `recipients.monero`) |
+| KAS (Kaspa) | **yes (1.0.6)** | yes | Exolix (fee to `recipients.kaspa`) |
+| ALGO (Algorand) | **yes (1.0.6)** | yes | Exolix (fee to `recipients.algorand`) |
+| NEAR (native) | **yes (1.0.6)** | yes | Exolix (fee to `recipients.near`, an implicit account) |
 
 Exolix destinations can be reached from ETH (Ethereum, Arbitrum, Base, Optimism), POL, SOL, USDT and USDC
-(Ethereum, Solana), BTC, LTC, DOGE, TRX and USDT-TRC20. Only the native coin is offered on the
-arrival-only chains. ASAs and NEP-141 tokens are not mapped.
+(Ethereum, Solana), BTC, LTC, DOGE, TRX and USDT-TRC20. Since 1.0.6 Monero, Kaspa, Algorand and NEAR are also
+sources (Exolix, to any of those destinations and back). Only their native coin is offered, both ways. ASAs and NEP-141 tokens are not mapped.
 
 ## Not swappable
 

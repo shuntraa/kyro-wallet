@@ -165,12 +165,12 @@ Limits of the NEAR Intents routes:
 | Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, XRP, Cardano, Sui, TON, Aptos | — | 1Click |
 | TRON | 1Click (TRX ⇄ USDT) | 1Click |
 | Stellar | — | 1Click, **destination only** |
-| Monero | — | Exolix: XMR ⇄ BTC, LTC, ETH, USDT / USDC (Ethereum), SOL, USDT / USDC (Solana). **To Monero** only for now: no Kyro Monero fee address is configured (`recipients.monero`), so no route FROM Monero (never fee-free) |
-| NEAR, Hedera, Kaspa, Polkadot, Algorand, Cosmos Hub | — | — |
+| Monero, Kaspa, Algorand, NEAR (native coin) | — | Exolix, both ways (from 1.0.6): XMR / KAS / ALGO / NEAR ⇄ BTC, LTC, DOGE, TRX, ETH, USDT / USDC (Ethereum, Solana, TRON), SOL… The Kyro fee is a second transfer on the source chain to `recipients.monero` / `kaspa` / `algorand` / `near` |
+| Hedera, Polkadot, Cosmos Hub | — | — |
 
 ## Exolix (Monero)
 
-Exolix (public API v2, no key, no affiliate program) has no integrator fee. Kyro takes its fee on the **source** side: the amount swapped is reduced by the Kyro rate (same curve), and the fee goes in a **second ordinary transfer** of the sold coin to Kyro's fee address on that chain (`recipients.bitcoin`, `litecoin`, `evm`, `solana`; `monero` when set), checked like the deposit and sent right after it. One transaction with an extra output (BTC / LTC / XMR) is planned; today it is two transfers. Fixed rate when Exolix offers one (the received amount is then the minimum), else floating (minimum = quote minus your slippage, not guaranteed by Exolix).
+Exolix (public API v2, no key, no affiliate program) has no integrator fee. Kyro takes its fee on the **source** side: the amount swapped is reduced by the Kyro rate (same curve), and the fee goes in a **second ordinary transfer** of the sold coin to Kyro's fee address on that chain (`recipients.bitcoin`, `litecoin`, `dogecoin`, `tron`, `evm`, `solana`, `monero`, `kaspa`, `algorand`, `near`), checked like the deposit and sent right after it. One transaction with an extra output (BTC / LTC / XMR / KAS) is planned; today it is two transfers. Fee addresses are checked with their real checksum before use (Monero base58 + Keccak-256, Kaspa cashaddr polymod, Algorand base32 + SHA-512/256, NEAR implicit = 64 lowercase hex): an invalid one closes the routes from that chain, never fee-free. Fixed rate when Exolix offers one (the received amount is then the minimum), else floating (minimum = quote minus your slippage, not guaranteed by Exolix).
 
 ## 1inch: removed
 

@@ -22,12 +22,12 @@ describe('Exolix routes beyond Monero', () => {
     expect(exolixAsset('near', 'near', 18)).toBeNull();
   });
 
-  it('serves an Exolix-only chain on one side, never from an arrival-only chain', () => {
+  it('serves an Exolix-only chain on one side, both ways', () => {
     expect(exolixRoute(1, 'kaspa')).toBe(true);
     expect(exolixRoute('tron', 'monero')).toBe(true);
     expect(exolixRoute('dogecoin', 'algorand')).toBe(true);
     expect(exolixRoute('monero', 'near')).toBe(true);
-    expect(exolixRoute('kaspa', 1)).toBe(false);
+    expect(exolixRoute('kaspa', 1)).toBe(true);
     expect(exolixRoute('bitcoin', 1)).toBe(false); // 1Click / LI.FI's
     expect(exolixRoute('kaspa', 'kaspa')).toBe(false);
     expect(exolixRoute(56, 'monero')).toBe(false);
@@ -57,7 +57,7 @@ describe('Exolix routes beyond Monero', () => {
     const p = new ExolixProvider({ fetch, fee: providerFee('exolix', KYRO_SWAP_FEE), recipients: exolixFeeRecipients(KYRO_SWAP_FEE) });
     const toKas: QuoteParams = { chain: 1, toChain: 'kaspa', recipient: OWN_KAS, sell: { address: NATIVE_EVM, symbol: 'ETH', decimals: 18 }, buy: { address: 'kaspa', symbol: 'KAS', decimals: 8 }, sellAmount: 100_000_000_000_000_000n, taker: OWN_EVM, slippageBps: 100 };
     expect(p.supports(toKas)).toBe(true);
-    expect(p.supports({ ...toKas, chain: 'kaspa', toChain: 1, recipient: OWN_EVM, sell: toKas.buy, buy: toKas.sell, taker: OWN_KAS })).toBe(false);
+    expect(p.supports({ ...toKas, chain: 'kaspa', toChain: 1, recipient: OWN_EVM, sell: toKas.buy, buy: toKas.sell, taker: OWN_KAS })).toBe(true);
     const q = await p.quote(toKas);
     expect(seen[0]).toContain('coinTo=KAS&networkTo=KAS');
     expect(q.buyAmount).toBe(400_000_000_000n);
