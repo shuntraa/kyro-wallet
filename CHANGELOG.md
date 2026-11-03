@@ -2,6 +2,8 @@
 
 ## 1.0.6
 
+- Address book: the network is detected from the pasted address (a short choice only when
+  several match), Enter saves and the name is optional. Send offers "Save" for a new recipient.
 - History is fetched in the background after unlock and kept per wallet, so the History page
   opens on a ready list; while it refreshes, what is there shows with a small "Updating…".
   Unreachable networks are named in a calm line and retried on their own.

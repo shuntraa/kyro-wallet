@@ -88,8 +88,10 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.noContact': 'No contacts.',
   'settings.deleteNamed': 'Delete {name}',
   'settings.name': 'Name',
-  'settings.invalidAddress': 'Invalid address for this network.',
+  'settings.invalidAddress': 'Unrecognised address.',
   'settings.addToBook': 'Add to address book',
+  'settings.nameOptional': 'Name (optional)',
+  'settings.searchContacts': 'Search contacts',
   'settings.yourAddress': 'your address',
 
   'settings.hintBtc': 'SegWit and Taproot',

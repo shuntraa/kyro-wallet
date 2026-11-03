@@ -96,8 +96,10 @@ export const settings = {
   'settings.noContact': 'Aucun contact.',
   'settings.deleteNamed': 'Supprimer {name}',
   'settings.name': 'Nom',
-  'settings.invalidAddress': 'Adresse invalide pour ce réseau.',
+  'settings.invalidAddress': 'Adresse non reconnue.',
   'settings.addToBook': 'Ajouter au carnet',
+  'settings.nameOptional': 'Nom (facultatif)',
+  'settings.searchContacts': 'Rechercher un contact',
   'settings.yourAddress': 'ton adresse',
 
   // Vault accounts

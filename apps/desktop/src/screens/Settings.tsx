@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { call, toIpcError, type AccountChain, type ApiKeyName, type Settings } from '@kyro/shared';
-import { findLookalike, isHiddenFamily, outgoingHosts, type KnownAddress } from '@kyro/chains';
+import { findLookalike, outgoingHosts, type KnownAddress } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
 import { getBackupState, getContacts, saveContacts, type Contact, type ContactFamily } from '../lib/storage';
 import { PasswordField } from '../components/kit';
+import { CoinIcon } from '../components/coins/CoinIcon';
+import { adapterValidator, CONTACT_FAMILY_META, detectFamilies } from '../lib/contactDetect';
+import { familyAdapters } from '../lib/accounts';
 import { PoisoningWarning } from '../components/Poisoning';
 import { ServersSection } from './settings/Servers';
 import { NetDiagnostics } from './settings/Diagnostics';
@@ -554,17 +557,20 @@ function Contacts() {
   const [list, setList] = useState<Contact[]>(() => getContacts());
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
-  const [family, setFamily] = useState<ContactFamily>('evm');
+  const [pick, setPick] = useState<ContactFamily | null>(null);
+  const [query, setQuery] = useState('');
   const { t } = useT();
-  const adapter = family === 'evm' ? [...adapters.evm.values()][0] : family === 'ada' ? adapters.cardano : family === 'xlm' ? adapters.stellar : family === 'kas' ? adapters.kaspa : family === 'dot' ? adapters.polkadot : family === 'apt' ? adapters.aptos : adapters[family];
-  const valid = !!adapter && adapter.isValidAddress(address.trim());
+  const candidates = useMemo(() => detectFamilies(address, adapterValidator(adapters)), [address, adapters]);
+  const family: ContactFamily | undefined = pick && candidates.includes(pick) ? pick : candidates[0];
+  const adapter = family ? familyAdapters(adapters, family)[0] : undefined;
+  const valid = !!family;
   const persist = (l: Contact[]) => {
     setList(l);
     saveContacts(l);
   };
   // Address poisoning: a contact saved from a look-alike would become a « known » address.
   const lookalike = (() => {
-    if (!valid) return null;
+    if (!family) return null;
     const own = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address, accounts.sol?.address, accounts.ltc?.address, accounts.doge?.address, accounts.bch?.address, accounts.dash?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address, accounts.kas?.address, accounts.polkadot?.address, accounts.algo?.address, accounts.xmr?.address, accounts.ton?.address, accounts.cosmos?.address, accounts.aptos?.address, accounts.zec?.address, ...accountSources.filter((x) => x.family === family).flatMap((x) => x.addresses)];
     const ownOfFamily = own.filter((a): a is string => !!a && (adapter?.isValidAddress(a) ?? false));
     const known: KnownAddress[] = [
@@ -575,49 +581,69 @@ function Contacts() {
   })();
   const [ack, setAck] = useState(false);
   useEffect(() => setAck(false), [address, family]);
+  const canSave = valid && (!lookalike || ack);
   return (
     <Panel className="gap-4 py-5">
       <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionContacts')}</span>
       <p className="m-0 -mt-2 text-[13px] text-mute">{t('settings.contactsIntro')}</p>
       <div className="flex flex-col gap-2">
         {list.length === 0 && <span className="text-[13px] text-faint">{t('settings.noContact')}</span>}
-        {list.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
-            <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{c.name.slice(0, 1).toUpperCase()}</span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-[14px] font-semibold">{c.name}</span>
-              <span className="font-mono text-[12px] text-mute">
-                {c.family.toUpperCase()} · {shortAddress(c.address)}
+        {list.length > 5 && <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('settings.searchContacts')} aria-label={t('settings.searchContacts')} />}
+        {list
+          .filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()) || c.address.toLowerCase().includes(query.trim().toLowerCase()))
+          .map((c) => (
+            <div key={c.id} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
+              <CoinIcon symbol={CONTACT_FAMILY_META[c.family]?.symbol ?? c.family.toUpperCase()} size={30} />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[14px] font-semibold">{c.name}</span>
+                <span className="font-mono text-[12px] text-mute">{shortAddress(c.address)}</span>
               </span>
-            </span>
-            <button type="button" aria-label={t('settings.deleteNamed', { name: c.name })} onClick={() => persist(list.filter((x) => x.id !== c.id))} className="flex size-8 items-center justify-center rounded-full text-mute hover:bg-control hover:text-down">
-              <IconTrash size={15} />
-            </button>
-          </div>
-        ))}
+              <button type="button" aria-label={t('settings.deleteNamed', { name: c.name })} onClick={() => persist(list.filter((x) => x.id !== c.id))} className="flex size-8 items-center justify-center rounded-full text-mute hover:bg-control hover:text-down">
+                <IconTrash size={15} />
+              </button>
+            </div>
+          ))}
       </div>
       <div className="flex flex-col gap-2 border-t border-line pt-4">
         <span className="text-[13px] font-semibold">{t('common.add')}</span>
-        <div className="flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.name')} className="w-[160px]" />
-          <Segmented label={t('common.network')} value={family} onChange={(v) => setFamily(v as ContactFamily)} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'bch', label: 'BCH' }, { value: 'dash', label: 'DASH' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }, { value: 'zec', label: 'ZEC' }, { value: 'apt', label: 'APT' }, { value: 'cosmos', label: 'ATOM' }, { value: 'ton', label: 'TON' }, { value: 'xmr', label: 'XMR' }, { value: 'algo', label: 'ALGO' }, { value: 'dot', label: 'DOT' }, { value: 'kas', label: 'KAS' }, { value: 'hbar', label: 'HBAR' }, { value: 'sui', label: 'SUI' }, { value: 'xlm', label: 'XLM' }, { value: 'near', label: 'NEAR' }].filter((o) => !isHiddenFamily(o.value))} />
-        </div>
-        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('common.address')} className="font-mono text-[13px]" />
-        {address && !valid && <span className="text-[12px] text-down">{t('settings.invalidAddress')}</span>}
-        {lookalike && <PoisoningWarning recipient={address.trim()} lookalike={lookalike} family={family} acknowledged={ack} onAcknowledge={setAck} />}
-        <div>
-          <Button
-            variant="primary"
-            disabled={!name.trim() || !valid || (!!lookalike && !ack)}
-            onClick={() => {
-              persist([...list, { id: crypto.randomUUID(), name: name.trim(), address: address.trim(), family, sends: 0 }]);
-              setName('');
-              setAddress('');
-            }}
-          >
-            {t('settings.addToBook')}
-          </Button>
-        </div>
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!canSave || !family) return;
+            persist([...list, { id: crypto.randomUUID(), name: name.trim() || shortAddress(address.trim()), address: address.trim(), family, sends: 0 }]);
+            setName('');
+            setAddress('');
+            setPick(null);
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('common.address')} aria-label={t('common.address')} className="min-w-0 flex-1 font-mono text-[13px]" />
+            {family && candidates.length === 1 && (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-raised py-1 pr-2.5 pl-1 text-[12px] font-semibold">
+                <CoinIcon symbol={CONTACT_FAMILY_META[family].symbol} size={20} />
+                {CONTACT_FAMILY_META[family].label}
+              </span>
+            )}
+            {family && candidates.length > 1 && (
+              <select value={family} onChange={(e) => setPick(e.target.value as ContactFamily)} aria-label={t('common.network')} className="h-[42px] shrink-0 rounded-ctl border border-line-3 bg-bg px-2 text-[13px] font-semibold">
+                {candidates.map((f) => (
+                  <option key={f} value={f}>
+                    {CONTACT_FAMILY_META[f].label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          {address.trim() && !valid && <span className="text-[12px] text-down">{t('settings.invalidAddress')}</span>}
+          {lookalike && family && <PoisoningWarning recipient={address.trim()} lookalike={lookalike} family={family} acknowledged={ack} onAcknowledge={setAck} />}
+          <div className="flex gap-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.nameOptional')} aria-label={t('settings.name')} className="min-w-0 flex-1" />
+            <Button type="submit" variant="primary" disabled={!canSave}>
+              {t('settings.addToBook')}
+            </Button>
+          </div>
+        </form>
       </div>
     </Panel>
   );

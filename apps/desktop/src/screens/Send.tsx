@@ -179,6 +179,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // An address handed over by the search palette: its origin is unknown (typed or pasted there), never « pasted here ».
   const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
   const toRef = useRef<HTMLInputElement>(null);
+  const [, setContactsRev] = useState(0);
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const otherNetworks = asset && !addrValid && siblings.length > 1 ? otherNetworksForAddress(toTrim, asset, siblings, (a, x) => !!adapterFor(a, adapters)?.isValidAddress(x)) : [];
@@ -767,7 +768,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   <div className="flex items-center gap-2.5">
                     <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
-                      <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? t('send.yourOwnAccount') : t('send.unknownAddress')}</span>
+                      <span className="flex flex-wrap items-center gap-2 text-[14px] font-medium">
+                        {ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? t('send.yourOwnAccount') : t('send.unknownAddress')}
+                        {!ownAccount && !contact && !isOwn && <InlineSaveContact key={toTrim} address={toTrim} family={asset.family as ContactFamily} onSaved={() => setContactsRev((n) => n + 1)} />}
+                      </span>
                       <span className="text-[12px] text-mute">{ownAccount ? t('send.ownAccountSub', { chain: ACCOUNT_CHAIN_LABEL[ownAccount.family], n: ownAccount.index + 1 }) : contact ? tp('send.contactSub', contact.sends ?? 0) : isOwn ? t('send.ownVaultSub') : t('send.unknownSub')}</span>
                     </span>
                   </div>
@@ -1497,6 +1501,7 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
   const { t } = useT();
   const [name, setName] = useState('');
   const [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-1 items-center justify-center p-8">
       <div className="rise flex w-[520px] flex-col items-center gap-5 rounded-panel border border-line bg-card px-8 py-9 text-center">
@@ -1512,21 +1517,27 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
           <CopyButton text={id} />
         </div>
         {children}
-        {!contactKnown && !saved && (
-          <div className="flex w-full items-center gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('send.doneContactName')} className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] focus:border-ice-line" />
-            <Button
-              size="md"
-              disabled={!name.trim()}
-              onClick={() => {
-                saveContacts([...getContacts(), { id: crypto.randomUUID(), name: name.trim(), address: to, family: asset.family as ContactFamily, sends: 1 }]);
-                setSaved(true);
-              }}
-            >
+        {!contactKnown && !saved && !open && (
+          <button type="button" onClick={() => setOpen(true)} className="text-[13px] font-medium text-ice-text hover:underline">
+            {t('send.saveToBook')}
+          </button>
+        )}
+        {!contactKnown && !saved && open && (
+          <form
+            className="flex w-full items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!findContact(to, asset.family as ContactFamily)) saveContacts([...getContacts(), { id: crypto.randomUUID(), name: name.trim() || shortAddress(to), address: to, family: asset.family as ContactFamily, sends: 1 }]);
+              setSaved(true);
+            }}
+          >
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t('send.doneContactName')} className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] focus:border-ice-line" />
+            <Button type="submit" size="md">
               {t('common.save')}
             </Button>
-          </div>
+          </form>
         )}
+        {saved && <span className="text-[13px] text-up">{t('send.savedContact')}</span>}
         <div className="flex gap-2">
           <Button variant="primary" size="lg" onClick={onHistory}>
             {t('send.doneViewHistory')}
@@ -1537,5 +1548,41 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
         </div>
       </div>
     </div>
+  );
+}
+
+/** « Save » next to an unknown recipient: the name prompt opens inline, Enter saves (empty name: short address). */
+function InlineSaveContact({ address, family, onSaved }: { address: string; family: ContactFamily; onSaved: () => void }) {
+  const { t } = useT();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-[12px] font-medium text-ice-text hover:underline">
+        {t('send.saveContact')}
+      </button>
+    );
+  // Inside the Send form: no nested <form>, Enter is handled here.
+  const save = () => {
+    if (!findContact(address, family)) saveContacts([...getContacts(), { id: crypto.randomUUID(), name: name.trim() || shortAddress(address), address, family, sends: 0 }]);
+    onSaved();
+  };
+  return (
+    <span className="flex items-center gap-1.5">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+          } else if (e.key === 'Escape') setOpen(false);
+        }}
+        placeholder={t('send.doneContactName')} aria-label={t('send.doneContactName')} className="h-7 w-[180px] rounded-ctl border border-line-2 bg-bg px-2 text-[12px] font-normal focus:border-ice-line" />
+      <Button type="button" size="sm" onClick={save}>
+        {t('common.save')}
+      </Button>
+    </span>
   );
 }
