@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.6
+
+- History is fetched in the background after unlock and kept per wallet, so the History page
+  opens on a ready list; while it refreshes, what is there shows with a small "Updating…".
+  Unreachable networks are named in a calm line and retried on their own.
+- Price charts: "All" now goes back years (Kraken public weekly prices, no account), and is
+  hidden for coins without a long history instead of repeating 1Y.
+- Search: one result per coin, with its icon and your balance or its rank.
+- Receive: a quieter network note.
+
 ## 1.0.5
 
 - Earn (was Staking): a new page with 14 options and live estimated rates. New: ETH liquid
