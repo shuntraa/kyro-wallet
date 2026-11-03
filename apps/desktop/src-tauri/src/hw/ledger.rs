@@ -139,6 +139,18 @@ pub fn open(loc: &Locator, model: &str) -> HwResult<Box<dyn HardwareWallet>> {
     }))
 }
 
+/// The bare HID link of a found Ledger (real-device check, `device_check`).
+#[cfg(test)]
+pub fn hid_link(loc: &Locator) -> HwResult<HidLink> {
+    let guard = lock(hidapi());
+    let api = guard.as_ref().ok_or(HwError::NotFound)?;
+    let dev = api.open_path(&loc.path).map_err(|_| HwError::NotFound)?;
+    Ok(HidLink {
+        dev: Mutex::new(dev),
+        path: Mutex::new(loc.path.clone()),
+    })
+}
+
 /// Raw APDU exchange. `HidLink` in the app, a recorded replay in tests.
 pub trait ApduLink: Send {
     fn exchange(&self, ctl: &Ctl, apdu: &[u8]) -> HwResult<(Vec<u8>, u16)>;

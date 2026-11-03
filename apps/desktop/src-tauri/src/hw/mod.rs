@@ -1,6 +1,8 @@
 //! Hardware wallets (Ledger over USB HID, Trezor over WebUSB).
 
 pub mod chains;
+#[cfg(test)]
+mod device_check;
 pub mod ledger;
 pub mod ledger_algo;
 pub mod ledger_apdu;
