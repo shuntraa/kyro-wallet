@@ -419,7 +419,8 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(unsigned.wire));
     const message = getBase64Decoder().decode(tx.messageBytes);
-    const res = await call('hw_sign_sol_tx', { id: deviceId, accountId: this.hw.accountId, message });
+    // SPL: the typed recipient lets Rust (and a Trezor) name the wallet behind the token account.
+    const res = await call('hw_sign_sol_tx', { id: deviceId, accountId: this.hw.accountId, message, ...(unsigned.mint ? { recipient: unsigned.recipient } : {}) });
     const index = res.summary.ourSignerIndex;
     if (index === null) throw new Error(l10n('Ce compte ne signe pas cette transaction', 'This account does not sign this transaction'));
     const problem = checkSolSummary(unsigned, res.summary, this.me);

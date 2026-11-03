@@ -427,6 +427,16 @@ pub struct EvmSignRequest<'a> {
     pub token: Option<&'a LedgerErc20Descriptor>,
 }
 
+/// An associated token account a Solana transaction sends to: `token_account` =
+/// ATA(`base_address`, `token_program`, `token_mint`), checked by Rust before use.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SolTokenAccount {
+    pub base_address: String,
+    pub token_program: String,
+    pub token_mint: String,
+    pub token_account: String,
+}
+
 /// One connected device. Implementations never decide what is safe: they talk to the device,
 /// map its errors, and return raw results that the caller verifies.
 pub trait HardwareWallet: Send {
@@ -470,6 +480,20 @@ pub trait HardwareWallet: Send {
     fn sol_address(&mut self, ctl: &Ctl, account: u32, display: bool) -> HwResult<String>;
 
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>>;
+
+    /// Same as [`Self::sol_sign`], with the token accounts the transaction pays to (verified
+    /// associated token accounts), so a device that can use them shows the recipient wallet
+    /// instead of its token account. Default: ignored (Ledger's Solana app needs none).
+    fn sol_sign_tokens(
+        &mut self,
+        ctl: &Ctl,
+        account: u32,
+        message: &[u8],
+        tokens: &[SolTokenAccount],
+    ) -> HwResult<Vec<u8>> {
+        let _ = tokens;
+        self.sol_sign(ctl, account, message)
+    }
 
     fn raw(&mut self) -> RawDevice<'_> {
         RawDevice::None

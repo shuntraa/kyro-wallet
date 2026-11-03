@@ -179,7 +179,10 @@ pub use polkadot::{
     dot_decode_asset_details, dot_decode_asset_metadata, dot_known_asset, dot_known_assets,
     DotAssetAccount, DotAssetDetails, DotAssetSummary, DotKnownAsset,
 };
-pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
+pub use sol::{
+    sol_address, sol_address_of_pubkey, sol_associated_token_address, sol_sign_message,
+    sol_verify_signature,
+};
 pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_message_static_keys, sol_parse_lookup_table,
     SolInstruction, SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning,

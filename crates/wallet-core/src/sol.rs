@@ -77,3 +77,66 @@ pub fn sol_verify_signature(address: &str, message: &[u8], signature: &[u8]) -> 
         .map_err(|_| Error::Device("signature does not verify for this address".into()))?;
     Ok(sig)
 }
+
+const SOL_ATA_PROGRAM: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+
+fn sol_key(s: &str) -> Result<[u8; 32]> {
+    bs58::decode(s.trim())
+        .into_vec()
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| Error::input("invalid Solana address"))
+}
+
+/// Associated token account of `owner` for `mint` under `token_program` (base58 in and out):
+/// `find_program_address([owner, token_program, mint], ATA program)`.
+pub fn sol_associated_token_address(
+    owner: &str,
+    mint: &str,
+    token_program: &str,
+) -> Result<String> {
+    use sha2::Digest as _;
+    let (owner, program, mint, ata) = (
+        sol_key(owner)?,
+        sol_key(token_program)?,
+        sol_key(mint)?,
+        sol_key(SOL_ATA_PROGRAM)?,
+    );
+    for bump in (0..=255u8).rev() {
+        let mut h = sha2::Sha256::new();
+        for s in [&owner[..], &program[..], &mint[..], &[bump][..]] {
+            h.update(s);
+        }
+        h.update(ata);
+        h.update(b"ProgramDerivedAddress");
+        let k: [u8; 32] = h.finalize().into();
+        if curve25519_dalek::edwards::CompressedEdwardsY(k)
+            .decompress()
+            .is_none()
+        {
+            return Ok(bs58::encode(k).into_string());
+        }
+    }
+    Err(Error::input("no associated token address"))
+}
+
+#[cfg(test)]
+mod ata_tests {
+    use super::*;
+
+    #[test]
+    fn ata_matches_devnet_vector() {
+        // Same vector as packages/chains/test/solana.test.ts (a real devnet token account).
+        let wallet = "Cf9abfrZbkkcKthpkKqwmA8H3LiGtGZ2ZL8NsfQzYLQP";
+        let mint = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+        let token = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+        let ata = sol_associated_token_address(wallet, mint, token).unwrap();
+        assert_eq!(ata, "5iv62nJJJHsV7pgJcA3sf9kp98uWaQcjyKtxFZ5dEbcW");
+        let t22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+        assert_ne!(
+            sol_associated_token_address(wallet, mint, t22).unwrap(),
+            ata
+        );
+        assert!(sol_associated_token_address("bad", mint, token).is_err());
+    }
+}

@@ -879,6 +879,7 @@ pub async fn hw_sign_sol_tx(
     id: String,
     account_id: String,
     message: String,
+    recipient: Option<String>,
 ) -> AppResult<HwSolSigned> {
     guard(&state)?;
     let acc = load_account(&state, &account_id)?;
@@ -907,6 +908,7 @@ pub async fn hw_sign_sol_tx(
     if !same {
         return Err(AppError::HwWrongDevice);
     }
+    let tokens = sol_token_accounts(&summary, recipient.as_deref());
     let lang = crate::i18n::current();
     confirm_native(
         &app,
@@ -914,7 +916,9 @@ pub async fn hw_sign_sol_tx(
             "Confirmer la transaction Solana (hardware wallet)",
             "Confirm the Solana transaction (hardware wallet)",
         ),
-        solana::describe(lang, &decoded, &me, state.network) + &device_line(lang, &info),
+        solana::describe(lang, &decoded, &me, state.network)
+            + &sol_token_owner_lines(lang, &tokens)
+            + &device_line(lang, &info),
     )
     .await?;
     if summary.requires_extra_confirmation {
@@ -933,7 +937,7 @@ pub async fn hw_sign_sol_tx(
     let sig = state
         .hw
         .run(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
-            dev.sol_sign(ctl, account, &msg)
+            dev.sol_sign_tokens(ctl, account, &msg, &tokens)
         })
         .await?;
     let sig = wallet_core::sol_verify_signature(&me, &bytes, &sig)?;
@@ -942,6 +946,78 @@ pub async fn hw_sign_sol_tx(
         signature: base64::engine::general_purpose::STANDARD.encode(sig),
         summary,
     })
+}
+
+fn sol_program_id(p: wallet_core::SolTokenProgram) -> &'static str {
+    match p {
+        wallet_core::SolTokenProgram::Token => "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        wallet_core::SolTokenProgram::Token2022 => "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    }
+}
+
+/// Token accounts this transaction pays to whose wallet is known: the holder of an associated
+/// token account created in the same transaction, or `recipient` (what the user typed). Each is
+/// kept only if it IS that wallet's associated token account for the transfer's mint, so a
+/// wrong `recipient` adds nothing (the device would also re-derive and refuse it).
+pub fn sol_token_accounts(
+    summary: &wallet_core::SolTxSummary,
+    recipient: Option<&str>,
+) -> Vec<crate::hw::SolTokenAccount> {
+    use wallet_core::SolInstruction as I;
+    let mut owners: Vec<&str> = recipient.into_iter().collect();
+    for ins in &summary.instructions {
+        if let I::AtaCreate { owner, .. } = ins {
+            owners.push(owner);
+        }
+    }
+    let mut out: Vec<crate::hw::SolTokenAccount> = Vec::new();
+    for ins in &summary.instructions {
+        let I::TokenTransfer {
+            token_program,
+            destination,
+            mint: Some(mint),
+            ..
+        } = ins
+        else {
+            continue;
+        };
+        let program = sol_program_id(*token_program);
+        let found = owners.iter().find(|o| {
+            wallet_core::sol_associated_token_address(o, mint, program)
+                .is_ok_and(|a| a == *destination)
+        });
+        if let Some(owner) = found {
+            let t = crate::hw::SolTokenAccount {
+                base_address: (*owner).to_owned(),
+                token_program: program.to_owned(),
+                token_mint: mint.clone(),
+                token_account: destination.clone(),
+            };
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    out
+}
+
+/// "Recipient wallet" lines for the native window (token accounts verified as ATAs).
+fn sol_token_owner_lines(lang: Lang, tokens: &[crate::hw::SolTokenAccount]) -> String {
+    tokens
+        .iter()
+        .map(|t| {
+            format!(
+                "
+{} {} → {}",
+                lang.pick(
+                    "Portefeuille destinataire (compte token associé vérifié) :",
+                    "Recipient wallet (verified associated token account):"
+                ),
+                t.token_account,
+                t.base_address
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1089,5 +1165,63 @@ mod tests {
         };
         assert!(describe_btc_extra(Lang::Fr, &s).contains("sortie 2 : OP_RETURN"));
         assert!(describe_btc_extra(Lang::En, &s).contains("output 2: OP_RETURN"));
+    }
+
+    #[test]
+    fn sol_token_accounts_only_verified_atas() {
+        use wallet_core::{SolInstruction as I, SolTokenProgram, SolTxSummary};
+        let wallet = "Cf9abfrZbkkcKthpkKqwmA8H3LiGtGZ2ZL8NsfQzYLQP";
+        let mint = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+        let ata = "5iv62nJJJHsV7pgJcA3sf9kp98uWaQcjyKtxFZ5dEbcW";
+        let me = "GxVQ1n7DXnb1iU94CvWuxZQFM56Cj5bk5UpWg7T3Xu2d";
+        let transfer = I::TokenTransfer {
+            token_program: SolTokenProgram::Token,
+            checked: true,
+            source: "GXGc5RJU7W4j8FrH38vfGbryht5av3zeiZCmhDN7yRPU".into(),
+            destination: ata.into(),
+            authority: me.into(),
+            mint: Some(mint.into()),
+            amount: "1000000".into(),
+            decimals: Some(6),
+            multisig_signers: vec![],
+        };
+        let summary = |instructions: Vec<I>| SolTxSummary {
+            version: "legacy".into(),
+            fee_payer: me.into(),
+            signers: vec![me.into()],
+            our_signer_index: Some(0),
+            recent_blockhash: "11111111111111111111111111111111".into(),
+            instructions,
+            lookup_tables: vec![],
+            base_fee_lamports: "5000".into(),
+            compute_unit_limit: None,
+            compute_unit_price_micro_lamports: None,
+            priority_fee_lamports: None,
+            warnings: vec![],
+            requires_extra_confirmation: false,
+        };
+        let s = summary(vec![transfer.clone()]);
+        // Existing ATA: only through the typed recipient, and only if it derives.
+        assert!(sol_token_accounts(&s, None).is_empty());
+        assert!(sol_token_accounts(&s, Some(me)).is_empty());
+        let got = sol_token_accounts(&s, Some(wallet));
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].base_address, wallet);
+        assert_eq!(got[0].token_account, ata);
+        assert_eq!(got[0].token_mint, mint);
+        // Created ATA: the holder comes from the transaction itself; no duplicate.
+        let create = I::AtaCreate {
+            idempotent: true,
+            payer: me.into(),
+            account: ata.into(),
+            owner: wallet.into(),
+            mint: mint.into(),
+            token_program: None,
+        };
+        let s = summary(vec![create, transfer]);
+        assert_eq!(sol_token_accounts(&s, None).len(), 1);
+        assert_eq!(sol_token_accounts(&s, Some(wallet)).len(), 1);
+        let lines = sol_token_owner_lines(Lang::En, &sol_token_accounts(&s, None));
+        assert!(lines.contains(wallet) && lines.contains("Recipient wallet"));
     }
 }

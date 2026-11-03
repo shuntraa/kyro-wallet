@@ -177,8 +177,9 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
              own summary), or reject",
         ),
         0x6808 => HwError::unsupported(
-            "this Ledger cannot show the details of this transaction: turn on \
-             “Blind signing” in the Solana app settings, or reject",
+            "Enable Blind signing in the Solana app settings: this Ledger cannot \
+             show every instruction of this transaction (Kyro showed its own \
+             summary), or reject",
         ),
         0x6807 => HwError::unsupported("app not installed on the device"),
         0xB008 => HwError::bad("signature or HMAC rejected by the device (B008)"),
@@ -373,6 +374,9 @@ mod tests {
             sw_error(0x6808, Signing),
             HwError::Unsupported { .. }
         ));
+        let hint = |e: HwError| format!("{e:?}");
+        assert!(hint(sw_error(0x6808, Signing))
+            .contains("Enable Blind signing in the Solana app settings"));
         assert!(matches!(sw_error(0xB007, General), HwError::BadResponse(_)));
     }
 

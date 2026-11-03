@@ -2559,7 +2559,7 @@ export interface Commands {
   hw_sign_btc_psbt: { args: { id: string; accountId: string; psbt: string }; ret: { psbt: string; summary: BtcTxSummary } };
   /** 2nd dialog for a contract call or blind signing. Signs for `m/44'/60'/0'/0/{account}`. */
   hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest }; ret: { rawTx: string; hash: string } };
-  hw_sign_sol_tx: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary } };
+  hw_sign_sol_tx: { args: { id: string; accountId: string; message: string; recipient?: string }; ret: { signature: string; summary: SolTxSummary } };
   /** LTC / DOGE / BCH / DASH: every input of this account with `nonWitnessUtxo`. Partial signatures (BCH: finalized). */
   hw_sign_utxo_psbt: { args: { id: string; accountId: string; chain: 'ltc' | 'doge' | 'bch' | 'dash'; psbt: string }; ret: { psbt: string; summary: UtxoTxSummary } };
   hw_xrp_build_tx: { args: { accountId: string; to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } }; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };

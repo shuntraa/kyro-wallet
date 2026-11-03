@@ -14,6 +14,9 @@
 - Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.
 - Ledger: Litecoin works with the current Litecoin app (keys, address on screen, signing over the
   new protocol); an app that does not understand Kyro now says to update it in Ledger Live.
+- Hardware wallets: Solana tokens (SPL, e.g. USDC/USDT) can be sent from Ledger and Trezor
+  accounts, creating the recipient's token account when needed; a Trezor shows the recipient
+  wallet, a Ledger that needs it says "Enable Blind signing in the Solana app settings".
 
 ## 1.0.5
 

@@ -793,13 +793,47 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
     }
 
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>> {
+        self.sol_sign_tokens(ctl, account, message, &[])
+    }
+
+    fn sol_sign_tokens(
+        &mut self,
+        ctl: &Ctl,
+        account: u32,
+        message: &[u8],
+        tokens: &[super::SolTokenAccount],
+    ) -> HwResult<Vec<u8>> {
         self.ensure(Chain::Sol)?;
-        let mut req = protos::SolanaSignTx::new();
-        req.address_n = sol_path(account).to_vec();
-        req.set_serialized_tx(message.to_vec());
+        let req = sol_sign_request(account, message, tokens);
         let sig: protos::SolanaTxSignature = self.send(ctl, &req)?;
         Ok(sig.signature().to_vec())
     }
+}
+
+/// `SolanaSignTx`, with `additional_info.token_accounts_infos` when the transaction pays to
+/// associated token accounts: the firmware re-derives each one and then shows the recipient
+/// wallet (base address) instead of the token account.
+pub fn sol_sign_request(
+    account: u32,
+    message: &[u8],
+    tokens: &[super::SolTokenAccount],
+) -> protos::SolanaSignTx {
+    let mut req = protos::SolanaSignTx::new();
+    req.address_n = sol_path(account).to_vec();
+    req.set_serialized_tx(message.to_vec());
+    if !tokens.is_empty() {
+        let mut info = protos::SolanaTxAdditionalInfo::new();
+        for t in tokens {
+            let mut a = protos::SolanaTxTokenAccountInfo::new();
+            a.set_base_address(t.base_address.clone());
+            a.set_token_program(t.token_program.clone());
+            a.set_token_mint(t.token_mint.clone());
+            a.set_token_account(t.token_account.clone());
+            info.token_accounts_infos.push(a);
+        }
+        req.additional_info = protobuf::MessageField::some(info);
+    }
+    req
 }
 
 fn account_index(a: &BtcAccount) -> HwResult<u32> {
@@ -955,6 +989,31 @@ mod tests {
             t.sol_sign(&ctl(), 0, &[1]),
             Err(HwError::BadResponse(_))
         ));
+    }
+
+    #[test]
+    fn sol_sign_request_carries_token_accounts() {
+        let tok = super::super::SolTokenAccount {
+            base_address: "Cf9abfrZbkkcKthpkKqwmA8H3LiGtGZ2ZL8NsfQzYLQP".into(),
+            token_program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".into(),
+            token_mint: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU".into(),
+            token_account: "5iv62nJJJHsV7pgJcA3sf9kp98uWaQcjyKtxFZ5dEbcW".into(),
+        };
+        let plain = sol_sign_request(0, &[1, 2], &[]);
+        assert!(plain.additional_info.is_none());
+        let req = sol_sign_request(0, &[1, 2], std::slice::from_ref(&tok));
+        // Wire fixture: what the firmware receives, decoded back.
+        let wire = req.write_to_bytes().unwrap();
+        let back = protos::SolanaSignTx::parse_from_bytes(&wire).unwrap();
+        assert_eq!(back.address_n, sol_path(0).to_vec());
+        assert_eq!(back.serialized_tx(), &[1, 2]);
+        let infos = &back.additional_info.token_accounts_infos;
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].base_address(), tok.base_address);
+        assert_eq!(infos[0].token_program(), tok.token_program);
+        assert_eq!(infos[0].token_mint(), tok.token_mint);
+        assert_eq!(infos[0].token_account(), tok.token_account);
+        assert!(back.additional_info.encoded_token.is_none());
     }
 
     #[test]
