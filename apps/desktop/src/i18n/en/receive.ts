@@ -61,7 +61,7 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.xrpNote': '<b>1 XRP reserve:</b> an XRP Ledger account only exists after receiving at least 1 XRP, which stays locked (base reserve, plus 0.2 XRP per owned object: trust line, offer…). The first payment to this address must therefore be at least 1 XRP.',
   'receive.xrpNotActivated': 'Your account is not activated yet: ask for at least 1 XRP to start.',
   'receive.cbfNote': '<b>Compact filters mode:</b> a received payment only appears once included in a block (about 10 minutes), not as soon as it is sent. Kyro does not see the mempool in this mode.',
-  'receive.networkWarning': 'Only send assets of the {chain} network here. Another network = lost funds.',
+  'receive.networkWarning': 'Send only {chain} assets to this address.',
   'receive.testTokens': ' Test tokens have no value.',
   'receive.chainZec': 'transparent Zcash',
   'receive.chainHbarId': 'Hedera (account)',

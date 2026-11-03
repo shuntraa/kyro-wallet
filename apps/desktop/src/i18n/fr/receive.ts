@@ -61,7 +61,7 @@ export const receive = {
   'receive.xrpNote': '<b>Réserve de 1 XRP :</b> un compte XRP Ledger n’existe qu’après avoir reçu au moins 1 XRP, qui reste bloqué (réserve de base, plus 0,2 XRP par objet possédé : ligne de confiance, offre…). Le premier envoi vers cette adresse doit donc être d’au moins 1 XRP.',
   'receive.xrpNotActivated': 'Ton compte n’est pas encore activé : demande au moins 1 XRP pour commencer.',
   'receive.cbfNote': '<b>Mode filtres compacts :</b> un paiement reçu n’apparaît qu’une fois inclus dans un bloc (environ 10 minutes), pas dès son envoi. Kyro ne voit pas le mempool dans ce mode.',
-  'receive.networkWarning': 'N’envoie ici que des actifs du réseau {chain}. Un autre réseau = fonds perdus.',
+  'receive.networkWarning': 'Envoie uniquement des actifs du réseau {chain} à cette adresse.',
   'receive.testTokens': ' Les jetons de test n’ont aucune valeur.',
   'receive.chainZec': 'Zcash transparente',
   'receive.chainHbarId': 'Hedera (compte)',

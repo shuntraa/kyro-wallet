@@ -639,10 +639,16 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               {rt('receive.cbfNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
-          <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            {t('receive.networkWarning', { chain: chainName })}
-            {network === 'testnet' ? t('receive.testTokens') : ''}
-          </Notice>
+          <div className="flex items-center gap-2.5 rounded-box border border-line bg-control px-3.5 py-2.5 text-[12.5px] leading-[1.5] text-mute">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-2 bg-card py-0.5 pr-2 pl-0.5 text-[11.5px] font-medium text-text">
+              <CoinIcon id={family === 'evm' ? 'ethereum' : family} size={16} />
+              {chainName}
+            </span>
+            <span className="min-w-0">
+              {t('receive.networkWarning', { chain: chainName })}
+              {network === 'testnet' ? t('receive.testTokens') : ''}
+            </span>
+          </div>
         </div>
       </section>
       {mismatch !== null && <AddressMismatchStop error={mismatch} onClose={() => setMismatch(null)} />}
