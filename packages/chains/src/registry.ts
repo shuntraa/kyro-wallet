@@ -966,7 +966,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     : btc.kind === 'core' ? { host: host(btc.url), purpose: l10n('Bitcoin : ton nœud Bitcoin Core', 'Bitcoin: your Bitcoin Core node'), custom: true }
     : btc.kind === 'cbf' ? { host: l10n('pairs Bitcoin (P2P)', 'Bitcoin peers (P2P)'), purpose: l10n('Bitcoin : filtres compacts, aucun serveur ne voit tes adresses', 'Bitcoin: compact filters, no server sees your addresses'), custom: true }
     : { host: host(btc.url), purpose: l10n('Bitcoin : ton serveur Esplora', 'Bitcoin: your Esplora server'), custom: true };
-  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: l10n('Prix du top 250', 'Top 250 prices') }, btcHost];
+  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: l10n('Prix du top 250', 'Top 250 prices') }, { host: 'api.kraken.com', purpose: l10n('Historique long des cours (graphique « Tout »)', 'Long price history (« All » chart)') }, btcHost];
   for (const c of evmChains(network)) {
     const custom = servers.evm[String(c.chainId)]?.url;
     list.push(custom ? { host: host(custom), purpose: l10n(`${c.name} : ton nœud RPC`, `${c.name}: your RPC node`), custom: true } : { host: host(c.rpcUrl), purpose: l10n(`${c.name} : nœud RPC`, `${c.name}: RPC node`) });

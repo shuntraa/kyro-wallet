@@ -1655,6 +1655,7 @@ Hardware wallets: not offered (no `hw_*` command). What it would take: Ledger "A
 | Host | Use |
 |---|---|
 | `api.coingecko.com`, `pro-api.coingecko.com` | prices, top 250, charts |
+| `api.kraken.com` | « All » chart: public weekly OHLC (`/0/public/OHLC?pair=…&interval=10080`), no key, Tor family `market` |
 | `mempool.space` | Bitcoin: UTXOs, fees, broadcast (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`): used by the Rust `ltc_*` commands, Tor family `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet and mainnet (rippled JSON-RPC): used by the Rust `xrp_*` commands, Tor family `xrp` |

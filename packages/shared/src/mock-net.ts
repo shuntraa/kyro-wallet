@@ -118,6 +118,11 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   if (route?.kind === 'sol') return solRpc(req, s);
   if (route?.kind === 'esplora') return esplora(url, req, s);
   if (host === 'api.coingecko.com' || host === 'pro-api.coingecko.com') return coingecko(url);
+  if (host === 'api.kraken.com') {
+    // Weekly closes since 2015, a smooth demo curve.
+    const rows = Array.from({ length: 520 }, (_, i) => { const t = 1420070400 + i * 604800; const c = (300 + i * 60 + Math.sin(i / 9) * 400).toFixed(2); return [t, c, c, c, c, c, '1', 1]; });
+    return json(200, { error: [], result: { XXBTZUSD: rows, last: 0 } });
+  }
   if (host === 'mempool.space') return esplora(url, req, s);
   if (host in EVM_HOSTS) return evmRpcAny(EVM_HOSTS[host] ?? 1, req, s);
   if (SOL_HOSTS.has(host)) return solRpc(req, s);

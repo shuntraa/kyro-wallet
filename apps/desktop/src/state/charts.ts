@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import type { ChartDays, ChartPoint } from '@kyro/market';
 import { loadChart, refreshChart, windowed } from '../lib/chartCache';
+import { allTimeFetcher, hasLongHistory } from '../lib/longHistory';
 import { portfolioSeries } from '../lib/portfolioSeries';
 import { useAsync, type AsyncState } from '../lib/useAsync';
 import { useApp } from './app';
@@ -9,6 +10,10 @@ import { usePortfolio } from './portfolio';
 
 export type Period = '1J' | '1S' | '1M' | '1A' | 'Tout';
 export const PERIODS: Period[] = ['1J', '1S', '1M', '1A', 'Tout'];
+/** The periods offered for a coin: « All » only when a long source exists (else it equals 1Y). */
+export function coinPeriods(coinId: string): Period[] {
+  return hasLongHistory(coinId) ? PERIODS : PERIODS.filter((p) => p !== 'Tout');
+}
 export const PERIOD_DAYS: Record<Period, ChartDays> = { '1J': 1, '1S': 7, '1M': 30, '1A': 365, Tout: 'max' };
 
 /**
@@ -21,7 +26,13 @@ export function useCoinChart(coinId: string | null, period: Period): AsyncState<
   const id = coinId ? `${cur}|${coinId}|${period}` : '';
   const cached = useMemo(() => (coinId ? loadChart(cur, coinId, period) : null), [id]);
   const res = useAsync<{ id: string; points: ChartPoint[] }>(
-    coinId ? async () => ({ id, points: await refreshChart((days) => market.chart(coinId, cur, days), cur, coinId, period) }) : null,
+    coinId
+      ? async () => {
+          const recent = (days: ChartDays) => market.chart(coinId, cur, days);
+          const fetcher = period === 'Tout' ? allTimeFetcher(coinId, recent, loadChart(cur, coinId, period)?.[0]?.[0]) : recent;
+          return { id, points: await refreshChart(fetcher, cur, coinId, period) };
+        }
+      : null,
     [coinId, period, cur],
     { intervalMs: 120_000 },
   );

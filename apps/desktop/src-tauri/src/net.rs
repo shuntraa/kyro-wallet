@@ -19,6 +19,8 @@ use crate::tor::TorManager;
 pub const ALLOWED_HOSTS: &[&str] = &[
     "api.coingecko.com",
     "pro-api.coingecko.com",
+    // Kraken public OHLC (weekly candles, no key): long price history for the « All » chart.
+    "api.kraken.com",
     "mempool.space",
     // Litecoin (Esplora/mempool API, mainnet + testnet4): only Rust's `ltc_*` commands use it.
     "litecoinspace.org",
@@ -1336,6 +1338,7 @@ mod tests {
         }
         assert_eq!(family_for("api.devnet.solana.com", &c), Family::Solana);
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
+        assert_eq!(family_for("api.kraken.com", &c), Family::Market);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
         assert_eq!(family_for("exolix.com", &c), Family::Swap);

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { assetsFor, evmChains, findAsset, findChain, WATCH_ONLY_CHAINS, type AssetDef } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
-import { PERIODS, useCoinChart, type Period } from '../state/charts';
+import { coinPeriods, useCoinChart, type Period } from '../state/charts';
 import { useHistory } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
@@ -43,7 +43,9 @@ export function AssetDetail({ id }: { id: string }) {
   const multi = !!supported && isMultiAccount(supported.family);
   const holding = supported ? (multi ? pf.accountHoldings.find((h) => h.asset.id === supported.id && h.account?.index === selectedAccounts[supported.family]) : pf.holdings.find((h) => h.asset.id === supported.id)) : undefined;
   const accountRows = supported && multi ? pf.accountHoldings.filter((h) => h.asset.id === supported.id && h.account) : [];
-  const chart = useCoinChart(coinId, period);
+  // « All » is hidden for coins without a long history source: fall back to 1Y if it was picked.
+  const shown = period === 'Tout' && !coinPeriods(coinId).includes('Tout') ? '1A' : period;
+  const chart = useCoinChart(coinId, shown);
   useOnTorReady(chart.reload);
   const month = useCoinChart(coinId, '1M');
   const history = useHistory();
@@ -162,7 +164,7 @@ export function AssetDetail({ id }: { id: string }) {
                 </span>
               )}
             </div>
-            <Segmented className="shrink-0" label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
+            <Segmented className="shrink-0" label={t('portfolio.period')} value={shown} onChange={setPeriod} options={coinPeriods(coinId).map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
           </div>
           <div className="mt-auto flex min-h-0 flex-1 flex-col justify-end">
             {values.length > 1 ? (
