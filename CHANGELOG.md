@@ -19,6 +19,8 @@
 - Swap: pick any coin you hold, on any network, without a network menu; the account choice
   only shows when you have several. The rate ("1 BTC ≈ 31.2 ETH") and what you receive show
   under the amounts.
+- Earn: live estimated rates for Solana, Cardano and TRON (network-wide, before the
+  validator, pool or SR commission), read from the servers Kyro already uses.
 ## 1.0.4
 
 - Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools

@@ -43,6 +43,10 @@ async function readRates(evm: EvmGet): Promise<Rates> {
       (v) => void (out.near = v.grossApy),
       () => void (out.near = null),
     ),
+    call('earn_staking_rates').then(
+      (v) => void Object.assign(out, { sol: v.sol, ada: v.ada, trx: v.trx }),
+      () => undefined,
+    ),
   ];
   for (const [id, m] of Object.entries(AAVE_MARKETS)) {
     const a = evm(m.chainKey);

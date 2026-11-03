@@ -846,6 +846,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       requireUnlocked();
       throw new IpcError('INVALID_INPUT', l10n('Earn (Lido, Aave) : mainnet uniquement, indisponible en démo.', 'Earn (Lido, Aave): mainnet only, not available in the demo.'));
     },
+    earn_staking_rates: () => ({ sol: 6.8, ada: 2.6, trx: 3.4 }),
     evm_sign_tx: (a) => {
       requireUnlocked();
       const account = accts.arg(a.account);

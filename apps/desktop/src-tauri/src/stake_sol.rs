@@ -331,7 +331,7 @@ fn validator_of(v: &Value, delinquent: bool) -> Option<SolValidator> {
     })
 }
 
-async fn vote_accounts(state: &AppState) -> AppResult<Vec<SolValidator>> {
+pub(crate) async fn vote_accounts(state: &AppState) -> AppResult<Vec<SolValidator>> {
     let v = rpc(
         state,
         "getVoteAccounts",

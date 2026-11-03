@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-earn-staking-rates"
+description = "Enables the earn_staking_rates command without any pre-configured scope."
+commands.allow = ["earn_staking_rates"]
+
+[[permission]]
+identifier = "deny-earn-staking-rates"
+description = "Denies the earn_staking_rates command without any pre-configured scope."
+commands.deny = ["earn_staking_rates"]

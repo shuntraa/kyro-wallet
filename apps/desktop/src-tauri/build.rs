@@ -257,6 +257,8 @@ const COMMANDS: &[&str] = &[
     "near_stake_broadcast",
     // Earn on Ethereum (Lido, Aave v3): Rust builds the calldata.
     "earn_evm_build",
+    // Earn: estimated SOL / ADA / TRX staking rates (read only, existing hosts).
+    "earn_staking_rates",
     "set_capture_protection",
     // Opens https://kyrowallet.com/frais (fixed in Rust) in the system browser: Swap screen.
     "open_fees_page",

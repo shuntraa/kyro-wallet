@@ -43,6 +43,7 @@ mod dialog_text;
 mod dot_backend;
 mod dot_history;
 mod earn_evm;
+mod earn_rates;
 mod electrum;
 mod error;
 mod fiat;
@@ -399,6 +400,7 @@ pub fn run() {
             stake_near::near_stake_validators,
             stake_near::near_stake_build,
             earn_evm::earn_evm_build,
+            earn_rates::earn_staking_rates,
             stake_near::near_stake_sign,
             stake_near::near_stake_broadcast,
             commands::set_capture_protection,

@@ -256,6 +256,7 @@
     "allow-near-stake-validators",
     "allow-near-stake-build",
     "allow-earn-evm-build",
+    "allow-earn-staking-rates",
     "allow-near-stake-sign",
     "allow-near-stake-broadcast",
     "allow-set-capture-protection",
