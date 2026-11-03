@@ -52,6 +52,8 @@ export interface HistoryData {
   known: string[];
   /** Chains whose request is still running (a background refresh when they are also `known`). */
   pending: string[];
+  /** Every chain asked. */
+  chains: string[];
 }
 
 type Source = ReturnType<typeof useVault>['accountSources'][number];
@@ -93,15 +95,63 @@ function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string,
   const dotHistory: HistoryData['dotHistory'] = dotStatuses.length === 0 ? null : dotStatuses.includes('unavailable') ? 'unavailable' : dotStatuses.includes('partial') ? 'partial' : 'ok';
   const known = [...new Set(jobs.filter((j) => remoteByJob.has(j.key)).map((j) => j.a.chain.key))];
   const pendingChains = [...new Set(jobs.filter((j) => pending.has(j.key)).map((j) => j.a.chain.key))];
-  return { entries, errors, known, pending: pendingChains, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
+  return { entries, errors, known, pending: pendingChains, chains: [...new Set(jobs.map((j) => j.a.chain.key))], btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
 }
 
 const REFRESH_MS = 60_000;
+/** Background warm-up: a few seconds after unlock (balances first), then this often. */
+const WARM_DELAY_MS = 8_000;
+const WARM_EVERY_MS = 5 * 60_000;
 /** A chain's history request: joined while in flight, its answer reused this long by other screens. */
 const HISTORY_REUSE_MS = 20_000;
 /** Past this, a chain's round ends without it (its request keeps running and is merged next time). */
 const CHAIN_TIMEOUT_MS = 25_000;
+/** After a round with unreachable networks, they are asked again this soon (quietly). */
+const RETRY_MS = 20_000;
 const historyRequests = new Dedupe(HISTORY_REUSE_MS);
+
+const sourcesKeyOf = (sources: readonly Source[]): string => sources.map((x) => `${x.family}:${x.index}:${x.name}:${x.addresses.join(',')}`).join('|');
+const jobsOf = (sources: readonly Source[]): Job[] => sources.flatMap((src) => src.adapters.map((a) => ({ a, src, key: historyKey(src.family, src.index, a.chain.key) })));
+const requestKey = (network: string, j: Job): string => `${network}|${j.key}|${j.src.addresses.join(',')}`;
+
+/** Merges `items` into the on-disk cache (re-read first: the warm-up and the screens write it concurrently). */
+function persistMerged(network: string, fp: string, items: ReadonlyMap<string, readonly HistoryItem[]>): void {
+  const disk: HistoryCache = loadHistory(network, fp) ?? new Map();
+  for (const [k, v] of items) disk.set(k, mergeHistory(disk.get(k), v));
+  saveHistory(network, fp, disk);
+}
+
+/** Chains to name in the « couldn't reach » line (Tron's « no history » is its own line); `all` when none answered. */
+export function unreachable(data: Pick<HistoryData, 'errors' | 'chains'>, ignore: (msg: string) => boolean = () => false): { keys: string[]; all: boolean } {
+  const keys = Object.entries(data.errors).filter(([, m]) => !ignore(m)).map(([k]) => k);
+  return { keys, all: keys.length > 0 && Object.keys(data.errors).length >= data.chains.length };
+}
+
+/** Networks asked at once by the background warm-up: low priority, leaves room for balances. */
+export const WARM_CONCURRENCY = 2;
+
+/**
+ * Fetches every account's history in the background (after unlock, then periodically) into the
+ * on-disk cache, so the History screen opens on a ready list. Shares requests with the screens.
+ */
+export async function warmHistory(network: string, sources: readonly Source[], alive: () => boolean = () => true): Promise<void> {
+  const fp = fingerprint(sourcesKeyOf(sources));
+  const jobs = jobsOf(sources);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (alive() && next < jobs.length) {
+      const j = jobs[next++];
+      if (!j) return;
+      try {
+        const fresh = await historyRequests.run(requestKey(network, j), () => j.a.getHistory());
+        if (alive()) persistMerged(network, fp, new Map([[j.key, fresh]]));
+      } catch {
+        /* the screen shows (and retries) unreachable networks itself */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(WARM_CONCURRENCY, jobs.length) }, worker));
+}
 
 /**
  * Unified history. The last known activity (local cache, `balanceCache.ts`) renders at once; every
@@ -111,9 +161,9 @@ const historyRequests = new Dedupe(HISTORY_REUSE_MS);
 export function useHistory(): AsyncState<HistoryData> {
   const { adapters, accounts, accountSources, isMultiAccount } = useVault();
   const network = accounts.network;
-  const sourcesKey = accountSources.map((x) => `${x.family}:${x.index}:${x.name}:${x.addresses.join(',')}`).join('|');
+  const sourcesKey = sourcesKeyOf(accountSources);
   const fp = fingerprint(sourcesKey);
-  const jobsFor = (): Job[] => accountSources.flatMap((src) => src.adapters.map((a) => ({ a, src, key: historyKey(src.family, src.index, a.chain.key) })));
+  const jobsFor = (): Job[] => jobsOf(accountSources);
   const fromCache = (): HistoryData | undefined => {
     const cache = loadHistory(network, fp);
     // Empty answers are cached too: « No activity » shows at once, then refreshes silently.
@@ -140,7 +190,8 @@ export function useHistory(): AsyncState<HistoryData> {
     const publish = (errs: Record<string, string>) => {
       if (alive) setState({ id, data: assemble(jobs, cache, errs, network, isMultiAccount, pending) });
     };
-    const persist = () => saveHistory(network, fp, new Map(jobs.flatMap((j) => (cache.has(j.key) ? [[j.key, cache.get(j.key) ?? []] as const] : []))));
+    const persist = () => persistMerged(network, fp, new Map(jobs.flatMap((j) => (cache.has(j.key) ? [[j.key, cache.get(j.key) ?? []] as const] : []))));
+    let retryTimer: number | undefined;
     // Each chain's answer reaches the disk without waiting for the slowest one (batched).
     let saveTimer: number | undefined;
     const saveSoon = () => {
@@ -158,7 +209,7 @@ export function useHistory(): AsyncState<HistoryData> {
     void settleWithin(
       jobs.map(async (j) => {
         try {
-          const fresh = await historyRequests.run(`${network}|${j.key}|${j.src.addresses.join(',')}`, () => j.a.getHistory());
+          const fresh = await historyRequests.run(requestKey(network, j), () => j.a.getHistory());
           cache.set(j.key, mergeHistory(cache.get(j.key), fresh));
           if (alive) saveSoon();
         } catch (e) {
@@ -177,9 +228,12 @@ export function useHistory(): AsyncState<HistoryData> {
       publish(errors);
       setLoading(false);
       setUpdatedAt(Date.now());
+      // Unreachable networks are asked again soon, in the background.
+      if (Object.keys(errors).length > 0) retryTimer = window.setTimeout(() => setTick((t) => t + 1), RETRY_MS);
     });
     return () => {
       alive = false;
+      window.clearTimeout(retryTimer);
       if (saveTimer !== undefined) {
         window.clearTimeout(saveTimer);
         persist();
@@ -238,4 +292,32 @@ export function useHistory(): AsyncState<HistoryData> {
   }, [updatedAt, network]);
 
   return result;
+}
+
+/** Keeps every wallet's history cache warm while unlocked (mounted once in the unlocked shell). */
+export function useHistoryWarmup(): void {
+  const { accounts, accountSources } = useVault();
+  const network = accounts.network;
+  const sourcesKey = sourcesKeyOf(accountSources);
+  const sources = useRef(accountSources);
+  sources.current = accountSources;
+  useEffect(() => {
+    if (!sourcesKey) return;
+    let alive = true;
+    let busy = false;
+    const run = () => {
+      if (busy) return;
+      busy = true;
+      void warmHistory(network, sources.current, () => alive).finally(() => {
+        busy = false;
+      });
+    };
+    const first = window.setTimeout(run, WARM_DELAY_MS);
+    const every = window.setInterval(run, WARM_EVERY_MS);
+    return () => {
+      alive = false;
+      window.clearTimeout(first);
+      window.clearInterval(every);
+    };
+  }, [sourcesKey, network]);
 }

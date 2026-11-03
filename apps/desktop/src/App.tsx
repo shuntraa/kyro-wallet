@@ -16,6 +16,7 @@ import { Send } from './screens/Send';
 import { Receive } from './screens/Receive';
 import { Swap } from './screens/Swap';
 import { History } from './screens/History';
+import { useHistoryWarmup } from './state/history';
 import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
@@ -110,9 +111,10 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 }
 
 function Unlocked() {
-  const { route, navigate } = useApp();
+  const { route, navigate, hideBalances } = useApp();
   const pf = usePortfolio();
   const { lang } = useT();
+  useHistoryWarmup();
 
   const assetName = useCallback(
     (id: string) => {

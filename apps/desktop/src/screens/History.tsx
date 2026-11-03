@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BTC_TXS_CAP, toIpcError } from '@kyro/shared';
-import { assetsFor, findAsset, unitsToNumber } from '@kyro/chains';
+import { assetsFor, findAsset, findChain, unitsToNumber } from '@kyro/chains';
 import { buildRevoke, isUnlimitedAllowance } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
-import { useHistory, type HistoryEntry } from '../state/history';
+import { unreachable, useHistory, type HistoryEntry } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { useOnCbfSynced } from '../state/cbf';
 import { cn } from '../lib/cn';
@@ -48,6 +48,13 @@ export function History() {
   const cur = settings.currency;
   const priceOf = (e: HistoryEntry) => (e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null);
 
+  // A lone « Loading… » only for the first seconds; then what is there, with a small « Updating… ».
+  const [grace, setGrace] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setGrace(false), 3000);
+    return () => window.clearTimeout(id);
+  }, []);
+  const down = history.data ? unreachable(history.data, tronNoHistory) : null;
   const entries = useMemo(() => (history.data?.entries ?? []).filter((e) => matches(e, filter)), [history.data, filter]);
   const groups = useMemo(() => {
     const out: Array<{ label: string; items: HistoryEntry[] }> = [];
@@ -125,10 +132,18 @@ export function History() {
       <div className="flex min-h-0 flex-1 gap-5">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
           <div key={`${filter}:${history.data ? 'data' : 'loading'}`} className="min-h-0 flex-1 overflow-y-auto pb-2 scroll-thin">
-            {history.loading && groups.length === 0 ? (
+            {history.loading && !(grace && groups.length === 0) && (
+              <p role="status" className="m-0 flex items-center gap-2 px-5 pt-3 text-[12px] text-faint">
+                <Spinner className="size-3" />
+                {t('history.updating')}
+              </p>
+            )}
+            {history.loading && grace && groups.length === 0 ? (
               <LoadingLine />
             ) : groups.length === 0 ? (
-              <EmptyState title={t('history.noTransactions')}>{filter === 'all' ? t('history.noTransactionsHint') : t('history.nothingForFilter')}</EmptyState>
+              <EmptyState title={t('history.noTransactions')}>
+                {history.loading && history.data ? t('history.checking', { done: history.data.known.length, total: history.data.chains.length }) : filter === 'all' ? t('history.noTransactionsHint') : t('history.nothingForFilter')}
+              </EmptyState>
             ) : (
               groups.map((g, gi) => (
                 <div key={g.label} className="stagger">
@@ -144,10 +159,20 @@ export function History() {
               ))
             )}
             {history.data && Object.entries(history.data.errors).some(([, v]) => tronNoHistory(v)) && <TronNoHistoryLine className="px-5 py-3" />}
-            {history.data && Object.entries(history.data.errors).some(([, v]) => !tronNoHistory(v)) && (
-              <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).filter((v) => !tronNoHistory(v)).join(' ')}>
-                {t('history.partial')}
-              </ErrorLine>
+            {down && down.keys.length > 0 && (
+              down.all ? (
+                <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data?.errors ?? {}).join(' ')}>
+                  {t('history.partial')}
+                </ErrorLine>
+              ) : (
+                <p role="status" className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-faint">
+                  {t('history.unreachable', { networks: down.keys.map((k) => findChain(network, k)?.label ?? k).join(', ') })}
+                  {' · '}
+                  <button type="button" onClick={history.reload} className="text-mute underline-offset-2 hover:text-text hover:underline">
+                    {t('history.retry')}
+                  </button>
+                </p>
+              )
             )}
             {history.data?.dotHistory === 'unavailable' && <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">{t('history.dotUnavailable')}</p>}
             {history.data?.dotHistory === 'partial' && <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">{t('history.dotPartial')}</p>}

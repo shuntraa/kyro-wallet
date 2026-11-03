@@ -210,9 +210,10 @@ export function decodeHistory(raw: unknown, fp: string): HistoryCache | null {
   return out;
 }
 
+/** One history cache per wallet (account-list fingerprint) and network: switching wallets keeps each one's list. */
 export function loadHistory(network: string, fp: string): HistoryCache | null {
-  return decodeHistory(readJson<unknown>(`cache.history.${network}`, null), fp);
+  return decodeHistory(readJson<unknown>(`cache.history.${network}.${fp}`, null), fp) ?? decodeHistory(readJson<unknown>(`cache.history.${network}`, null), fp);
 }
 export function saveHistory(network: string, fp: string, m: HistoryCache): void {
-  if (m.size > 0) writeJson(`cache.history.${network}`, encodeHistory(fp, m));
+  if (m.size > 0) writeJson(`cache.history.${network}.${fp}`, encodeHistory(fp, m));
 }
