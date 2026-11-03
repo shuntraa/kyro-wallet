@@ -194,6 +194,37 @@ export function sellChoices(network: Network, chains: Chain[], assets: AssetDef[
   return out;
 }
 
+/** A « You send » row of the unified picker: any of your assets, on any network, with its balance. */
+export interface SendChoice extends SellChoice {
+  balance: bigint;
+}
+
+/**
+ * Unified « You send » list (Exodus-like, no network dropdown): every asset a swap can start from,
+ * across all networks, with its balance; held assets first (stable order otherwise), greyed last.
+ */
+export function sendChoices(network: Network, chains: Chain[], assets: AssetDef[], balanceOf: (assetId: string) => bigint): SendChoice[] {
+  const rank = (c: SendChoice) => (c.comingSoon ? 2 : c.balance > 0n ? 0 : 1);
+  return sellChoices(network, chains, assets)
+    .map((c) => ({ ...c, balance: balanceOf(c.asset.id) }))
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i)
+    .map(({ c }) => c);
+}
+
+/** A pick in the unified list sets the network implicitly: its chain and asset (null when greyed / unknown). */
+export function pickSend(choices: SendChoice[], assetId: string): { chain: Chain; asset: AssetDef } | null {
+  const c = choices.find((x) => x.asset.id === assetId && !x.comingSoon);
+  return c ? { chain: c.chain, asset: c.asset } : null;
+}
+
+/** Rate of a quote: how many `buy` units for 1 `sell` unit (null without amounts). */
+export function swapRate(sellAmount: bigint, sellDecimals: number, buyAmount: bigint, buyDecimals: number): number | null {
+  if (sellAmount <= 0n || buyAmount <= 0n) return null;
+  const r = Number(buyAmount) / 10 ** buyDecimals / (Number(sellAmount) / 10 ** sellDecimals);
+  return Number.isFinite(r) && r > 0 ? r : null;
+}
+
 /** History label of a cross-chain transfer (li.quest `/v1/status`, or 1Click's own status). */
 export function crossStatusLabel(status: string | undefined, toChainLabel: string): string {
   switch (status) {

@@ -40,6 +40,8 @@ export const swap = {
   'swap.slippageRange': 'Slippage entre 0,01 % et 15 %.',
   'swap.slippageHigh': 'Slippage élevé : tu peux recevoir nettement moins que prévu.',
   'swap.youGive': 'Tu envoies',
+  'swap.rate': 'Taux',
+  'swap.rateValue': '1 {sell} ≈ {rate} {buy}',
   'swap.youReceive': 'Tu reçois',
   'swap.youReceiveEstimated': 'Tu reçois ≈',
   'swap.balance': 'Solde {amount}',

@@ -29,16 +29,15 @@ import {
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtEta, fmtFiat, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
+import { fmtCrypto, fmtEta, fmtFiat, fmtNumber, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
-import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, sellChoices, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
+import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, pickSend, sendChoices, swapChainOf, swapRate, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
 import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
-import { Menu } from '../components/ui/menu';
 import { AccountPicker } from '../components/AccountPicker';
 import { Dialog } from '../components/ui/dialog';
 import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
@@ -93,7 +92,7 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
 }
 
 function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
-  const { settings, network, swapProviders, navigate } = useApp();
+  const { settings, network, swapProviders, navigate, vaultLists } = useApp();
   const { t } = useT();
   const { adapters, accounts } = useVault();
   const pf = usePortfolio();
@@ -105,7 +104,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     () => [...evmChains(network).filter((c) => canSwapFrom(c, network)), solChain(network), ...allChains(network).filter((c) => c.family !== 'evm' && c.family !== 'sol' && canSwapFrom(c, network))].map((c) => ({ key: c.key, label: c.label })),
     [network],
   );
-  const initialSell = sellAssetId ? assetsFor(network).find((a) => a.id === sellAssetId) : undefined;
+  // No network dropdown: without a given asset, start from the first one you hold (any network).
+  const [initialSell] = useState(() => (sellAssetId ? assetsFor(network).find((a) => a.id === sellAssetId) : sendChoices(network, allChains(network), assetsFor(network), (id) => pf.balances.get(id) ?? 0n).find((c) => c.balance > 0n)?.asset));
   const [chainKey, setChainKey] = useState(initialSell && chains.some((c) => c.key === initialSell.chainKey) ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
   const tokens = useMemo(() => assetsFor(network).filter((a) => a.chainKey === chainKey), [network, chainKey]);
   const [sellId, setSellId] = useState(initialSell?.id ?? tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
@@ -422,11 +422,11 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     const held = pf.balances.get(a.id) ?? 0n;
     return { id: a.id, symbol: a.symbol, name: a.name, network: c.label, networkName: c.name, coingeckoId: a.coingeckoId, held: held > 0n, disabled: comingSoon, ...(comingSoon ? { note: t('swap.sourceComingSoon') } : {}), hint: `${a.name} · ${fmtCrypto(held, a.decimals)}`, icon: <CoinIcon asset={a} size={24} /> };
   };
-  const sellList = sellChoices(network, allChains(network), assetsFor(network));
+  const sellList = sendChoices(network, allChains(network), assetsFor(network), (id) => pf.balances.get(id) ?? 0n);
   const sellItems = sellList.map((c) => pickerItem(c.asset, c.chain, c.comingSoon));
   const buyItems = groups.flatMap((g) => g.assets.map((a) => pickerItem(a, g.chain)));
   const selectSell = (id: string) => {
-    const c = sellList.find((x) => x.asset.id === id && !x.comingSoon);
+    const c = pickSend(sellList, id);
     if (!c) return;
     if (id === buy.id) setBuyId(sell.id);
     if (c.chain.key !== chainKey) {
@@ -436,26 +436,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     setSellId(id);
   };
   const canInvert = !cross || canSwapFrom(buyChain, network);
+  // Account selector only when you hold several accounts on the sell network (inside « You send »).
+  const multiAccount = (vaultLists?.[accountChainOf(chain)]?.length ?? 0) > 1;
+  const rate = chosen && sellAmount ? swapRate(sellAmount, sell.decimals, chosen.buyAmount, buy.decimals) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
         <div className="flex items-center gap-4">
           <h1 className="screen-title">{t('swap.title')}</h1>
-          <Menu
-            value={chainKey}
-            onSelect={(k) => {
-              setChainKey(k);
-              setAmountStr('');
-            }}
-            items={[...chains.map((c) => ({ value: c.key, label: c.label })), ...sellList.filter((c) => c.comingSoon && c.asset.kind === 'native').map((c) => ({ value: c.chain.key, label: c.chain.label, hint: t('swap.sourceComingSoon'), disabled: true }))]}
-            trigger={
-              <button type="button" className="press flex h-9 items-center gap-2 rounded-ctl border border-line-2 px-3.5 text-[13px] text-text2 hover:border-line-3 hover:bg-raised hover:text-text">
-                {chain.name} <IconChevronDown size={13} />
-              </button>
-            }
-          />
-          <AccountPicker family={accountChainOf(chain)} />
         </div>
         <div className="flex items-center gap-2.5">
           <span className="eyebrow">{t('swap.slippageMax')}</span>
@@ -506,6 +495,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 />
               }
               sub={sellAmount && sellPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(sellAmount, sell.decimals) * sellPrice, cur)}` : over ? t('swap.insufficient') : ' '}
+              note={multiAccount ? <AccountPicker family={accountChainOf(chain)} className="mt-1" /> : undefined}
               token={<TokenButton title={t('swap.pickGive')} asset={sell} items={sellItems} onSelect={selectSell} />}
             />
             <button
@@ -535,9 +525,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
           {chosen && (
             <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
+              {rate !== null && (
+                <div className="flex h-9 items-center justify-between border-b border-line">
+                  <span className="text-mute">{t('swap.rate')}</span>
+                  <span className="font-medium">{t('swap.rateValue', { sell: sell.symbol, rate: fmtNumber(rate, rate >= 1 ? 4 : 8), buy: buy.symbol })}</span>
+                </div>
+              )}
               <div className="flex h-9 items-center justify-between border-b border-line">
-                <span className="text-mute">{t('swap.minGuaranteed')}</span>
-                <span className="font-medium">{fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
+                <span className="text-mute">{t('swap.youReceive')}</span>
+                <span className="font-medium">≈ {fmtCrypto(chosen.buyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
               <div className="flex h-9 items-center justify-between">
                 <span className="text-mute">{t('swap.networkFees')}</span>

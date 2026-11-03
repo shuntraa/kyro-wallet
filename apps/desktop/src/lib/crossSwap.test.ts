@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { call, setBackend } from '@kyro/shared';
 import { createMockBackend } from '@kyro/shared/mock';
 import { allChains, assetsFor, createAdapters, findChain, type AnyUnsigned } from '@kyro/chains';
-import { buildDepositTx, buyGroups, canSwapFrom, canSwapTo, crossStatusLabel, depositTxProblem, ownAddressOn, swapChainOf, swapTokenAddress } from './crossSwap';
+import { buildDepositTx, buyGroups, canSwapFrom, canSwapTo, crossStatusLabel, depositTxProblem, ownAddressOn, pickSend, sendChoices, swapChainOf, swapRate, swapTokenAddress } from './crossSwap';
 import { isLocalTx } from './storage';
 
 const accounts = {
@@ -229,4 +229,51 @@ describe('NEAR Intents deposit: the ordinary transfer Kyro builds (demo adapters
     await expect(buildDepositTx(asset('xlm'), ad, { ...plan('btc'), depositAddress: 'GDRXE2BQUC3AZNPVFSCEZ76NJ3WWL25FYFK6RGZGIEKWE4SOOHSUJUJ6' })).rejects.toThrow();
     await expect(buildDepositTx(asset('ltc'), ad, { ...plan('ltc'), depositAddress: DEPOSIT.doge ?? '' })).rejects.toThrow(/adresse de dépôt invalide/);
   }, 60_000);
+});
+
+describe('unified « You send » picker (no network dropdown)', () => {
+  const chains = allChains('mainnet');
+  const assets = assetsFor('mainnet');
+  const eth = assets.find((a) => a.chainKey === 'ethereum' && a.kind === 'native')!;
+  const btc = assets.find((a) => a.chainKey === 'bitcoin' && a.kind === 'native')!;
+  const sol = assets.find((a) => a.chainKey === 'solana' && a.kind === 'native')!;
+  const held = new Map([[btc.id, 50_000_000n], [sol.id, 2_000_000_000n]]);
+  const list = sendChoices('mainnet', chains, assets, (id) => held.get(id) ?? 0n);
+
+  it('lists assets across every network with balances, held first', () => {
+    expect(new Set(list.map((c) => c.chain.key)).size).toBeGreaterThan(3);
+    expect(list.slice(0, 2).map((c) => c.asset.id).sort()).toEqual([btc.id, sol.id].sort());
+    expect(list.find((c) => c.asset.id === btc.id)?.balance).toBe(50_000_000n);
+    expect(list.find((c) => c.asset.id === eth.id)?.balance).toBe(0n);
+    const firstSoon = list.findIndex((c) => c.comingSoon);
+    if (firstSoon >= 0) expect(list.slice(firstSoon).every((c) => c.comingSoon)).toBe(true);
+  });
+
+  it('a pick sets chain and asset implicitly, and routes « You receive » from that chain', () => {
+    const pick = pickSend(list, btc.id)!;
+    expect(pick.chain.key).toBe('bitcoin');
+    expect(pick.asset.id).toBe(btc.id);
+    const groups = buyGroups('mainnet', chains, assets, pick.asset);
+    expect(groups[0]?.chain.key).not.toBe('bitcoin'); // BTC has no same-chain swap: first group is another chain
+    expect(groups.some((g) => g.chain.key === 'ethereum' && g.assets.some((a) => a.id === eth.id))).toBe(true);
+    expect(groups.flatMap((g) => g.assets).some((a) => a.id === btc.id)).toBe(false);
+    const fromEth = buyGroups('mainnet', chains, assets, pickSend(list, eth.id)!.asset);
+    expect(fromEth[0]?.chain.key).toBe('ethereum'); // same-chain first
+    expect(pickSend(list, 'nope')).toBeNull();
+    const soon = list.find((c) => c.comingSoon);
+    if (soon) expect(pickSend(list, soon.asset.id)).toBeNull();
+  });
+
+  it('testnet: picks stay same-chain only', () => {
+    const tChains = allChains('testnet');
+    const tAssets = assetsFor('testnet');
+    const tList = sendChoices('testnet', tChains, tAssets, () => 0n);
+    const pick = pickSend(tList, tList[0]!.asset.id)!;
+    expect(buyGroups('testnet', tChains, tAssets, pick.asset).every((g) => g.chain.key === pick.chain.key)).toBe(true);
+  });
+
+  it('computes the rate shown under the amounts', () => {
+    expect(swapRate(100_000_000n, 8, 31_200_000_000_000_000_000n, 18)).toBeCloseTo(31.2);
+    expect(swapRate(0n, 8, 1n, 18)).toBeNull();
+  });
 });

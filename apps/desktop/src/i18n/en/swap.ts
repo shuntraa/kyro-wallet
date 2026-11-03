@@ -40,6 +40,8 @@ export const swap: Record<keyof typeof fr, string> = {
   'swap.slippageRange': 'Slippage between 0.01% and 15%.',
   'swap.slippageHigh': 'High slippage: you may receive noticeably less than expected.',
   'swap.youGive': 'You send',
+  'swap.rate': 'Rate',
+  'swap.rateValue': '1 {sell} ≈ {rate} {buy}',
   'swap.youReceive': 'You receive',
   'swap.youReceiveEstimated': 'You receive ≈',
   'swap.balance': 'Balance {amount}',

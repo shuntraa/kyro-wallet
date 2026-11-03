@@ -16,6 +16,9 @@
   header wraps on narrow windows (the period selector stays whole).
 - Earn: a rate that cannot be read shows "—" after a few seconds; the page scrolls normally.
 - Token picker: Escape closes it.
+- Swap: pick any coin you hold, on any network, without a network menu; the account choice
+  only shows when you have several. The rate ("1 BTC ≈ 31.2 ETH") and what you receive show
+  under the amounts.
 ## 1.0.4
 
 - Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools
