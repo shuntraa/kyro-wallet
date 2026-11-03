@@ -7,6 +7,8 @@
   Unreachable networks are named in a calm line and retried on their own.
 - Price charts: "All" now goes back years (Kraken public weekly prices, no account), and is
   hidden for coins without a long history instead of repeating 1Y.
+- Arbitrum history works over Tor again: a second public node (arb1.arbitrum.io) is tried when
+  publicnode refuses.
 - Search: one result per coin, with its icon and your balance or its rank.
 - Receive: a quieter network note.
 - Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.

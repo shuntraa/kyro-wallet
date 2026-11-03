@@ -71,6 +71,26 @@ describe('EVM balances via JSON-RPC batches', () => {
     expect(bal.length).toBeGreaterThan(1);
   });
 
+  it('history: falls back to the second public node when the first refuses (HTTP 403)', async () => {
+    const hosts: string[] = [];
+    const fetch = async (req: NetRequest): Promise<NetResponse> => {
+      const host = new URL(req.url).host;
+      hosts.push(host);
+      if (host === 'main.example') return { status: 403, body: 'forbidden' };
+      const body = JSON.parse(req.body ?? 'null') as Rpc | Rpc[];
+      const answer = (r: Rpc) => ({ jsonrpc: '2.0', id: r.id, result: r.method === 'eth_blockNumber' ? '0x100000' : [] });
+      return { status: 200, body: JSON.stringify(Array.isArray(body) ? body.map(answer) : answer(body)) };
+    };
+    const chain = { ...eth, rpcUrl: 'https://main.example', fallbackRpcUrl: 'https://backup.example' };
+    expect(await new EvmAdapter({ chain, address: ME, fetch }).getHistory()).toEqual([]);
+    expect(hosts[0]).toBe('main.example');
+    expect(hosts).toContain('backup.example');
+    // A custom RPC (Settings) is never replaced by the public fallback.
+    hosts.length = 0;
+    await expect(new EvmAdapter({ chain, address: ME, fetch, rpcUrl: 'https://main.example' }).getHistory()).rejects.toThrow();
+    expect(hosts.every((h) => h === 'main.example')).toBe(true);
+  });
+
   it('history: eth_getLogs in groups of at most 10 contracts, sent in batches', async () => {
     const seen: Rpc[][] = [];
     const fetch = async (req: NetRequest): Promise<NetResponse> => {

@@ -63,6 +63,7 @@ async fn rpc(state: &AppState, url: &str, method: &str, params: Value) -> Result
 const EVM: &[(&str, &str)] = &[
     ("ethereum", "https://ethereum-rpc.publicnode.com"),
     ("arbitrum", "https://arbitrum-one-rpc.publicnode.com"),
+    ("arb1", "https://arb1.arbitrum.io/rpc"),
     ("optimism", "https://optimism-rpc.publicnode.com"),
     ("base", "https://base-rpc.publicnode.com"),
     ("polygon", "https://polygon-bor-rpc.publicnode.com"),
@@ -516,10 +517,17 @@ fn live_smoke_evm_history_tor() {
     tauri::async_runtime::block_on(async {
         let t0 = Instant::now();
         state.net.tor.start();
+        // Extra endpoints to try (`KYRO_SMOKE_EXTRA=name=url,…`, hosts must be allowlisted).
+        let extra: Vec<(String, String)> = std::env::var("KYRO_SMOKE_EXTRA")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|x| x.split_once('=').map(|(a, b)| (a.to_owned(), b.to_owned())))
+            .collect();
         let chains: Vec<(&str, &str)> = EVM
             .iter()
             .copied()
             .filter(|(n, _)| only.iter().any(|o| o == n))
+            .chain(extra.iter().map(|(a, b)| (a.as_str(), b.as_str())))
             .collect();
         let mut failed = Vec::new();
         for round in 1..=3 {
@@ -558,6 +566,19 @@ fn live_smoke_evm_history_tor() {
                             .map_err(e)?;
                         if r.status != 200 {
                             return Err(format!("HTTP {}", r.status));
+                        }
+                        // Every batch entry must be a `result`, not an RPC `error` (HTTP 200 either way).
+                        let v: Value = serde_json::from_str(&r.body).map_err(e)?;
+                        let errors: Vec<String> = v
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|x| x.get("error").map(Value::to_string))
+                                    .collect()
+                            })
+                            .unwrap_or_else(|| vec![v.to_string()]);
+                        if let Some(first) = errors.first() {
+                            return Err(format!("{} RPC errors, first: {first}", errors.len()));
                         }
                         Ok(r.body.len())
                     }

@@ -97,6 +97,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
+    // Arbitrum Foundation public RPC: history fallback (publicnode answers 403 to some Tor exits).
+    "arb1.arbitrum.io",
     "optimism-rpc.publicnode.com",
     "base-rpc.publicnode.com",
     "polygon-bor-rpc.publicnode.com",
@@ -471,6 +473,7 @@ const EVM_OWN_RPC_HOSTS: &[&str] = &[
     "rpc.ankr.com",
     "kaia.api.pocket.network",
     "evm.confluxrpc.com",
+    "arb1.arbitrum.io",
 ];
 
 pub fn family_for(host: &str, ctx: &NetContext) -> Family {
@@ -530,7 +533,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Evm
     } else if host.ends_with(".solana.com") {
         Family::Solana
-    } else if host.ends_with("coingecko.com") || host == "eth-api.lido.fi" {
+    } else if host.ends_with("coingecko.com")
+        || host == "eth-api.lido.fi"
+        || host == "api.kraken.com"
+    {
         Family::Market
     } else if matches!(
         host,
@@ -1339,6 +1345,7 @@ mod tests {
         assert_eq!(family_for("api.devnet.solana.com", &c), Family::Solana);
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
         assert_eq!(family_for("api.kraken.com", &c), Family::Market);
+        assert_eq!(family_for("arb1.arbitrum.io", &c), Family::Evm);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
         assert_eq!(family_for("exolix.com", &c), Family::Swap);

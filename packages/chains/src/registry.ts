@@ -41,6 +41,8 @@ export interface EvmChain extends ChainBase {
   family: 'evm';
   chainId: number;
   rpcUrl: string;
+  /** Second public node, tried for the history when `rpcUrl` refuses (e.g. a Tor exit blocked by publicnode). */
+  fallbackRpcUrl?: string;
 }
 
 export interface SolChain extends ChainBase {
@@ -128,7 +130,7 @@ const EVM_MAINNET: EvmChain[] = [
   evm({ key: 'ethereum', name: 'Ethereum', label: 'Ethereum', network: 'mainnet', color: CHAIN_COLORS.ethereum, glyph: 'Ξ', nativeSymbol: 'ETH', nativeName: 'Ethereum',
     coingeckoId: 'ethereum', phase: 1, blockTimeSecs: 12, chainId: 1, rpcUrl: 'https://ethereum-rpc.publicnode.com' }),
   evm({ key: 'arbitrum', name: 'Arbitrum One', label: 'Arbitrum', network: 'mainnet', color: CHAIN_COLORS.arbitrum, glyph: 'A', nativeSymbol: 'ETH', nativeName: 'Ethereum',
-    coingeckoId: 'ethereum', phase: 2, blockTimeSecs: 0.25, chainId: 42161, rpcUrl: 'https://arbitrum-one-rpc.publicnode.com' }),
+    coingeckoId: 'ethereum', phase: 2, blockTimeSecs: 0.25, chainId: 42161, rpcUrl: 'https://arbitrum-one-rpc.publicnode.com', fallbackRpcUrl: 'https://arb1.arbitrum.io/rpc' }),
   evm({ key: 'optimism', name: 'Optimism', label: 'Optimism', network: 'mainnet', color: '#FF0420', glyph: 'O', nativeSymbol: 'ETH', nativeName: 'Ethereum',
     coingeckoId: 'ethereum', phase: 2, blockTimeSecs: 2, chainId: 10, rpcUrl: 'https://optimism-rpc.publicnode.com' }),
   evm({ key: 'base', name: 'Base', label: 'Base', network: 'mainnet', color: '#3C6CF0', glyph: 'B', nativeSymbol: 'ETH', nativeName: 'Ethereum',
@@ -970,6 +972,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   for (const c of evmChains(network)) {
     const custom = servers.evm[String(c.chainId)]?.url;
     list.push(custom ? { host: host(custom), purpose: l10n(`${c.name} : ton nœud RPC`, `${c.name}: your RPC node`), custom: true } : { host: host(c.rpcUrl), purpose: l10n(`${c.name} : nœud RPC`, `${c.name}: RPC node`) });
+    if (!custom && c.fallbackRpcUrl) list.push({ host: host(c.fallbackRpcUrl), purpose: l10n(`${c.name} : nœud de secours (historique)`, `${c.name}: fallback node (history)`) });
   }
   const sol = solChain(network);
   const solCustom = servers.solana[sol.cluster]?.url;

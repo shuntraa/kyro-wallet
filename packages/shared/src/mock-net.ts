@@ -49,6 +49,7 @@ export const EVM_HOSTS: Record<string, number> = {
   'ethereum-sepolia-rpc.publicnode.com': 11155111,
   'ethereum-rpc.publicnode.com': 1,
   'arbitrum-one-rpc.publicnode.com': 42161,
+  'arb1.arbitrum.io': 42161,
   'optimism-rpc.publicnode.com': 10,
   'base-rpc.publicnode.com': 8453,
   'polygon-bor-rpc.publicnode.com': 137,

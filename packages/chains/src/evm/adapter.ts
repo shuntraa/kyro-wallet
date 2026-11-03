@@ -106,6 +106,8 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   readonly chain: EvmChain;
   readonly client: PublicClient;
   readonly rpcUrl: string;
+  /** Nodes tried in turn for the history: the RPC, then the registry's fallback (not with a custom RPC). */
+  private readonly historyUrls: string[];
   /** Last measured RPC round trip (status bar). */
   latencyMs: number | null = null;
   private readonly address: `0x${string}`;
@@ -120,6 +122,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     this.address = getAddress(opts.address);
     this.fetcher = opts.fetch ?? netFetch;
     this.rpcUrl = opts.rpcUrl || opts.chain.rpcUrl;
+    this.historyUrls = !opts.rpcUrl && opts.chain.fallbackRpcUrl ? [this.rpcUrl, opts.chain.fallbackRpcUrl] : [this.rpcUrl];
     this.logRange = opts.logRange ?? 5_000n;
     this.hw = opts.hw ?? null;
     this.account = opts.account ?? 0;
@@ -401,7 +404,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   }
 
   /** `Transfer` logs to or from us of the given tokens: one `eth_getLogs` per {@link LOG_ADDRESSES} contracts and direction (publicnode refuses more addresses per query), sent as JSON-RPC batches; one call at a time if the node refuses batches. */
-  private async transferLogs(addresses: string[], fromBlock: bigint, toBlock: bigint): Promise<Array<{ log: RawLog; dir: 'in' | 'out' }>> {
+  private async transferLogs(url: string, addresses: string[], fromBlock: bigint, toBlock: bigint): Promise<Array<{ log: RawLog; dir: 'in' | 'out' }>> {
     const me = '0x' + this.address.slice(2).toLowerCase().padStart(64, '0');
     const range = { fromBlock: '0x' + fromBlock.toString(16), toBlock: '0x' + toBlock.toString(16) };
     const queries: Array<{ dir: 'in' | 'out'; params: unknown[] }> = [];
@@ -413,7 +416,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     const results: unknown[][] = [];
     try {
       for (let i = 0; i < queries.length; i += BALANCE_BATCH) {
-        const outcomes = await jsonRpcBatch(this.fetcher, this.rpcUrl, queries.slice(i, i + BALANCE_BATCH).map((q) => ({ method: 'eth_getLogs', params: q.params })));
+        const outcomes = await jsonRpcBatch(this.fetcher, url, queries.slice(i, i + BALANCE_BATCH).map((q) => ({ method: 'eth_getLogs', params: q.params })));
         for (const o of outcomes) {
           if (!o.ok) throw o.error;
           results.push(Array.isArray(o.result) ? o.result : []);
@@ -422,7 +425,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     } catch (e) {
       if (!(e instanceof JsonRpcError) && !(e instanceof HttpError && e.status >= 400 && e.status < 500)) throw e;
       results.length = 0;
-      for (const q of queries) results.push(await jsonRpc<unknown[]>(this.fetcher, this.rpcUrl, 'eth_getLogs', q.params));
+      for (const q of queries) results.push(await jsonRpc<unknown[]>(this.fetcher, url, 'eth_getLogs', q.params));
     }
     return queries.flatMap((q, i) => (results[i] ?? []).filter(isRawLog).map((log) => ({ log, dir: q.dir })));
   }
@@ -431,9 +434,24 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   async getHistory(): Promise<HistoryItem[]> {
     const tokens = this.tokens();
     if (tokens.length === 0) return [];
-    const latest = await this.client.getBlockNumber();
-    const fromBlock = latest > this.logRange ? latest - this.logRange : 0n;
-    const logs = await this.transferLogs(tokens.map((t) => getAddress(t.contract ?? '')), fromBlock, latest);
+    const contracts = tokens.map((t) => getAddress(t.contract ?? ''));
+    // The first node that answers both the block number and the logs (a fallback node when the
+    // main one refuses, e.g. HTTP 403 to some Tor exits).
+    let logs: Array<{ log: RawLog; dir: 'in' | 'out' }> | null = null;
+    let lastError: unknown = null;
+    let okUrl = this.rpcUrl;
+    for (const url of this.historyUrls) {
+      try {
+        const latest = BigInt(await jsonRpc<string>(this.fetcher, url, 'eth_blockNumber', []));
+        const fromBlock = latest > this.logRange ? latest - this.logRange : 0n;
+        logs = await this.transferLogs(url, contracts, fromBlock, latest);
+        okUrl = url;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (logs === null) throw lastError;
     const all = logs
       .map(({ log, dir }) => ({
         dir,
@@ -450,8 +468,8 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     const blockTimes = new Map<bigint, number>();
     for (const bn of [...new Set(all.map((x) => x.l.blockNumber).filter((b): b is bigint => b !== null))].slice(0, 12)) {
       try {
-        const b = await this.client.getBlock({ blockNumber: bn });
-        blockTimes.set(bn, Number(b.timestamp) * 1000);
+        const b = await jsonRpc<{ timestamp?: string } | null>(this.fetcher, okUrl, 'eth_getBlockByNumber', ['0x' + bn.toString(16), false]);
+        if (b?.timestamp) blockTimes.set(bn, Number(BigInt(b.timestamp)) * 1000);
       } catch {
         /* time unknown */
       }
@@ -462,8 +480,8 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     await Promise.all(
       outHashes.map(async (hash) => {
         try {
-          const tx = await this.client.getTransaction({ hash });
-          txFrom.set(hash.toLowerCase(), tx.from.toLowerCase());
+          const tx = await jsonRpc<{ from?: string } | null>(this.fetcher, okUrl, 'eth_getTransactionByHash', [hash]);
+          if (tx?.from) txFrom.set(hash.toLowerCase(), tx.from.toLowerCase());
         } catch {
           /* unknown sender: the entry stays unverified (never a trusted address anyway) */
         }
