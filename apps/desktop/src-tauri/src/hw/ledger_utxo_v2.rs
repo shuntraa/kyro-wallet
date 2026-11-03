@@ -3,11 +3,12 @@
 //! GET WALLET ADDRESS `03`, SIGN PSBT `04` with the default policy `wpkh(@0/**)`), not the legacy
 //! CLA `E0` commands of [`super::ledger_utxo`] (it answers them `6F00` / `6E00` / `6D00`).
 //!
-//! Which protocol an app speaks is decided by its version: 2.1 and later are v2 apps, older ones
-//! the legacy app. Every v2 command uses exactly the Bitcoin app's framing (that of
-//! `ledger_bitcoin_client`, P2 = protocol version `01`): Litecoin 2.4.11 does not answer the
-//! P2 = `00` form, which sent Kyro down the legacy path. Kyro's own summary and the device screen
-//! still show every output; the device signs only after the user confirms there.
+//! Which protocol an app speaks is decided by probing GET MASTER FINGERPRINT (no screen, no
+//! secret), framed exactly like the Bitcoin app client (P2 = protocol version `01`): `9000` → v2,
+//! a "command not understood" status (`6E00` CLA not supported, `6D00`, `6F00`) → legacy. Ledger's
+//! Litecoin 2.4.x is still the legacy code base numbered 2.x, so the version alone decides
+//! nothing. Kyro's own summary and the device screen still show every output; the device signs
+//! only after the user confirms there.
 
 use bitcoin::bip32::{DerivationPath, Fingerprint, Xpub};
 use ledger_bitcoin_client::apdu::{APDUCommand, StatusWord, CURRENT_PROTOCOL_VERSION};
@@ -27,8 +28,6 @@ const INS_SIGN_PSBT: u8 = 0x04;
 const INS_GET_MASTER_FINGERPRINT: u8 = 0x05;
 /// P2 of every v2 command: the client protocol version (as `ledger_bitcoin_client` sends it).
 const P2: u8 = CURRENT_PROTOCOL_VERSION;
-/// First Litecoin app version on the Bitcoin app v2 code base.
-pub const MIN_V2: &str = "2.1.0";
 /// BIP32 version bytes of a mainnet `xpub` (Kyro stores Litecoin account keys as `xpub…`).
 const XPUB_MAIN: [u8; 4] = [0x04, 0x88, 0xB2, 0x1E];
 
@@ -51,11 +50,6 @@ pub fn may_be_v2(coin: UtxoCoin) -> bool {
     coin == UtxoCoin::Litecoin
 }
 
-/// Whether the app of `coin` at `version` speaks the v2 protocol.
-pub fn is_v2(coin: UtxoCoin, version: &str) -> bool {
-    may_be_v2(coin) && super::version_at_least(version, MIN_V2)
-}
-
 /// GET MASTER FINGERPRINT.
 pub fn master_fingerprint_apdu() -> HwResult<Vec<u8>> {
     apdu::apdu(CLA, INS_GET_MASTER_FINGERPRINT, 0, P2, &[])
@@ -71,9 +65,7 @@ pub fn extended_pubkey_apdu(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
     apdu::apdu(CLA, INS_GET_EXTENDED_PUBKEY, 0, P2, &data)
 }
 
-/// Probes the open app: `Some(master fingerprint)` for a v2 app (version ≥ [`MIN_V2`]), `None`
-/// for a legacy one (no v2 APDU sent). A v2 app refusing the fingerprint is an error, never a
-/// silent fall back to the legacy protocol.
+/// Probes the open app: `Some(master fingerprint)` for a v2 app, `None` for a legacy one.
 pub fn probe(
     link: &dyn ApduLink,
     ctl: &Ctl,
@@ -81,10 +73,6 @@ pub fn probe(
     coin: UtxoCoin,
 ) -> HwResult<Option<[u8; 4]>> {
     if !may_be_v2(coin) {
-        return Ok(None);
-    }
-    let (_, version) = super::chains::ledger_open_app(link, ctl)?;
-    if !is_v2(coin, &version) {
         return Ok(None);
     }
     let (data, sw) = link.exchange(ctl, &master_fingerprint_apdu()?)?;
@@ -96,7 +84,7 @@ pub fn probe(
                 .ok_or_else(|| HwError::bad("malformed master fingerprint"))?;
             Ok(Some(fp))
         }
-        sw if is_protocol_mismatch(sw) => Err(outdated(coin)),
+        sw if is_protocol_mismatch(sw) => Ok(None),
         sw => Err(super::chains::ledger_sw_error(
             link,
             ctl,
@@ -318,14 +306,6 @@ mod tests {
     }
     use std::str::FromStr;
 
-    fn app(version: &str) -> Exchange {
-        let mut r = vec![1, 8];
-        r.extend(b"Litecoin");
-        r.push(version.len() as u8);
-        r.extend(version.as_bytes());
-        (apdu::get_app_and_version(), r, SW_OK)
-    }
-
     fn probe_with(steps: Vec<Exchange>, coin: UtxoCoin) -> HwResult<Option<[u8; 4]>> {
         let link = Replay(Mutex::new(steps));
         let r = probe(&link, &ctl(), "Litecoin", coin);
@@ -334,31 +314,23 @@ mod tests {
     }
 
     #[test]
-    fn probe_decides_the_protocol_by_version() {
+    fn probe_decides_the_protocol() {
         let fp_cmd = master_fingerprint_apdu().unwrap();
         // Same framing as the Bitcoin app client: P2 = protocol version 01.
         assert_eq!(hex::encode(&fp_cmd), "e105000100");
-        // Litecoin 2.4.11 (the real device): v2.
-        let v2 = vec![app("2.4.11"), (fp_cmd.clone(), vec![1, 2, 3, 4], SW_OK)];
+        let v2 = vec![(fp_cmd.clone(), vec![1, 2, 3, 4], SW_OK)];
         assert_eq!(
             probe_with(v2, UtxoCoin::Litecoin).unwrap(),
             Some([1, 2, 3, 4])
         );
-        // Before 2.1: legacy app, no v2 APDU at all.
-        for v in ["1.4.0", "2.0.6"] {
-            assert_eq!(probe_with(vec![app(v)], UtxoCoin::Litecoin).unwrap(), None);
-        }
-        // A v2 app refusing the fingerprint is an error, never the legacy path.
-        for sw in [0x6F00, 0x6E00, 0x6D00] {
-            let steps = vec![app("2.4.11"), (fp_cmd.clone(), vec![], sw)];
-            assert!(matches!(
-                probe_with(steps, UtxoCoin::Litecoin),
-                Err(HwError::Unsupported { .. })
-            ));
+        // Litecoin 2.4.11 on a Nano X answers 6E00 (legacy code base).
+        for sw in [0x6E00, 0x6D00, 0x6F00] {
+            let legacy = vec![(fp_cmd.clone(), vec![], sw)];
+            assert_eq!(probe_with(legacy, UtxoCoin::Litecoin).unwrap(), None);
         }
         // Dogecoin is never probed (no APDU at all).
         assert_eq!(probe_with(vec![], UtxoCoin::Dogecoin).unwrap(), None);
-        let locked = vec![app("2.4.11"), (fp_cmd, vec![], 0x5515)];
+        let locked = vec![(fp_cmd, vec![], 0x5515)];
         assert!(matches!(
             probe_with(locked, UtxoCoin::Litecoin),
             Err(HwError::Locked)

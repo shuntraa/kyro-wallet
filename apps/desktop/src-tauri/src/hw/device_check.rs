@@ -24,8 +24,8 @@ use wallet_core::{BtcKind, Network, UtxoCoin};
 use super::ledger::{self, ApduLink, HidLink, Ledger};
 use super::ledger_apdu::{self as apdu, SwContext, SW_OK};
 use super::{
-    chains, evm_path, ledger_apps, ledger_utxo_v2, sol_path, version_at_least, Chain, Ctl,
-    HardwareWallet, HwError, HwResult, Locator, Prompt,
+    chains, evm_path, ledger_apps, ledger_utxo, ledger_utxo_v2, sol_path, version_at_least, Chain,
+    Ctl, HardwareWallet, HwError, HwResult, Locator, Prompt,
 };
 
 const NET: Network = Network::Mainnet;
@@ -226,7 +226,89 @@ fn check_btc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
     check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
 }
 
+/// Litecoin legacy-app diagnostic: the status word of each candidate command (and, on `9000`,
+/// the returned address), so a refusal shows which shape the app accepts. Read-only, no screen.
+fn diag_ltc_legacy(link: &dyn ApduLink, c: &Ctl) {
+    const H: u32 = 0x8000_0000;
+    let show = |name: &str, cmd: HwResult<Vec<u8>>| match cmd.and_then(|a| link.exchange(c, &a)) {
+        Ok((data, sw)) => {
+            let extra = if sw == SW_OK && name.starts_with("E0 40") {
+                match ledger_utxo::parse_wallet_public_key(&data) {
+                    Ok(k) => format!(" address {}", k.address),
+                    Err(e) => format!(" unparsed {e:?}"),
+                }
+            } else if sw == SW_OK {
+                format!(" data {}", hex::encode(&data))
+            } else {
+                String::new()
+            };
+            println!("  DIAG {name}: SW {sw:04X}{extra}");
+        }
+        Err(e) => println!("  DIAG {name}: {e:?}"),
+    };
+    show(
+        "E1 05 GET MASTER FINGERPRINT (v2 probe)",
+        ledger_utxo_v2::master_fingerprint_apdu(),
+    );
+    show("E0 16 GET COIN VERSION", apdu::apdu(0xE0, 0x16, 0, 0, &[]));
+    show(
+        "E0 C4 GET FIRMWARE VERSION",
+        apdu::apdu(0xE0, 0xC4, 0, 0, &[]),
+    );
+    let paths: [(&str, Vec<u32>); 5] = [
+        ("m", vec![]),
+        ("m/84'/2'", vec![84 | H, 2 | H]),
+        ("m/84'/2'/0'", vec![84 | H, 2 | H, H]),
+        ("m/84'/2'/0'/0/0", vec![84 | H, 2 | H, H, 0, 0]),
+        ("m/44'/2'/0'/0/0", vec![44 | H, 2 | H, H, 0, 0]),
+    ];
+    for (label, path) in &paths {
+        for fmt in [0u8, 1, 2] {
+            show(
+                &format!("E0 40 GET WALLET PUBLIC KEY {label} P1=00 P2={fmt:02X}"),
+                ledger_utxo::get_wallet_public_key(path, false, fmt),
+            );
+        }
+    }
+}
+
+/// Litecoin legacy app: leaf key and address `m/84'/2'/0'/0/0` from the device vs Kyro's
+/// derivation from the account xpub (no message signing over the legacy protocol here).
+fn check_ltc_legacy(r: &mut Report, link: &dyn ApduLink, c: &Ctl, xpub: &str, kyro: &str) {
+    const H: u32 = 0x8000_0000;
+    let leaf = ledger_utxo::get_wallet_public_key(&[84 | H, 2 | H, H, 0, 0], false, 0x02)
+        .and_then(|cmd| call(link, c, &cmd))
+        .and_then(|d| ledger_utxo::parse_wallet_public_key(&d));
+    let Some(leaf) = r.step("read key m/84'/2'/0'/0/0 (legacy)", leaf) else {
+        return;
+    };
+    let secp = Secp256k1::verification_only();
+    let zero = ChildNumber::Normal { index: 0 };
+    let kyro_leaf = Xpub::from_str(xpub)
+        .ok()
+        .and_then(|x| x.derive_pub(&secp, &[zero, zero]).ok());
+    r.check(
+        "re-derive key from account xpub",
+        kyro_leaf.map(|k| k.public_key.serialize()) == Some(leaf.pubkey),
+        &hex::encode(leaf.pubkey),
+    );
+    r.check(
+        "device address = Kyro address",
+        leaf.address == kyro,
+        &format!("device {} / Kyro {kyro}", leaf.address),
+    );
+}
+
 fn check_ltc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
+    let legacy = {
+        let link = dev.apdu_link().expect("Ledger link");
+        let probe = ledger_utxo_v2::probe(link, c, "Litecoin", UtxoCoin::Litecoin);
+        let legacy = matches!(probe, Ok(None));
+        if legacy {
+            diag_ltc_legacy(link, c);
+        }
+        legacy
+    };
     let keys = chains::read_keys(dev, c, NET, Chain::Ltc, 0);
     let Some(acc) = r
         .step("read account key m/84'/2'/0'", keys)
@@ -239,6 +321,10 @@ fn check_ltc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
     let addr =
         |s: &ScriptBuf| wallet_core::utxo_address_of_script(s.as_bytes(), NET, UtxoCoin::Litecoin);
     let link = dev.apdu_link().expect("Ledger link");
+    if legacy {
+        check_ltc_legacy(r, link, c, &acc.xpub, &kyro);
+        return;
+    }
     let magic = "Litecoin Signed Message:\n";
     check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
 }

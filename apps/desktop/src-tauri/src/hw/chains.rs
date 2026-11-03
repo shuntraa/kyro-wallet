@@ -190,7 +190,7 @@ pub fn ledger_sw_error(
     }
 }
 
-pub(super) fn ledger_open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
+fn ledger_open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
     let (data, sw) = link.exchange(ctl, &apdu::get_app_and_version())?;
     if sw != SW_OK {
         return Err(apdu::sw_error(sw, SwContext::General));
@@ -260,6 +260,23 @@ fn fingerprint_of(pubkey: &[u8; 33]) -> [u8; 4] {
     fp
 }
 
+/// Master key fingerprint over the legacy protocol; `None` when the app refuses to derive the
+/// master key (`6F00` / `6982`, outside the app's allowed paths).
+fn legacy_master_fingerprint(
+    link: &dyn ApduLink,
+    ctl: &Ctl,
+    coin: UtxoCoin,
+) -> HwResult<Option<[u8; 4]>> {
+    let cmd = ledger_utxo::get_wallet_public_key(&[], false, ledger_utxo::address_format(coin))?;
+    match link.exchange(ctl, &cmd)? {
+        (data, SW_OK) => Ok(Some(fingerprint_of(
+            &ledger_utxo::parse_wallet_public_key(&data)?.pubkey,
+        ))),
+        (_, 0x6F00 | 0x6982) => Ok(None),
+        (_, sw) => Err(apdu::sw_error(sw, SwContext::General)),
+    }
+}
+
 fn ledger_utxo_account(
     link: &dyn ApduLink,
     ctl: &Ctl,
@@ -272,9 +289,14 @@ fn ledger_utxo_account(
     if let Some(fp) = ledger_utxo_v2::probe(link, ctl, app, coin)? {
         return ledger_utxo_v2::account(link, ctl, app, coin, fp, &path);
     }
-    let master = ledger_wallet_key(link, ctl, app, coin, &[], false)?;
+    let master = legacy_master_fingerprint(link, ctl, coin)?;
     let parent = ledger_wallet_key(link, ctl, app, coin, &path[..2], false)?;
     let node = ledger_wallet_key(link, ctl, app, coin, &path, false)?;
+    let master = master.unwrap_or_else(|| {
+        // The app may only derive under its own coin paths (Litecoin 2.4.x refuses the master
+        // key with 6F00): the `m/purpose'/coin'` key then stands in as a stable device id.
+        fingerprint_of(&parent.pubkey)
+    });
     let xpub = bitcoin::bip32::Xpub {
         network: match net {
             Network::Mainnet => bitcoin::NetworkKind::Main,
@@ -290,7 +312,7 @@ fn ledger_utxo_account(
     Ok(UtxoAccount {
         coin,
         xpub: xpub.to_string(),
-        fingerprint: hex::encode(fingerprint_of(&master.pubkey)),
+        fingerprint: hex::encode(master),
         path: path_string(&path),
     })
 }
@@ -1164,11 +1186,12 @@ mod tests {
         ));
     }
 
-    /// Current Litecoin app 2.4.11 (Bitcoin app v2 code base, as on the owner's Nano X):
-    /// fingerprint + GET EXTENDED PUBKEY with the Bitcoin framing (P2 `01`, an `Ltub` answer)
-    /// give Kyro's own account; a legacy app (< 2.1) answering `6F00` gets a clear message.
+    /// Litecoin over both protocols. A v2 app: fingerprint + GET EXTENDED PUBKEY with the Bitcoin
+    /// framing (P2 `01`, an `Ltub` answer) give Kyro's own account. Litecoin 2.4.11 as on the
+    /// owner's Nano X: legacy code base, `6E00` to the v2 probe and `6F00` to the master key, so
+    /// the account comes from `m/84'/2'` and `m/84'/2'/0'` (P2 `02`, bech32).
     #[test]
-    fn ledger_litecoin_v2_and_outdated_app() {
+    fn ledger_litecoin_v2_and_legacy_app() {
         let seed = wallet_core::Mnemonic::parse(
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
         )
@@ -1178,12 +1201,15 @@ mod tests {
         let master =
             bitcoin::bip32::Xpriv::new_master(bitcoin::NetworkKind::Main, &seed[..]).unwrap();
         let path = utxo_account_path(UtxoCoin::Litecoin, Network::Mainnet, 0);
-        let dp = bitcoin::bip32::DerivationPath::from(
-            path.iter()
-                .map(|i| bitcoin::bip32::ChildNumber::from(*i))
-                .collect::<Vec<_>>(),
-        );
-        let x = bitcoin::bip32::Xpub::from_priv(&secp, &master.derive_priv(&secp, &dp).unwrap());
+        let derive = |p: &[u32]| {
+            let dp = bitcoin::bip32::DerivationPath::from(
+                p.iter()
+                    .map(|i| bitcoin::bip32::ChildNumber::from(*i))
+                    .collect::<Vec<_>>(),
+            );
+            master.derive_priv(&secp, &dp).unwrap()
+        };
+        let x = bitcoin::bip32::Xpub::from_priv(&secp, &derive(&path));
         let mut raw = x.encode().to_vec();
         raw[..4].copy_from_slice(&[0x01, 0x9D, 0xA4, 0x62]);
         let mut xpub_resp = bitcoin::base58::encode_check(&raw).into_bytes();
@@ -1193,9 +1219,8 @@ mod tests {
         fp_resp.extend([0x90, 0x00]);
         let probe = ledger_utxo_v2::master_fingerprint_apdu().unwrap();
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![
-            app("Litecoin", "2.4.11"),
-            app("Litecoin", "2.4.11"),
-            (probe, fp_resp),
+            app("Litecoin", "2.4.0"),
+            (probe.clone(), fp_resp),
             (
                 ledger_utxo_v2::extended_pubkey_apdu(&path, false).unwrap(),
                 xpub_resp,
@@ -1209,20 +1234,41 @@ mod tests {
             wallet_core::utxo_account(&seed, Network::Mainnet, UtxoCoin::Litecoin, 0).unwrap();
         assert_eq!(got, want);
 
+        let answer = |p: &[u32]| {
+            let k = derive(p);
+            let mut r = vec![65u8];
+            r.extend(k.private_key.public_key(&secp).serialize_uncompressed());
+            r.push(4);
+            r.extend(b"ltc1");
+            r.extend(k.chain_code.to_bytes());
+            r.extend([0x90, 0x00]);
+            (
+                ledger_utxo::get_wallet_public_key(p, false, 0x02).unwrap(),
+                r,
+            )
+        };
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![
-            app("Litecoin", "2.0.6"),
-            app("Litecoin", "2.0.6"),
+            app("Litecoin", "2.4.11"),
+            (probe, vec![0x6E, 0x00]),
             (
                 ledger_utxo::get_wallet_public_key(&[], false, 0x02).unwrap(),
                 vec![0x6F, 0x00],
             ),
+            answer(&path[..2]),
+            answer(&path),
         ])));
-        let Err(HwError::Unsupported { what, .. }) =
-            read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Ltc, 0)
-        else {
-            panic!("6F00 must be reported as an outdated app");
-        };
-        assert!(what.starts_with("The Litecoin app on your Ledger is outdated"));
+        let got = read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Ltc, 0)
+            .unwrap()
+            .utxo
+            .unwrap();
+        assert_eq!(got.xpub, want.xpub);
+        assert_eq!(got.path, "m/84'/2'/0'");
+        let parent = derive(&path[..2]).private_key.public_key(&secp).serialize();
+        assert_eq!(got.fingerprint, hex::encode(fingerprint_of(&parent)));
+        assert_eq!(
+            hex::encode(ledger_utxo::get_wallet_public_key(&path, false, 0x02).unwrap()),
+            "e04000020d03800000548000000280000000"
+        );
     }
 
     #[test]
