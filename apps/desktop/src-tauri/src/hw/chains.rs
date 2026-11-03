@@ -190,7 +190,7 @@ pub fn ledger_sw_error(
     }
 }
 
-fn ledger_open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
+pub(super) fn ledger_open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
     let (data, sw) = link.exchange(ctl, &apdu::get_app_and_version())?;
     if sw != SW_OK {
         return Err(apdu::sw_error(sw, SwContext::General));
@@ -269,7 +269,7 @@ fn ledger_utxo_account(
     account: u32,
 ) -> HwResult<UtxoAccount> {
     let path = utxo_account_path(coin, net, account);
-    if let Some(fp) = ledger_utxo_v2::probe(link, ctl, coin)? {
+    if let Some(fp) = ledger_utxo_v2::probe(link, ctl, app, coin)? {
         return ledger_utxo_v2::account(link, ctl, app, coin, fp, &path);
     }
     let master = ledger_wallet_key(link, ctl, app, coin, &[], false)?;
@@ -648,7 +648,7 @@ pub fn display_address(
     match (dev.raw(), target) {
         (RawDevice::Ledger(link), Target::Utxo { coin, path }) => {
             let app = ledger_ensure(link, ctl, chain_of(*coin), net)?;
-            if ledger_utxo_v2::probe(link, ctl, *coin)?.is_some() {
+            if ledger_utxo_v2::probe(link, ctl, app, *coin)?.is_some() {
                 let stored = acc
                     .utxo_account(*coin)
                     .ok_or_else(|| HwError::bad("missing account"))?;
@@ -734,7 +734,7 @@ pub fn sign_utxo(
     match dev.raw() {
         RawDevice::Ledger(link) => {
             let app = ledger_ensure(link, ctl, chain_of(coin), net)?;
-            if ledger_utxo_v2::probe(link, ctl, coin)?.is_some() {
+            if ledger_utxo_v2::probe(link, ctl, app, coin)?.is_some() {
                 return ledger_utxo_v2::sign(link, ctl, app, account, psbt);
             }
             let mut call = ledger_utxo::caller(link, ctl, app);
@@ -1164,8 +1164,9 @@ mod tests {
         ));
     }
 
-    /// Current Litecoin app (Bitcoin app v2 code base): fingerprint + GET EXTENDED PUBKEY (an
-    /// `Ltub` answer) give Kyro's own account; a legacy app answering `6F00` gets a clear message.
+    /// Current Litecoin app 2.4.11 (Bitcoin app v2 code base, as on the owner's Nano X):
+    /// fingerprint + GET EXTENDED PUBKEY with the Bitcoin framing (P2 `01`, an `Ltub` answer)
+    /// give Kyro's own account; a legacy app (< 2.1) answering `6F00` gets a clear message.
     #[test]
     fn ledger_litecoin_v2_and_outdated_app() {
         let seed = wallet_core::Mnemonic::parse(
@@ -1192,8 +1193,9 @@ mod tests {
         fp_resp.extend([0x90, 0x00]);
         let probe = ledger_utxo_v2::master_fingerprint_apdu().unwrap();
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![
-            app("Litecoin", "2.4.0"),
-            (probe.clone(), fp_resp),
+            app("Litecoin", "2.4.11"),
+            app("Litecoin", "2.4.11"),
+            (probe, fp_resp),
             (
                 ledger_utxo_v2::extended_pubkey_apdu(&path, false).unwrap(),
                 xpub_resp,
@@ -1208,8 +1210,8 @@ mod tests {
         assert_eq!(got, want);
 
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![
-            app("Litecoin", "2.1.0"),
-            (probe, vec![0x6E, 0x00]),
+            app("Litecoin", "2.0.6"),
+            app("Litecoin", "2.0.6"),
             (
                 ledger_utxo::get_wallet_public_key(&[], false, 0x02).unwrap(),
                 vec![0x6F, 0x00],

@@ -2,6 +2,8 @@
 
 ## 1.0.6
 
+- Ledger Litecoin: app 2.1 and later (2.4.11 tested) is read and signed with the Bitcoin
+  app protocol (m/84'/2'/0', ltc1 addresses) instead of being reported as outdated.
 - Address book: the network is detected from the pasted address (a short choice only when
   several match), Enter saves and the name is optional. Send offers "Save" for a new recipient.
 - History is fetched in the background after unlock and kept per wallet, so the History page

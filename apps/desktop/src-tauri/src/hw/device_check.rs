@@ -146,9 +146,12 @@ fn signed_msg_hash(magic: &str, msg: &[u8]) -> [u8; 32] {
 }
 
 /// Bitcoin / Litecoin (v2 app): leaf key `account/0/0` from the device vs Kyro's derivation
-/// from the account xpub, the address of both, then a signed message checked with the leaf key.
+/// from the account xpub, the address of both, then a signed message checked with the leaf key
+/// under the coin's message `magic`.
+#[allow(clippy::too_many_arguments)]
 fn check_v2(
     r: &mut Report,
+    magic: &str,
     link: &dyn ApduLink,
     c: &Ctl,
     xpub: &str,
@@ -197,16 +200,11 @@ fn check_v2(
         return;
     };
     sig.normalize_s();
-    let magic = ["Bitcoin Signed Message:\n", "Litecoin Signed Message:\n"]
-        .into_iter()
-        .find(|m| {
-            let msg = Message::from_digest(signed_msg_hash(m, MESSAGE));
-            secp.verify_ecdsa(&msg, &sig, &dev_leaf.public_key).is_ok()
-        });
+    let msg = Message::from_digest(signed_msg_hash(magic, MESSAGE));
     r.check(
         "signature verifies with the read key",
-        magic.is_some(),
-        &format!("magic {:?}", magic.unwrap_or("none")),
+        secp.verify_ecdsa(&msg, &sig, &dev_leaf.public_key).is_ok(),
+        &format!("magic {magic:?}"),
     );
 }
 
@@ -224,12 +222,16 @@ fn check_btc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
             .map(|a| a.to_string())
     };
     let link = dev.apdu_link().expect("Ledger link");
-    check_v2(r, link, c, &acc.xpub, &acc.path, &kyro, &addr);
+    let magic = "Bitcoin Signed Message:\n";
+    check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
 }
 
 fn check_ltc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
     let keys = chains::read_keys(dev, c, NET, Chain::Ltc, 0);
-    let Some(acc) = r.step("read account key", keys).and_then(|k| k.utxo) else {
+    let Some(acc) = r
+        .step("read account key m/84'/2'/0'", keys)
+        .and_then(|k| k.utxo)
+    else {
         return;
     };
     let kyro = wallet_core::utxo_address_from_xpub(&acc.xpub, NET, UtxoCoin::Litecoin, false, 0)
@@ -237,7 +239,8 @@ fn check_ltc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
     let addr =
         |s: &ScriptBuf| wallet_core::utxo_address_of_script(s.as_bytes(), NET, UtxoCoin::Litecoin);
     let link = dev.apdu_link().expect("Ledger link");
-    check_v2(r, link, c, &acc.xpub, &acc.path, &kyro, &addr);
+    let magic = "Litecoin Signed Message:\n";
+    check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
 }
 
 fn check_evm(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
