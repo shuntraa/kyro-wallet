@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // "Mes actifs" / "Marché · top 250" / "Favoris" lists.
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
 import type { MarketCoin } from '@kyro/market';
@@ -40,6 +40,8 @@ export function useFavorites() {
 
 export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?: ListTab; className?: string }) {
   const [tab, setTab] = useState<ListTab>(initialTab);
+  // One underline per card: a shared id makes it fly between Portfolio and Assets on navigation.
+  const tabUnderline = `asset-tab-${useId()}`;
   const [sort, setSort] = useState<Sort>('value');
   const [query, setQuery] = useState('');
   const pf = usePortfolio();
@@ -67,7 +69,7 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
               className={cn('relative h-14 text-[15px] transition-colors duration-150', tab === k ? 'font-medium text-text' : 'font-normal text-mute hover:text-text2')}
             >
               {label}
-              {tab === k && <motion.span layoutId="asset-tab" aria-hidden="true" className="absolute right-0 -bottom-px left-0 h-[2px] rounded-full bg-ice shadow-[0_0_10px_rgba(124,196,255,.6)]" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />}
+              {tab === k && <motion.span layoutId={tabUnderline} aria-hidden="true" className="absolute right-0 -bottom-px left-0 h-[2px] rounded-full bg-ice shadow-[0_0_10px_rgba(124,196,255,.6)]" transition={{ type: 'spring', stiffness: 520, damping: 42 }} />}
             </button>
           ))}
         </div>

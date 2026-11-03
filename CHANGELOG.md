@@ -2,6 +2,7 @@
 
 ## 1.0.6
 
+- Switching between Portfolio and Assets no longer slides the tab underline across the screen.
 - Ledger Litecoin: the app's protocol is detected by asking it (Litecoin 2.4.x is still the
   legacy app), and the account is read without the master key the app refuses, instead of
   being reported as outdated.
