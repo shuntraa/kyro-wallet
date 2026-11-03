@@ -31,6 +31,8 @@ export const earn = {
   'earn.lockNear': '≈ 2–3 jours',
   'earn.risk': 'Rendements variables, versés par le protocole. Risques : bug de contrat, dépeg, pénalités des validateurs.',
   'earn.hw': 'Pas encore disponible avec un hardware wallet.',
+  'earn.hwSign': 'Vérifiez et confirmez sur votre {device}.',
+  'earn.hwBlind': 'Activez « Blind signing » dans les réglages de l’app Ethereum.',
   'earn.mainnetOnly': 'Disponible sur le mainnet uniquement.',
   'earn.noAccount': 'Aucun compte',
   'earn.stakeTitle': 'Staker {symbol}',

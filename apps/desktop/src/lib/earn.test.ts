@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, filterOptions, parseReserveData } from './earn';
+import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, filterOptions, parseReserveData } from './earn';
 
 describe('earn', () => {
   it('Aave APY from the ray liquidity rate (compounded per second)', () => {
@@ -50,5 +50,22 @@ describe('earn', () => {
     expect(filterOptions(EARN_OPTIONS, 'stable').map((o) => o.symbol)).toEqual(['USDT', 'USDC', 'DAI', 'USDT', 'USDC', 'USDC', 'USDT', 'USDC']);
     for (const o of EARN_OPTIONS) if (o.target.kind === 'aave') expect(AAVE_MARKETS[o.target.market]?.symbol).toBe(o.symbol);
     expect(filterOptions(EARN_OPTIONS, 'staking').every((o) => o.type !== 'lending')).toBe(true);
+  });
+});
+
+describe('earn routing', () => {
+  const by = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
+  const all = () => true;
+  it('Lido and Aave start from a hardware wallet too; staking tabs stay seed-only', () => {
+    for (const id of ['eth-lido', 'usdt-aave', 'usdc-aave-arb', 'usdc-aave-pol']) {
+      expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: true }), id).toBeNull();
+      expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
+      expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: false }), id).toBe('mainnetOnly');
+    }
+    for (const id of ['sol', 'ada', 'trx', 'near']) {
+      expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: true }), id).toBe('hw');
+      expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
+      expect(earnBlock(by(id), { hw: false, hasAccount: () => false, hasEvm: true }), id).toBe('noAccount');
+    }
   });
 });

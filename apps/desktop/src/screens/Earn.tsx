@@ -4,20 +4,21 @@
 // amount → review → confirm. Rust builds the call (`earn_evm_build`) and names it in the native window.
 
 import { useMemo, useState } from 'react';
-import { call, toIpcError, type EarnEvmAction } from '@kyro/shared';
-import { tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
+import { call, toIpcError, type EarnEvmAction, type HwDeviceKind } from '@kyro/shared';
+import { signAndBroadcastHw, tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import { buildApproval, buildRevoke, requiresZeroAllowanceFirst } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { useCachedAsync } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
 import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
-import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
+import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { IconCheck, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
+import { BRAND, hwErrorView, pickDevice, withDevice } from '../state/hw';
 
 type Hex = `0x${string}`;
 type Rates = Record<string, number | null>;
@@ -104,8 +105,8 @@ export function Earn() {
   const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
   const rates = useCachedAsync<Rates>(`earn.rates.${network}`, () => readRates(evm), [network, !!eth], { intervalMs: 300_000 });
-  const pos = useCachedAsync<Positions>(eth && !activeHw ? `earn.pos.${ethKey}` : null, eth && !activeHw ? () => readPositions(evm) : null, [ethKey, !!activeHw]);
-  const lidoReq = useCachedAsync<WithdrawalStatus[]>(eth && !activeHw ? `earn.lidoq.${ethKey}` : null, eth && !activeHw ? () => readLidoRequests(eth) : null, [ethKey, !!activeHw]);
+  const pos = useCachedAsync<Positions>(eth ? `earn.pos.${ethKey}` : null, eth ? () => readPositions(evm) : null, [ethKey]);
+  const lidoReq = useCachedAsync<WithdrawalStatus[]>(eth ? `earn.lidoq.${ethKey}` : null, eth ? () => readLidoRequests(eth) : null, [ethKey]);
   const claimable = (lidoReq.data ?? []).filter((r) => r.isFinalized);
   const pending = (lidoReq.data ?? []).filter((r) => !r.isFinalized).reduce((a, r) => a + r.amountOfStETH, 0n);
   useOnTorReady(() => {
@@ -119,9 +120,8 @@ export function Earn() {
 
   const adapterFor = (o: EarnOption): EvmAdapter | undefined => (o.target.kind === 'aave' ? evm(AAVE_MARKETS[o.target.market]!.chainKey) : o.target.kind === 'lido' ? eth : undefined);
   const unavailable = (o: EarnOption): string | null => {
-    if (o.target.kind === 'tab') return activeHw ? t('earn.hw') : has[o.target.chain] ? null : t('earn.noAccount');
-    if (activeHw) return t('earn.hw');
-    return adapterFor(o) ? null : t('earn.mainnetOnly');
+    const b = earnBlock(o, { hw: !!activeHw, hasAccount: (c) => !!has[c], hasEvm: !!adapterFor(o) });
+    return b ? t(`earn.${b}` as const) : null;
   };
 
   return (
@@ -207,6 +207,7 @@ export function Earn() {
           opt={flow.opt}
           mode={flow.mode}
           eth={adapterFor(flow.opt)!}
+          hw={activeHw?.device ?? null}
           apy={rates.data?.[flow.opt.id] ?? null}
           position={pos.data?.[flow.opt.id] ?? 0n}
           onClose={() => setFlow(null)}
@@ -224,7 +225,7 @@ export function Earn() {
 type Phase = 'amount' | 'review' | 'busy' | 'done';
 type Mode = 'in' | 'out' | 'claim';
 
-function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone }: { opt: EarnOption; mode: Mode; eth: EvmAdapter; apy: number | null; position: bigint; claims: WithdrawalStatus[]; onClose: () => void; onDone: () => void }) {
+function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onDone }: { opt: EarnOption; mode: Mode; eth: EvmAdapter; hw: HwDeviceKind | null; apy: number | null; position: bigint; claims: WithdrawalStatus[]; onClose: () => void; onDone: () => void }) {
   const { t } = useT();
   const { network } = useApp();
   const [input, setInput] = useState('');
@@ -234,6 +235,7 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
   const [password, setPassword] = useState('');
   const [wrongPw, setWrongPw] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [blindHint, setBlindHint] = useState(false);
   const isLido = opt.target.kind === 'lido';
   const reserve = opt.target.kind === 'aave' ? AAVE_MARKETS[opt.target.market]! : null;
   const aave = reserve?.symbol ?? null;
@@ -258,12 +260,17 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
     if (!action || amount === null) return;
     setPhase('busy');
     setError(null);
+    setBlindHint(false);
     try {
+      // Hardware wallet: Rust shows its decoded review (pinned contract + function), then the device.
+      const device = hw ? await pickDevice(hw) : null;
+      const sign = async (u: Awaited<ReturnType<EvmAdapter['buildCall']>>) =>
+        device ? withDevice(device.id, () => signAndBroadcastHw(eth, u, device.id)) : eth.broadcast(await eth.signTx(u, password));
       const fee = (await eth.estimateFees()).options.normal.params;
       if (fee.family !== 'evm') throw new Error('fee');
       const send = async (to: string, data: Hex, value: bigint, kind: 'approval' | 'swap') => {
         const u = await eth.buildCall({ to, data, value, fee, kind, asset, amount: kind === 'approval' ? amount : value });
-        const h = await eth.broadcast(await eth.signTx(u, password));
+        const h = await sign(u);
         setStep(t('earn.stepWaiting'));
         if (!(await eth.waitForReceipt(h))) throw new Error(t('earn.errFailed'));
       };
@@ -303,7 +310,7 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
       const u = await eth.buildCall({ to: built.to, data: built.data as Hex, value, fee, kind: 'swap', asset, amount });
       const decoded = await eth.decode(u);
       if (decoded.to.toLowerCase() !== target || BigInt(decoded.valueWei) !== (isLido && mode === 'in' ? amount : 0n)) throw new Error(t('earn.errDecode'));
-      const h = await eth.broadcast(await eth.signTx(u, password));
+      const h = await sign(u);
       setStep(t('earn.stepWaiting'));
       if (!(await eth.waitForReceipt(h))) throw new Error(t('earn.errFailed'));
       setPhase('done');
@@ -311,7 +318,9 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
     } catch (e) {
       const err = toIpcError(e);
       if (err.code === 'WRONG_PASSWORD') setWrongPw((n) => n + 1);
-      setError(err.message);
+      // Ledger answers 6A80 when blind signing is off: a short hint (Kyro already named the call).
+      setBlindHint(hw === 'ledger' && err.code === 'HW_UNSUPPORTED');
+      setError(hw && err.code.startsWith('HW_') ? hwErrorView(e).detail : err.message);
       setPhase('review');
     }
   };
@@ -373,7 +382,12 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
           <Notice tone="info" icon={<IconShield size={15} className="mt-0.5 shrink-0 text-ice" />}>
             {t('earn.risk')}
           </Notice>
-          <PasswordField id="earn-pw" value={password} onChange={setPassword} wrong={wrongPw} onEnter={() => password && phase === 'review' && void run()} />
+          {hw ? (
+            <p className="m-0 text-[12.5px] text-mute">{t('earn.hwSign', { device: BRAND[hw] })}</p>
+          ) : (
+            <PasswordField id="earn-pw" value={password} onChange={setPassword} wrong={wrongPw} onEnter={() => password && phase === 'review' && void run()} />
+          )}
+          {blindHint && <p className="m-0 text-[12.5px] font-medium text-warn">{t('earn.hwBlind')}</p>}
           {error && (
             <div className="flex items-start gap-2 text-[12.5px] text-warn">
               <IconWarn size={14} className="mt-0.5 shrink-0" /> {error}
@@ -383,7 +397,7 @@ function EvmEarnDialog({ opt, mode, eth, apy, position, claims, onClose, onDone 
             <Button variant="outline" disabled={phase === 'busy'} onClick={() => setPhase('amount')}>
               {t('earn.back')}
             </Button>
-            <Button disabled={!password || phase === 'busy' || network !== 'mainnet'} onClick={() => void run()}>
+            <Button disabled={(!hw && !password) || phase === 'busy' || network !== 'mainnet'} onClick={() => void run()}>
               {phase === 'busy' ? (
                 <>
                   <Spinner /> {step}

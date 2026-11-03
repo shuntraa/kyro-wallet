@@ -674,6 +674,55 @@ pub(crate) fn evm_unknown_token(s: &wallet_core::EvmTxSummary, token: Option<&To
     matches!(s.kind, EvmTxKind::Erc20Transfer | EvmTxKind::Erc20Approve) && token.is_none()
 }
 
+/// Pinned Earn call (Lido, Aave v3), for both the seed and the hardware-wallet paths: its
+/// beneficiary must be the signer, stETH (not in the token table) is named for the queue
+/// approval, and the "unknown contract" warnings go (the call is decoded and named). Returns the
+/// token label to use and, for an Earn call, the review text (network, contract + function, fee).
+pub(crate) fn evm_earn_review(
+    lang: Lang,
+    tx: &EvmTxRequest,
+    summary: &mut wallet_core::EvmTxSummary,
+    from: &str,
+    token: Option<TokenLabel>,
+) -> AppResult<(Option<TokenLabel>, Option<String>)> {
+    let Some(earn) = crate::earn_evm::decode(summary.chain_id, &tx.to, &tx.value_wei, &tx.data)
+    else {
+        return Ok((token, None));
+    };
+    if let Some(b) = earn.beneficiary() {
+        if !b.eq_ignore_ascii_case(from) {
+            return Err(AppError::InvalidInput(
+                "Earn: the position must belong to the signing account".into(),
+            ));
+        }
+    }
+    // stETH is not in the token table: its approval to the pinned Lido queue is named here.
+    let token = token.or_else(|| {
+        matches!(earn, crate::earn_evm::EarnCall::LidoApproveQueue { .. }).then(|| TokenLabel {
+            symbol: "stETH".into(),
+            decimals: 18,
+        })
+    });
+    // Decoded: the call and its attached stake are known, not an "unknown action".
+    summary.warnings.retain(|w| {
+        !matches!(
+            w,
+            wallet_core::EvmWarning::ContractCall | wallet_core::EvmWarning::ValueToContract { .. }
+        )
+    });
+    summary.requires_extra_confirmation = !summary.warnings.is_empty();
+    let body = format!(
+        "{}{}\n\n{}\n{}{} {}",
+        lang.pick("Réseau : ", "Network: "),
+        chain_name(lang, summary.chain_id),
+        crate::earn_evm::describe(lang, &earn),
+        lang.pick("Frais maximum : ", "Maximum fee: "),
+        format_units_in(lang, &summary.max_fee_wei, 18),
+        native_symbol(lang, summary.chain_id)
+    );
+    Ok((token, Some(body)))
+}
+
 pub(crate) fn evm_needs_extra(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> bool {
     s.requires_extra_confirmation || evm_unknown_token(s, token)
 }
@@ -902,40 +951,11 @@ pub async fn evm_sign_tx(
     let token = evm_token_label(state.network, &summary);
     let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
     let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
-    // Pinned Earn call (Lido, Aave v3): named contract + function; its beneficiary must be us.
-    let earn = crate::earn_evm::decode(summary.chain_id, &tx.to, &tx.value_wei, &tx.data);
-    if let Some(b) = earn.as_ref().and_then(|c| c.beneficiary()) {
-        if !b.eq_ignore_ascii_case(&from) {
-            return Err(AppError::InvalidInput(
-                "Earn: the position must belong to the signing account".into(),
-            ));
-        }
-    }
-    // stETH is not in the token table: its approval to the pinned Lido queue is named here.
-    let token = token.or_else(|| {
-        matches!(
-            earn,
-            Some(crate::earn_evm::EarnCall::LidoApproveQueue { .. })
-        )
-        .then(|| TokenLabel {
-            symbol: "stETH".into(),
-            decimals: 18,
-        })
-    });
-    let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
-    let body = match &earn {
-        Some(c) => format!(
-            "{}{}\n\n{}\n{}{} {}",
-            lang.pick("Réseau : ", "Network: "),
-            chain_name(lang, summary.chain_id),
-            crate::earn_evm::describe(lang, c),
-            lang.pick("Frais maximum : ", "Maximum fee: "),
-            format_units_in(lang, &summary.max_fee_wei, 18),
-            native_symbol(lang, summary.chain_id)
-        ),
-        None => describe_evm(lang, &summary, token.as_ref()),
-    };
+    let mut summary = summary;
+    let (token, earn_body) = evm_earn_review(lang, &tx, &mut summary, &from, token)?;
+    let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let body = earn_body.unwrap_or_else(|| describe_evm(lang, &summary, token.as_ref()));
     confirm_native(
         &app,
         lang.confirm_tx_title(),
@@ -946,18 +966,6 @@ pub async fn evm_sign_tx(
     )
     .await?;
     confirm_signer(&app, &signer).await?;
-    let mut summary = summary;
-    if earn.is_some() {
-        // Decoded above: the call and its attached stake are known, not an "unknown action".
-        summary.warnings.retain(|w| {
-            !matches!(
-                w,
-                wallet_core::EvmWarning::ContractCall
-                    | wallet_core::EvmWarning::ValueToContract { .. }
-            )
-        });
-        summary.requires_extra_confirmation = !summary.warnings.is_empty();
-    }
     if evm_needs_extra(&summary, token.as_ref()) {
         confirm_native(
             &app,

@@ -17,8 +17,8 @@ use wallet_core::{
 };
 
 use crate::commands::{
-    confirm_native, describe_btc, describe_btc_extra, describe_evm, evm_needs_extra,
-    evm_token_label, evm_warning_lines, TokenLabel,
+    confirm_native, describe_btc, describe_btc_extra, describe_evm, evm_earn_review,
+    evm_needs_extra, evm_token_label, evm_warning_lines, TokenLabel,
 };
 use crate::error::{AppError, AppResult};
 use crate::hw::{
@@ -789,7 +789,10 @@ pub async fn hw_sign_evm_tx(
     let expected = acc
         .evm_address()?
         .ok_or_else(|| AppError::InvalidInput("this account has no EVM key".into()))?;
-    let summary = wallet_core::evm_decode(&tx, state.network)?;
+    let mut summary = wallet_core::evm_decode(&tx, state.network)?;
+    let lang = crate::i18n::current();
+    // Earn (Lido, Aave v3): same pinned decoding and review as the seed path.
+    let (earn_token, earn_body) = evm_earn_review(lang, &tx, &mut summary, &expected, None)?;
     let descriptor = match (info.kind, summary.kind, summary.token_contract.as_deref()) {
         (
             HwDeviceKind::Ledger,
@@ -805,7 +808,8 @@ pub async fn hw_sign_evm_tx(
             symbol: d.ticker.clone(),
             decimals: d.decimals,
         })
-        .or_else(|| evm_token_label(state.network, &summary));
+        .or_else(|| evm_token_label(state.network, &summary))
+        .or(earn_token);
     let extra = evm_needs_extra(&summary, hint.as_ref());
 
     let acc2 = acc.clone();
@@ -820,14 +824,14 @@ pub async fn hw_sign_evm_tx(
     if !same {
         return Err(AppError::HwWrongDevice);
     }
-    let lang = crate::i18n::current();
     confirm_native(
         &app,
         lang.pick(
             "Confirmer la transaction (hardware wallet)",
             "Confirm the transaction (hardware wallet)",
         ),
-        describe_evm(lang, &summary, hint.as_ref()) + &device_line(lang, &info),
+        earn_body.unwrap_or_else(|| describe_evm(lang, &summary, hint.as_ref()))
+            + &device_line(lang, &info),
     )
     .await?;
     if !clear || extra {

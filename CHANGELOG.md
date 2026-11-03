@@ -21,6 +21,10 @@
   under the amounts.
 - Earn: live estimated rates for Solana, Cardano and TRON (network-wide, before the
   validator, pool or SR commission), read from the servers Kyro already uses.
+- Earn with a Ledger or Trezor: Lido and Aave work from hardware wallet accounts. Kyro names the
+  contract and function first, then the device shows the transaction; a Ledger with blind
+  signing off gets a short hint. Staking on Solana, Cardano, TRON and NEAR still needs a
+  recovery-phrase account.
 ## 1.0.4
 
 - Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools

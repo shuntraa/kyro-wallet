@@ -147,3 +147,15 @@ export async function lidoAprPercent(): Promise<number> {
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 100) throw new Error('Lido APR: invalid answer');
   return v;
 }
+
+export type EarnBlock = 'hw' | 'noAccount' | 'mainnetOnly';
+
+/**
+ * Can this option start? EVM options (Lido, Aave) work from a seed or a hardware wallet (Rust
+ * names the pinned call before the device shows it). The staking tabs need the seed: Kyro's
+ * hardware signing does not cover stake accounts, certificates, votes or pool calls yet.
+ */
+export function earnBlock(o: EarnOption, ctx: { hw: boolean; hasAccount: (chain: string) => boolean; hasEvm: boolean }): EarnBlock | null {
+  if (o.target.kind === 'tab') return ctx.hw ? 'hw' : ctx.hasAccount(o.target.chain) ? null : 'noAccount';
+  return ctx.hasEvm ? null : 'mainnetOnly';
+}
