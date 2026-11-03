@@ -6,7 +6,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type HwKeyChain, type WatchOnlyAccount } from '@kyro/shared';
 import { HW_KEY_CHAINS, hwFingerprint, hwToAccounts } from '@kyro/chains';
-import { BRAND, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevice, PIN_MATRIX_KEYPAD } from '../state/hw';
+import { BRAND, connectOutcome, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevice, PIN_MATRIX_KEYPAD, type ConnectOutcome } from '../state/hw';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
 import { useApp } from '../state/app';
@@ -338,7 +338,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   const [chains, setChains] = useState<Set<SetupChain>>(new Set(['btc', 'evm']));
   const [account, setAccount] = useState(0);
   const [label, setLabel] = useState('');
-  const [progress, setProgress] = useState<Partial<Record<SetupChain, 'todo' | 'reading' | 'ok' | 'error'>>>({});
+  const [progress, setProgress] = useState<Partial<Record<SetupChain, 'todo' | 'reading' | 'ok' | 'error' | Exclude<ConnectOutcome, 'stop'>>>>({});
   const [saved, setSaved] = useState<WatchOnlyAccount | null>(null);
   const { t } = useT();
 
@@ -372,7 +372,9 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
     try {
       const st = await withDevice(d.id, () => call('hw_open', { id: d.id }));
       setStatus(st);
-      setChains(new Set(DEFAULT_CHAINS.filter((c) => st.chains.find((x) => x.chain === c)?.state !== 'unsupported')));
+      // Ledger: every chain it supports, Kyro opens each app in turn (one-step connect).
+      const pre = d.kind === 'ledger' ? IMPLEMENTED.filter((c) => st.chains.some((x) => x.chain === c)) : DEFAULT_CHAINS;
+      setChains(new Set(pre.filter((c) => st.chains.find((x) => x.chain === c)?.state !== 'unsupported')));
     } catch (e) {
       setError(e);
     } finally {
@@ -406,6 +408,12 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
         setSaved(acc);
         setProgress((p) => ({ ...p, [chain]: 'ok' }));
       } catch (e) {
+        // App not installed, refused, too old: skip this chain and go on.
+        const outcome = connectOutcome(e);
+        if (outcome !== 'stop') {
+          setProgress((p) => ({ ...p, [chain]: outcome }));
+          continue;
+        }
         setProgress((p) => ({ ...p, [chain]: 'error' }));
         setError({ error: e, chain });
         setBusy(null);
@@ -413,11 +421,12 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
       }
     }
     setBusy(null);
-    if (acc) {
-      setSaved(acc);
-      setStep('done');
-    }
+    if (acc) setSaved(acc);
+    setStep('done');
   };
+
+  const outcomeText = (s: (typeof progress)[SetupChain]): string =>
+    s === 'ok' ? t('hw.connect.added') : s === 'missing' ? t('hw.connect.missing') : s === 'old' ? t('hw.connect.old') : t('hw.connect.skipped');
 
   const failed = error && typeof error === 'object' && 'chain' in error ? (error as { error: unknown; chain: SetupChain }) : null;
 
@@ -541,9 +550,9 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               const app = status?.chains.find((x) => x.chain === c)?.app;
               return (
                 <li key={c} className="flex items-center gap-3 rounded-ctl border border-line bg-raised px-4 py-2.5">
-                  {st === 'ok' ? <IconCheck size={15} className="text-up" /> : st === 'reading' ? <Spinner className="size-3.5 text-ice" /> : st === 'error' ? <IconX size={15} className="text-down" /> : <span className="size-1.5 rounded-full bg-faint" />}
+                  {st === 'ok' ? <IconCheck size={15} className="text-up" /> : st === 'reading' ? <Spinner className="size-3.5 text-ice" /> : st === 'error' ? <IconX size={15} className="text-down" /> : st === 'missing' || st === 'old' || st === 'skipped' ? <IconX size={15} className="text-faint" /> : <span className="size-1.5 rounded-full bg-faint" />}
                   <span className="flex-1 text-[13px] font-semibold">{chainLabel(c)}</span>
-                  {device.kind === 'ledger' && app && <span className="text-[12px] text-mute">{t('hw.setup.ledgerApp', { app })}</span>}
+                  {st === 'missing' || st === 'old' || st === 'skipped' ? <span className="text-[12px] text-mute">{outcomeText(st)}</span> : device.kind === 'ledger' && app && <span className="text-[12px] text-mute">{t('hw.setup.ledgerApp', { app })}</span>}
                 </li>
               );
             })}
@@ -563,7 +572,26 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
         </div>
       )}
 
-      {step === 'done' && saved && <HwAccountSummary acc={saved} action={<Button variant="primary" onClick={() => onDone(saved)}>{t('hw.setup.useAccount')}</Button>} />}
+      {step === 'done' && (
+        <div className="flex flex-col gap-3">
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label={t('hw.connect.summary')}>
+            {IMPLEMENTED.filter((c) => chains.has(c)).map((c) => (
+              <li key={c} className="flex items-center gap-3 rounded-ctl border border-line bg-raised px-4 py-2">
+                {progress[c] === 'ok' ? <IconCheck size={15} className="text-up" /> : <IconX size={15} className="text-faint" />}
+                <span className="flex-1 text-[13px] font-semibold">{chainLabel(c)}</span>
+                <span className={cn('text-[12px]', progress[c] === 'ok' ? 'text-up' : 'text-mute')}>{outcomeText(progress[c])}</span>
+              </li>
+            ))}
+          </ul>
+          {saved ? (
+            <HwAccountSummary acc={saved} action={<Button variant="primary" onClick={() => onDone(saved)}>{t('hw.setup.useAccount')}</Button>} />
+          ) : (
+            <div>
+              <Button onClick={() => setStep('device')}>{t('common.back')}</Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -170,3 +170,24 @@ export function pinPosition(row: number, col: number): string {
   if (!p) throw new Error(t('hw.invalidCell'));
   return p;
 }
+
+/**
+ * One-step connect: what to do when reading one chain fails. A missing app, a refusal on the
+ * device, an app too old or that did not start only skip that chain; anything else (unplugged,
+ * locked, timeout, wrong device…) stops the run.
+ */
+export type ConnectOutcome = 'missing' | 'skipped' | 'old' | 'stop';
+export function connectOutcome(e: unknown): ConnectOutcome {
+  const err = ipcErrorIn(e) ?? toIpcError(e);
+  switch (err.code) {
+    case 'HW_APP_MISSING':
+      return 'missing';
+    case 'HW_REJECTED':
+    case 'HW_WRONG_APP':
+      return 'skipped';
+    case 'HW_UNSUPPORTED':
+      return errorData(e, 'HW_UNSUPPORTED')?.min ? 'old' : 'skipped';
+    default:
+      return 'stop';
+  }
+}

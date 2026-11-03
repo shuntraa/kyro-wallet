@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { emitDemoEvent, IpcError, onHwPrompt, toIpcError } from '@kyro/shared';
 import { DEMO_TREZOR_LAYOUT, demoDecodePin, TREZOR_KEYPAD } from '@kyro/shared/mock';
-import { createHwPromptStore, hwErrorView, isAddressMismatch, PIN_MATRIX_KEYPAD, pinPosition, type HwPromptStore } from './hw';
+import { connectOutcome, createHwPromptStore, hwErrorView, isAddressMismatch, PIN_MATRIX_KEYPAD, pinPosition, type HwPromptStore } from './hw';
 
 let store: HwPromptStore | null = null;
 afterEach(() => {
@@ -75,5 +75,20 @@ describe('hw-prompt store', () => {
     expect(store.getSnapshot()).toEqual({ byDevice: { 'ledger-1': 'open-app' }, apps: { 'ledger-1': 'Bitcoin' } });
     store.clear('ledger-1');
     expect(store.getSnapshot()).toEqual({ byDevice: {}, apps: {} });
+  });
+});
+
+describe('one-step connect outcomes', () => {
+  const o = (code: string, data?: unknown) => connectOutcome(toIpcError({ code, message: 'x', data }));
+  it('skips a chain whose app is missing, refused, too old or not started; stops otherwise', () => {
+    expect(o('HW_APP_MISSING', { app: 'Tron' })).toBe('missing');
+    expect(o('HW_REJECTED')).toBe('skipped');
+    expect(o('HW_WRONG_APP', { expected: 'Tron', open: 'BOLOS' })).toBe('skipped');
+    expect(o('HW_UNSUPPORTED', { min: '1.9.0' })).toBe('old');
+    expect(o('HW_UNSUPPORTED', { min: null })).toBe('skipped');
+    expect(o('HW_DISCONNECTED')).toBe('stop');
+    expect(o('HW_LOCKED')).toBe('stop');
+    expect(o('HW_TIMEOUT')).toBe('stop');
+    expect(o('USER_REJECTED')).toBe('stop');
   });
 });

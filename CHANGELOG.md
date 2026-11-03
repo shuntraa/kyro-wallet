@@ -19,6 +19,9 @@
   wallet, a Ledger that needs it says "Enable Blind signing in the Solana app settings".
 - Hardware wallets: TRON tokens (TRC-20, e.g. USDT) can be sent from Ledger accounts; when the
   Tron app needs a setting, Kyro names it ("Allow data" or "Custom contracts").
+- Ledger: connect in one step, like Ledger Live. Every chain the Ledger supports is ticked;
+  one "Connect" opens each app in turn, reads the keys, and skips an app that is not installed
+  or refused. A short result per chain follows (Added / Not installed / Skipped).
 
 ## 1.0.5
 
