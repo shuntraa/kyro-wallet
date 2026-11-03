@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Captures the Kyro desktop app (demo mode, in a plain browser) for the website. 1. In
-// E:\wallet\apps\desktop: pnpm dev (Vite prints http://127.0.0.1:<port>/) 2. From site-prep: node
+// apps/desktop: pnpm dev (Vite prints http://127.0.0.1:<port>/) 2. From site-prep: node
 // website/src/capture.mjs http://127.0.0.1:<port> Window 1440x900 at device scale 2. Writes
 // website/src/screenshots/app-<name>.png, then, if ffmpeg is on PATH, the WebP files the site uses
 // (website/public/img/win-*.webp).
