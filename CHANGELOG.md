@@ -17,6 +17,8 @@
 - Hardware wallets: Solana tokens (SPL, e.g. USDC/USDT) can be sent from Ledger and Trezor
   accounts, creating the recipient's token account when needed; a Trezor shows the recipient
   wallet, a Ledger that needs it says "Enable Blind signing in the Solana app settings".
+- Hardware wallets: TRON tokens (TRC-20, e.g. USDT) can be sent from Ledger accounts; when the
+  Tron app needs a setting, Kyro names it ("Allow data" or "Custom contracts").
 
 ## 1.0.5
 

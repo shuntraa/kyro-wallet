@@ -718,7 +718,7 @@ Reference TypeScript types: `packages/shared/src/ipc.ts`. Names in `snake_case`,
 | `hw_sign_xrp_tx` | `{ id, accountId, blob }` | like `xrp_sign_tx` | same checks as `xrp_sign_tx` → native dialog → **Ledger** ("XRP" app) → DER signature verified (low-S) on the signing hash computed by Kyro, attached to Kyro's blob (`xrp_hw_assemble`) |
 | `hw_xrp_broadcast` | `{ accountId, blob }` | `string` (hash) | like `xrp_broadcast` |
 | `hw_tron_build_tx` | `{ accountId, to, amount, token? }` | `TronBuilt` | like `tron_build_tx`, address of the hardware wallet account |
-| `hw_sign_tron_tx` | `{ id, accountId, raw }` | like `tron_sign_tx` | **Ledger only** ("Tron" app); the signature must yield the account's address again (`tron_recover_signer`) |
+| `hw_sign_tron_tx` | `{ id, accountId, raw }` | like `tron_sign_tx` | **Ledger only** ("Tron" app), TRX and TRC-20; the signature must yield the account's address again (`tron_recover_signer`). Tron app `6A8B` / `6A8D` → "Enable 'Allow data'" / "Enable 'Custom contracts'" in the Tron app settings |
 | `hw_tron_broadcast` | `{ accountId, raw, signature }` | `string` (txid) | like `tron_broadcast` |
 | `hw_stellar_build_tx` | `{ accountId, to, amount, memo? }` | like `stellar_build_tx` | address of the hardware wallet account |
 | `hw_sign_stellar_tx` | `{ id, accountId, envelope }` | like `stellar_sign_tx` | Ledger ("Stellar" app, on the *signature base*) or Trezor (`StellarSignTx` + operation, the firmware rebuilds the XDR); ed25519 signature strictly verified on **Kyro's hash** for this network, attached to Kyro's envelope (`stellar_hw_assemble`) |

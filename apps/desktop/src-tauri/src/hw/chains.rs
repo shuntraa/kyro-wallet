@@ -792,7 +792,14 @@ pub fn sign_tron(
         RawDevice::Ledger(link) => {
             let app = ledger_ensure(link, ctl, Chain::Tron, net)?;
             let apdus = ledger_coins::tron_sign(&key_path(Chain::Tron, account)?, raw)?;
-            ledger_coins::tron_parse_signature(&ledger_sign_apdus(link, ctl, app, &apdus)?)
+            // TRC-20 transfers are clear-signed by the Tron app; its "Allow data" /
+            // "Custom contracts" refusals are mapped to the setting to turn on.
+            ctl.prompt(Prompt::ConfirmOnDevice);
+            let mut last = Vec::new();
+            for a in &apdus {
+                last = ledger_call(link, ctl, a, SwContext::TronSigning, app)?;
+            }
+            ledger_coins::tron_parse_signature(&last)
         }
         _ => Err(HwError::unsupported("TRON on this device")),
     }
@@ -1035,6 +1042,73 @@ mod tests {
             sign_tron(&mut l, &ctl(), Network::Mainnet, 0, &raw),
             Err(HwError::Rejected)
         );
+    }
+
+    /// TRC-20 (USDT) transfer on the Ledger Tron app: replayed APDUs, a device signature that
+    /// recovers to the account, and the app's settings refusals mapped to their hints.
+    #[test]
+    fn ledger_tron_trc20_transfer() {
+        let seed = wallet_core::Mnemonic::parse(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+        .unwrap()
+        .to_seed("");
+        let me = wallet_core::tron_address(&seed, 0).unwrap();
+        let usdt = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+        let to = wallet_core::tron_address(&seed, 1).unwrap();
+        let raw = wallet_core::TronRaw {
+            ref_block_bytes: [1, 2],
+            ref_block_hash: [3; 8],
+            expiration: 1_700_000_060_000,
+            memo: Vec::new(),
+            contract: wallet_core::TronContract::Trigger {
+                owner: wallet_core::tron_address_bytes(&me).unwrap(),
+                contract: wallet_core::tron_address_bytes(usdt).unwrap(),
+                call_value: 0,
+                data: wallet_core::tron_trc20_transfer_data(&to, "5000000").unwrap(),
+            },
+            timestamp: 1_700_000_000_000,
+            fee_limit: 30_000_000,
+        }
+        .encode();
+        let raw_hex = hex::encode(&raw);
+        let summary = wallet_core::tron_decode_raw(&raw_hex, &me).unwrap();
+        assert!(format!("{summary:?}").contains(usdt));
+        let (sig, _) = wallet_core::tron_sign(&seed, 0, &raw_hex).unwrap();
+        let sign = ledger_coins::tron_sign(&key_path(Chain::Tron, 0).unwrap(), &raw).unwrap();
+        let mut ok = sig.to_vec();
+        ok.extend([0x90, 0x00]);
+        let mut l = Ledger::with_link(Replay(Mutex::new(
+            [
+                vec![app("Tron", "0.5.0")],
+                sign.iter()
+                    .take(sign.len() - 1)
+                    .map(|a| (a.clone(), vec![0x90, 0x00]))
+                    .collect(),
+                vec![(sign[sign.len() - 1].clone(), ok)],
+            ]
+            .concat(),
+        )));
+        let got = sign_tron(&mut l, &ctl(), Network::Mainnet, 0, &raw).unwrap();
+        assert_eq!(
+            wallet_core::tron_recover_signer(&raw_hex, &got).unwrap(),
+            me
+        );
+        for (sw, hint) in [
+            ([0x6A, 0x8B], "Enable 'Allow data' in the Tron app settings"),
+            (
+                [0x6A, 0x8D],
+                "Enable 'Custom contracts' in the Tron app settings",
+            ),
+        ] {
+            let mut l = Ledger::with_link(Replay(Mutex::new(vec![
+                app("Tron", "0.5.0"),
+                (sign[0].clone(), sw.to_vec()),
+            ])));
+            let err = sign_tron(&mut l, &ctl(), Network::Mainnet, 0, &raw).unwrap_err();
+            assert!(matches!(err, HwError::Unsupported { .. }));
+            assert!(format!("{err:?}").contains(hint), "{err:?}");
+        }
     }
 
     /// Ledger UTXO account: three GET WALLET PUBLIC KEY (master, parent, account) give the

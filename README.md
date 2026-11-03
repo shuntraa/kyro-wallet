@@ -82,7 +82,7 @@ Your keys stay in the device and every transaction is confirmed on its screen. K
 | **Ledger only** | XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON, NEAR |
 | **Trezor only** | Zcash (transparent) |
 
-Caveats: on NEAR and TON the Ledger account is a different account than the software wallet for the same phrase. Not available on hardware wallets: Monero, Polkadot, Kaspa. From a hardware account, token sends are supported on EVM chains and Solana (SPL) for now (native coins elsewhere). Details in [SECURITY.md](SECURITY.md).
+Caveats: on NEAR and TON the Ledger account is a different account than the software wallet for the same phrase. Not available on hardware wallets: Monero, Polkadot, Kaspa. From a hardware account, token sends are supported on EVM chains, Solana (SPL) and TRON (TRC-20, Ledger) for now (native coins elsewhere). Details in [SECURITY.md](SECURITY.md).
 
 ## Automatic updates
 

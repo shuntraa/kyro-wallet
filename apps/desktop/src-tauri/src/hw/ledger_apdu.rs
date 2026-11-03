@@ -154,6 +154,8 @@ pub enum SwContext {
     Signing,
     /// Ethereum SIGN ETH TRANSACTION: `6A80` means "blind signing disabled".
     EthSigning,
+    /// Tron SIGN: `6A8B` / `6A8D` mean "Allow data" / "Custom contracts" is off.
+    TronSigning,
 }
 
 /// Whether this status word means "the open app does not understand this command".
@@ -180,6 +182,15 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
             "Enable Blind signing in the Solana app settings: this Ledger cannot \
              show every instruction of this transaction (Kyro showed its own \
              summary), or reject",
+        ),
+        // Tron app (`app_errors.h`): a setting must be turned on for this transaction.
+        0x6A8B if ctx == SwContext::TronSigning => HwError::unsupported(
+            "Enable 'Allow data' in the Tron app settings (this transaction carries \
+             data the app hides by default), or reject",
+        ),
+        0x6A8D if ctx == SwContext::TronSigning => HwError::unsupported(
+            "Enable 'Custom contracts' in the Tron app settings (this token is not \
+             in the app's list; Kyro showed its own summary), or reject",
         ),
         0x6807 => HwError::unsupported("app not installed on the device"),
         0xB008 => HwError::bad("signature or HMAC rejected by the device (B008)"),
@@ -377,6 +388,10 @@ mod tests {
         let hint = |e: HwError| format!("{e:?}");
         assert!(hint(sw_error(0x6808, Signing))
             .contains("Enable Blind signing in the Solana app settings"));
+        assert!(hint(sw_error(0x6A8B, TronSigning))
+            .contains("Enable 'Allow data' in the Tron app settings"));
+        assert!(hint(sw_error(0x6A8D, TronSigning)).contains("'Custom contracts'"));
+        assert!(matches!(sw_error(0x6A8B, Signing), HwError::BadResponse(_)));
         assert!(matches!(sw_error(0xB007, General), HwError::BadResponse(_)));
     }
 
