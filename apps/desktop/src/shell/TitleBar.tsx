@@ -2,6 +2,7 @@
 // Integrated title bar (40 px): logo, breadcrumb, search, window controls.
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { CoinIcon, type CoinIconAsset } from '../components/coins/CoinIcon';
 import { isTauri } from '@kyro/shared';
 import { KyroMark } from '../components/kit';
 import { IconSearch } from '../components/icons';
@@ -59,6 +60,7 @@ export interface SearchResult {
   id: string;
   label: string;
   hint: string;
+  icon?: CoinIconAsset;
   onSelect: () => void;
 }
 
@@ -179,7 +181,10 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
                 onMouseEnter={() => setSel(i)}
                 className={`flex w-full items-center justify-between gap-3 rounded-[5px] px-3 py-2 text-left text-[13px] transition-colors duration-100 ${i === sel ? 'bg-control' : ''}`}
               >
-                <span className="truncate font-medium">{r.label}</span>
+                <span className="flex min-w-0 items-center gap-2.5">
+                  {r.icon && <CoinIcon asset={r.icon} size={18} className="shrink-0" />}
+                  <span className="truncate font-medium">{r.label}</span>
+                </span>
                 <span className="shrink-0 text-[12px] text-faint">{r.hint}</span>
               </button>
             ))

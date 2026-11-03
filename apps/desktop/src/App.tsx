@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { MotionConfig, motion } from 'motion/react';
-import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { coinSearch } from './lib/coinSearch';
+import { fmtNumber } from './lib/format';
 import { AppProvider, useApp, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
@@ -128,16 +130,14 @@ function Unlocked() {
     (q: string): SearchResult[] => {
       const s = q.toLowerCase();
       const out: SearchResult[] = [];
-      for (const h of pf.holdings) {
-        if (matchesCoinQuery(s, h.asset)) {
-          out.push({ id: h.asset.id, label: h.asset.name, hint: t('shell.searchMine', { symbol: h.asset.symbol }), onSelect: () => navigate({ name: 'asset', id: h.asset.id }) });
-        }
-      }
-      for (const c of pf.markets ?? []) {
-        if (out.length >= 8) break;
-        if (matchesCoinQuery(s, { name: c.name, symbol: c.symbol, coingeckoId: c.id })) {
-          out.push({ id: `cg:${c.id}`, label: c.name, hint: t('shell.searchRank', { symbol: c.symbol, rank: c.rank ?? '—' }), onSelect: () => navigate({ name: 'asset', id: `cg:${c.id}` }) });
-        }
+      for (const c of coinSearch(q, pf.holdings, pf.markets ?? [])) {
+        out.push({
+          id: c.id,
+          label: c.name,
+          hint: c.units !== null ? (hideBalances ? `••• ${c.symbol}` : `${fmtNumber(c.units, 6)} ${c.symbol}`) : t('shell.searchRank', { symbol: c.symbol, rank: c.rank ?? '—' }),
+          icon: c.asset ?? { id: c.id, symbol: c.symbol },
+          onSelect: () => navigate({ name: 'asset', id: c.id }),
+        });
       }
       for (const w of WATCH_ONLY_CHAINS) {
         if (w.name.toLowerCase().includes(s) && !out.some((o) => o.id === `cg:${w.coingeckoId}`)) {
@@ -149,7 +149,7 @@ function Unlocked() {
       }
       return out;
     },
-    [pf.holdings, pf.markets, navigate, lang],
+    [pf.holdings, pf.markets, navigate, lang, hideBalances],
   );
 
   const screen = useMemo(() => {
