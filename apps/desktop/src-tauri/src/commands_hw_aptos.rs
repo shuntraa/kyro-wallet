@@ -6,8 +6,8 @@ use wallet_core::HwKeyChain;
 
 use crate::commands::confirm_native;
 use crate::commands_aptos::{
-    broadcast_checked, build, ctx, describe_aptos, describe_aptos_extra, prepare_sign, AptosBuilt,
-    AptosSigned,
+    broadcast_checked, build, build_token, ctx, describe_aptos, describe_aptos_extra, prepare_sign,
+    AptosBuilt, AptosSigned,
 };
 use crate::commands_hw::device_line;
 use crate::commands_hw_keys::{check_device, device_sign, key_array, stored_key};
@@ -27,6 +27,20 @@ pub async fn hw_aptos_build_tx(
     build(&ctx(&state), &key.address, &key_array(&key)?, &to, &amount).await
 }
 
+/// Transfer of a known fungible asset: `metadata` = its metadata object, `amount` in its units.
+#[tauri::command]
+pub async fn hw_aptos_build_token_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    metadata: String,
+    to: String,
+    amount: String,
+) -> AppResult<AptosBuilt> {
+    let (_, key) = stored_key(&state, &account_id, CHAIN)?;
+    let pk = key_array(&key)?;
+    build_token(&ctx(&state), &key.address, &pk, &metadata, &to, &amount).await
+}
+
 #[tauri::command]
 pub async fn hw_sign_aptos_tx(
     app: AppHandle,
@@ -41,12 +55,20 @@ pub async fn hw_sign_aptos_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &key.address, &pk, &raw).await?;
     let lang = crate::i18n::current();
-    confirm_native(
-        &app,
+    let title = if summary.token.is_some() {
+        lang.pick(
+            "Confirmer l'envoi de jetons (hardware wallet)",
+            "Confirm the token send (hardware wallet)",
+        )
+    } else {
         lang.pick(
             "Confirmer l'envoi d'APT (hardware wallet)",
             "Confirm the APT send (hardware wallet)",
-        ),
+        )
+    };
+    confirm_native(
+        &app,
+        title,
         describe_aptos(lang, &summary, &context, state.network) + &device_line(lang, &info),
     )
     .await?;

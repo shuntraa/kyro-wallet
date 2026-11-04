@@ -298,6 +298,7 @@
     "allow-hw-sign-sui-tx",
     "allow-hw-sui-broadcast",
     "allow-hw-aptos-build-tx",
+    "allow-hw-aptos-build-token-tx",
     "allow-hw-sign-aptos-tx",
     "allow-hw-aptos-broadcast",
     "allow-hw-algo-build-tx",

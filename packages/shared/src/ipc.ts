@@ -2642,6 +2642,7 @@ export interface Commands {
   hw_sui_build_token_tx: { args: { accountId: string; coinType: string; to: string; amount?: string; all?: boolean }; ret: SuiBuilt };
   hw_sign_sui_tx: { args: { id: string; accountId: string; bcs: string; coinType?: string }; ret: SuiBuilt & { signature: string; digest: string } };
   hw_sui_broadcast: { args: { accountId: string; bcs: string; signature: string }; ret: string };
+  hw_aptos_build_token_tx: { args: { accountId: string; metadata: string; to: string; amount: string }; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   hw_aptos_build_tx: { args: { accountId: string; to: string; amount: string }; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   hw_sign_aptos_tx: { args: { id: string; accountId: string; raw: string }; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
   hw_aptos_broadcast: { args: { accountId: string; signed: string }; ret: string };

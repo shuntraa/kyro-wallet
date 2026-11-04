@@ -10,6 +10,10 @@ const INS_SIGN_TX: u8 = 0x06;
 const P2_MORE: u8 = 0x80;
 const P2_LAST: u8 = 0x00;
 const CHUNK: usize = 255;
+/// `primary_fungible_store::transfer`, in the message of a fungible-asset transfer.
+const FA_MODULE: &[u8] = b"primary_fungible_store";
+/// First app showing the right amount for an asset without 8 decimals (`CHANGELOG.md`, 0.10.1).
+const MIN_FA_DECIMALS: &str = "0.10.1";
 
 pub fn get_pubkey(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
     apdu::apdu(
@@ -63,6 +67,9 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 }
 
 pub fn sign(app: &App<'_>, path: &[u32], message: &[u8]) -> HwResult<Vec<u8>> {
+    if message.windows(FA_MODULE.len()).any(|w| w == FA_MODULE) {
+        app.require(MIN_FA_DECIMALS)?;
+    }
     let mut last = Vec::new();
     for a in sign_apdus(path, message)? {
         last = app.call(&a, SwContext::Signing)?;
@@ -98,6 +105,54 @@ mod tests {
         assert_eq!(pubkey(&a, &path, true).unwrap(), pk.to_vec());
         assert!(parse_pubkey(&resp[..resp.len() - 1]).is_err());
         assert!(parse_pubkey(&[&[33u8, 0x02][..], &resp[2..]].concat()).is_err());
+    }
+
+    /// USDC through the app, then checked as an Aptos signature; refused on an app that would
+    /// show a wrong amount.
+    #[test]
+    fn fungible_asset_transfer() {
+        use ed25519_dalek::Signer;
+        let k = ed25519_dalek::SigningKey::from_bytes(&[8; 32]);
+        let pk = k.verifying_key().to_bytes();
+        let usdc = wallet_core::aptos_known_assets(1)[0].metadata;
+        let t = wallet_core::AptosTransfer {
+            sender: wallet_core::aptos_address_bytes_of_pubkey(&pk),
+            sequence_number: 3,
+            recipient: [2; 32],
+            amount: 1_500_000,
+            max_gas_amount: 2_000,
+            gas_unit_price: 100,
+            expiration_timestamp_secs: 1_800_000_000,
+            chain_id: 1,
+            token: Some(hex::decode(&usdc[2..]).unwrap().try_into().unwrap()),
+        };
+        let raw = hex::encode(t.encode().unwrap());
+        let msg = wallet_core::aptos_hw_message(&raw).unwrap();
+        let path = HwKeyChain::Aptos.path(0);
+        let sig = k.sign(&msg).to_bytes();
+        let mut lines = app("Aptos", "0.10.1").to_vec();
+        let apdus = sign_apdus(&path, &msg).unwrap();
+        for (i, a) in apdus.iter().enumerate() {
+            lines.push(format!("=> {}", hex::encode(a)));
+            lines.push(if i + 1 == apdus.len() {
+                format!("<= 40{}9000", hex::encode(sig))
+            } else {
+                "<= 9000".into()
+            });
+        }
+        let r = Replay::new(&lines);
+        let c = ctl();
+        let a = App::open(&r, &c, HwKeyChain::Aptos).unwrap();
+        let got = sign(&a, &path, &msg).unwrap();
+        assert!(r.done());
+        wallet_core::aptos_hw_signed(&raw, &pk, &got).unwrap();
+
+        let r = Replay::new(&app("Aptos", "0.9.14"));
+        let a = App::open(&r, &c, HwKeyChain::Aptos).unwrap();
+        assert!(matches!(
+            sign(&a, &path, &msg),
+            Err(HwError::Unsupported { .. })
+        ));
     }
 
     #[test]

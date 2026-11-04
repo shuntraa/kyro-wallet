@@ -300,6 +300,7 @@ const COMMANDS: &[&str] = &[
     "hw_sign_sui_tx",
     "hw_sui_broadcast",
     "hw_aptos_build_tx",
+    "hw_aptos_build_token_tx",
     "hw_sign_aptos_tx",
     "hw_aptos_broadcast",
     "hw_algo_build_tx",

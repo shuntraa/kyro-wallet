@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-aptos-build-token-tx"
+description = "Enables the hw_aptos_build_token_tx command without any pre-configured scope."
+commands.allow = ["hw_aptos_build_token_tx"]
+
+[[permission]]
+identifier = "deny-hw-aptos-build-token-tx"
+description = "Denies the hw_aptos_build_token_tx command without any pre-configured scope."
+commands.deny = ["hw_aptos_build_token_tx"]

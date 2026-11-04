@@ -1134,6 +1134,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_sign_sui_tx: hwKeyDemo,
     hw_sui_broadcast: hwKeyDemo,
     hw_aptos_build_tx: hwKeyDemo,
+    hw_aptos_build_token_tx: hwKeyDemo,
     hw_sign_aptos_tx: hwKeyDemo,
     hw_aptos_broadcast: hwKeyDemo,
     hw_algo_build_tx: hwKeyDemo,

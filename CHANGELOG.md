@@ -21,6 +21,8 @@
   enabled or removed there (Receive), each shown in full on the device.
 - Hardware wallets: Sui USDC can be sent from Ledger accounts, the device reading the token and
   the amount from the coins themselves (8 coins per transfer at most).
+- Hardware wallets: Aptos USDC and USDt can be sent from Ledger accounts (Aptos app 0.10.1 or
+  later), shown by name and amount on the device.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited

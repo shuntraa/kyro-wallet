@@ -45,13 +45,12 @@ export function rustAptosBackend(account = 0): AptosBackend {
 
 /** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustAptosHwBackend(accountId: string): AptosBackend {
-  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
-  const { buildToken: _buildTokenVaultOnly, ...base } = rustAptosBackend();
   return {
-    ...base,
+    ...rustAptosBackend(),
     build: (to, amount) => call('hw_aptos_build_tx', { accountId, to, amount }),
     sign: (raw, id) => call('hw_sign_aptos_tx', { id, accountId, raw }),
     broadcast: (signed) => call('hw_aptos_broadcast', { accountId, signed }),
+    buildToken: (metadata, to, amount) => call('hw_aptos_build_token_tx', { accountId, metadata, to, amount }),
   };
 }
 
@@ -157,7 +156,6 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
 
   /** Fungible-asset transfer (`primary_fungible_store::transfer`), gas in APT; `max` = the whole token balance. */
   private async buildToken(params: BuildParams): Promise<AptosUnsigned> {
-    if (this.hw) throw new Error(l10n('Jetons Aptos : pas encore pris en charge sur hardware wallet', 'Aptos tokens: not yet supported on hardware wallets'));
     const k = APTOS_ASSETS[this.chain.network].find((x) => x.contract === params.asset.contract);
     if (!k || k.decimals !== params.asset.decimals || !this.backend.buildToken) throw new Error(l10n('Jeton Aptos inconnu', 'Unknown Aptos token'));
     const to = norm(params.to);
