@@ -78,6 +78,8 @@ import { cn } from '../lib/cn';
 import { decimalSep, fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { getLanguage, t, tp, useT } from '../i18n';
 import { rt } from '../i18n/rich';
+import { EnsLine } from '../components/EnsLine';
+import { ensActive, ensAddress, ensResolver, useEnsRecipient } from '../lib/useEnsRecipient';
 import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard, type GuardState } from '../lib/clipboardGuard';
 import { addLocalTx, bumpContactSends, findContact, getContacts, getLastPrice, getLocalTxs, saveContacts, setLastPrice, type ContactFamily } from '../lib/storage';
 import { checkPricePlausible } from '@kyro/market';
@@ -188,7 +190,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
   const toRef = useRef<HTMLInputElement>(null);
   const [, setContactsRev] = useState(0);
-  const toTrim = to.trim();
+  const ens = useEnsRecipient(to, ensResolver(asset, adapters, network), asset?.chainKey);
+  const toTrim = ensActive(ens, to) ? (ensAddress(ens, to) ?? '') : to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const otherNetworks = asset && !addrValid && siblings.length > 1 ? otherNetworksForAddress(toTrim, asset, siblings, (a, x) => !!adapterFor(a, adapters)?.isValidAddress(x)) : [];
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
@@ -832,6 +835,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </div>
               )}
             </div>
+            <EnsLine ens={ens} />
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {dotProblem && <span className="text-[12px] text-down">{dotProblem}</span>}
             {xlmProblem && <span className="text-[12px] text-down">{xlmProblem}</span>}
@@ -1195,6 +1199,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
           </div>
           <dl className="m-0 flex flex-col text-[13px]">
+            {ens.status === 'ok' && <div className="border-b border-line py-2"><EnsLine ens={ens} /></div>}
             <Row k={t('common.network')} v={chain.name} />
             <Row
               k={isTron ? t('send.burnMax') : t('send.feeMax')}

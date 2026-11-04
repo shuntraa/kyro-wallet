@@ -11,6 +11,9 @@
   spam.
 - Lock before sleep: on Windows, Kyro now locks as the computer goes to sleep, not only when it
   wakes up. On by default, in Settings › Security. macOS and Linux still lock on wake.
+- Send: type a name.eth as the recipient on EVM chains. Kyro shows the address under the field,
+  and the review and the signing window show that real address. Names stored off-chain aren't
+  read.
 - Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
   settings to one encrypted file, with a password you choose. Import shows what would change
   first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.

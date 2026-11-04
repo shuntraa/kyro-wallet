@@ -48,6 +48,7 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Fee choice, speed up and cancel**: Slow, Normal or Fast on Send, and a stuck Bitcoin, Litecoin or EVM send can be sped up or cancelled from History.
 - **Automatic signed updates**, downloaded silently over Tor, signature-checked, applied at the next start.
 - **Tokens you receive stay visible**: other Sui coins, Cosmos IBC denoms and CashTokens show read only, unknown ones folded.
+- **ENS names on Send**: type `name.eth` on EVM chains, read over Tor from the Ethereum RPC. The real address is what you review and sign.
 - **Tor by default.** If Tor is unavailable, Kyro stops instead of silently connecting in the clear. Plain bridges for places that block Tor (obfs4 not yet).
 - **No account, no tracking, no analytics, no personal data.** Once a week Kyro anonymously downloads a tiny file over Tor so GitHub's download counter can estimate active wallets; turn it off in Settings › Privacy.
 - Interface in **English and French**.

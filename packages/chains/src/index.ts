@@ -8,6 +8,7 @@ export * from './factory';
 export * from './bitcoin/coinselect';
 export { BitcoinAdapter, type DerivedAddress, type BitcoinAdapterOptions } from './bitcoin/adapter';
 export { parseXpub } from './bitcoin/xpub';
+export { looksLikeEnsName, normalizeEnsName, type EnsResult } from './evm/ens';
 export { EvmAdapter, evmRecipientProblem, netTransport, BALANCE_BATCH, LOG_ADDRESSES, type EvmAdapterOptions, type ContractCallParams } from './evm/adapter';
 export {
   SolanaAdapter,

@@ -39,6 +39,8 @@ Why the onion: `mempool.space` does not respond to Tor exit relays (timeout at t
 
 **Tokens received** add no host: Sui `balances` and `coinMetadata` on the Sui GraphQL API, Cosmos `/cosmos/bank/v1beta1/balances/{address}` and `/ibc/apps/transfer/v1/denoms/{hash}` on the same LCD, `blockchain.scripthash.listunspent` with `tokens_only` on the same Fulcrum servers. They see the address they already see, and only when you open that coin's page.
 
+**ENS names** add no host: `eth_call` on your Ethereum server (`ethereum-rpc.publicnode.com` by default, Sepolia on testnet), when you type a `.eth` name in Send on an EVM chain. That server sees the name you look up. Off-chain lookups (CCIP-read) are not followed, so no gateway is ever contacted.
+
 **Local alerts** (price, funds received) add no request and no host: they read the prices and the history cache the app already holds, and the notification is shown by the operating system.
 
 In clear mode, every server contacted sees your **IP address**; in Tor mode (default), it sees that of an exit relay. In both modes, blockchain nodes see the **public addresses** whose balance you request. To avoid this: use **your own nodes** (Settings → Networks and servers).
