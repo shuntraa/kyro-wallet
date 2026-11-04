@@ -32,13 +32,11 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/guides/move-from-another-wallet/#page","url":"https://kyrowallet.com/guides/move-from-another-wallet/","name":"Move from another wallet","description":"Import a 12 or 24-word BIP39 recovery phrase into Kyro, or send your coins to a new phrase instead. What carries over, and what can look different.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://kyrowallet.com/guides/"},{"@type":"ListItem","position":3,"name":"Move from another wallet","item":"https://kyrowallet.com/guides/move-from-another-wallet/"}]},{"@type":"Article","@id":"https://kyrowallet.com/guides/move-from-another-wallet/#article","headline":"Move from another wallet","description":"Import a 12 or 24-word BIP39 recovery phrase into Kyro, or send your coins to a new phrase instead. What carries over, and what can look different.","url":"https://kyrowallet.com/guides/move-from-another-wallet/","mainEntityOfPage":"https://kyrowallet.com/guides/move-from-another-wallet/#page","datePublished":"2026-11-04","dateModified":"2026-11-04","inLanguage":"en","image":"https://kyrowallet.com/img/og.jpg","author":{"@id":"https://kyrowallet.com/#org"},"publisher":{"@id":"https://kyrowallet.com/#org"},"about":{"@id":"https://kyrowallet.com/#app"}}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -48,9 +46,9 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop data-here>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
               <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/" aria-current="page">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
             </details>
@@ -61,9 +59,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/" aria-current="page">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -76,7 +76,7 @@
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title">
+    <section class="page-hero tone-band" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/guides/">Guides</a></li><li><span aria-current="page">Move from another wallet</span></li></ol></nav>
         <div class="ph-grid">
@@ -118,7 +118,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/guides/back-up-your-recovery-phrase/">Back up your recovery phrase</a></h3><p>Paper, in order, offline. What to do and what to avoid.</p></li><li class="glow-card spot"><h3><a href="/guides/first-steps-with-kyro/">First steps with Kyro</a></h3><p>From the welcome screen to your first receive address.</p></li><li class="glow-card spot"><h3><a href="/guides/why-a-wallet-should-use-tor/">Why a wallet should use Tor</a></h3><p>Your IP and your addresses in the same log line.</p></li>
+          <li class="spot"><h3><a href="/guides/back-up-your-recovery-phrase/">Back up your recovery phrase</a></h3><p>Paper, in order, offline. What to do and what to avoid.</p></li><li class="spot"><h3><a href="/guides/first-steps-with-kyro/">First steps with Kyro</a></h3><p>From the welcome screen to your first receive address.</p></li><li class="spot"><h3><a href="/guides/why-a-wallet-should-use-tor/">Why a wallet should use Tor</a></h3><p>Your IP and your addresses in the same log line.</p></li>
         </ul></div>
     </section>
     

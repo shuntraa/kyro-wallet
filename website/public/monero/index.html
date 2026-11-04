@@ -32,12 +32,10 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/monero/#page","url":"https://kyrowallet.com/monero/","name":"Private Monero desktop wallet","description":"A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Monero","item":"https://kyrowallet.com/monero/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/monero/#faq","url":"https://kyrowallet.com/monero/","mainEntity":[{"@type":"Question","name":"Is Kyro a full Monero wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Send, receive and swap XMR from the same app as your other coins. Kyro talks to a monerod node and scans blocks itself. No light-wallet server is used."}},{"@type":"Question","name":"Does the Monero node see my addresses?","acceptedAnswer":{"@type":"Answer","text":"No. Neither your addresses nor your view key are sent. The node sees the block ranges you download, the decoy outputs requested for a send, and the transactions you publish, from a Tor exit relay."}},{"@type":"Question","name":"Can I import my 25-word Monero seed?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro derives Monero from your BIP39 recovery phrase, and a 25-word phrase created elsewhere cannot be imported. The other way works: Kyro shows a 25-word seed that restores your wallet in Monero GUI, Feather or Cake Wallet."}},{"@type":"Question","name":"Can I use my own Monero node?","acceptedAnswer":{"@type":"Answer","text":"Yes. Set your own monerod in Settings, or a .onion address. Kyro checks it is on the right network and refuses to fall back to the default node if yours goes down."}},{"@type":"Question","name":"Does Monero work on a Ledger or Trezor in Kyro?","acceptedAnswer":{"@type":"Answer","text":"No. Monero on a hardware wallet is not supported."}},{"@type":"Question","name":"Why do I not see an old XMR payment?","acceptedAnswer":{"@type":"Answer","text":"Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings › Security and it scans again from there."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -47,9 +45,9 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop data-here>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
               <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/" aria-current="page">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
             </details>
@@ -60,9 +58,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/" aria-current="page">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -74,7 +74,7 @@
 
   <main id="content">
 
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+    <section class="page-hero tone-band page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Monero</span></li></ol></nav>
         <div class="ph-grid">
@@ -152,7 +152,7 @@
           <p data-reveal>Monero comes from the same recovery phrase as your other coins, with its own 25-word seed if you want to leave.</p>
         </div>
         
-        <div class="glow-grid" data-reveal-group>
+        <div class="tiles tiles-3" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Same recovery phrase</h3><p>Your XMR derives from your BIP39 phrase, using the scheme of Ledger’s Monero app. It is not a native 25-word Monero phrase.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>A way out</h3><p>Kyro shows a 25-word Monero seed in the protected phrase window. It restores the wallet in Monero GUI, Feather or Cake Wallet.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>One limit</h3><p>A 25-word phrase made elsewhere cannot be imported. Send those XMR to your Kyro address instead.</p></article>
         </div></div>
     </section>
@@ -194,12 +194,12 @@
           <p data-reveal>Monero is easy to get subtly wrong, so Kyro leans on a reviewed library and checks its own output.</p>
         </div>
         
-        <div class="glow-grid" data-reveal-group>
+        <div class="tiles tiles-3" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>monero-oxide</h3><p>Addresses, scanning, key images, CLSAG, Bulletproofs+ and decoy selection come from monero-oxide / monero-wallet 0.2. Cypher Stack audited that library in May 2025. Kyro itself has not been externally audited.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Checked after signing</h3><p>Rust builds the transfer, then verifies that the signed transaction creates exactly the outputs you approved.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Honest status</h3><p>This integration is young. There is no Monero on hardware wallets, and it is tested against official vectors. Start small.</p></article>
         </div></div>
     </section>
     
-    <section class="section" aria-labelledby="m-faq">
+    <section class="section side-faq" aria-labelledby="m-faq">
       <div class="wrap">
         
         <div class="head-center">
@@ -221,7 +221,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/chains/monero/">Monero in Kyro, feature by feature</a></h3><p>Send, receive, swap and hardware availability at a glance.</p></li><li class="glow-card spot"><h3><a href="/guides/swap-to-monero/">Swap to Monero</a></h3><p>From any supported coin to XMR, with what each party sees.</p></li><li class="glow-card spot"><h3><a href="/tor/">How Kyro uses Tor</a></h3><p>Circuits, exit relays and what happens when Tor is down.</p></li>
+          <li class="spot"><h3><a href="/chains/monero/">Monero in Kyro, feature by feature</a></h3><p>Send, receive, swap and hardware availability at a glance.</p></li><li class="spot"><h3><a href="/guides/swap-to-monero/">Swap to Monero</a></h3><p>From any supported coin to XMR, with what each party sees.</p></li><li class="spot"><h3><a href="/tor/">How Kyro uses Tor</a></h3><p>Circuits, exit relays and what happens when Tor is down.</p></li>
         </ul></div>
     </section>
     

@@ -2,5 +2,6 @@
 // Kyro Wallet site: runs before first paint so motion-only styles apply without a flash.
 (function () {
   var m = window.matchMedia;
+  document.documentElement.classList.add('ui');
   if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');
 })();

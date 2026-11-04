@@ -55,10 +55,9 @@
     each('.os-row[data-os="' + os + '"]', function (row) {
       row.setAttribute('data-current', 'true');
     });
-    each('[data-install-os~="' + os + '"]', function (row) {
-      row.setAttribute('data-current', 'true');
-      var list = row.parentNode;
-      if (list && list.firstElementChild !== row) list.insertBefore(row, list.firstElementChild);
+    each('[data-install-os~="' + os + '"]', function (panel) {
+      var tab = document.querySelector('[aria-controls="' + panel.id + '"]');
+      if (tab) tab.click();
     });
   }
 

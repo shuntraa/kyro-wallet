@@ -32,13 +32,11 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/download/#page","url":"https://kyrowallet.com/download/","name":"Download Kyro Wallet","description":"Install Kyro Wallet 1.0.7 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Download","item":"https://kyrowallet.com/download/"}]},{"@type":"SoftwareApplication","@id":"https://kyrowallet.com/#app","name":"Kyro Wallet","alternateName":"Kyro","description":"Free, open-source, non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on your device.","applicationCategory":"FinanceApplication","applicationSubCategory":"Cryptocurrency wallet","operatingSystem":"Windows, macOS, Linux","softwareVersion":"1.0.7","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/shuntraa/kyro-wallet/releases/latest","installUrl":"https://kyrowallet.com/download/","screenshot":"https://kyrowallet.com/img/win-portfolio.webp","url":"https://kyrowallet.com/","publisher":{"@id":"https://kyrowallet.com/#org"},"featureList":["Send and receive on 36 blockchains","Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs","Earn: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, Lido and Aave","Ledger and Trezor hardware wallets","Several wallets on one device, and watch addresses with no key","Local price and funds-received alerts","Simulation before signing, fee speeds, speed up and cancel","Built-in Tor, no personal data collected","Transactions decoded and confirmed in a system window"]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -48,7 +46,7 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
             <details class="nav-more" data-pop>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
@@ -61,9 +59,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/" aria-current="page">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -76,7 +76,7 @@
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title">
+    <section class="page-hero tone-band" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Download</span></li></ol></nav>
         <div class="ph-grid">
@@ -103,12 +103,16 @@
           <h2 id="install-title">Install with <em>one command</em></h2>
           <p>Paste the command for your system into PowerShell (Windows) or Terminal (macOS, Linux). It downloads the latest release from GitHub, checks its SHA-256 and installs it. A file fetched this way is not marked as downloaded from the internet, so Windows SmartScreen and macOS Gatekeeper do not block the first launch.</p>
           
-          <div class="install" data-install data-copy-scope>
-            <div class="install-row" data-install-os="windows">
+          <div class="install tabs" data-install data-copy-scope>
+            <div class="tab-list" role="tablist" aria-label="Install command for your system">
+              <button class="tab" type="button" role="tab" id="dl-tab-win" aria-controls="dl-p-win" aria-selected="true">Windows</button>
+              <button class="tab" type="button" role="tab" id="dl-tab-unix" aria-controls="dl-p-unix" aria-selected="false" tabindex="-1">macOS and Linux</button>
+            </div>
+            <div class="install-row tab-panel on" id="dl-p-win" role="tabpanel" aria-labelledby="dl-tab-win" data-install-os="windows">
               <p class="install-os"><span class="os-icon os-windows" aria-hidden="true"></span>Windows <span class="mute">· PowerShell</span></p>
               <div class="cmd"><code id="dl-win">irm https://kyrowallet.com/install.ps1 | iex</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="dl-win" data-copy-label="Windows command" aria-label="Copy the Windows install command">Copy</button></div>
             </div>
-            <div class="install-row" data-install-os="macos linux">
+            <div class="install-row tab-panel" id="dl-p-unix" role="tabpanel" aria-labelledby="dl-tab-unix" data-install-os="macos linux">
               <p class="install-os"><span class="os-icon os-apple" aria-hidden="true"></span><span class="os-icon os-linux" aria-hidden="true"></span>macOS and Linux <span class="mute">· Terminal</span></p>
               <div class="cmd"><code id="dl-unix">curl -fsSL https://kyrowallet.com/install.sh | sh</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="dl-unix" data-copy-label="macOS and Linux command" aria-label="Copy the macOS and Linux install command">Copy</button></div>
             </div>
@@ -226,7 +230,7 @@ pnpm build</code></pre>
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/wallets/windows/">Kyro for Windows</a></h3><p>SmartScreen, .exe or .msi, and how updates work.</p></li><li class="glow-card spot"><h3><a href="/wallets/macos/">Kyro for macOS</a></h3><p>Apple Silicon and Intel, and the first launch.</p></li><li class="glow-card spot"><h3><a href="/wallets/linux/">Kyro for Linux</a></h3><p>AppImage or .deb, FUSE and udev rules.</p></li><li class="glow-card spot"><h3><a href="/guides/verify-your-download/">Verify your download</a></h3><p>Check the SHA-256 in two minutes.</p></li><li class="glow-card spot"><h3><a href="/guides/windows-smartscreen/">What SmartScreen means</a></h3><p>Why Windows warns, and what to do.</p></li><li class="glow-card spot"><h3><a href="/guides/first-steps-with-kyro/">First steps with Kyro</a></h3><p>From install to your first small send.</p></li>
+          <li class="spot"><h3><a href="/wallets/windows/">Kyro for Windows</a></h3><p>SmartScreen, .exe or .msi, and how updates work.</p></li><li class="spot"><h3><a href="/wallets/macos/">Kyro for macOS</a></h3><p>Apple Silicon and Intel, and the first launch.</p></li><li class="spot"><h3><a href="/wallets/linux/">Kyro for Linux</a></h3><p>AppImage or .deb, FUSE and udev rules.</p></li><li class="spot"><h3><a href="/guides/verify-your-download/">Verify your download</a></h3><p>Check the SHA-256 in two minutes.</p></li><li class="spot"><h3><a href="/guides/windows-smartscreen/">What SmartScreen means</a></h3><p>Why Windows warns, and what to do.</p></li><li class="spot"><h3><a href="/guides/first-steps-with-kyro/">First steps with Kyro</a></h3><p>From install to your first small send.</p></li>
         </ul></div>
     </section>
   </main>

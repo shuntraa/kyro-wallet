@@ -32,14 +32,12 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://kyrowallet.com/#org","name":"Kyro Wallet","url":"https://kyrowallet.com/","logo":"https://kyrowallet.com/favicon.svg","sameAs":["https://github.com/shuntraa/kyro-wallet"]},{"@type":"WebSite","@id":"https://kyrowallet.com/#website","url":"https://kyrowallet.com/","name":"Kyro Wallet","publisher":{"@id":"https://kyrowallet.com/#org"},"inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://kyrowallet.com/#app","name":"Kyro Wallet","alternateName":"Kyro","description":"Free, open-source, non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on your device.","applicationCategory":"FinanceApplication","applicationSubCategory":"Cryptocurrency wallet","operatingSystem":"Windows, macOS, Linux","softwareVersion":"1.0.7","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/shuntraa/kyro-wallet/releases/latest","installUrl":"https://kyrowallet.com/download/","screenshot":"https://kyrowallet.com/img/win-portfolio.webp","url":"https://kyrowallet.com/","publisher":{"@id":"https://kyrowallet.com/#org"},"featureList":["Send and receive on 36 blockchains","Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs","Earn: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, Lido and Aave","Ledger and Trezor hardware wallets","Several wallets on one device, and watch addresses with no key","Local price and funds-received alerts","Simulation before signing, fee speeds, speed up and cancel","Built-in Tor, no personal data collected","Transactions decoded and confirmed in a system window"]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
   <script src="/scenes.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -49,7 +47,7 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
             <details class="nav-more" data-pop>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
@@ -62,9 +60,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/" aria-current="page">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -77,6 +77,7 @@
   <main id="content">
 
     <section class="hero" id="showcase" aria-labelledby="hero-title">
+      <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-copy">
         <a class="badge" href="https://github.com/shuntraa/kyro-wallet">
           <span class="badge-tag">1.0.7</span>
@@ -116,7 +117,7 @@
       </div>
     </section>
 
-    <section class="section coins" id="chains" aria-labelledby="chains-title">
+    <section class="section coins head-split" id="chains" aria-labelledby="chains-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Blockchains</p>
@@ -130,7 +131,7 @@
       </div>
     </section>
 
-    <section class="section" id="how" aria-labelledby="how-title">
+    <section class="section bg-dots" id="how" aria-labelledby="how-title">
       <div class="wrap">
         
         <div class="head-center">
@@ -177,7 +178,7 @@
       </div>
     </section>
 
-    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
+    <section class="section bg-glow" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
@@ -205,7 +206,7 @@
         </div>
     </section>
 
-    <section class="section" id="sees" aria-labelledby="sees-title">
+    <section class="section head-split" id="sees" aria-labelledby="sees-title">
       <div class="wrap">
         
         <div class="head-center">
@@ -247,7 +248,7 @@
       </div>
     </section>
 
-    <section class="section" id="fees" aria-labelledby="swap-title">
+    <section class="section bg-band head-split" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -308,7 +309,7 @@
       </div>
     </section>
 
-    <section class="section" id="features" aria-labelledby="earn-title">
+    <section class="section bg-grid" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
@@ -364,7 +365,7 @@
       </div>
     </section>
 
-    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
+    <section class="section hw-scene bg-glow-l" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
@@ -431,18 +432,30 @@
       </div>
     </section>
 
-    <section class="section" id="security" aria-labelledby="security-title">
+    <section class="section bg-band head-split" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
           <h2 id="security-title">Yours, <em>start to finish</em></h2>
           <p data-reveal>A non-custodial, open-source wallet. No account and no analytics. Only an anonymous weekly count over Tor, which you can turn off.</p>
         </div>
-        <div class="glow-grid" data-reveal-group>
-          <article class="glow-card spot g-ice">
+        <div class="bento bento-sec" data-reveal-group>
+          <article class="glow-card spot g-ice tile-wide tile-show">
+            <div>
             <span class="card-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3"/></svg></span>
             <h3>Keys stay on your device</h3>
             <p>Encrypted with your password and kept in the Rust core. No server has a copy.</p>
+            </div>
+            
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro vault panel: keys encrypted on this device, auto-lock timer, no unlimited approvals, Tor on."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
+    <div class="kw-kv"><span>Auto-lock</span><b>14:54</b></div>
+    <div class="kw-bar"><i></i></div>
+    <div class="kw-kv"><span>Hardware wallet</span><b class="ice">Add</b></div>
+    <div class="kw-kv"><span>Unlimited approvals</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Recovery phrase</span><b class="up">Imported</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div>
           </article>
           <article class="glow-card spot g-deep">
             <span class="card-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4zM4 9h16"/></svg></span>
@@ -504,7 +517,7 @@
       </div>
     </section>
 
-    <section class="section" id="roadmap" aria-labelledby="road-title">
+    <section class="section bg-dots head-split" id="roadmap" aria-labelledby="road-title">
       <div class="wrap">
         
         <div class="head-center">
@@ -526,7 +539,7 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="faq-title">
+    <section class="section side-faq" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Questions</p>

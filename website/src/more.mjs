@@ -81,7 +81,7 @@ function tor() {
           ['Blockchains stay public', 'Most chains publish every transfer. Tor hides your IP, and your addresses remain linked to each other on chain when you link them.', 'ic-accounts'],
           ['Swap providers see the order', 'Swap APIs see the tokens, amounts and recipient. Exolix sees your source and destination addresses, so it can link those two accounts.', 'ic-swap'],
           ['Two background requests', 'The signed update check and the anonymous weekly count. Both go over Tor and both can be turned off.', 'ic-send']
-        ], true)}`)}
+        ], true)}`, 'head-split')}
     ${faqBlock('t-faq', faqs)}
     ${nextLinks('t-next', [
       ['/guides/why-a-wallet-should-use-tor/', 'Why a wallet should use Tor', 'The problem in plain words: your IP and your addresses in the same log line.'],
@@ -310,7 +310,7 @@ function earn() {
           ['Waiting periods', 'TRON unstaking takes 14 days. Aptos takes up to 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.', 'ic-lock'],
           ['Votes shrink', 'On TRON, unstaking reduces your votes in proportion. Kyro warns you first.', 'ic-eye'],
           ['Price risk', 'Staked coins can lose value like any other. A rate does not protect you from that.', 'ic-dash']
-        ])}
+        ], true)}
         <p class="tbl-note">Kyro is a tool. Nothing on this site is financial advice.</p>`)}
 
     ${row('e-sign', 'Signing', 'See the contract, <em>then sign</em>', true, html`

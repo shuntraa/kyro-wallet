@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: the one frame loop, the reveals, the cursor light on cards and the small-screen
-// menu. Scrolling is native everywhere. Every animation runs on time, started once when its element
+// Kyro Wallet site: the frame loop, the reveals, the cursor light on cards, the header's popovers and
+// the tabs. Scrolling is native everywhere. Every animation runs on time, started once when its element
 // enters, so a notched wheel and a finger look the same. Motion is off for reduced motion.
 (function () {
   'use strict';
@@ -14,7 +14,8 @@
     return b + (a - b) * Math.exp(-dt / tau);
   }
 
-  // One frame loop for the whole site. K.y is a heavily eased scroll value, only for the silk's drift.
+  // One frame loop for the whole site, started by the first scene that asks for it: a page of plain
+  // reading runs none. K.y is a heavily eased scroll value.
   var jobs = [];
   var K = (window.Kyro = {
     motion: motion,
@@ -23,6 +24,7 @@
     y: window.scrollY,
     frame: function (fn) {
       jobs.push(fn);
+      if (jobs.length === 1) requestAnimationFrame(loop);
     }
   });
 
@@ -56,7 +58,6 @@
     var raw = now - last;
     last = now;
     var dt = raw > 0 ? Math.min(raw / 1000, 0.05) : 1 / 60;
-    K.raw = raw;
     K.y = damp(K.y, window.scrollY, 0.7, dt);
     for (var i = 0; i < jobs.length; i++) jobs[i](K.y, now, dt);
   }
@@ -140,17 +141,87 @@
     );
   }
 
-  // The header's popovers: Escape, a click outside or a followed link closes them.
+  // The header's popovers: Escape, a click outside or a followed link closes them, with a short exit.
   function menu() {
     document.querySelectorAll('details[data-pop]').forEach(function (m) {
+      var timer = 0;
+      function close() {
+        if (!m.open || timer) return;
+        if (!motion) {
+          m.open = false;
+          return;
+        }
+        m.classList.add('closing');
+        timer = window.setTimeout(function () {
+          timer = 0;
+          m.open = false;
+          m.classList.remove('closing');
+        }, 140);
+      }
+      m.querySelector('summary').addEventListener('click', function (e) {
+        if (m.open) {
+          e.preventDefault();
+          close();
+        }
+      });
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && m.open) {
-          m.open = false;
+          close();
           m.querySelector('summary').focus();
         }
       });
       document.addEventListener('click', function (e) {
-        if (m.open && (!m.contains(e.target) || e.target.closest('a'))) m.open = false;
+        if (m.open && (!m.contains(e.target) || e.target.closest('a'))) close();
+      });
+    });
+  }
+
+  /** One hover light that slides from link to link in the header. */
+  function navLight() {
+    var list = document.querySelector('.nav > ul');
+    if (!list) return;
+    var hl = document.createElement('span');
+    hl.className = 'nav-hl';
+    list.appendChild(hl);
+    list.addEventListener('pointerover', function (e) {
+      var t = e.target.closest('a, summary');
+      if (!t || t.closest('.nav-more-panel')) return hl.classList.remove('on');
+      var b = t.getBoundingClientRect();
+      hl.style.width = b.width + 'px';
+      hl.style.transform = 'translate3d(' + (b.left - list.getBoundingClientRect().left) + 'px, 0, 0)';
+      hl.classList.add('on');
+    });
+    list.addEventListener('pointerleave', function () {
+      hl.classList.remove('on');
+    });
+  }
+
+  /** Tabs with the keys the ARIA pattern expects. Without JavaScript all the panels simply show. */
+  function select(tabs, i, focus) {
+    tabs.forEach(function (t, n) {
+      var on = n === i;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).classList.toggle('on', on);
+    });
+    if (focus) tabs[i].focus();
+    // Only the bar itself moves, sideways on a phone: choosing a tab never scrolls the page.
+    tabs[i].parentNode.scrollLeft = tabs[i].offsetLeft - 24;
+  }
+  function tabs() {
+    document.querySelectorAll('[role="tablist"]').forEach(function (list) {
+      var all = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+      all.forEach(function (t, i) {
+        t.addEventListener('click', function () {
+          select(all, i);
+        });
+      });
+      list.addEventListener('keydown', function (e) {
+        var i = all.indexOf(document.activeElement), n = all.length;
+        var to = { ArrowRight: (i + 1) % n, ArrowLeft: (i + n - 1) % n, Home: 0, End: n - 1 }[e.key];
+        if (i < 0 || to === undefined) return;
+        e.preventDefault();
+        select(all, to, true);
       });
     });
   }
@@ -159,6 +230,11 @@
   function hashOpen() {
     var id = window.location.hash.slice(1);
     var el = id && document.getElementById(id);
+    var panel = el && el.closest('[role="tabpanel"]');
+    if (panel) {
+      document.querySelector('[aria-controls="' + panel.id + '"]').click();
+      el.scrollIntoView();
+    }
     if (el && el.tagName === 'DETAILS') {
       el.open = true;
       el.scrollIntoView();
@@ -166,12 +242,15 @@
   }
 
   menu();
+  tabs();
   hashOpen();
   window.addEventListener('hashchange', hashOpen);
 
   if (motion) {
     reveals();
-    if (fine) spotlight();
+    if (fine) {
+      spotlight();
+      navLight();
+    }
   }
-  requestAnimationFrame(loop);
 })();

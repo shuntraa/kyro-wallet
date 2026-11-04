@@ -518,7 +518,7 @@ function guidesIndex(all) {
         <div>
           <h2>${title}</h2>
           <ul class="link-cards" data-reveal-group>
-            ${all.filter((g) => g.group === k).map((g) => `<li class="glow-card spot"><h3><a href="/guides/${g.slug}/">${g.short}</a></h3><p>${g.blurb}</p></li>`)}
+            ${all.filter((g) => g.group === k).map((g) => `<li class="spot"><h3><a href="/guides/${g.slug}/">${g.short}</a></h3><p>${g.blurb}</p></li>`)}
           </ul>
         </div>`
         )}

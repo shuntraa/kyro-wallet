@@ -189,6 +189,7 @@ export function home(chains) {
 
   const body = html`
     <section class="hero" id="showcase" aria-labelledby="hero-title">
+      <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-copy">
         <a class="badge" href="${REPO}">
           <span class="badge-tag">${VERSION}</span>
@@ -216,7 +217,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section coins" id="chains" aria-labelledby="chains-title">
+    <section class="section coins head-split" id="chains" aria-labelledby="chains-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Blockchains</p>
@@ -230,7 +231,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" id="how" aria-labelledby="how-title">
+    <section class="section bg-dots" id="how" aria-labelledby="how-title">
       <div class="wrap">
         ${head('How it works', 'how-title', 'Private in <em>three steps</em>', 'No account to open and nothing to configure. Tor is on before your first balance loads.')}
         <div class="steps3" data-reveal-group>
@@ -254,7 +255,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
+    <section class="section bg-glow" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
@@ -282,7 +283,7 @@ export function home(chains) {
         </div>
     </section>
 
-    <section class="section" id="sees" aria-labelledby="sees-title">
+    <section class="section head-split" id="sees" aria-labelledby="sees-title">
       <div class="wrap">
         ${head('What servers see', 'sees-title', 'Your IP stays <em>out of the log</em>', 'A wallet has to ask servers about your addresses. The question is whether your IP address comes with it.')}
         <div data-reveal>${seesCards()}</div>
@@ -291,7 +292,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" id="fees" aria-labelledby="swap-title">
+    <section class="section bg-band head-split" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -320,7 +321,7 @@ export function home(chains) {
           ${ul(['Your addresses and keys are never sent to the node.', 'Tor hides your IP from it. Your own node or a .onion works too.', 'A 25-word seed restores the wallet in Monero GUI, Feather or Cake Wallet.'])}
           <a class="more" href="/monero/">The private Monero wallet</a>`, moneroCard())}
 
-    <section class="section" id="features" aria-labelledby="earn-title">
+    <section class="section bg-grid" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
@@ -333,7 +334,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
+    <section class="section hw-scene bg-glow-l" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
@@ -355,18 +356,21 @@ export function home(chains) {
           ${ul(['Amount, recipient, network and fee, as Rust read them.', 'Your password, then your click, for every signature.', 'Unusual transactions need a second, reinforced confirmation.', 'Address-poisoning alerts and clipboard checks before you send.'])}
           <a class="more" href="/security/">Nothing is signed without you</a>`, confirmCard())}
 
-    <section class="section" id="security" aria-labelledby="security-title">
+    <section class="section bg-band head-split" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
           <h2 id="security-title">Yours, <em>start to finish</em></h2>
           <p data-reveal>A non-custodial, open-source wallet. No account and no analytics. Only an anonymous weekly count over Tor, which you can turn off.</p>
         </div>
-        <div class="glow-grid" data-reveal-group>
-          <article class="glow-card spot g-ice">
+        <div class="bento bento-sec" data-reveal-group>
+          <article class="glow-card spot g-ice tile-wide tile-show">
+            <div>
             <span class="card-ic">${icon('lock')}</span>
             <h3>Keys stay on your device</h3>
             <p>Encrypted with your password and kept in the Rust core. No server has a copy.</p>
+            </div>
+            ${vaultCard()}
           </article>
           <article class="glow-card spot g-deep">
             <span class="card-ic">${icon('window')}</span>
@@ -405,7 +409,7 @@ export function home(chains) {
           <p class="small mute">Bit-for-bit reproducible builds are a goal, not a guarantee yet. The installers are not code-signed yet, so your system warns on first launch.</p>
           ${a('/open-source/', '<span class="more">Read, build and verify</span>')}`, term('Terminal', [`$ git clone ${REPO}.git`, '$ cd kyro-wallet', '$ pnpm install --frozen-lockfile', '$ pnpm build']))}
 
-    <section class="section" id="roadmap" aria-labelledby="road-title">
+    <section class="section bg-dots head-split" id="roadmap" aria-labelledby="road-title">
       <div class="wrap">
         ${head('Roadmap', 'road-title', 'Shipped, <em>and next</em>', `Version ${VERSION} today. No dates we cannot keep.`)}
         <div class="road-cols">
@@ -416,7 +420,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" aria-labelledby="faq-title">
+    <section class="section side-faq" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Questions</p>
@@ -469,18 +473,23 @@ export function features(chains) {
   const description = `What Kyro Wallet does: one portfolio for ${chains.length} blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.`;
   const hw = chains.filter((c) => c.features.hardware).map((c) => c.name);
 
+  const TABS = [['f-portfolio', 'Portfolio'], ['f-swap', 'Swap'], ['f-stake', 'Earn'], ['f-tor', 'Tor'], ['f-xmr', 'Monero'], ['f-sign', 'Transaction review'], ['f-hw', 'Hardware wallets']];
   const row = (id, label, h, flip, text, visual) => html`
-    <section class="section" aria-labelledby="${id}">
-      <div class="wrap feature-row${flip ? ' flip' : ''}">
+    <div class="tab-panel${id === TABS[0][0] ? ' on' : ''}" id="p-${id}" role="tabpanel" aria-labelledby="t-${id}" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>${label}</p>
+          <p class="eyebrow">${label}</p>
           <h2 id="${id}">${h}</h2>
-          <div data-reveal>${text}</div>
+          <div>${text}</div>
         </div>
-        <div class="feature-visual" data-reveal>${visual}</div>
+        <div class="feature-visual">${visual}</div>
       </div>
-    </section>`;
-  const mini = (ic, g, h, p) => `<article class="glow-card spot ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
+    </div>`;
+  const tabBar = html`
+        <div class="tab-list" role="tablist" aria-label="What Kyro does">
+          ${TABS.map(([id, label], i) => `<button class="tab" type="button" role="tab" id="t-${id}" aria-controls="p-${id}" aria-selected="${i ? 'false' : 'true'}"${i ? ' tabindex="-1"' : ''}>${label}</button>`)}
+        </div>`;
+  const mini = (ic, g, h, p, i) => `<article class="glow-card spot ${g}${i ? ' tile-wide' : ''}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
 
   const body = html`
     ${pageHero({
@@ -489,11 +498,14 @@ export function features(chains) {
       h1: 'What Kyro <em>does</em>',
       lead: `A private crypto wallet: send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase, over Tor, and read every transaction before it is signed.`
     })}
+    <section class="section section-tight bg-none feature-tabs" aria-label="Features">
+      <div class="wrap">
+        ${tabBar}
     ${row('f-portfolio', 'Portfolio', 'All your coins <em>in one list</em>', false, html`
           <p>Total value, a price chart from one day to all time, and every asset with its balance, 7-day trend and share.</p>
           <ul class="checks">
             <li>Market tab with the top 200 coins, and favourites.</li>
-            <li>Search assets and addresses with Ctrl K.</li>
+            <li>Search assets and addresses with <kbd>Ctrl K</kbd>.</li>
             <li>Allocation by asset, and a vault panel with your security status.</li>
             <li>Several wallets on one device, each with its own phrase, password and history.</li>
             <li>Watch addresses: follow any public address or xpub with no key.</li>
@@ -539,6 +551,8 @@ export function features(chains) {
             <li>Software accounts and hardware accounts side by side.</li>
           </ul>
           <p><a href="/hardware-wallets/">Device table and limits</a></p>`, ledgerScene())}
+      </div>
+    </section>
 
     <section class="section" aria-labelledby="f-more">
       <div class="wrap">
@@ -546,8 +560,8 @@ export function features(chains) {
           <p class="eyebrow" data-reveal>And also</p>
           <h2 id="f-more">The <em>small things</em></h2>
         </div>
-        <div class="glow-grid glow-grid-4" data-reveal-group>
-          ${mini('ic-accounts', 'g-ice', 'Many accounts', 'Several accounts per blockchain from the same phrase. Move funds between them in two clicks.')}
+        <div class="bento bento-8" data-reveal-group>
+          ${mini('ic-accounts', 'g-ice', 'Many accounts', 'Several accounts per blockchain from the same phrase. Move funds between them in two clicks.', true)}
           ${mini('ic-tor', 'g-deep', 'Tor built in', 'All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.')}
           ${mini('ic-eye', 'g-sky', 'No personal data', 'No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.')}
           ${mini('ic-lock', 'g-deep', 'Auto-lock', 'The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.')}

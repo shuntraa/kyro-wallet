@@ -32,12 +32,10 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/open-source/#page","url":"https://kyrowallet.com/open-source/","name":"Kyro is open source","description":"Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Open source","item":"https://kyrowallet.com/open-source/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/open-source/#faq","url":"https://kyrowallet.com/open-source/","mainEntity":[{"@type":"Question","name":"What licence is Kyro under?","acceptedAnswer":{"@type":"Answer","text":"GPL-3.0-or-later. You can read, run, change and share it. If you distribute a changed version, it stays under the same licence, with its source."}},{"@type":"Question","name":"Are Kyro builds reproducible?","acceptedAnswer":{"@type":"Answer","text":"Not bit for bit yet. It is a goal, not a guarantee. Today you can verify the SHA-256 of a release and build from the same source yourself."}},{"@type":"Question","name":"Can I remove the swap fee?","acceptedAnswer":{"@type":"Answer","text":"Yes, in your own build. The rates live in packages/swap/src/fees.ts, and anyone can change them or set the fee to 0."}},{"@type":"Question","name":"Has Kyro been audited?","acceptedAnswer":{"@type":"Answer","text":"An internal security review has been done. No independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -47,9 +45,9 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop data-here>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
               <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/" aria-current="page">Open source</a></li><li><a href="/about/">About</a></li></ul>
             </details>
@@ -60,9 +58,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/" aria-current="page">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -74,7 +74,7 @@
 
   <main id="content">
 
-    <section class="page-hero" aria-labelledby="page-title">
+    <section class="page-hero tone-band" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Open source</span></li></ol></nav>
         <div class="ph-grid">
@@ -148,7 +148,7 @@
           <p data-reveal>Three things you can verify, and one you cannot yet.</p>
         </div>
         
-        <div class="glow-grid glow-grid-4" data-reveal-group>
+        <div class="rows" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Release checksums</h3><p>Each release ships <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a>. <a href="/guides/verify-your-download/">Compare your file</a> before you run it.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Signed updates</h3><p>Each update is signed. Kyro verifies it against a public key pinned in the app, and refuses a bad signature.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Servers contacted</h3><p>Every server is listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>, and any new one has to be added there.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Not yet</h3><p>Bit-for-bit reproducible builds are a goal, not a guarantee. The installers are not code-signed yet.</p></article>
         </div></div>
     </section>
@@ -169,7 +169,7 @@
         </div></div>
     </section>
     
-    <section class="section" aria-labelledby="o-faq">
+    <section class="section side-faq" aria-labelledby="o-faq">
       <div class="wrap">
         
         <div class="head-center">
@@ -191,7 +191,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>The three layers, and what no software can do.</p></li><li class="glow-card spot"><h3><a href="/changelog/">Changelog</a></h3><p>What changed in each release.</p></li><li class="glow-card spot"><h3><a href="/brand/">Brand kit</a></h3><p>Logos and colours for writing about Kyro.</p></li>
+          <li class="spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>The three layers, and what no software can do.</p></li><li class="spot"><h3><a href="/changelog/">Changelog</a></h3><p>What changed in each release.</p></li><li class="spot"><h3><a href="/brand/">Brand kit</a></h3><p>Logos and colours for writing about Kyro.</p></li>
         </ul></div>
     </section>
     

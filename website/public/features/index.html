@@ -32,13 +32,11 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/features/#page","url":"https://kyrowallet.com/features/","name":"Kyro Wallet features","description":"What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://kyrowallet.com/features/"}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/scenes.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -48,7 +46,7 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/" aria-current="page"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/" aria-current="page">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
             <details class="nav-more" data-pop>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
@@ -61,9 +59,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/" aria-current="page">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -76,7 +76,7 @@
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title">
+    <section class="page-hero tone-grid" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Features</span></li></ol></nav>
         <div class="ph-grid">
@@ -91,24 +91,30 @@
         </div>
       </div>
     </section>
+    <section class="section section-tight bg-none feature-tabs" aria-label="Features">
+      <div class="wrap">
+        
+        <div class="tab-list" role="tablist" aria-label="What Kyro does">
+          <button class="tab" type="button" role="tab" id="t-f-portfolio" aria-controls="p-f-portfolio" aria-selected="true">Portfolio</button><button class="tab" type="button" role="tab" id="t-f-swap" aria-controls="p-f-swap" aria-selected="false" tabindex="-1">Swap</button><button class="tab" type="button" role="tab" id="t-f-stake" aria-controls="p-f-stake" aria-selected="false" tabindex="-1">Earn</button><button class="tab" type="button" role="tab" id="t-f-tor" aria-controls="p-f-tor" aria-selected="false" tabindex="-1">Tor</button><button class="tab" type="button" role="tab" id="t-f-xmr" aria-controls="p-f-xmr" aria-selected="false" tabindex="-1">Monero</button><button class="tab" type="button" role="tab" id="t-f-sign" aria-controls="p-f-sign" aria-selected="false" tabindex="-1">Transaction review</button><button class="tab" type="button" role="tab" id="t-f-hw" aria-controls="p-f-hw" aria-selected="false" tabindex="-1">Hardware wallets</button>
+        </div>
     
-    <section class="section" aria-labelledby="f-portfolio">
-      <div class="wrap feature-row">
+    <div class="tab-panel on" id="p-f-portfolio" role="tabpanel" aria-labelledby="t-f-portfolio" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Portfolio</p>
+          <p class="eyebrow">Portfolio</p>
           <h2 id="f-portfolio">All your coins <em>in one list</em></h2>
-          <div data-reveal>
+          <div>
           <p>Total value, a price chart from one day to all time, and every asset with its balance, 7-day trend and share.</p>
           <ul class="checks">
             <li>Market tab with the top 200 coins, and favourites.</li>
-            <li>Search assets and addresses with Ctrl K.</li>
+            <li>Search assets and addresses with <kbd>Ctrl K</kbd>.</li>
             <li>Allocation by asset, and a vault panel with your security status.</li>
             <li>Several wallets on one device, each with its own phrase, password and history.</li>
             <li>Watch addresses: follow any public address or xpub with no key.</li>
             <li>Alerts for price levels and funds received, computed on your device.</li>
           </ul></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="kw-card" role="img" aria-label="Kyro asset list with demo numbers: Bitcoin, Ethereum, Monero, Solana and Cardano."><div aria-hidden="true">
     <div class="kw-tabs"><b>My assets</b><span>Market</span><span>Favorites</span></div>
     
@@ -150,14 +156,14 @@
           </div>
   </div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-swap">
-      <div class="wrap feature-row flip">
+    <div class="tab-panel" id="p-f-swap" role="tabpanel" aria-labelledby="t-f-swap" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Swap</p>
+          <p class="eyebrow">Swap</p>
           <h2 id="f-swap">The fee <em>in plain sight</em></h2>
-          <div data-reveal>
+          <div>
           <p>Kyro asks several providers for a quote, including NEAR Intents across chains and Exolix for Monero, then picks the best price after fees. The Kyro fee, from 0.7%, and the provider’s own costs are already out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
           <ul class="checks">
             <li>Token approvals are for the exact amount. Unlimited approvals are off unless you turn them on.</li>
@@ -167,7 +173,7 @@
           </ul>
           <p><a href="/swap/">Routes and limits</a></p></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
     <div class="sw-side">
       <p class="kw-label">You send</p>
@@ -181,14 +187,14 @@
     <div class="sw-foot"><span data-rate>1 BTC ≈ 100 XMR</span><span>Service fee included</span></div>
   </div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-stake">
-      <div class="wrap feature-row">
+    <div class="tab-panel" id="p-f-stake" role="tabpanel" aria-labelledby="t-f-stake" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Earn</p>
+          <p class="eyebrow">Earn</p>
           <h2 id="f-stake">16 ways <em>to earn</em></h2>
-          <div data-reveal>
+          <div>
           <p>Stake, liquid-stake or lend from your own accounts, in one list. Rates are estimates, never guaranteed.</p>
           <ul class="checks">
             <li><b>Staking:</b> SOL, ADA, TRX, NEAR, SUI and APT. A validator, pool or Super Representative cannot spend your coins.</li>
@@ -197,7 +203,7 @@
           </ul>
           <p class="small mute">Contract bugs, depegs and lower rewards are real risks. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account. <a href="/earn/">Options and risks</a></p></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="kw-card" role="img" aria-label="Kyro Earn list with demo rates. Rates are estimates."><div aria-hidden="true">
           <div class="kw-earn">
             <span class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt="" decoding="async"><span><b>Solana</b><small>Staking</small></span></span>
@@ -221,18 +227,18 @@
             <i class="kw-b">Start</i>
           </div></div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-tor">
-      <div class="wrap feature-row flip">
+    <div class="tab-panel" id="p-f-tor" role="tabpanel" aria-labelledby="t-f-tor" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Tor</p>
+          <p class="eyebrow">Tor</p>
           <h2 id="f-tor">Tor, <em>on from the start</em></h2>
-          <div data-reveal>
+          <div>
           <p>Every request leaves through a built-in Tor client, with separate circuits per blockchain family. If Tor is down, Kyro stops.</p>
           <p><a href="/tor/">What each party sees</a></p></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="cir spot" role="img" aria-label="Four blockchains, each on its own Tor circuit of three relays. Bitcoin goes to mempool's onion service and never uses an exit relay."><div aria-hidden="true">
     <div class="cir-row">
       <span class="kw-coin"><img class="tok" src="/img/coins/btc.svg" width="32" height="32" alt="" decoding="async"><b>Bitcoin</b></span>
@@ -253,18 +259,18 @@
     </div>
   </div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-xmr">
-      <div class="wrap feature-row">
+    <div class="tab-panel" id="p-f-xmr" role="tabpanel" aria-labelledby="t-f-xmr" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Monero</p>
+          <p class="eyebrow">Monero</p>
           <h2 id="f-xmr">A real <em>Monero wallet</em></h2>
-          <div data-reveal>
+          <div>
           <p>Blocks are scanned on your machine and your view key stays there. Swap in and out of XMR through Exolix.</p>
           <p><a href="/monero/">The private Monero wallet</a></p></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
     <div class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
     <p class="coin-bal">12.3456 <span>XMR</span></p>
@@ -276,14 +282,14 @@
     <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
   </div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-sign">
-      <div class="wrap feature-row flip">
+    <div class="tab-panel" id="p-f-sign" role="tabpanel" aria-labelledby="t-f-sign" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Transaction review</p>
+          <p class="eyebrow">Transaction review</p>
           <h2 id="f-sign">Read it <em>before you sign it</em></h2>
-          <div data-reveal>
+          <div>
           <p>The Rust core decodes each transaction and shows it in a native system window, outside the app’s web view.</p>
           <ul class="checks">
             <li>Contract calls, token approvals and high fees ask for a second confirmation.</li>
@@ -294,7 +300,7 @@
             <li>Speed up or cancel a pending Bitcoin, Litecoin or EVM send.</li>
           </ul></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
     <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
     <div class="dlg-body">
@@ -307,14 +313,14 @@
     </div>
   </div></div></div>
       </div>
-    </section>
+    </div>
     
-    <section class="section" aria-labelledby="f-hw">
-      <div class="wrap feature-row">
+    <div class="tab-panel" id="p-f-hw" role="tabpanel" aria-labelledby="t-f-hw" tabindex="0">
+      <div class="feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Hardware wallets</p>
+          <p class="eyebrow">Hardware wallets</p>
           <h2 id="f-hw">Ledger <em>and</em> Trezor</h2>
-          <div data-reveal>
+          <div>
           <p>Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.</p>
           <ul class="checks">
             <li>Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.</li>
@@ -322,7 +328,7 @@
           </ul>
           <p><a href="/hardware-wallets/">Device table and limits</a></p></div>
         </div>
-        <div class="feature-visual" data-reveal>
+        <div class="feature-visual">
   <div class="lg" data-ledger role="img" aria-label="A hardware wallet wired to coins. Its screen asks to open Bitcoin, then confirms a demo transaction."><div class="lg-stage" aria-hidden="true">
     <svg viewBox="0 0 640 560" fill="none">
       <defs>
@@ -348,6 +354,8 @@
     </svg>
   </div></div></div>
       </div>
+    </div>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="f-more">
@@ -356,8 +364,8 @@
           <p class="eyebrow" data-reveal>And also</p>
           <h2 id="f-more">The <em>small things</em></h2>
         </div>
-        <div class="glow-grid glow-grid-4" data-reveal-group>
-          <article class="glow-card spot g-ice"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Many accounts</h3><p>Several accounts per blockchain from the same phrase. Move funds between them in two clicks.</p></article>
+        <div class="bento bento-8" data-reveal-group>
+          <article class="glow-card spot g-ice tile-wide"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Many accounts</h3><p>Several accounts per blockchain from the same phrase. Move funds between them in two clicks.</p></article>
           <article class="glow-card spot g-deep"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Tor built in</h3><p>All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.</p></article>
           <article class="glow-card spot g-sky"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>No personal data</h3><p>No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.</p></article>
           <article class="glow-card spot g-deep"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Auto-lock</h3><p>The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.</p></article>
@@ -378,7 +386,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/swap/">Swap routes and limits</a></h3><p>Every provider, and what does not swap yet.</p></li><li class="glow-card spot"><h3><a href="/hardware-wallets/">Ledger and Trezor</a></h3><p>What works on which device.</p></li><li class="glow-card spot"><h3><a href="/guides/">Guides</a></h3><p>Step-by-step articles, from backup to staking.</p></li>
+          <li class="spot"><h3><a href="/swap/">Swap routes and limits</a></h3><p>Every provider, and what does not swap yet.</p></li><li class="spot"><h3><a href="/hardware-wallets/">Ledger and Trezor</a></h3><p>What works on which device.</p></li><li class="spot"><h3><a href="/guides/">Guides</a></h3><p>Step-by-step articles, from backup to staking.</p></li>
         </ul></div>
     </section>
     

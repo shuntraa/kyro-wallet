@@ -32,12 +32,10 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/tor/#page","url":"https://kyrowallet.com/tor/","name":"Tor wallet: how Kyro uses Tor","description":"Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Tor","item":"https://kyrowallet.com/tor/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/tor/#faq","url":"https://kyrowallet.com/tor/","mainEntity":[{"@type":"Question","name":"Do I need to install Tor or Tor Browser?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro embeds its own Tor client, Arti, from The Tor Project. It starts in the background when the app opens."}},{"@type":"Question","name":"Can I turn Tor off?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address."}},{"@type":"Question","name":"Does Tor make my transactions anonymous?","acceptedAnswer":{"@type":"Answer","text":"No. Tor hides who is asking. It does not hide what is asked: the server you query still sees the addresses and transactions you look up, and public blockchains stay public."}},{"@type":"Question","name":"Why is Kyro slower over Tor?","acceptedAnswer":{"@type":"Answer","text":"Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers."}},{"@type":"Question","name":"Do my own servers go through Tor too?","acceptedAnswer":{"@type":"Answer","text":"Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -47,9 +45,9 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop data-here>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
               <ul class="nav-more-panel"><li><a href="/tor/" aria-current="page">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
             </details>
@@ -60,9 +58,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/" aria-current="page">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -74,7 +74,7 @@
 
   <main id="content">
 
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+    <section class="page-hero tone-dots page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Tor</span></li></ol></nav>
         <div class="ph-grid">
@@ -143,7 +143,7 @@
           <p data-reveal>A server or an exit relay cannot link your Bitcoin lookup to your Solana lookup through the circuit, because they never share one.</p>
         </div>
         
-        <div class="glow-grid" data-reveal-group>
+        <div class="tiles tiles-3" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Isolated by family</h3><p>Each blockchain family has its own isolated circuits. Prices and swaps have their own too. All EVM networks count as one family.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Bitcoin stays inside Tor</h3><p>Bitcoin lookups go to mempool’s onion service. No exit relay is involved, so no relay sees the hostname or the volume.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Retries stay on Tor</h3><p>A stream refused by a closed circuit is retried on a new one. A refusal on one family no longer moves the others. It never falls back to clear.</p></article>
         </div></div>
     </section>
@@ -198,7 +198,7 @@
     </section>
 
     
-    <section class="section" aria-labelledby="t-limits">
+    <section class="section head-split" aria-labelledby="t-limits">
       <div class="wrap">
         
         <div class="head-center">
@@ -207,12 +207,12 @@
           <p data-reveal>Tor is one layer. It hides your network location. These things stay true with it on.</p>
         </div>
         
-        <div class="glow-grid glow-grid-4" data-reveal-group>
+        <div class="rows" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Servers still see lookups</h3><p>The server you query sees the addresses and transactions you ask about. To avoid that, use your own node.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Blockchains stay public</h3><p>Most chains publish every transfer. Tor hides your IP, and your addresses remain linked to each other on chain when you link them.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Swap providers see the order</h3><p>Swap APIs see the tokens, amounts and recipient. Exolix sees your source and destination addresses, so it can link those two accounts.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Two background requests</h3><p>The signed update check and the anonymous weekly count. Both go over Tor and both can be turned off.</p></article>
         </div></div>
     </section>
     
-    <section class="section" aria-labelledby="t-faq">
+    <section class="section side-faq" aria-labelledby="t-faq">
       <div class="wrap">
         
         <div class="head-center">
@@ -234,7 +234,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/guides/why-a-wallet-should-use-tor/">Why a wallet should use Tor</a></h3><p>The problem in plain words: your IP and your addresses in the same log line.</p></li><li class="glow-card spot"><h3><a href="/monero/">Monero over Tor</a></h3><p>A desktop Monero wallet that scans blocks on your machine.</p></li><li class="glow-card spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>Tor covers the network. This covers the vault and the signature.</p></li>
+          <li class="spot"><h3><a href="/guides/why-a-wallet-should-use-tor/">Why a wallet should use Tor</a></h3><p>The problem in plain words: your IP and your addresses in the same log line.</p></li><li class="spot"><h3><a href="/monero/">Monero over Tor</a></h3><p>A desktop Monero wallet that scans blocks on your machine.</p></li><li class="spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>Tor covers the network. This covers the vault and the signature.</p></li>
         </ul></div>
     </section>
     
