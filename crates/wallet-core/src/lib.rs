@@ -222,8 +222,8 @@ pub use sui_tx::{
     sui_decode_coin_tx, sui_decode_tx, sui_hw_message, sui_hw_signature, sui_known_coin,
     sui_known_coins, sui_sign, sui_sign_coin, sui_tx_digest, sui_verify_signed, SuiGasCoinView,
     SuiKnownCoin, SuiObjectRef, SuiTokenSummary, SuiTransfer, SuiTransferAmount, SuiTxSummary,
-    SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
-    SUI_HW_MAX_TOKEN_COINS, SUI_MAX_TOKEN_COINS,
+    SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_HW_MAX_TOKEN_COINS,
+    SUI_MAX_GAS_OBJECTS, SUI_MAX_TOKEN_COINS,
 };
 pub use ton::{
     ton_address, ton_decode_tx, ton_hw_check_comment, ton_hw_request, ton_hw_signed,
