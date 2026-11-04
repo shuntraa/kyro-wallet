@@ -206,13 +206,51 @@ function passwordIssues(pw: string, confirm: string): string | null {
   return null;
 }
 
-function PasswordStep({ busy, error, onSubmit, cta, extra }: { busy: boolean; error: string | null; onSubmit: (pw: string) => void; cta: string; extra?: ReactNode }) {
+/** Optional BIP39 passphrase, typed twice. Sent to Rust once, as typed: never trimmed. */
+function usePassphrase() {
+  const [open, setOpen] = useState(false);
+  const [first, setFirst] = useState('');
+  const [second, setSecond] = useState('');
+  const toggle = () => {
+    setFirst('');
+    setSecond('');
+    setOpen((v) => !v);
+  };
+  const clear = () => {
+    setFirst('');
+    setSecond('');
+  };
+  return { open, first, second, setFirst, setSecond, toggle, clear, ready: first === second, args: first && first === second ? { passphrase: first } : {} };
+}
+
+function PassphraseFields({ pp }: { pp: ReturnType<typeof usePassphrase> }) {
+  const { t } = useT();
+  return (
+    <div className="flex flex-col gap-3">
+      <button type="button" aria-expanded={pp.open} onClick={pp.toggle} className="press inline-flex items-center gap-1 self-start text-[13px] text-mute hover:text-text">
+        <IconChevronRight size={13} className={cn('transition-transform', pp.open && 'rotate-90')} />
+        {t('welcome.advanced')}
+      </button>
+      {pp.open && (
+        <>
+          <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('welcome.passphraseHelp')}</p>
+          <PasswordField id="pp-new" label={t('welcome.passphrase')} value={pp.first} onChange={pp.setFirst} autoComplete="off" />
+          <PasswordField id="pp-confirm" label={t('welcome.passphraseConfirm')} value={pp.second} onChange={pp.setSecond} autoComplete="off" invalid={!!pp.second && !pp.ready} />
+          {pp.second && !pp.ready && <p className="m-0 text-[12px] text-down">{t('welcome.passphraseMismatch')}</p>}
+          <Notice tone="warn">{t('welcome.passphraseWarn')}</Notice>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PasswordStep({ busy, error, onSubmit, cta, extra, pp }: { busy: boolean; error: string | null; onSubmit: (pw: string) => void; cta: string; extra?: ReactNode; pp: ReturnType<typeof usePassphrase> }) {
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const issue = passwordIssues(pw, confirm);
   const { demo } = useApp();
   const { t } = useT();
-  const ok = !issue && confirm === pw && pw.length > 0;
+  const ok = !issue && confirm === pw && pw.length > 0 && pp.ready;
   return (
     <div className="flex max-w-[460px] flex-col gap-4">
       {extra}
@@ -220,6 +258,7 @@ function PasswordStep({ busy, error, onSubmit, cta, extra }: { busy: boolean; er
       <PasswordField id="pw-confirm" label={t('welcome.confirmPassword')} value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={!!confirm && confirm !== pw} onEnter={() => ok && onSubmit(pw)} />
       <p className="m-0 text-[12px] leading-[1.5] text-mute">{issue ?? t('welcome.pwHelp')}</p>
       {demo && <p className="m-0 text-[12px] text-ice-text2">{demoPasswordHint()}</p>}
+      <PassphraseFields pp={pp} />
       {error && <Notice tone="error">{error}</Notice>}
       <Button variant="primary" size="xl" disabled={!ok || busy} onClick={() => onSubmit(pw)} className="mt-1 self-start">
         {busy && <Spinner />} {cta}
@@ -255,13 +294,15 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [giveUp, setGiveUp] = useState(false);
   const { t, tp } = useT();
+  const pp = usePassphrase();
 
   const create = async (pw: string) => {
     setBusy(true);
     setError(null);
     try {
       // Rust creates the vault and keeps the phrase: it is never sent to this interface.
-      const res = await call('vault_create', { password: pw, words: count });
+      const res = await call('vault_create', { password: pw, words: count, ...pp.args });
+      pp.clear();
       setWordCount(res.wordCount);
       setStep('phrase');
     } catch (e) {
@@ -330,6 +371,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
             error={error}
             onSubmit={create}
             cta={t('welcome.createVault')}
+            pp={pp}
             extra={
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[13px] text-text2">{t('welcome.phraseLength')}</span>
@@ -482,6 +524,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [xmrMode, setXmrMode] = useState<'date' | 'genesis'>('date');
   const [xmrDate, setXmrDate] = useState('');
   const { t } = useT();
+  const pp = usePassphrase();
   const xmrRestore = ((): XmrRestoreFrom | null => {
     if (!xmrLedger) return { kind: 'kyro' };
     if (xmrMode === 'genesis') return { kind: 'genesis' };
@@ -515,8 +558,9 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await call('vault_import', { password: pw, phrase, xmrRestore: xmrRestore ?? { kind: 'kyro' } });
+      await call('vault_import', { password: pw, phrase, xmrRestore: xmrRestore ?? { kind: 'kyro' }, ...pp.args });
       setWords([]);
+      pp.clear();
       setBackupState('imported');
       await enterVault();
     } catch (e) {
@@ -532,7 +576,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
           <StepHeader step={2} total={2} title={t('welcome.protectTitle')} onBack={() => setStep('phrase')}>
             {t('welcome.protectIntro')}
           </StepHeader>
-          <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta={t('welcome.import')} />
+          <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta={t('welcome.import')} pp={pp} />
         </div>
       </OnboardingFrame>
     );

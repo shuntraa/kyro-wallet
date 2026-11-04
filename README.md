@@ -36,6 +36,7 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **36 blockchains, one recovery phrase**, with **220+ tokens**.
 - **Send, receive and swap** from the same window. Swaps carry a service fee from 0.7%, included in the rate — see [fees](https://kyrowallet.com/fees/).
 - **Dust protection**: tiny coins from strangers stay out of your sends, so they can't link your addresses. You see the amount set aside, and you can include it.
+- **Optional passphrase** (the BIP39 "25th word") when you create or import a wallet, under Advanced.
 - **Earn**: staking on SOL, ADA, TRX, NEAR, SUI and APT from accounts that stay in your name (SOL and ADA also from Ledger and Trezor, NEAR from Ledger), ETH liquid staking with Lido, and USDT, USDC, DAI and WETH lending on Aave v3. Rates are estimates.
 - **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
 - **Simulation before signing** on EVM swaps and contract calls, through your own RPC node, no third-party service.

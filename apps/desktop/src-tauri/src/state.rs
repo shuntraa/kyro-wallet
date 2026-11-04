@@ -35,6 +35,8 @@ struct Guard {
 /// the 3-word check (`vault_backup_*`).
 pub struct PendingBackup {
     pub words: Zeroizing<Vec<String>>,
+    /// The wallet has a passphrase. Not the passphrase: it stays in the vault.
+    pub has_passphrase: bool,
     /// The three positions (0-based) the user must type, chosen by Rust.
     pub checks: [usize; 3],
     pub failures: u32,
@@ -636,12 +638,40 @@ mod tests {
     }
 
     #[test]
+    fn a_passphrase_stays_in_its_own_wallet() {
+        let dir = std::env::temp_dir().join(format!("kyro-state-pp-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let state = AppState::new(dir.clone()).unwrap();
+        let m = |p| Mnemonic::parse(p).unwrap();
+        let plain = seal(&m(PHRASE_1), "first password", KdfParams::minimum()).unwrap();
+        state.write_new_vault(&plain).unwrap();
+        let main_bytes = fs::read(&state.vault_path).unwrap();
+        fs::create_dir_all(wallets_dir(&state.wallets_path)).unwrap();
+        state.begin_new_wallet(ID, "Two".into());
+        let passphrase = Zeroizing::new("25th word".to_owned());
+        let secret = wallet_core::WalletSecret::new(m(PHRASE_1), passphrase).unwrap();
+        let sealed =
+            wallet_core::seal_secret(&secret, "second password", KdfParams::minimum()).unwrap();
+        state.write_new_vault(&sealed).unwrap();
+        let opened = wallet_core::open(&state.read_vault().unwrap(), "second password").unwrap();
+        assert_eq!(opened.passphrase(), "25th word");
+        state.activate_wallet(MAIN);
+        let opened = wallet_core::open(&state.read_vault().unwrap(), "first password").unwrap();
+        assert!(!opened.has_passphrase());
+        assert_ne!(&opened.seed()[..], &secret.seed()[..]);
+        assert_eq!(fs::read(&state.vault_path).unwrap(), main_bytes);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn changing_a_password_touches_only_the_wallet_in_use() {
         let (state, dir) = with_two_wallets("password");
         let main_bytes = fs::read(&state.vault_path).unwrap();
-        let m = Mnemonic::parse(PHRASE_2).unwrap();
+        let secret = wallet_core::WalletSecret::plain(Mnemonic::parse(PHRASE_2).unwrap());
         let path = state.active_vault_path();
-        crate::wallets::rewrite_vault(&path, &m, "third password", KdfParams::minimum()).unwrap();
+        crate::wallets::rewrite_vault(&path, &secret, "third password", KdfParams::minimum())
+            .unwrap();
         assert_eq!(phrase(&state, "third password").as_deref(), Some(PHRASE_2));
         assert_eq!(phrase(&state, "second password"), None);
         assert_eq!(fs::read(&state.vault_path).unwrap(), main_bytes);
@@ -684,7 +714,7 @@ mod tests {
         let before = fs::read(state.active_vault_path()).unwrap();
         let wrong = Zeroizing::new("not the password".to_owned());
         let r =
-            tauri::async_runtime::block_on(crate::commands::mnemonic_from_password(&state, wrong));
+            tauri::async_runtime::block_on(crate::commands::secret_from_password(&state, wrong));
         assert!(r.is_err());
         assert_ne!(*lock(&state.guard), Guard::default());
         assert_eq!(fs::read(state.active_vault_path()).unwrap(), before);

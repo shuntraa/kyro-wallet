@@ -31,11 +31,24 @@ const DONE_PATH: &str = "/done";
 const SANS_PATH: &str = "/font/sans.woff2";
 const MONO_PATH: &str = "/font/mono.woff2";
 
+/// The BIP39 passphrase of the wallet, in the window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Passphrase<'a> {
+    /// None, or not this window's business (Monero).
+    #[default]
+    None,
+    /// Blurred under the words, like them (Settings › Security).
+    Shown(&'a str),
+    /// A line says the wallet has one (creation: it was just typed twice).
+    Reminder,
+}
+
 /// What the window shows.
 pub struct PhraseView<'a> {
     pub title: &'a str,
     pub lead: &'a str,
     pub words: &'a [String],
+    pub passphrase: Passphrase<'a>,
     /// Extra lines under the words (Monero: key path, restore height).
     pub notes: Vec<String>,
 }
@@ -152,6 +165,8 @@ li{display:flex;align-items:baseline;gap:10px;height:40px;padding:0 12px;border-
 #reveal:checked~main .w,ol:active .w{filter:none;opacity:1}
 .hint{margin:12px 2px 0;color:var(--mute);font-size:12.5px}
 #reveal:checked~main .hint{visibility:hidden}
+.pp{margin:12px 2px 0;display:flex;flex-direction:column;gap:6px}
+.pp .w{white-space:normal;overflow-wrap:anywhere;line-height:1.35}
 .notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;color:var(--mute);font-size:12.5px}
 .notes li{display:block;height:auto;padding:0 0 0 14px;background:none;border:0;border-radius:0;position:relative}
 .notes li::before{content:'';position:absolute;left:2px;top:.62em;width:4px;height:4px;border-radius:2px;background:var(--faint)}
@@ -218,12 +233,28 @@ pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
         out.push_str(&Zeroizing::new(escape(w)));
         out.push_str("</span></li>");
     }
-    out.push_str("</ol><p class=\"hint\">");
+    out.push_str("</ol>");
+    if let Passphrase::Shown(p) = view.passphrase {
+        out.push_str("<div class=\"pp\"><span class=\"count\">");
+        out.push_str(&escape(lang.pick("Phrase secrète", "Passphrase")));
+        out.push_str("</span><span class=\"w\">");
+        out.push_str(&Zeroizing::new(escape(p)));
+        out.push_str("</span></div>");
+    }
+    out.push_str("<p class=\"hint\">");
     out.push_str(&escape(lang.pick(
         "Clique sur « Afficher », ou maintiens le clic sur les mots, pour les lire.",
         "Click “Show”, or press and hold the words, to read them.",
     )));
     out.push_str("</p></section><ul class=\"notes\">");
+    let passphrase_note = (view.passphrase != Passphrase::None).then(|| {
+        lang.pick(
+            "Ce portefeuille a aussi une phrase secrète. Sans elle, ces mots n’ouvrent pas ces fonds. \
+             Si tu l’oublies, ces fonds sont perdus. Personne ne peut la récupérer.",
+            "This wallet also has a passphrase. These words alone do not open these funds. If you \
+             forget it, these funds are lost. Nobody can recover it.",
+        )
+    });
     let fixed = [
         lang.pick(
             "Pas de photo, pas de copie, pas de cloud. Personne de légitime ne te demandera jamais ces mots.",
@@ -236,7 +267,8 @@ pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
              a camera: make sure nobody is watching.",
         ),
     ];
-    for note in view.notes.iter().map(String::as_str).chain(fixed) {
+    let notes = view.notes.iter().map(String::as_str);
+    for note in notes.chain(passphrase_note).chain(fixed) {
         out.push_str("<li>");
         out.push_str(&escape(note));
         out.push_str("</li>");
@@ -389,7 +421,11 @@ pub async fn show(app: &AppHandle, view: PhraseView<'_>) -> AppResult<()> {
 }
 
 /// The recovery phrase view (creation and Settings › Security).
-pub fn recovery_view(lang: Lang, words: &[String]) -> PhraseView<'_> {
+pub fn recovery_view<'a>(
+    lang: Lang,
+    words: &'a [String],
+    passphrase: Passphrase<'a>,
+) -> PhraseView<'a> {
     PhraseView {
         title: lang.pick("Ta phrase de récupération", "Your recovery phrase"),
         lead: lang.pick(
@@ -397,6 +433,7 @@ pub fn recovery_view(lang: Lang, words: &[String]) -> PhraseView<'_> {
             "Write these words on paper, in order. Anyone with them can take your funds.",
         ),
         words,
+        passphrase,
         notes: vec![],
     }
 }
@@ -410,6 +447,25 @@ mod tests {
     }
 
     #[test]
+    fn the_passphrase_is_blurred_like_the_words_and_escaped() {
+        let w = words(12);
+        let view = recovery_view(Lang::En, &w, Passphrase::Shown("<b>&\"secret\""));
+        let page = render(Lang::En, &view);
+        assert!(page.contains("<span class=\"w\">&lt;b&gt;&amp;&quot;secret&quot;</span>"));
+        assert!(page.contains("If you forget it, these funds are lost. Nobody can recover it."));
+        assert!(!page.contains("<b>&"));
+    }
+
+    #[test]
+    fn creation_only_reminds_and_a_plain_wallet_says_nothing() {
+        let w = words(12);
+        let reminder = render(Lang::Fr, &recovery_view(Lang::Fr, &w, Passphrase::Reminder));
+        assert!(reminder.contains("phrase secrète") && !reminder.contains("class=\"pp\""));
+        let plain = render(Lang::En, &recovery_view(Lang::En, &w, Passphrase::None));
+        assert!(!plain.contains("passphrase") && !plain.contains("class=\"pp\""));
+    }
+
+    #[test]
     fn page_shows_every_word_in_order_and_no_script() {
         let w = words(24);
         let page = render(
@@ -418,6 +474,7 @@ mod tests {
                 title: "Your recovery phrase",
                 lead: "Write these words on paper, in order. Anyone with them can take your funds.",
                 words: &w,
+                passphrase: Passphrase::None,
                 notes: vec![],
             },
         );
@@ -440,6 +497,7 @@ mod tests {
                 title: "Ta phrase de récupération",
                 lead: "x",
                 words: &words(12),
+                passphrase: Passphrase::None,
                 notes: vec!["Hauteur de restauration : 7".into()],
             },
         );
@@ -457,6 +515,7 @@ mod tests {
                 title: "<b>",
                 lead: "l",
                 words: &w,
+                passphrase: Passphrase::None,
                 notes: vec!["</li><script>".into()],
             },
         );
@@ -529,7 +588,7 @@ mod tests {
         } else {
             Lang::En
         };
-        let page = render(lang, &recovery_view(lang, &w));
+        let page = render(lang, &recovery_view(lang, &w, Passphrase::None));
         std::fs::write(path, page.as_bytes()).unwrap();
     }
 }

@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 
 use crate::display::sanitize_text;
 use crate::error::{Error, Result};
-use crate::mnemonic::Mnemonic;
+use crate::mnemonic::{nfkd, Mnemonic};
 use crate::network::Network;
 
 const HARDENED: u32 = 0x8000_0000;
@@ -51,6 +51,7 @@ impl CardanoRoot {
     /// CIP-0003 Icarus: PBKDF2-HMAC-SHA512(passphrase, entropy, 4096, 96 B) then clamping.
     pub fn from_mnemonic(mnemonic: &Mnemonic, passphrase: &str) -> CardanoRoot {
         let entropy = mnemonic.entropy();
+        let passphrase = nfkd(passphrase);
         let mut out = Zeroizing::new([0u8; 96]);
         pbkdf2::pbkdf2_hmac::<sha2::Sha512>(passphrase.as_bytes(), &entropy, 4096, &mut out[..]);
         // Clamp in place: `normalize_bytes_force3rd` by value would leave an unerased root copy.

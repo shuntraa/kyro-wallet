@@ -8,7 +8,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use wallet_core::{
-    BtcKind, EvmTxKind, EvmTxRequest, KdfParams, Mnemonic, Network, Seed, UtxoCoin, WordCount,
+    BtcKind, EvmTxKind, EvmTxRequest, KdfParams, Mnemonic, Network, Seed, UtxoCoin, WalletSecret,
+    WordCount,
 };
 use zeroize::Zeroizing;
 
@@ -35,13 +36,13 @@ pub(crate) async fn seed_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<Seed> {
-    Ok(mnemonic_from_password(state, password).await?.to_seed(""))
+    Ok(secret_from_password(state, password).await?.seed())
 }
 
-pub(crate) async fn mnemonic_from_password(
+pub(crate) async fn secret_from_password(
     state: &AppState,
     password: Zeroizing<String>,
-) -> AppResult<Mnemonic> {
+) -> AppResult<WalletSecret> {
     let file = state.read_vault()?;
     state.reserve_attempt()?;
     let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
@@ -55,16 +56,16 @@ pub(crate) async fn cardano_root_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<wallet_core::CardanoRoot> {
-    let m = mnemonic_from_password(state, password).await?;
-    blocking(move || Ok(wallet_core::CardanoRoot::from_mnemonic(&m, ""))).await
+    let secret = secret_from_password(state, password).await?;
+    blocking(move || Ok(secret.cardano_root())).await
 }
 
 pub(crate) async fn polkadot_root_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<wallet_core::PolkadotRoot> {
-    let m = mnemonic_from_password(state, password).await?;
-    blocking(move || Ok(wallet_core::PolkadotRoot::from_mnemonic(&m, "")?)).await
+    let secret = secret_from_password(state, password).await?;
+    blocking(move || Ok(secret.polkadot_root()?)).await
 }
 
 pub(crate) async fn confirm_native(
@@ -108,10 +109,21 @@ pub(crate) async fn confirm_native_with(
 
 /// Shows the recovery phrase in the phrase window (`phrase_window.rs`). The words never reach the
 /// main webview: a compromised interface cannot read them, even with the password.
-async fn show_words(app: &AppHandle, words: Zeroizing<Vec<String>>) -> AppResult<()> {
+async fn show_words(
+    app: &AppHandle,
+    words: Zeroizing<Vec<String>>,
+    passphrase: crate::phrase_window::Passphrase<'_>,
+) -> AppResult<()> {
     let _open = app.state::<AppState>().dialogs.enter();
     let lang = crate::i18n::current();
-    crate::phrase_window::show(app, crate::phrase_window::recovery_view(lang, &words)).await
+    let view = crate::phrase_window::recovery_view(lang, &words, passphrase);
+    crate::phrase_window::show(app, view).await
+}
+
+/// Passphrase received from the interface: the only time it crosses IPC, and only inward.
+fn wallet_secret(mnemonic: Mnemonic, passphrase: Option<String>) -> AppResult<WalletSecret> {
+    let passphrase = Zeroizing::new(passphrase.unwrap_or_default());
+    Ok(WalletSecret::new(mnemonic, passphrase)?)
 }
 
 pub(crate) fn check_password_strength(password: &str) -> AppResult<()> {
@@ -148,12 +160,12 @@ pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
     }
 }
 
-/// Seals `mnemonic` into a NEW vault and starts the session. The creation lock is held from
+/// Seals `secret` into a NEW vault and starts the session. The creation lock is held from
 /// the existence check until the session is started, and the file is created with
 /// `create_new` semantics: two concurrent calls can never both succeed, nor overwrite a vault.
 async fn seal_and_start(
     state: &AppState,
-    mnemonic: Mnemonic,
+    secret: WalletSecret,
     password: Zeroizing<String>,
 ) -> AppResult<()> {
     check_password_strength(&password)?;
@@ -163,12 +175,12 @@ async fn seal_and_start(
             "a vault already exists on this device".into(),
         ));
     }
-    let seed = mnemonic.to_seed("");
-    let cardano = wallet_core::CardanoRoot::from_mnemonic(&mnemonic, "");
-    let polkadot = wallet_core::PolkadotRoot::from_mnemonic(&mnemonic, "")?;
+    let seed = secret.seed();
+    let cardano = secret.cardano_root();
+    let polkadot = secret.polkadot_root()?;
     let file = blocking(move || {
-        Ok(wallet_core::seal(
-            &mnemonic,
+        Ok(wallet_core::seal_secret(
+            &secret,
             &password,
             KdfParams::production(),
         )?)
@@ -208,6 +220,7 @@ pub async fn vault_create(
     state: State<'_, AppState>,
     password: String,
     words: u8,
+    passphrase: Option<String>,
 ) -> AppResult<CreatedOut> {
     let password = Zeroizing::new(password);
     let count = match words {
@@ -215,13 +228,15 @@ pub async fn vault_create(
         24 => WordCount::W24,
         _ => return Err(AppError::InvalidInput("12 or 24 words".into())),
     };
-    let mnemonic = Mnemonic::generate(count)?;
-    let words = mnemonic.words();
+    let secret = wallet_secret(Mnemonic::generate(count)?, passphrase)?;
+    let words = secret.words();
     let word_count = words.len();
-    seal_and_start(&state, mnemonic, password).await?;
+    let has_passphrase = secret.has_passphrase();
+    seal_and_start(&state, secret, password).await?;
     state.set_pending_backup(PendingBackup {
         checks: random_checks(word_count)?,
         words,
+        has_passphrase,
         failures: 0,
     });
     Ok(CreatedOut { word_count })
@@ -240,13 +255,19 @@ pub async fn vault_backup_show(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> AppResult<BackupChecks> {
-    let words = state.with_pending_backup(|p| {
+    let (words, has_passphrase) = state.with_pending_backup(|p| {
         Ok(p.as_ref()
-            .map(|p| Zeroizing::new(p.words.to_vec()))
+            .map(|p| (Zeroizing::new(p.words.to_vec()), p.has_passphrase))
             .unwrap_or_default())
     })?;
     let n = words.len();
-    show_words(&app, words).await?;
+    // Just typed twice: the window only reminds that it exists.
+    let passphrase = if has_passphrase {
+        crate::phrase_window::Passphrase::Reminder
+    } else {
+        crate::phrase_window::Passphrase::None
+    };
+    show_words(&app, words, passphrase).await?;
     let checks = random_checks(n)?;
     state.with_pending_backup(|p| {
         if let Some(p) = p.as_mut() {
@@ -308,11 +329,12 @@ pub async fn vault_import(
     password: String,
     phrase: String,
     xmr_restore: Option<crate::xmr_backend::RestoreFrom>,
+    passphrase: Option<String>,
 ) -> AppResult<()> {
     let password = Zeroizing::new(password);
     let phrase = Zeroizing::new(phrase);
-    let mnemonic = Mnemonic::parse(&phrase)?;
-    seal_and_start(&state, mnemonic, password).await?;
+    let secret = wallet_secret(Mnemonic::parse(&phrase)?, passphrase)?;
+    seal_and_start(&state, secret, password).await?;
     // Restored phrase: Monero scans from Kyro's first release (or the older date chosen),
     // never just from today, so funds received before this install are found.
     crate::xmr_backend::save_restore_from(
@@ -328,12 +350,12 @@ pub async fn vault_unlock(
     password: String,
 ) -> AppResult<()> {
     let epoch = state.wallet_epoch();
-    let m = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    let secret = secret_from_password(&state, Zeroizing::new(password)).await?;
     let (seed, cardano, polkadot) = blocking(move || {
         Ok((
-            m.to_seed(""),
-            wallet_core::CardanoRoot::from_mnemonic(&m, ""),
-            wallet_core::PolkadotRoot::from_mnemonic(&m, "")?,
+            secret.seed(),
+            secret.cardano_root(),
+            secret.polkadot_root()?,
         ))
     })
     .await?;
@@ -347,7 +369,7 @@ pub fn vault_lock(state: State<'_, AppState>) {
     state.lock_session();
 }
 
-/// New password for the wallet in use: same phrase, same KDF, same strength rule. The vault is
+/// New password for the wallet in use: same phrase and passphrase, same KDF, same strength rule. The vault is
 /// re-encrypted to a new file, checked, then swapped in atomically (`wallets::rewrite_vault`). The
 /// session ends after: nothing derived under the old password stays, and the next unlock proves
 /// the new one.
@@ -375,12 +397,10 @@ pub async fn vault_change_password(
     }
     // Held to the end: no switch, no second change, no new vault meanwhile.
     let _creating = state.vault_create_lock.lock().await;
-    let mnemonic = mnemonic_from_password(&state, current).await?;
+    let secret = secret_from_password(&state, current).await?;
     let path = state.active_vault_path();
-    blocking(move || {
-        crate::wallets::rewrite_vault(&path, &mnemonic, &next, KdfParams::production())
-    })
-    .await?;
+    blocking(move || crate::wallets::rewrite_vault(&path, &secret, &next, KdfParams::production()))
+        .await?;
     state.end_session_after_password_change();
     Ok(())
 }
@@ -397,7 +417,7 @@ pub async fn vault_reveal_mnemonic(
         return Err(AppError::Locked);
     }
     state.check_reveal_cooldown()?;
-    let mnemonic = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    let secret = secret_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
     confirm_native_with(
         &app,
@@ -410,7 +430,12 @@ pub async fn vault_reveal_mnemonic(
         lang.cancel(),
     )
     .await?;
-    show_words(&app, mnemonic.words()).await?;
+    let passphrase = if secret.has_passphrase() {
+        crate::phrase_window::Passphrase::Shown(secret.passphrase())
+    } else {
+        crate::phrase_window::Passphrase::None
+    };
+    show_words(&app, secret.words(), passphrase).await?;
     state.touch();
     Ok(())
 }
@@ -1713,7 +1738,11 @@ mod tests {
     #[test]
     fn phrase_texts_in_english() {
         let words: Vec<String> = (1..=12).map(|i| format!("word{i}")).collect();
-        let v = crate::phrase_window::recovery_view(Lang::En, &words);
+        let v = crate::phrase_window::recovery_view(
+            Lang::En,
+            &words,
+            crate::phrase_window::Passphrase::None,
+        );
         assert_eq!(
             v.lead,
             "Write these words on paper, in order. Anyone with them can take your funds."
@@ -1751,7 +1780,11 @@ mod tests {
         let words: Vec<String> = (1..=12).map(|i| format!("mot{i}")).collect();
         let t = crate::phrase_window::render(
             Lang::Fr,
-            &crate::phrase_window::recovery_view(Lang::Fr, &words),
+            &crate::phrase_window::recovery_view(
+                Lang::Fr,
+                &words,
+                crate::phrase_window::Passphrase::None,
+            ),
         );
         assert!(t.contains("<span class=\"n\">1</span><span class=\"w\">mot1</span>"));
         assert!(t.contains("<span class=\"n\">12</span><span class=\"w\">mot12</span>"));
@@ -1759,6 +1792,7 @@ mod tests {
         let c = random_checks(12).unwrap();
         assert!(c[0] < c[1] && c[1] < c[2] && c[2] < 12);
         let p = PendingBackup {
+            has_passphrase: false,
             words: Zeroizing::new(words),
             checks: [0, 5, 11],
             failures: 0,

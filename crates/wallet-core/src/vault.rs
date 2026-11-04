@@ -1,4 +1,6 @@
-//! Encrypted vault holding the recovery phrase.
+//! Encrypted vault holding the recovery phrase and, for the wallets that have one, its BIP39
+//! passphrase. The file format is the same for both: only the encrypted content differs, and a
+//! wallet without passphrase holds exactly what it always held, the phrase alone.
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::engine::general_purpose::STANDARD as B64;
@@ -9,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
-use crate::mnemonic::Mnemonic;
+use crate::mnemonic::{Mnemonic, WalletSecret};
 
 /// Current (and only supported) vault format version.
 pub const VAULT_VERSION: u8 = 1;
@@ -19,6 +21,11 @@ const NONCE_LEN: usize = 24;
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
 const AAD_DOMAIN: &[u8] = b"kyro-vault";
+/// First byte of a content with a passphrase: `0x01`, phrase, `0x00`, passphrase. A phrase never
+/// starts with it, so a Kyro from before passphrases refuses the vault instead of opening it as
+/// another wallet. The content is authenticated: this marker cannot be added or removed.
+const WITH_PASSPHRASE: u8 = 0x01;
+const PASSPHRASE_SEPARATOR: u8 = 0x00;
 
 // Floor: below this, a stolen vault file is cheap to brute-force (OWASP's Argon2id minimum is
 // 19 MiB / 2 passes; Kyro asks for more).
@@ -176,19 +183,49 @@ fn b64_fixed<const N: usize>(field: &str, s: &str) -> Result<[u8; N]> {
         .map_err(|_| Error::InvalidVault(format!("{field} must be {N} bytes")))
 }
 
-/// Encrypts the recovery phrase under `password`.
-pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<VaultFile> {
-    seal_with(mnemonic, password, kdf, kdf.argon2()?)
+fn content(secret: &WalletSecret) -> Zeroizing<Vec<u8>> {
+    let phrase = secret.phrase();
+    if !secret.has_passphrase() {
+        return Zeroizing::new(phrase.as_bytes().to_vec());
+    }
+    let passphrase = secret.passphrase().as_bytes();
+    let mut out = Zeroizing::new(Vec::with_capacity(phrase.len() + passphrase.len() + 2));
+    out.push(WITH_PASSPHRASE);
+    out.extend_from_slice(phrase.as_bytes());
+    out.push(PASSPHRASE_SEPARATOR);
+    out.extend_from_slice(passphrase);
+    out
 }
 
-fn seal_with(
-    mnemonic: &Mnemonic,
-    password: &str,
-    kdf: KdfParams,
-    argon2: Argon2<'static>,
-) -> Result<VaultFile> {
+fn parse_content(content: &[u8]) -> Result<WalletSecret> {
+    let text = |bytes| {
+        core::str::from_utf8(bytes)
+            .map_err(|_| Error::InvalidVault("decrypted payload is not UTF-8".into()))
+    };
+    let Some(rest) = content.strip_prefix(&[WITH_PASSPHRASE]) else {
+        return Ok(WalletSecret::plain(Mnemonic::parse(text(content)?)?));
+    };
+    let at = rest
+        .iter()
+        .position(|b| *b == PASSPHRASE_SEPARATOR)
+        .ok_or_else(|| Error::InvalidVault("malformed payload".into()))?;
+    let passphrase = Zeroizing::new(text(&rest[at + 1..])?.to_owned());
+    if passphrase.is_empty() {
+        return Err(Error::InvalidVault("malformed payload".into()));
+    }
+    WalletSecret::new(Mnemonic::parse(text(&rest[..at])?)?, passphrase)
+        .map_err(|_| Error::InvalidVault("malformed payload".into()))
+}
+
+/// Encrypts a recovery phrase without passphrase under `password`.
+pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<VaultFile> {
     let phrase = mnemonic.phrase();
-    seal_payload(AAD_DOMAIN, phrase.as_bytes(), password, kdf, argon2)
+    seal_payload(AAD_DOMAIN, phrase.as_bytes(), password, kdf, kdf.argon2()?)
+}
+
+/// Encrypts a phrase and its passphrase, if any, under `password`.
+pub fn seal_secret(secret: &WalletSecret, password: &str, kdf: KdfParams) -> Result<VaultFile> {
+    seal_payload(AAD_DOMAIN, &content(secret), password, kdf, kdf.argon2()?)
 }
 
 /// Encrypts `data` under `password` (another format than the vault's: see [`seal_data`]).
@@ -226,12 +263,10 @@ fn seal_payload(
     })
 }
 
-/// Decrypts a vault.
-pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
-    let plaintext = open_payload(AAD_DOMAIN, file, password)?;
-    let phrase = core::str::from_utf8(&plaintext)
-        .map_err(|_| Error::InvalidVault("decrypted payload is not UTF-8".into()))?;
-    Mnemonic::parse(phrase)
+/// Decrypts a vault. Keys come from the result as a whole ([`WalletSecret::seed`]…): there is no
+/// way to get a seed that leaves the passphrase out.
+pub fn open(file: &VaultFile, password: &str) -> Result<WalletSecret> {
+    parse_content(&open_payload(AAD_DOMAIN, file, password)?)
 }
 
 /// Encrypts `data` exactly as the vault encrypts the phrase (same KDF, cipher, floor and ceiling).
@@ -293,7 +328,36 @@ mod tests {
 
     fn weak_vault(kdf: KdfParams) -> VaultFile {
         let m = Mnemonic::parse(ABANDON).unwrap();
-        seal_with(&m, "pw", kdf, kdf.argon2_unchecked().unwrap()).unwrap()
+        let phrase = m.phrase();
+        let argon2 = kdf.argon2_unchecked().unwrap();
+        seal_payload(AAD_DOMAIN, phrase.as_bytes(), "pw", kdf, argon2).unwrap()
+    }
+
+    #[test]
+    fn a_plain_wallet_seals_the_phrase_and_nothing_else() {
+        let secret = WalletSecret::plain(Mnemonic::parse(ABANDON).unwrap());
+        assert_eq!(&content(&secret)[..], ABANDON.as_bytes());
+        let file = seal_secret(&secret, "pw", KdfParams::minimum()).unwrap();
+        let plain = open_payload(AAD_DOMAIN, &file, "pw").unwrap();
+        assert_eq!(&plain[..], ABANDON.as_bytes());
+    }
+
+    #[test]
+    fn passphrase_content_round_trips_and_broken_content_is_refused() {
+        let m = Mnemonic::parse(ABANDON).unwrap();
+        let secret = WalletSecret::new(m, Zeroizing::new("a b".to_owned())).unwrap();
+        let bytes = content(&secret);
+        assert_eq!(bytes[0], WITH_PASSPHRASE);
+        assert_eq!(parse_content(&bytes).unwrap(), secret);
+        let framed = |tail: &[u8]| [&[WITH_PASSPHRASE], ABANDON.as_bytes(), tail].concat();
+        for bad in [
+            framed(b""),              // no separator
+            framed(b"\0"),            // empty passphrase
+            framed(b"\0line\nbreak"), // control character
+            framed(b"\0\xff"),        // not UTF-8
+        ] {
+            assert!(matches!(parse_content(&bad), Err(Error::InvalidVault(_))));
+        }
     }
 
     #[test]

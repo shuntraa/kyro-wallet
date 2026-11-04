@@ -27,7 +27,7 @@ fn roundtrip() {
     assert_eq!(B64.decode(&file.salt).unwrap().len(), 16);
     assert_eq!(B64.decode(&file.nonce).unwrap().len(), 24);
     let opened = open(&file, PW).unwrap();
-    assert!(opened == m);
+    assert!(!opened.has_passphrase());
     assert_eq!(opened.phrase(), m.phrase());
 }
 
@@ -158,6 +158,6 @@ fn secret_types_are_send_static() {
 fn production_params_roundtrip() {
     let m = Mnemonic::parse(ABANDON).unwrap();
     let f = seal(&m, PW, KdfParams::production()).unwrap();
-    assert!(open(&f, PW).unwrap() == m);
+    assert_eq!(open(&f, PW).unwrap().phrase(), m.phrase());
     assert_eq!(open(&f, "nope"), Err(Error::WrongPassword));
 }

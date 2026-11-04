@@ -13,7 +13,7 @@ use tauri::State;
 use zeroize::Zeroizing;
 
 use crate::accounts::clean_name;
-use wallet_core::{KdfParams, Mnemonic, VaultFile};
+use wallet_core::{KdfParams, VaultFile, WalletSecret};
 
 use crate::commands::blocking;
 use crate::error::{AppError, AppResult};
@@ -139,19 +139,18 @@ impl WalletList {
     }
 }
 
-/// Encrypts `mnemonic` under `password` with `kdf` and swaps the vault at `path`, once the new file
-/// read back from the disk opens to the same words.
+/// Encrypts `secret` under `password` with `kdf` and swaps the vault at `path`, once the new file
+/// read back from the disk opens to the same phrase and passphrase.
 pub fn rewrite_vault(
     path: &Path,
-    mnemonic: &Mnemonic,
+    secret: &WalletSecret,
     password: &str,
     kdf: KdfParams,
 ) -> AppResult<()> {
-    let sealed = serde_json::to_vec(&wallet_core::seal(mnemonic, password, kdf)?)?;
-    let want = mnemonic.words();
+    let sealed = serde_json::to_vec(&wallet_core::seal_secret(secret, password, kdf)?)?;
     crate::settings::replace_checked(path, &sealed, |written| {
         let file: VaultFile = serde_json::from_slice(written)?;
-        if wallet_core::open(&file, password)?.words() == want {
+        if wallet_core::open(&file, password)? == *secret {
             Ok(())
         } else {
             Err(AppError::Internal("the new vault does not match".into()))
@@ -299,7 +298,7 @@ pub async fn wallet_remove(
         ));
     }
     // The password of the wallet being removed, under its own attempt counter.
-    crate::commands::mnemonic_from_password(&state, password).await?;
+    crate::commands::secret_from_password(&state, password).await?;
     let _creating = state.vault_create_lock.lock().await;
     let vault = wallet_vault(&state.wallets_path, &id);
     state.activate_wallet(MAIN);
@@ -317,6 +316,7 @@ pub async fn wallet_remove(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wallet_core::Mnemonic;
 
     fn tmp(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("kyro-wallets-{tag}-{}", std::process::id()));
@@ -328,12 +328,12 @@ mod tests {
     const PHRASE: &str =
         "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
-    fn vault_at(tag: &str) -> (PathBuf, Mnemonic) {
+    fn vault_at(tag: &str) -> (PathBuf, WalletSecret) {
         let path = tmp(tag).with_file_name("coffre-testnet.kyrovault");
         let m = Mnemonic::parse(PHRASE).unwrap();
         let file = wallet_core::seal(&m, "old password", KdfParams::minimum()).unwrap();
         std::fs::write(&path, serde_json::to_vec(&file).unwrap()).unwrap();
-        (path, m)
+        (path, WalletSecret::plain(m))
     }
 
     fn opens(path: &Path, pw: &str) -> bool {
@@ -348,6 +348,24 @@ mod tests {
         assert!(opens(&path, "new password"));
         assert!(!opens(&path, "old password"));
         assert!(!path.with_extension("kyrovault.new").exists());
+    }
+
+    #[test]
+    fn a_new_password_keeps_the_passphrase() {
+        let path = tmp("pw-passphrase").with_file_name("coffre-testnet.kyrovault");
+        let secret = WalletSecret::new(
+            Mnemonic::parse(PHRASE).unwrap(),
+            Zeroizing::new("twenty-fifth word".to_owned()),
+        )
+        .unwrap();
+        let seed = secret.seed();
+        let file = wallet_core::seal_secret(&secret, "old password", KdfParams::minimum()).unwrap();
+        std::fs::write(&path, serde_json::to_vec(&file).unwrap()).unwrap();
+        rewrite_vault(&path, &secret, "new password", KdfParams::minimum()).unwrap();
+        let f: VaultFile = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let opened = wallet_core::open(&f, "new password").unwrap();
+        assert_eq!(opened, secret);
+        assert_eq!(opened.seed(), seed);
     }
 
     #[test]

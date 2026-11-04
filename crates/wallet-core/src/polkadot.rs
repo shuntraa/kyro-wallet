@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
-use crate::mnemonic::Mnemonic;
+use crate::mnemonic::{nfkd, Mnemonic};
 use crate::network::Network;
 
 const SIGNING_CTX: &[u8] = b"substrate";
@@ -180,7 +180,7 @@ impl PolkadotRoot {
     /// `substrate-bip39`: PBKDF2-HMAC-SHA512(entropy, "mnemonic" ‖ passphrase, 2048)[..32].
     pub fn from_mnemonic(mnemonic: &Mnemonic, passphrase: &str) -> Result<PolkadotRoot> {
         let entropy = mnemonic.entropy();
-        substrate_bip39::mini_secret_from_entropy(&entropy, passphrase)
+        substrate_bip39::mini_secret_from_entropy(&entropy, &nfkd(passphrase))
             .map(PolkadotRoot)
             .map_err(|_| Error::crypto("substrate-bip39 derivation failed"))
     }

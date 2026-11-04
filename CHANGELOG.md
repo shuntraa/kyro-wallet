@@ -4,6 +4,7 @@
 
 - Dust protection: tiny coins from strangers on an address already in use stay out of your sends, on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash. Send shows them as Set aside, with a box to include them. Your balance does not change.
 - History marks tiny EVM transfers worth under 1 as a possible scam, next to zero transfers.
+- Recovery phrase passphrase, the 25th word: optional when you create or import a wallet (Advanced). It follows BIP39, on every chain. Unlocking still takes only your password. If you forget it, these funds are lost. Nobody can recover it.
 - Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
   settings to one encrypted file, with a password you choose. Import shows what would change
   first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.

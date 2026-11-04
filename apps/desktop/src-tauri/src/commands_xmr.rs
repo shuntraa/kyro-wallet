@@ -10,8 +10,7 @@ use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{
-    blocking, confirm_native, confirm_native_with, format_units_in, mnemonic_from_password,
-    seed_from_password,
+    blocking, confirm_native, confirm_native_with, format_units_in, seed_from_password,
 };
 use crate::error::{AppError, AppResult};
 use crate::i18n::Lang;
@@ -506,6 +505,7 @@ pub(crate) fn seed_view<'a>(
             .into(),
     });
     crate::phrase_window::PhraseView {
+        passphrase: crate::phrase_window::Passphrase::None,
         title: lang.pick("Phrase Monero (25 mots)", "Monero phrase (25 words)"),
         lead: lang.pick(
             "Écris ces mots sur papier, dans l’ordre. Quiconque les possède peut prendre tes XMR.",
@@ -530,7 +530,7 @@ pub async fn xmr_seed_show(
     }
     let a = account_arg(account)?;
     state.check_reveal_cooldown()?;
-    let mnemonic = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
     confirm_native_with(
         &app,
@@ -553,8 +553,7 @@ pub async fn xmr_seed_show(
     let restore = xmr_backend::load(&state, a)
         .ok()
         .and_then(|c| c.restore_height);
-    let words =
-        blocking(move || Ok(wallet_core::xmr_seed_words(&mnemonic.to_seed(""), a)?)).await?;
+    let words = blocking(move || Ok(wallet_core::xmr_seed_words(&seed, a)?)).await?;
     let path = wallet_core::xmr_path(a);
     let _open = app.state::<AppState>().dialogs.enter();
     crate::phrase_window::show(&app, seed_view(lang, &words, &path, restore)).await?;

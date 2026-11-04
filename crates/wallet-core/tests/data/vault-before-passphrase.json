@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kdf": {
+    "m_cost_kib": 65536,
+    "t_cost": 2,
+    "p_cost": 1
+  },
+  "salt": "rPT4jCDMue66wTu0xH8FlA==",
+  "nonce": "9MTgSh9pbyFLtZpM5LLxYQWHOxRvkljY",
+  "ciphertext": "IPuDneHeyL4EexUMNpjWFQysAB/PxA3jWzb2JGgJwSeLHcRKDDseZgqTjIk15FKse8SVl6XOMl8kFRUQOm68I0rvYYCGxOTZc919pvPHd76rHnVOYK9d82fJ+4VRa52cu5xXfFppnb8UFzg9vA=="
+}

@@ -2422,7 +2422,7 @@ export const MAX_HW_ACCOUNT = 100;
 export interface Commands {
   vault_status: { args: undefined; ret: VaultStatus };
   /** The words are NOT returned: `vault_backup_show` displays them in a native dialog. */
-  vault_create: { args: { password: string; words: 12 | 24 }; ret: { wordCount: number } };
+  vault_create: { args: { password: string; words: 12 | 24; passphrase?: string }; ret: { wordCount: number } };
   /** Native dialog with the phrase of the vault just created (resolves when it is closed), then
    * the 0-based positions of the 3 words to type back. Only while that phrase is pending. */
   vault_backup_show: { args: undefined; ret: { checks: [number, number, number] } };
@@ -2430,7 +2430,7 @@ export interface Commands {
    * phrase is dropped (`attemptsLeft: 0`): show it again from Réglages › Sécurité. */
   vault_backup_verify: { args: { answers: string[] }; ret: { ok: boolean; attemptsLeft: number } };
   /** `xmrRestore`: where Monero's first scan starts (default `kyro`: Kyro's first release). */
-  vault_import: { args: { password: string; phrase: string; xmrRestore?: XmrRestoreFrom }; ret: void };
+  vault_import: { args: { password: string; phrase: string; xmrRestore?: XmrRestoreFrom; passphrase?: string }; ret: void };
   vault_unlock: { args: { password: string }; ret: void };
   vault_lock: { args: undefined; ret: void };
   /** Password, then a native confirmation, then the words in a native dialog. Returns nothing. */

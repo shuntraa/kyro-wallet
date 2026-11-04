@@ -163,7 +163,7 @@ pub use lightning::{
     ln_seal_state, LnInvoice, LnLockedCoin, LnRefund, LnSwapChecked, LnSwapTerms,
     LN_MIN_INVOICE_MARGIN_SECS,
 };
-pub use mnemonic::{Mnemonic, Seed, WordCount};
+pub use mnemonic::{Mnemonic, Seed, WalletSecret, WordCount, MAX_PASSPHRASE_CHARS};
 pub use monero::{
     monero_wallet, xmr_address, xmr_addresses, xmr_build, xmr_cache_open, xmr_cache_seal,
     xmr_key_images, xmr_parse_address, xmr_path, xmr_public_keys, xmr_rng, xmr_scanner,
@@ -271,7 +271,7 @@ pub use utxo::{
     DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
     LTC_DUST_RELAY_FEE_PER_KVB, LTC_MIN_RELAY_FEE_PER_KVB,
 };
-pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
+pub use vault::{open, seal, seal_secret, KdfParams, VaultFile, VAULT_VERSION};
 pub use watch::{
     sol_path, HwDeviceKind, WatchAddress, WatchAddressStore, WatchEvm, WatchKey, WatchOnlyAccount,
     WatchOnlyStore, WatchSol, EVM_NODE_PATH, MAX_HW_ACCOUNT, MAX_WATCH_ADDRESSES,
