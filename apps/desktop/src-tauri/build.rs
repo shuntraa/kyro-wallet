@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "vault_import",
     "vault_unlock",
     "vault_lock",
+    "vault_change_password",
     "vault_reveal_mnemonic",
     // Recovery phrase of a new vault: shown natively, checked in Rust (docs/IPC.md §2.1).
     "vault_backup_show",

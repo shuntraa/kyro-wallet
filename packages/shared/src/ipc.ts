@@ -2619,6 +2619,8 @@ export interface Commands {
   /** Forgets one pairing (`key`) or all (no key: Kyro's THP key too). Returns how many. The device keeps Kyro until it is reset. */
   hw_thp_forget: { args: { key?: string }; ret: number };
   hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
+  /** Locks on success: the next unlock takes the new password. */
+  vault_change_password: { args: { current: string; next: string }; ret: void };
   wallets_get: { args: undefined; ret: WalletsInfo };
   wallet_switch: { args: { id: string }; ret: WalletsInfo };
   wallet_new: { args: { name: string }; ret: void };

@@ -342,6 +342,27 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
+/// Replaces `path` with `bytes` only after `check` accepted what was read back from the disk. The
+/// old file stays whole until the final rename, which is atomic: a crash at any point leaves
+/// either the old file or the new one, never half of either. A leftover `.new` is never read.
+pub fn replace_checked(
+    path: &Path,
+    bytes: &[u8],
+    check: impl FnOnce(&[u8]) -> AppResult<()>,
+) -> AppResult<()> {
+    let tmp = sibling(path, "new");
+    let _ = fs::remove_file(&tmp);
+    write_private(&tmp, bytes, true)?;
+    let swapped = fs::read(&tmp)
+        .map_err(AppError::from)
+        .and_then(|written| check(&written))
+        .and_then(|()| fs::rename(&tmp, path).map_err(AppError::from));
+    if swapped.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    swapped
+}
+
 /// Creates `path` with `bytes`, refusing to replace an existing file (`AlreadyExists`), and never
 /// leaving a half-written file: written to a temp file first, then hard-linked into place (atomic,
 /// fails if the target exists).

@@ -16,6 +16,7 @@ import { ServersSection } from './settings/Servers';
 import { NetDiagnostics } from './settings/Diagnostics';
 import { Devices } from './settings/Devices';
 import { AccountsSection } from './settings/Accounts';
+import { ChangePassword } from './settings/ChangePassword';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronRight, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
@@ -311,9 +312,7 @@ function RevealPhrase() {
       <Button variant="dangerOutline" size="md" onClick={() => setOpen(true)}>
         {t('common.show')}
       </Button>
-      <Button variant="outline" size="md" disabled title={t('settings.changePasswordSoon')}>
-        {t('common.password')}
-      </Button>
+      <ChangePassword />
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} title={t('settings.recoveryPhrase')} className="w-[620px]">
         {!shown ? (
           <>

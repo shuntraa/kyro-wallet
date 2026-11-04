@@ -217,6 +217,18 @@ impl AppState {
         self.wallet_epoch.load(Ordering::SeqCst)
     }
 
+    /// The vault file of the wallet in use.
+    pub fn active_vault_path(&self) -> PathBuf {
+        lock(&self.active).path.clone()
+    }
+
+    /// The password just changed: every secret of the session goes, and an unlock still running
+    /// on the old password cannot open one. The next unlock proves the new password.
+    pub fn end_session_after_password_change(&self) {
+        self.lock_session();
+        self.wallet_epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
     /// Ends the session and points every vault operation at wallet `id`, with its own attempts.
     pub fn activate_wallet(&self, id: &str) {
         self.lock_session();
@@ -620,6 +632,62 @@ mod tests {
         assert!(!wallet_vault(&state.wallets_path, other).exists());
         assert!(!WalletList::load(&state.wallets_path).knows(other));
         assert!(state.cancel_new_wallet().is_err());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn changing_a_password_touches_only_the_wallet_in_use() {
+        let (state, dir) = with_two_wallets("password");
+        let main_bytes = fs::read(&state.vault_path).unwrap();
+        let m = Mnemonic::parse(PHRASE_2).unwrap();
+        let path = state.active_vault_path();
+        crate::wallets::rewrite_vault(&path, &m, "third password", KdfParams::minimum()).unwrap();
+        assert_eq!(phrase(&state, "third password").as_deref(), Some(PHRASE_2));
+        assert_eq!(phrase(&state, "second password"), None);
+        assert_eq!(fs::read(&state.vault_path).unwrap(), main_bytes);
+        state.activate_wallet(MAIN);
+        assert_eq!(phrase(&state, "first password").as_deref(), Some(PHRASE_1));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn after_a_password_change_the_session_is_gone_and_a_late_unlock_is_refused() {
+        let (state, dir) = with_two_wallets("relock");
+        let m = Mnemonic::parse(PHRASE_2).unwrap();
+        let keys = |m: &Mnemonic| {
+            (
+                m.to_seed(""),
+                CardanoRoot::from_mnemonic(m, ""),
+                PolkadotRoot::from_mnemonic(m, "").unwrap(),
+            )
+        };
+        let (s, c, p) = keys(&m);
+        state.start_session(s, c, p);
+        let late = state.wallet_epoch();
+        state.end_session_after_password_change();
+        assert!(!state.is_unlocked());
+        let (s, c, p) = keys(&m);
+        assert!(state.start_session_for(late, s, c, p).is_err());
+        assert!(!state.is_unlocked());
+        // Unlocking again, with the new password, opens a session.
+        let (s, c, p) = keys(&m);
+        state
+            .start_session_for(state.wallet_epoch(), s, c, p)
+            .unwrap();
+        assert!(state.is_unlocked());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_wrong_current_password_counts_as_an_attempt_and_changes_nothing() {
+        let (state, dir) = with_two_wallets("wrong");
+        let before = fs::read(state.active_vault_path()).unwrap();
+        let wrong = Zeroizing::new("not the password".to_owned());
+        let r =
+            tauri::async_runtime::block_on(crate::commands::mnemonic_from_password(&state, wrong));
+        assert!(r.is_err());
+        assert_ne!(*lock(&state.guard), Guard::default());
+        assert_eq!(fs::read(state.active_vault_path()).unwrap(), before);
         fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -64,6 +64,38 @@ describe('wallet flow', () => {
   });
 });
 
+describe('change password', () => {
+  const NEXT = 'a brand new password';
+
+  it('a wrong current password changes nothing', async () => {
+    await expect(call('vault_change_password', { current: 'not the password', next: NEXT })).rejects.toMatchObject({ code: 'WRONG_PASSWORD' });
+    expect((await call('vault_status')).unlocked).toBe(true);
+    await call('vault_lock');
+    await call('vault_unlock', { password: FIRST });
+  });
+
+  it('locks, then only the new password unlocks', async () => {
+    await call('vault_change_password', { current: FIRST, next: NEXT });
+    expect((await call('vault_status')).unlocked).toBe(false);
+    await expect(call('vault_unlock', { password: FIRST })).rejects.toMatchObject({ code: 'WRONG_PASSWORD' });
+    await call('vault_unlock', { password: NEXT });
+  });
+
+  it('keeps the rules of a new password', async () => {
+    await expect(call('vault_change_password', { current: FIRST, next: 'short' })).rejects.toThrow();
+    await expect(call('vault_change_password', { current: FIRST, next: FIRST })).rejects.toThrow();
+    expect((await call('vault_status')).unlocked).toBe(true);
+  });
+
+  it('applies to the wallet in use only', async () => {
+    await call('wallet_new', { name: 'Savings' });
+    await call('vault_import', { password: SECOND, phrase: PHRASE });
+    await call('vault_change_password', { current: SECOND, next: NEXT });
+    await call('wallet_switch', { id: 'main' });
+    await call('vault_unlock', { password: FIRST });
+  });
+});
+
 describe('local records', () => {
   const tx: LocalTx = { id: '0x1', network: 'testnet', chainKey: 'sepolia', assetId: 'eth', kind: 'transfer', direction: 'out', amount: '1', time: 1, status: 'pending' };
   const approval: ApprovalRecord = { network: 'testnet', chainId: 1, chainKey: 'sepolia', token: '0xa', tokenSymbol: 'T', tokenDecimals: 6, spender: '0xb', spenderLabel: 'B', amount: '1', unlimited: true, time: 1, txHash: '0x2' };

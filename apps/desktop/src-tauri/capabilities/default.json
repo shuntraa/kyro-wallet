@@ -17,6 +17,7 @@
     "allow-vault-import",
     "allow-vault-unlock",
     "allow-vault-lock",
+    "allow-vault-change-password",
     "allow-vault-reveal-mnemonic",
     "allow-vault-backup-show",
     "allow-vault-backup-verify",

@@ -13,6 +13,8 @@ use tauri::State;
 use zeroize::Zeroizing;
 
 use crate::accounts::clean_name;
+use wallet_core::{KdfParams, Mnemonic, VaultFile};
+
 use crate::commands::blocking;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -135,6 +137,26 @@ impl WalletList {
             .map(|w| w.name = name)
             .ok_or_else(|| AppError::InvalidInput("unknown wallet".into()))
     }
+}
+
+/// Encrypts `mnemonic` under `password` with `kdf` and swaps the vault at `path`, once the new file
+/// read back from the disk opens to the same words.
+pub fn rewrite_vault(
+    path: &Path,
+    mnemonic: &Mnemonic,
+    password: &str,
+    kdf: KdfParams,
+) -> AppResult<()> {
+    let sealed = serde_json::to_vec(&wallet_core::seal(mnemonic, password, kdf)?)?;
+    let want = mnemonic.words();
+    crate::settings::replace_checked(path, &sealed, |written| {
+        let file: VaultFile = serde_json::from_slice(written)?;
+        if wallet_core::open(&file, password)?.words() == want {
+            Ok(())
+        } else {
+            Err(AppError::Internal("the new vault does not match".into()))
+        }
+    })
 }
 
 /// A random id: file names only, not a secret.
@@ -301,6 +323,55 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("wallets-testnet.json")
+    }
+
+    const PHRASE: &str =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
+
+    fn vault_at(tag: &str) -> (PathBuf, Mnemonic) {
+        let path = tmp(tag).with_file_name("coffre-testnet.kyrovault");
+        let m = Mnemonic::parse(PHRASE).unwrap();
+        let file = wallet_core::seal(&m, "old password", KdfParams::minimum()).unwrap();
+        std::fs::write(&path, serde_json::to_vec(&file).unwrap()).unwrap();
+        (path, m)
+    }
+
+    fn opens(path: &Path, pw: &str) -> bool {
+        let f: VaultFile = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        wallet_core::open(&f, pw).is_ok_and(|m| m.words().join(" ") == PHRASE)
+    }
+
+    #[test]
+    fn the_new_password_opens_the_same_phrase_and_the_old_one_stops() {
+        let (path, m) = vault_at("pw-ok");
+        rewrite_vault(&path, &m, "new password", KdfParams::minimum()).unwrap();
+        assert!(opens(&path, "new password"));
+        assert!(!opens(&path, "old password"));
+        assert!(!path.with_extension("kyrovault.new").exists());
+    }
+
+    #[test]
+    fn a_new_file_that_fails_its_check_leaves_the_vault_untouched() {
+        let (path, _) = vault_at("pw-check");
+        let before = std::fs::read(&path).unwrap();
+        let refused = crate::settings::replace_checked(&path, b"anything", |_| {
+            Err(AppError::Internal("does not open".into()))
+        });
+        assert!(refused.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(!path.with_extension("kyrovault.new").exists());
+    }
+
+    #[test]
+    fn a_crash_before_the_swap_leaves_a_usable_vault_and_can_be_retried() {
+        let (path, m) = vault_at("pw-crash");
+        // What a crash leaves: a half-written new file next to the vault.
+        let leftover = path.with_extension("kyrovault.new");
+        std::fs::write(&leftover, b"{\"half").unwrap();
+        assert!(opens(&path, "old password"));
+        rewrite_vault(&path, &m, "new password", KdfParams::minimum()).unwrap();
+        assert!(opens(&path, "new password"));
+        assert!(!leftover.exists());
     }
 
     #[test]

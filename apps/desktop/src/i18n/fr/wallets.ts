@@ -23,4 +23,13 @@ export const wallets = {
   'wallets.removeTitle': 'Retirer {name} ?',
   'wallets.removeBody': 'Il quitte la liste. Le fichier chiffré reste sur cet appareil, mais Kyro ne l’ouvrira plus : garde ta phrase de récupération. Rien ne change sur le réseau.',
   'wallets.removePassword': 'Mot de passe de ce portefeuille',
+  'wallets.pwTitle': 'Changer le mot de passe',
+  'wallets.pwIntro': 'Ta phrase de récupération ne change pas. Kyro se verrouille ensuite : déverrouille avec le nouveau mot de passe.',
+  'wallets.pwIntroNamed': 'Pour {name} seulement. Sa phrase de récupération ne change pas. Kyro se verrouille ensuite : déverrouille avec le nouveau mot de passe.',
+  'wallets.pwCurrent': 'Mot de passe actuel',
+  'wallets.pwNew': 'Nouveau mot de passe',
+  'wallets.pwAgain': 'Nouveau mot de passe, encore',
+  'wallets.pwMismatch': 'Les deux mots de passe diffèrent.',
+  'wallets.pwSame': 'C’est déjà ton mot de passe.',
+  'wallets.pwSubmit': 'Changer le mot de passe',
 } as const;

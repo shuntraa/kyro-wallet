@@ -166,6 +166,7 @@ pub fn run() {
             commands::vault_import,
             commands::vault_unlock,
             commands::vault_lock,
+            commands::vault_change_password,
             commands::vault_reveal_mnemonic,
             commands::vault_backup_show,
             commands::vault_backup_verify,

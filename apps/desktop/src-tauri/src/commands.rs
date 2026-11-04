@@ -347,6 +347,44 @@ pub fn vault_lock(state: State<'_, AppState>) {
     state.lock_session();
 }
 
+/// New password for the wallet in use: same phrase, same KDF, same strength rule. The vault is
+/// re-encrypted to a new file, checked, then swapped in atomically (`wallets::rewrite_vault`). The
+/// session ends after: nothing derived under the old password stays, and the next unlock proves
+/// the new one.
+#[tauri::command]
+pub async fn vault_change_password(
+    state: State<'_, AppState>,
+    current: String,
+    next: String,
+) -> AppResult<()> {
+    let current = Zeroizing::new(current);
+    let next = Zeroizing::new(next);
+    if !state.is_unlocked() {
+        return Err(AppError::Locked);
+    }
+    if state.dialogs.any_open() {
+        return Err(AppError::InvalidInput(
+            "close the confirmation window first".into(),
+        ));
+    }
+    check_password_strength(&next)?;
+    if *current == *next {
+        return Err(AppError::InvalidInput(
+            "the new password is the same as the current one".into(),
+        ));
+    }
+    // Held to the end: no switch, no second change, no new vault meanwhile.
+    let _creating = state.vault_create_lock.lock().await;
+    let mnemonic = mnemonic_from_password(&state, current).await?;
+    let path = state.active_vault_path();
+    blocking(move || {
+        crate::wallets::rewrite_vault(&path, &mnemonic, &next, KdfParams::production())
+    })
+    .await?;
+    state.end_session_after_password_change();
+    Ok(())
+}
+
 /// Shows the recovery phrase again: password (rate-limited), then a native confirmation, then the
 /// words in the phrase window.
 #[tauri::command]

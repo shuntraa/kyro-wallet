@@ -30,6 +30,8 @@
   contract and the recipient, and the amount in raw units (Kyro's window names the token).
 - Ledger device check: real signatures, never broadcast, on TON, NEAR, XRP and Litecoin.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
+- Change password: Settings › Security, for the wallet in use. The new vault is checked before
+  it replaces the old one, then Kyro locks and asks for the new password.
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited
   approval, or an unknown or brand-new contract. It runs on your own RPC node and only warns:

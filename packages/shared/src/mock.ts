@@ -1055,6 +1055,14 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_thp_pairings: () => hw.thpPairings(),
     hw_thp_forget: (a) => hw.thpForget(a.key),
     hw_get_xpub: (a) => hw.getXpub(a),
+    vault_change_password: (a) => {
+      if (!unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
+      checkPassword(a.current);
+      const password = validPassword(a.next);
+      if (password === a.current) throw new IpcError('INVALID_INPUT', 'the new password is the same as the current one');
+      if (vault) vault = { ...vault, password };
+      unlocked = false;
+    },
     wallets_get: () => walletsInfo(),
     wallet_switch: (a) => {
       if (!walletEntries.some((w) => w.id === a.id)) throw new IpcError('INVALID_INPUT', 'unknown wallet');

@@ -24,4 +24,13 @@ export const wallets: Record<keyof typeof fr, string> = {
   'wallets.removeTitle': 'Remove {name}?',
   'wallets.removeBody': 'It leaves the list. The encrypted file stays on this device, but Kyro will not open it again: keep your recovery phrase. Nothing changes on the network.',
   'wallets.removePassword': 'Password of this wallet',
+  'wallets.pwTitle': 'Change password',
+  'wallets.pwIntro': 'Your recovery phrase stays the same. Kyro locks afterwards: unlock with the new password.',
+  'wallets.pwIntroNamed': 'For {name} only. Its recovery phrase stays the same. Kyro locks afterwards: unlock with the new password.',
+  'wallets.pwCurrent': 'Current password',
+  'wallets.pwNew': 'New password',
+  'wallets.pwAgain': 'New password again',
+  'wallets.pwMismatch': 'The two passwords differ.',
+  'wallets.pwSame': 'This is already your password.',
+  'wallets.pwSubmit': 'Change password',
 };

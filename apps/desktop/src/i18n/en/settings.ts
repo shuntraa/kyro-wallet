@@ -37,7 +37,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.recoveryPhrase': 'Recovery phrase',
   'settings.backupUnverified': 'Backup not verified',
   'settings.revealDesc': 'Password required.',
-  'settings.changePasswordSoon': 'Password change: coming soon',
   'settings.revealWarn': 'Make sure nobody can see your screen. Anyone with these words can take your funds.',
   'settings.revealHow': 'The words open in a separate window. If a window asks you to type them, it’s a scam.',
   'settings.revealButton': 'Show the phrase',

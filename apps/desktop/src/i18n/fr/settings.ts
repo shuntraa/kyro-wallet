@@ -40,7 +40,6 @@ export const settings = {
   'settings.recoveryPhrase': 'Phrase de récupération',
   'settings.backupUnverified': 'Sauvegarde non vérifiée',
   'settings.revealDesc': 'Mot de passe demandé.',
-  'settings.changePasswordSoon': 'Changement de mot de passe : bientôt',
   'settings.revealWarn': 'Vérifie que personne ne voit ton écran. Avec ces mots, n’importe qui peut prendre tes fonds.',
   'settings.revealHow': 'Les mots s’ouvrent dans une fenêtre à part. Si une fenêtre te demande de les taper, c’est une arnaque.',
   'settings.revealButton': 'Afficher la phrase',
