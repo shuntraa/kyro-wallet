@@ -147,11 +147,31 @@ const donate = () => html`
             </div>
           </details>`;
 
-/** Usage counters, filled by stats.js from the public `stats` branch; hidden if unavailable. */
-const usage = () => `<p class="usage" data-usage hidden>
-          <span data-usage-item="weekly_active" hidden><strong data-usage-n></strong> active wallets this week</span>
-          <span class="usage-total" data-usage-item="downloads_total" hidden><strong data-usage-n></strong> downloads in total</span>
-        </p>`;
+/** < 1000: exact. Then floored, one decimal under 10: 1.2k+, 12k+, 1.2M+, 7M+. */
+function compact(n) {
+  if (n < 1000) return String(n);
+  const unit = n < 1e6 ? 'k' : 'M';
+  const div = unit === 'k' ? 1e3 : 1e6;
+  // Integer arithmetic first: 2300 / 1000 * 10 would floor to 22.
+  const tenths = Math.floor((n * 10) / div);
+  return String(tenths < 100 ? tenths / 10 : Math.floor(n / div)) + unit + '+';
+}
+
+let usageStats = {};
+/** build.mjs hands over the counters before any page is rendered. */
+export const setUsageStats = (s) => {
+  usageStats = s || {};
+};
+
+/** Usage counters, baked in at build time so the site makes no outside request. Nothing shown without a value. */
+const usage = () => {
+  const item = (key, label, cls = '') => {
+    const v = usageStats[key];
+    return v > 0 ? `<span${cls}><strong data-roll>${compact(Math.floor(v))}</strong> ${label}</span>` : '';
+  };
+  const items = item('weekly_active', 'active wallets this week') + item('downloads_total', 'downloads in total', ' class="usage-total"');
+  return items ? `<p class="usage">${items}</p>` : '';
+};
 
 export function home(chains) {
   const n = chains.length;
@@ -344,7 +364,7 @@ export function home(chains) {
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js', '/stats.js', '/scenes.js'],
+    scripts: ['/download.js', '/copy.js', '/scenes.js'],
     ld: [
       {
         '@type': 'Organization',
@@ -794,7 +814,7 @@ pnpm build</code></pre>
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js', '/stats.js'],
+    scripts: ['/download.js', '/copy.js'],
     ld: [...webPage(path, 'Download Kyro Wallet', description, trail), appLd(chains)]
   };
 }
@@ -1108,11 +1128,11 @@ export function privacy() {
 
           <h2 id="network">Network requests</h2>
           <p>To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).</p>
-          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics. To show its usage counters it reads one public file from <code>raw.githubusercontent.com</code>, without cookies or referrer.</p>
+          <p>The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, and its usage counters are written into the pages when the site is built.</p>
 
           <h2 id="contact">Contact</h2>
           <p>Questions about privacy: open an issue on <a href="${REPO}/issues">GitHub</a>. Security issues: report them privately through <a href="${REPO}/security">GitHub security advisories</a>.</p>
-          <p>Last updated: 1 November 2026.</p>
+          <p>Last updated: 4 November 2026.</p>
         </div>
       </div>
     </section>`;

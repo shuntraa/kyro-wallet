@@ -8,6 +8,30 @@ import { SITE, VERSION, REPO, page, iconOf } from './layout.mjs';
 import * as P from './pages.mjs';
 import { feeBps } from './components.mjs';
 
+// Usage counters: read here, at build time, so visitors' browsers never contact anyone else. The last
+// good values stay in stats.json for builds without network; with neither, the pages show no numbers.
+const STATS_URL = 'https://raw.githubusercontent.com/shuntraa/kyro-wallet/stats/stats/stats.json';
+const STATS_FILE = new URL('./stats.json', import.meta.url);
+async function usageStats() {
+  const clean = (s) => {
+    const n = (v) => (typeof v === 'number' && isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    return { weekly_active: n(s?.weekly_active), downloads_total: n(s?.downloads_total) };
+  };
+  try {
+    const r = await fetch(STATS_URL, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const fresh = clean(await r.json());
+    if (fresh.weekly_active || fresh.downloads_total) {
+      writeFileSync(STATS_FILE, JSON.stringify(fresh, null, 2) + '\n');
+      return fresh;
+    }
+  } catch (e) {
+    console.warn(`usage stats: ${e.message}, using the last known values`);
+  }
+  return existsSync(STATS_FILE) ? clean(JSON.parse(readFileSync(STATS_FILE, 'utf8'))) : {};
+}
+P.setUsageStats(await usageStats());
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', 'public');
 const ICONS = resolve(HERE, '..', 'icons');

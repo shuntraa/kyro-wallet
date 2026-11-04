@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-:  active wallets this week :  downloads in total
+8:  active wallets this week84:  downloads in total
 
 ================================================================
 Features: send, swap, stake and hardware wallets | Kyro Wallet
@@ -261,7 +261,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-:  active wallets this week :  downloads in total
+8:  active wallets this week84:  downloads in total
 
 Recommended
 
@@ -671,13 +671,13 @@ Your recovery phrase and keys are encrypted with your password (Argon2id, then X
 
 To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in NETWORK.md, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).
 
-The website kyrowallet.com sets no cookies and uses no trackers or analytics. To show its usage counters it reads one public file from raw.githubusercontent.com, without cookies or referrer.
+The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, and its usage counters are written into the pages when the site is built.
 
 ## Contact
 
 Questions about privacy: open an issue on GitHub. Security issues: report them privately through GitHub security advisories.
 
-Last updated: 1 November 2026.
+Last updated: 4 November 2026.
 
 ================================================================
 Code signing policy | Kyro Wallet
