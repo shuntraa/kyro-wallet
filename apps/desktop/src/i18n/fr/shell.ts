@@ -10,6 +10,8 @@ export const shell = {
   'shell.earn': 'Gagner',
   'shell.searchMine': '{symbol} · mes actifs',
   'shell.searchRank': '{symbol} · rang {rank}',
+  'shell.searchContact': 'Contact · {address}',
+  'shell.searchHistory': 'Historique · {chain}',
   'shell.searchSendTo': 'Envoyer à {address}…',
   'shell.searchAddressHint': 'adresse',
   // Nav rail / title bar

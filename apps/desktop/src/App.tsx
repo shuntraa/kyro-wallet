@@ -2,8 +2,8 @@
 import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { MotionConfig, motion } from 'motion/react';
 import { coinSearch } from './lib/coinSearch';
-import { fmtNumber } from './lib/format';
-import { AppProvider, useApp, type Route } from './state/app';
+import { fmtNumber, shortAddress } from './lib/format';
+import { AppProvider, useApp, useVault, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
 import { NavRail } from './shell/NavRail';
@@ -20,7 +20,11 @@ import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
 import { useLongHistoryWarmup } from './state/charts';
 import { useAlerts } from './state/alerts';
-import { SettingsScreen } from './screens/Settings';
+import { cachedHistory } from './state/history';
+import { matchAny, MIN_QUERY } from './lib/search';
+import { getContacts } from './lib/storage';
+import { entryTitle } from './components/HistoryRow';
+import { SETTINGS_SECTIONS, SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
@@ -29,7 +33,7 @@ import { UpdateNotice } from './components/UpdateNotice';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { WatchOnlyScreen } from './components/WatchOnly';
 import { screenEnter } from './components/motion';
-import { t, useT } from './i18n';
+import { t, useT, type Key } from './i18n';
 
 const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
 const Earn = lazy(() => import('./screens/Earn').then((m) => ({ default: m.Earn })));
@@ -115,7 +119,8 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 }
 
 function Unlocked() {
-  const { route, navigate, hideBalances, activeWatch } = useApp();
+  const { route, navigate, hideBalances, activeWatch, network } = useApp();
+  const { accountSources, isMultiAccount } = useVault();
   const pf = usePortfolio();
   const { lang } = useT();
   useHistoryWarmup();
@@ -142,12 +147,22 @@ function Unlocked() {
           onSelect: () => navigate({ name: 'asset', id: c.id }),
         });
       }
+      for (const c of matchAny(q, getContacts(), (x) => [x.name, x.address])) {
+        out.push({ id: `contact:${c.id}`, label: c.name, hint: t('shell.searchContact', { address: shortAddress(c.address) }), onSelect: () => navigate({ name: 'send', to: c.address }) });
+      }
+      const entries = q.trim().length >= MIN_QUERY ? cachedHistory(network, accountSources, isMultiAccount)?.entries ?? [] : [];
+      for (const e of matchAny(q, entries, (x) => [entryTitle(x), x.counterparty, x.id])) {
+        out.push({ id: `tx:${e.id}`, label: entryTitle(e), hint: t('shell.searchHistory', { chain: e.chainLabel }), onSelect: () => navigate({ name: 'history' }) });
+      }
+      for (const s of matchAny(q, SETTINGS_SECTIONS, (x) => [(t as (k: Key) => string)(x.label)])) {
+        out.push({ id: `settings:${s.key}`, label: (t as (k: Key) => string)(s.label), hint: t('common.settings'), onSelect: () => navigate({ name: 'settings', section: s.key }) });
+      }
       if (/^(0x[0-9a-fA-F]{40}|(bc|tb)1[0-9a-z]{20,}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(q)) {
         out.unshift({ id: `send:${q}`, label: t('shell.searchSendTo', { address: q.slice(0, 10) }), hint: t('shell.searchAddressHint'), onSelect: () => navigate({ name: 'send', to: q }) });
       }
       return out;
     },
-    [pf.holdings, pf.markets, navigate, lang, hideBalances],
+    [pf.holdings, pf.markets, navigate, lang, hideBalances, network, accountSources, isMultiAccount],
   );
 
   const screen = useMemo(() => {

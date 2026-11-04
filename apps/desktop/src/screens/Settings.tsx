@@ -27,7 +27,7 @@ import { XmrWalletSection } from '../components/Monero';
 import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
 
-const SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
+export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
   { key: 'privacy', label: 'settings.sectionPrivacy' },
   { key: 'alerts', label: 'settings.sectionAlerts' },
@@ -65,7 +65,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
     <div className="flex min-h-0 flex-1">
       <nav aria-label={t('settings.sectionsNav')} className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
         <h1 className="screen-title px-2.5 pb-5">{t('common.settings')}</h1>
-        {SECTIONS.map((s) => (
+        {SETTINGS_SECTIONS.map((s) => (
           <button
             key={s.key}
             type="button"
