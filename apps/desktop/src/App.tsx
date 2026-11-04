@@ -19,6 +19,7 @@ import { Receive } from './screens/Receive';
 import { Swap } from './screens/Swap';
 import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
+import { useLongHistoryWarmup } from './state/charts';
 import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
@@ -117,6 +118,7 @@ function Unlocked() {
   const pf = usePortfolio();
   const { lang } = useT();
   useHistoryWarmup();
+  useLongHistoryWarmup();
 
   const assetName = useCallback(
     (id: string) => {

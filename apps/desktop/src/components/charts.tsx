@@ -16,6 +16,8 @@ export interface SmoothChartProps {
   /** Height in px; with `fit`, the maximum: the chart then fills its flex parent and follows it. */
   height: number;
   fit?: boolean;
+  /** When it changes, the curve fades in anew (a series extended to the left, not a new chart). */
+  revealKey?: string;
   renderTooltip?: (i: number) => { label: string; value: string };
   defaultPoint?: 'last' | 'max' | 'none';
   defaultLabel?: string;
@@ -26,7 +28,7 @@ export interface SmoothChartProps {
   stroke?: string;
 }
 
-export function SmoothChart({ values, height: maxH, fit = false, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF' }: SmoothChartProps) {
+export function SmoothChart({ values, height: maxH, fit = false, revealKey, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF' }: SmoothChartProps) {
   const gid = useId().replace(/:/g, '');
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -94,8 +96,10 @@ export function SmoothChart({ values, height: maxH, fit = false, renderTooltip, 
             <stop offset="1" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
         </defs>
-        {area && <path d={area} fill={`url(#g${gid})`} />}
-        {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />}
+        <g key={revealKey} className={revealKey === undefined ? undefined : 'fade-in'}>
+          {area && <path d={area} fill={`url(#g${gid})`} />}
+          {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />}
+        </g>
       </svg>
       {p && (
         <>

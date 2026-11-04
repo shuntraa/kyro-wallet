@@ -59,8 +59,11 @@ export function AssetDetail({ id }: { id: string }) {
   const values = points.map((p) => p[1]);
   const firstV = values[0];
   const lastV = values[values.length - 1];
-  const change = period === '1J' ? price?.change24h ?? null : firstV && lastV ? ((lastV - firstV) / firstV) * 100 : null;
-  const changeAbs = period === '1J' && price && price.change24h !== null ? price.price - price.price / (1 + price.change24h / 100) : firstV && lastV ? lastV - firstV : null;
+  // « All » has no change until its first point is the coin's start (1Y alone would say « since the start »).
+  const hasRange = !!firstV && !!lastV && !chart.partial;
+  const change = period === '1J' ? price?.change24h ?? null : hasRange ? ((lastV - firstV) / firstV) * 100 : null;
+  const changeAbs = period === '1J' && price && price.change24h !== null ? price.price - price.price / (1 + price.change24h / 100) : hasRange ? lastV - firstV : null;
+  const spanMs = (points[points.length - 1]?.[0] ?? 0) - (points[0]?.[0] ?? 0);
   const m30 = month.data;
   const change30 = m30 && m30.length > 1 ? (((m30[m30.length - 1]?.[1] ?? 0) - (m30[0]?.[1] ?? 0)) / (m30[0]?.[1] || 1)) * 100 : null;
 
@@ -170,6 +173,7 @@ export function AssetDetail({ id }: { id: string }) {
             {values.length > 1 ? (
               <SmoothChart
                 key={period}
+                revealKey={chart.partial ? 'partial' : 'full'}
                 values={values}
                 height={250}
                 fit
@@ -177,7 +181,7 @@ export function AssetDetail({ id }: { id: string }) {
                 defaultLabel={t('portfolio.highest')}
                 ariaLabel={t('portfolio.priceChartAria', { name })}
                 padTop={70}
-                renderTooltip={(i) => ({ label: fmtChartTime(points[i]?.[0] ?? Date.now()), value: fmtFiat(values[i] ?? 0, cur) })}
+                renderTooltip={(i) => ({ label: fmtChartTime(points[i]?.[0] ?? Date.now(), Date.now(), spanMs), value: fmtFiat(values[i] ?? 0, cur) })}
               />
             ) : chart.error ? (
               <ErrorLine className="pb-8" onRetry={chart.reload} error={chart.error}>

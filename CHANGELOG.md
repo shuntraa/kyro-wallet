@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7
+
+- Price charts: "All" really goes back years (Bitcoin: 2013), opens at once, with
+  the % from the first point and the year in the date.
+
 ## 1.0.6
 
 - Switching between Portfolio and Assets no longer slides the tab underline across the screen.

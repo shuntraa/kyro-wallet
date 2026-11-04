@@ -104,7 +104,7 @@ export function loadChart(currency: string, coinId: string, period: ChartPeriod)
   return decodeSeries(readJson<unknown>(key(cur, coinId, period), null));
 }
 
-function remove(k: string): void {
+export function remove(k: string): void {
   try {
     window.localStorage.removeItem(`kyro.${k}`);
   } catch {
@@ -126,6 +126,15 @@ export function saveChart(currency: string, coinId: string, period: ChartPeriod,
   const next = [id, ...list];
   for (const old of next.splice(CHART_MAX_COINS)) for (const p of PERIODS) remove(`cache.chart.${old}.${p}`);
   writeJson(INDEX, next);
+}
+
+/**
+ * « All » is built from the 1Y series and the long one (`longHistory.ts`) and no longer kept: the
+ * series saved under its name hold a single year, and would be shown as the whole history.
+ */
+export function dropSavedAll(): void {
+  const raw = readJson<unknown>(INDEX, []);
+  for (const id of Array.isArray(raw) ? raw : []) if (typeof id === 'string') remove(`cache.chart.${id}.Tout`);
 }
 
 /**

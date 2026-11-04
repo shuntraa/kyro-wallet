@@ -90,7 +90,7 @@ export function Portfolio() {
               defaultPoint="last"
               padBottom={10}
               ariaLabel={t('portfolio.chartAria', { period: periodLabel })}
-              renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now()), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
+              renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now(), Date.now(), (series[series.length - 1]?.[0] ?? 0) - (series[0]?.[0] ?? 0)), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
             />
           ) : null}
         </div>

@@ -709,6 +709,117 @@ fn live_smoke_activity_timing_tor() {
     });
 }
 
+/// The price history of the « All » chart over Tor: status, time, size, number of points and first
+/// date of every Kraken pair (`KRAKEN_PAIRS` in `packages/market`), then three rounds of Bitcoin.
+/// `KYRO_SMOKE_ONLY=<url part>` keeps the matching sources.
+///
+/// Measured 2026-11-04 for other keyless sources, refused: CoinGecko `days=max` (HTTP 401, 10012),
+/// CryptoCompare `histoday` (HTTP 401, key required), Bitstamp (HTTP 403/302 to Tor exits), Coinbase
+/// candles (a year per answer, 350 rows).
+///
+/// `cargo test -p kyro-desktop live_smoke_chart_history -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn live_smoke_chart_history() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-chart-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let only = std::env::var("KYRO_SMOKE_ONLY").unwrap_or_default();
+    const PAIRS: &[&str] = &[
+        "XBTUSD", "ETHUSD", "LTCUSD", "XDGUSD", "XRPUSD", "XMRUSD", "ZECUSD", "BCHUSD", "DASHUSD",
+        "XLMUSD", "ADAUSD", "DOTUSD", "SOLUSD", "TRXUSD", "ALGOUSD", "ATOMUSD", "AVAXUSD",
+        "NEARUSD", "LINKUSD", "UNIUSD", "XTZUSD", "ETCUSD", "USDTZUSD", "USDCUSD",
+    ];
+    const RECENT: &str =
+        "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365";
+    let kraken = |p: &str| format!("https://api.kraken.com/0/public/OHLC?pair={p}&interval=10080");
+    tauri::async_runtime::block_on(async {
+        state.net.tor.start();
+        for round in 1..=3 {
+            let pairs = if round == 1 { PAIRS } else { &PAIRS[..1] };
+            let urls = pairs.iter().map(|p| kraken(p)).chain([RECENT.to_owned()]);
+            for url in urls.filter(|u| only.is_empty() || u.contains(&only)) {
+                let t = Instant::now();
+                let req = FetchRequest {
+                    url: url.clone(),
+                    method: "GET".into(),
+                    headers: Default::default(),
+                    body: None,
+                };
+                let r = state
+                    .net
+                    .fetch(req, &state.settings(), &state.env_keys, state.network)
+                    .await;
+                let secs = t.elapsed().as_secs_f32();
+                let host = url.split(['?', '&']).nth(1).unwrap_or(&url);
+                match r {
+                    Err(x) => eprintln!("{round} {host:<28} {secs:>5.1}s ERR {x}"),
+                    Ok(r) => {
+                        let (n, first) = history_rows(&r.body);
+                        eprintln!(
+                            "{round} {host:<28} {secs:>5.1}s HTTP {} {:>8}B {n:>5} rows, first {first} | {}",
+                            r.status,
+                            r.body.len(),
+                            r.body.chars().take(if n > 0 { 0 } else { 140 }).collect::<String>()
+                        );
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// The longest array of rows in an answer (any shape above it) and its first time, as raw text.
+fn history_rows(body: &str) -> (usize, String) {
+    fn walk<'a>(v: &'a Value, best: &mut Option<&'a Vec<Value>>) {
+        match v {
+            Value::Array(a) => {
+                if a.len() > best.map_or(0, Vec::len) && a.iter().all(|x| !x.is_number()) {
+                    *best = Some(a);
+                }
+            }
+            Value::Object(o) => o.values().for_each(|x| walk(x, best)),
+            _ => {}
+        }
+    }
+    let Ok(v) = serde_json::from_str::<Value>(body) else {
+        return (0, "not JSON".into());
+    };
+    let mut best = None;
+    walk(&v, &mut best);
+    let Some(rows) = best else {
+        return (0, "-".into());
+    };
+    let time = |row: &Value| {
+        row.get(0)
+            .or_else(|| row.get("time"))
+            .or_else(|| row.get("timestamp"))
+            .and_then(|t| t.as_f64().or_else(|| t.as_str()?.parse().ok()))
+            .unwrap_or(0.0)
+    };
+    let oldest = rows.iter().map(time).fold(f64::INFINITY, f64::min);
+    let secs = if oldest > 1e11 {
+        oldest / 1000.0
+    } else {
+        oldest
+    };
+    let days = (secs / 86_400.0) as i64;
+    // Civil date from days since 1970 (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let (d, m) = (
+        doy - (153 * mp + 2) / 5 + 1,
+        if mp < 10 { mp + 3 } else { mp - 9 },
+    );
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    (rows.len(), format!("{y}-{m:02}-{d:02}"))
+}
+
 /// Exolix public API v2 over Tor, without a key: `GET /rate` (fixed, then float) and
 /// `POST /transactions` (XMR → BTC to a fresh, never-funded address; nothing is ever sent).
 #[test]

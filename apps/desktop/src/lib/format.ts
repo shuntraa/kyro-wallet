@@ -218,9 +218,17 @@ export function fmtMonth(ms: number): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Chart tooltip label: "Aujourd’hui, 14:00", "27 oct., 09:10" — "Today, 2:00 PM", "Oct 27, 9:10 AM". */
-export function fmtChartTime(ms: number, now = Date.now()): string {
+/** From this chart range on, a point is named by its date with the year. */
+const CHART_YEAR_SPAN_MS = 300 * 86_400_000;
+
+/**
+ * Chart tooltip label: "Aujourd’hui, 14:00", "27 oct., 09:10" — "Today, 2:00 PM", "Oct 27, 9:10 AM";
+ * "Nov 11, 2014" when the chart's range (`spanMs`) covers a year or more.
+ */
+export function fmtChartTime(ms: number, now = Date.now(), spanMs = 0): string {
   const d = new Date(ms);
+  // Over a range of a year or more the year says which point it is, and the hour means nothing.
+  if (spanMs >= CHART_YEAR_SPAN_MS) return df({ day: 'numeric', month: 'short', year: 'numeric' }).format(d);
   const time = df({ hour: 'numeric', minute: '2-digit' }).format(d);
   if (sameDay(d, new Date(now))) return `${t('time.today')}, ${time}`;
   if (sameDay(d, new Date(now - 86_400_000))) return `${t('time.yesterday')}, ${time}`;
