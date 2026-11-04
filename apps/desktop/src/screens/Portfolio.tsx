@@ -7,6 +7,7 @@ import { fmtChartTime, fmtFiat, fmtPct } from '../lib/format';
 import { BigFiat, HIDDEN, TrendPill } from '../components/kit';
 import { AllocationBar, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
+import { GainsCard } from '../components/Gains';
 import { VaultCard } from '../components/VaultCard';
 import { Button, Segmented } from '../components/ui/primitives';
 import { useOnTorReady } from '../state/tor';
@@ -120,6 +121,7 @@ export function Portfolio() {
               ))}
             </div>
           </section>
+          <GainsCard />
           <VaultCard />
         </div>
       </div>

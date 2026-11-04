@@ -2,6 +2,9 @@
 
 ## 1.0.7
 
+- Gains and losses: average cost and unrealized gain per coin and in total, on the Portfolio and
+  on each asset page, computed on your device. Where a price or an origin is unknown Kyro shows
+  « — » or says the figure is partial.
 - Alerts: price alerts per coin (above or below a level) and "funds received", as system
   notifications. Set them in Settings › Alerts. They work while Kyro is open and unlocked, from
   data it already loads; nothing leaves your device.

@@ -41,6 +41,7 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Several wallets** on one device, each with its own recovery phrase, password, accounts and history.
 - **Watch addresses**: follow any public address or xpub with no key: balance, tokens and history, nothing signable.
 - **Local alerts**: price levels and funds received, as system notifications, computed on your device.
+- **Gains and losses**: average cost and unrealized gain per coin and in total, computed on your device. Where a price or an origin is unknown, Kyro shows « — » or says the figure is partial.
 - **Fee choice, speed up and cancel**: Slow, Normal or Fast on Send, and a stuck Bitcoin, Litecoin or EVM send can be sped up or cancelled from History.
 - **Automatic signed updates**, downloaded silently over Tor, signature-checked, applied at the next start.
 - **Tor by default.** If Tor is unavailable, Kyro stops instead of silently connecting in the clear.

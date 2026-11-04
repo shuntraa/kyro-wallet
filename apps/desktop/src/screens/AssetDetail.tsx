@@ -5,6 +5,7 @@ import { canSwapFrom } from '../lib/crossSwap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { coinPeriods, useCoinChart, type Period } from '../state/charts';
+import { useGains } from '../state/gains';
 import { useHistory } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
@@ -15,6 +16,7 @@ import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
+import { AssetGains } from '../components/Gains';
 import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
@@ -50,6 +52,7 @@ export function AssetDetail({ id }: { id: string }) {
   useOnTorReady(chart.reload);
   const month = useCoinChart(coinId, '1M');
   const history = useHistory();
+  const gains = useGains();
 
   const name = supported?.name ?? coin?.name ?? coinId;
   const symbol = supported?.symbol ?? coin?.symbol ?? '';
@@ -207,6 +210,7 @@ export function AssetDetail({ id }: { id: string }) {
               <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
                 <div className="h-full origin-left rounded-full bg-ice transition-[width] duration-500" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
               </div>
+              <AssetGains gains={gains.byAsset.get(supported.id)} symbol={supported.symbol} />
               {accountRows.length > 1 && (
                 <div className="mt-2 flex flex-col">
                   <span className="eyebrow pb-2">{t('portfolio.perAccount')}</span>

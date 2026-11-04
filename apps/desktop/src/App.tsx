@@ -19,6 +19,7 @@ import { Swap } from './screens/Swap';
 import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
 import { useLongHistoryWarmup } from './state/charts';
+import { useGainsWarmup } from './state/gains';
 import { useAlerts } from './state/alerts';
 import { cachedHistory } from './state/history';
 import { matchAny, MIN_QUERY } from './lib/search';
@@ -125,6 +126,7 @@ function Unlocked() {
   const { lang } = useT();
   useHistoryWarmup();
   useLongHistoryWarmup();
+  useGainsWarmup();
   useAlerts();
 
   const assetName = useCallback(

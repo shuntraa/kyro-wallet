@@ -111,4 +111,10 @@ export const portfolio = {
   'portfolio.dotNoHistoryTitle': 'Historique non disponible',
   'portfolio.dotNoHistory': 'L’indexeur Statescan ne répond pas ou a répondu dans un format inattendu : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil. Il réessaie à chaque actualisation.',
   'portfolio.dotNoHistoryTestnet': 'Pas d’historique sur Westend (Statescan n’indexe que Polkadot) : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.',
+  'portfolio.gains': 'Gains et pertes',
+  'portfolio.gainsAverage': 'Coût moyen de 1 {symbol}',
+  'portfolio.gainsPartialTag': 'partiel',
+  'portfolio.gainsPartial': 'Chiffre partiel : il couvre {pct} de ce solde. Le prix ou l’origine du reste est inconnu.',
+  'portfolio.gainsPartialTotal': 'Chiffre partiel : il couvre {pct} de ta valeur. Le prix ou l’origine du reste est inconnu.',
+  'portfolio.gainsNone': 'Prix du jour ou origine inconnus : pas de chiffre.',
 } as const;

@@ -107,4 +107,10 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.dotNoHistoryTitle': 'History not available',
   'portfolio.dotNoHistory': 'The Statescan indexer is not answering, or answered in an unexpected format: Kyro shows your balance, and only the sends made from this device. It tries again on every refresh.',
   'portfolio.dotNoHistoryTestnet': 'No history on Westend (Statescan only indexes Polkadot): Kyro shows your balance, and only the sends made from this device.',
+  'portfolio.gains': 'Gains and losses',
+  'portfolio.gainsAverage': 'Average cost of 1 {symbol}',
+  'portfolio.gainsPartialTag': 'partial',
+  'portfolio.gainsPartial': 'Partial figure: it covers {pct} of this balance. The price or origin of the rest is unknown.',
+  'portfolio.gainsPartialTotal': 'Partial figure: it covers {pct} of your value. The price or origin of the rest is unknown.',
+  'portfolio.gainsNone': 'Day price or origin unknown: no figure.',
 };
