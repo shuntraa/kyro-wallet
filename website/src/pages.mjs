@@ -89,7 +89,7 @@ function appLd(chains) {
     featureList: [
       `Send and receive on ${chains.length} blockchains`,
       'Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs',
-      'Earn: staking on Solana, Cardano, TRON and NEAR, Lido and Aave',
+      'Earn: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, Lido and Aave',
       'Ledger and Trezor hardware wallets',
       'Built-in Tor, no personal data collected',
       'Transactions decoded and confirmed in a system window'
@@ -322,11 +322,11 @@ export function home(chains) {
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
           <h2 id="earn-title">Earn <em>without an account</em></h2>
-          <p data-reveal>Lido, Aave, Solana, Cardano, TRON and NEAR in one list. No sign-up, and your keys stay with you.</p>
+          <p data-reveal>Lido, Aave, Solana, Cardano, TRON, NEAR, Sui and Aptos in one list. No sign-up, and your keys stay with you.</p>
         </div>
         <div class="earn-wrap" data-reveal data-rows>${earnCard()}</div>
-        <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.</p>
-        <p class="center"><a class="more" href="/earn/">All 14 options and their risks</a></p>
+        <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. From a hardware wallet: Lido, Aave, and staking on Solana, Cardano and NEAR.</p>
+        <p class="center"><a class="more" href="/earn/">All 16 options and their risks</a></p>
       </div>
     </section>
 
@@ -502,14 +502,14 @@ export function features(chains) {
             <li>The provider’s transaction is decoded and checked: recipient, minimum amount and fee.</li>
           </ul>
           <p><a href="/swap/">Routes and limits</a></p>`, swapWidget())}
-    ${row('f-stake', 'Earn', '14 ways <em>to earn</em>', false, html`
+    ${row('f-stake', 'Earn', '16 ways <em>to earn</em>', false, html`
           <p>Stake, liquid-stake or lend from your own accounts, in one list. Rates are estimates, never guaranteed.</p>
           <ul class="checks">
-            <li><b>Staking:</b> SOL, ADA, TRX and NEAR. A validator, pool or Super Representative cannot spend your coins.</li>
+            <li><b>Staking:</b> SOL, ADA, TRX, NEAR, SUI and APT. A validator, pool or Super Representative cannot spend your coins.</li>
             <li><b>Liquid staking:</b> ETH with Lido, with unstaking through Lido’s queue.</li>
             <li><b>Lending:</b> Aave v3 on Ethereum, Arbitrum, Polygon and Base.</li>
           </ul>
-          <p class="small mute">Contract bugs, depegs and lower rewards are real risks. Staking needs a recovery-phrase account; with a hardware wallet, Earn covers Lido and Aave. <a href="/earn/">Options and risks</a></p>`, earnCard(['sol', 'ada', 'trx']))}
+          <p class="small mute">Contract bugs, depegs and lower rewards are real risks. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account. <a href="/earn/">Options and risks</a></p>`, earnCard(['sol', 'ada', 'trx']))}
     ${row('f-tor', 'Tor', 'Tor, <em>on from the start</em>', true, html`
           <p>Every request leaves through a built-in Tor client, with separate circuits per blockchain family. If Tor is down, Kyro stops.</p>
           <p><a href="/tor/">What each party sees</a></p>`, circuits())}
@@ -963,9 +963,9 @@ const FAQ = [
     title: 'Swaps and staking',
     items: [
       { q: 'Can I swap Monero in Kyro?', a: () => `<p>Yes, both ways, through Exolix. Kyro’s fee is a second ordinary transfer of the coin you sell. <a href="/guides/swap-to-monero/">Swap to Monero</a>.</p>` },
-      { q: 'Can I earn from a hardware wallet?', a: () => `<p>Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. <a href="/earn/">Options and risks</a>.</p>` },
+      { q: 'Can I earn from a hardware wallet?', a: () => `<p>Lido and Aave work from Ledger and Trezor accounts. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account. <a href="/earn/">Options and risks</a>.</p>` },
       { home: true, q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers charge their own costs as well: NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote you see already includes everything. <a href="/fees/">Full fee table</a>.</p>` },
-      { home: true, q: 'Can I stake with Kyro?', a: () => `<p>Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p>` }
+      { home: true, q: 'Can I stake with Kyro?', a: () => `<p>Yes. Earn lists 16 options: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p>` }
     ]
   },
   {
@@ -1084,7 +1084,7 @@ export function chainsIndex(chains) {
         <div class="head-center" data-reveal>
           <p class="eyebrow">Compare</p>
           <h2 id="matrix-title">What works <em>where</em></h2>
-          <p>Staking is available for SOL, ADA, TRX and NEAR. See <a href="/swap/">swap routes</a>, <a href="/earn/">Earn</a> and <a href="/hardware-wallets/">hardware wallets</a> for the details.</p>
+          <p>Staking is available for SOL, ADA, TRX, NEAR, SUI and APT. See <a href="/swap/">swap routes</a>, <a href="/earn/">Earn</a> and <a href="/hardware-wallets/">hardware wallets</a> for the details.</p>
         </div>
         ${matrix(chains)}
         <p class="center small mute">Missing a blockchain? <a href="${REPO}/issues">Ask on GitHub</a>.</p>
@@ -1115,7 +1115,7 @@ function chainFaqs(c, ctx) {
   const q = [
     [`Is Kyro a free ${c.name} wallet?`, `Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ${esc(c.ticker)}, and your keys stay on your own computer.`],
     [`Can I swap ${c.ticker} in Kyro?`, route ? `${route[1] === 'Yes' ? `Yes, ${route[2] === 'Yes' ? 'in both directions' : 'from it'}.` : 'You can swap into it, not out of it yet.'} Providers: ${route[3]}. <a href="/swap/">Routes and limits</a>.` : `Not yet. ${esc(NO_SWAP[c.slug] || '')}`],
-    [f.staking ? `Can I stake ${c.ticker} in Kyro?` : `Can I earn on ${c.name} in Kyro?`, f.staking ? `Yes, from a recovery-phrase account. It is refused from a hardware wallet. ${esc(c.staking || '')} Rates are estimates, never guaranteed.` : earnOn ? `Yes: ${earnOn} Rates are estimates, never guaranteed, and contract risks apply. <a href="/earn/">Options and risks</a>.` : `Kyro offers no staking or lending on ${esc(c.name)}.`],
+    [f.staking ? `Can I stake ${c.ticker} in Kyro?` : `Can I earn on ${c.name} in Kyro?`, f.staking ? `Yes, from a recovery-phrase account${['solana', 'cardano', 'near'].includes(c.slug) ? ' or a hardware wallet' : ''}. ${esc(c.staking || '')} Rates are estimates, never guaranteed.` : earnOn ? `Yes: ${earnOn} Rates are estimates, never guaranteed, and contract risks apply. <a href="/earn/">Options and risks</a>.` : `Kyro offers no staking or lending on ${esc(c.name)}.`],
     [`Does Kyro work with a hardware wallet on ${c.name}?`, f.hardware ? `Yes, with a ${hwNames}.${c.hwNote ? ' ' + esc(c.hwNote) : ''} <a href="/hardware-wallets/">Device table</a>.` : `No. ${esc(c.name)} is not supported on hardware wallets in Kyro. Use a software account.`],
     [`What can a server see when I use ${c.name} in Kyro?`, c.slug === 'monero' ? 'The node sees the blocks you download and the transactions you publish, from a Tor exit relay. It never gets your addresses or your view key, because Kyro scans blocks locally. <a href="/monero/">Details</a>.' : `The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. ${esc(c.name)} has its own circuit family, except that all EVM networks share one. <a href="/tor/">Who sees what</a>.`],
     [`Can I use my existing recovery phrase for ${c.name}?`, `Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all ${chains.length} blockchains. <a href="/faq/">More questions</a>.`]

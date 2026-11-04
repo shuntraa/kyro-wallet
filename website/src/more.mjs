@@ -252,18 +252,20 @@ const EARN_ROWS = [
   ['Aave · Arbitrum', 'Lending', 'USDT, USDC', 'None', 'Yes'],
   ['Aave · Polygon', 'Lending', 'USDT, USDC', 'None', 'Yes'],
   ['Aave · Base', 'Lending', 'USDC', 'None', 'Yes'],
-  ['Solana', 'Staking', 'SOL', 'About 2 to 3 days', 'No'],
-  ['Cardano', 'Staking', 'ADA (2 ADA deposit, returned)', 'None', 'No'],
+  ['Solana', 'Staking', 'SOL', 'About 2 to 3 days', 'Ledger, Trezor'],
+  ['Cardano', 'Staking', 'ADA (2 ADA deposit, returned)', 'None', 'Ledger, Trezor (rewards withdrawal: Trezor only)'],
   ['TRON', 'Staking', 'TRX (minimum 1 TRX)', '14 days', 'No'],
-  ['NEAR', 'Staking', 'NEAR', '4 epochs, about 2 to 3 days', 'No']
+  ['NEAR', 'Staking', 'NEAR', '4 epochs, about 2 to 3 days', 'Ledger'],
+  ['Sui', 'Staking', 'SUI (minimum 1 SUI)', 'None', 'No'],
+  ['Aptos', 'Staking', 'APT (minimum 11 APT)', 'Up to 14 days', 'No']
 ];
 
 function earn() {
   const faqs = [
     ['Are the rates guaranteed?', 'No. Every rate in Kyro is an estimate and it moves. For Solana, Cardano and TRON it is network-wide, before the validator, pool or Super Representative takes its share.'],
     ['Does Kyro take a fee on Earn?', 'Kyro takes no fee on staking. You pay the network fee, and validators, pools and protocols keep their own share of the rewards.'],
-    ['Can I use Earn with a Ledger or Trezor?', 'Yes for Lido and Aave. Staking on Solana, Cardano, TRON and NEAR still needs a recovery-phrase account, and Kyro refuses it from a hardware account.'],
-    ['Can a validator take my coins?', 'On Solana, Cardano, TRON and NEAR a validator, pool or Super Representative cannot spend your coins, and there is no slashing for delegators. A poor choice costs rewards.'],
+    ['Can I use Earn with a Ledger or Trezor?', 'Yes for Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.'],
+    ['Can a validator take my coins?', 'On Solana, Cardano, TRON, NEAR, Sui and Aptos a validator, pool or Super Representative cannot spend your coins, and there is no slashing for delegators. A poor choice costs rewards.'],
     ['Is lending on Aave the same risk as staking?', 'No. Your tokens go into a smart contract. A contract bug or a stablecoin losing its peg can cost you money. Kyro cannot remove those risks.'],
     ['Is this financial advice?', 'No. Kyro shows options and their terms. Whether any of them suits you is your decision.']
   ];
@@ -272,11 +274,11 @@ function earn() {
     name: 'Earn: staking and lending in Kyro',
     crumb: 'Earn',
     title: 'Earn: staking and lending from your own wallet | Kyro',
-    description: 'Stake SOL, ADA, TRX and NEAR, stake ETH with Lido or lend on Aave from a non-custodial wallet. 14 options, estimated rates and the risks stated plainly.',
+    description: 'Stake SOL, ADA, TRX, NEAR, SUI and APT, stake ETH with Lido or lend on Aave from a non-custodial wallet. 16 options, estimated rates and the risks stated plainly.',
     hero: {
       eyebrow: 'Earn',
       h1: 'Earn, <em>with the risks in plain sight</em>',
-      lead: '14 options in one list: staking, liquid staking and lending. No sign-up. Rates are estimates, never guaranteed.',
+      lead: '16 options in one list: staking, liquid staking and lending. No sign-up. Rates are estimates, never guaranteed.',
       extra: `<div class="hero-cta">${dlButton()}</div>`
     },
     scripts: ['/download.js', '/scenes.js'],
@@ -288,13 +290,13 @@ function earn() {
         <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed.</p>`, 'section-tight', 'wrap wrap-mid')}
 
     ${sec('e-opts', html`
-        ${head('Options', 'e-opts', 'All <em>14 options</em>', 'What you can put to work, how long it stays locked, and what works from a hardware wallet.')}
+        ${head('Options', 'e-opts', 'All <em>16 options</em>', 'What you can put to work, how long it stays locked, and what works from a hardware wallet.')}
         ${tbl('Earn options in Kyro', ['Option', 'Type', 'Assets', 'Lock', 'Hardware wallet'], EARN_ROWS)}`)}
 
     ${sec('e-how', html`
         ${head('Three kinds', 'e-how', 'Three ways <em>to earn</em>', 'They look alike in a list. They are different underneath.')}
         ${cards([
-          ['Staking', 'SOL, ADA, TRX and NEAR. You delegate from your own account to a validator, pool or Super Representative. They cannot spend your coins. On Cardano your ADA stays spendable.', 'ic-stake'],
+          ['Staking', 'SOL, ADA, TRX, NEAR, SUI and APT. You delegate from your own account to a validator, pool or Super Representative. They cannot spend your coins. On Cardano your ADA stays spendable.', 'ic-stake'],
           ['Liquid staking', 'ETH with Lido. You receive stETH, and you can swap it or unstake through Lido’s withdrawal queue, then claim in Kyro. You rely on Lido’s contracts.', 'ic-swap'],
           ['Lending', 'Aave v3 on Ethereum, Arbitrum, Polygon and Base. You deposit tokens into a contract and earn the variable rate borrowers pay. You can withdraw when liquidity allows it.', 'ic-accounts']
         ])}`)}
@@ -305,7 +307,7 @@ function earn() {
           ['Contract bugs', 'Lido and Aave are smart contracts Kyro does not control. A bug or an attack there can lose funds.', 'ic-shield'],
           ['Depeg', 'stETH can trade below ETH, and a stablecoin can lose its peg.', 'ic-swap'],
           ['Lower rewards', 'Rates move. A validator’s commission, downtime or a retiring pool can cut your rewards. A delinquent Solana validator pays nothing until it returns.', 'ic-stake'],
-          ['Waiting periods', 'TRON unstaking takes 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.', 'ic-lock'],
+          ['Waiting periods', 'TRON unstaking takes 14 days. Aptos takes up to 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.', 'ic-lock'],
           ['Votes shrink', 'On TRON, unstaking reduces your votes in proportion. Kyro warns you first.', 'ic-eye'],
           ['Price risk', 'Staked coins can lose value like any other. A rate does not protect you from that.', 'ic-dash']
         ])}
@@ -341,7 +343,7 @@ function hardware(chains) {
   const faqs = [
     ['Which Ledger and Trezor models work with Kyro?', 'Ledger devices with the current apps, and Trezor including the Trezor Safe 7. Cardano does not work on the Trezor One.'],
     ['Can I use Kyro with a hardware wallet only, without a recovery phrase in the app?', 'Yes. On the welcome screen choose “Use a Ledger / Trezor”. Kyro stores only public keys, and there is no vault or password to set.'],
-    ['Can I stake from a Ledger or Trezor?', 'Earn works with Lido and Aave. Staking on Solana, Cardano, TRON and NEAR is refused on hardware accounts for now.'],
+    ['Can I stake from a Ledger or Trezor?', 'Earn works with Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.'],
     ['Can I send tokens from a hardware wallet?', 'Yes on EVM chains and Solana (SPL), and on TRON (TRC-20) with a Ledger. On other chains, hardware accounts send the native coin for now.'],
     ['Why is my Ledger NEAR or TON address different?', 'The Ledger uses a different derivation path, so the same phrase gives a different account on NEAR, TON and Cardano. Kyro labels hardware accounts as such.'],
     ['Does Kyro check that my device is genuine?', 'No. Run the Genuine check in Ledger’s app or the authenticity check in Trezor Suite. Kyro cannot detect a malicious device that signs what it displays.']
@@ -398,7 +400,7 @@ function hardware(chains) {
         ${cards([
           ['Testing status', 'Kyro has run on real Ledger and Trezor devices. On a Ledger Nano X, addresses were checked on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, with test signatures on Bitcoin, Ethereum and Solana. Chains without their app installed were not checked on a device. Start with a small amount.', 'ic-eye'],
           ['Blind signing', 'When the device cannot decode a transaction, its screen shows only raw data and it protects your keys, not your consent. Kyro flags this with a hardened confirmation. Keep blind signing off until you need it.', 'ic-shield'],
-          ['Earn', 'Lido and Aave only. Staking on Solana, Cardano, TRON and NEAR is refused from a hardware account.', 'ic-stake'],
+          ['Earn', 'Lido and Aave only. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.', 'ic-stake'],
           ['Token sends', 'EVM chains, Solana SPL, and TRC-20 on Ledger. Native coins elsewhere.', 'ic-send'],
           ['Different accounts', 'On NEAR, TON and Cardano, a Ledger gives a different account than the software wallet for the same phrase.', 'ic-accounts'],
           ['Public keys on disk', 'Hardware account files hold xpubs unencrypted: a privacy matter, not a funds one. Always verify a receive address on the device.', 'ic-lock']

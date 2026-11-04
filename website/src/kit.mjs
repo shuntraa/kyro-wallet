@@ -85,7 +85,7 @@ export const DONE = [
   ['Tor built in', 'On by default, a circuit per blockchain family, no fallback to a direct connection.'],
   ['Signed automatic updates', 'Downloaded over Tor, verified against a pinned public key, applied at the next start.'],
   ['Swaps across chains', 'Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.'],
-  ['Earn', '14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.'],
+  ['Earn', '16 options: Lido, Aave v3, and staking on Solana, Cardano, TRON, NEAR, Sui and Aptos.'],
   ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.'],
   ['One-click Windows installer', 'A single branded window since 1.0.1, and one-line install on every system.']
 ];

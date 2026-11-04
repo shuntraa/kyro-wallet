@@ -411,7 +411,7 @@ const GUIDES = () => [
       ${ul([
         'On NEAR, TON and Cardano the Ledger account differs from the software account for the same phrase.',
         'Token sends work on EVM chains, Solana and TRON. Elsewhere, native coins only.',
-        'Earn covers Lido and Aave. Staking is refused from a hardware account.',
+        'Earn covers Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.',
         'Not available on Ledger: Monero, Polkadot, Kaspa and Zcash.'
       ], 'checks minus')}
       <p>Full table: ${a('/hardware-wallets/', 'Ledger and Trezor in Kyro')}. Hardware support is young, so start with a small amount.</p>`
@@ -463,7 +463,7 @@ const GUIDES = () => [
       ${ul([
         'XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON and NEAR: Ledger only.',
         'Monero, Polkadot and Kaspa: no hardware wallet support.',
-        'Staking on Solana, Cardano, TRON and NEAR is refused from a hardware account.'
+        'Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.'
       ], 'checks minus')}
       ${warn('Safe 7 support has been tested against Trezor’s device-side code, not yet on a real Safe 7. Other hardware paths are young too. Start with a small amount.')}
       <p>Full table: ${a('/hardware-wallets/', 'Ledger and Trezor in Kyro')}.</p>`
@@ -559,7 +559,7 @@ const TERMS = () => [
   ['Recovery phrase', `12 or 24 words that restore your whole wallet. Also called a seed phrase. ${a('/guides/back-up-your-recovery-phrase/', 'How to back it up')}.`],
   ['RPC server', 'A server a wallet talks to in order to read a blockchain and broadcast transactions.'],
   ['Seed', 'The secret value your keys come from. In everyday use, the same thing as your recovery phrase.'],
-  ['Slashing', 'A penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON and NEAR are not slashed today.'],
+  ['Slashing', 'A penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON, NEAR, Sui and Aptos are not slashed today.'],
   ['Slippage', 'The gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.'],
   ['Stablecoin', 'A token designed to track a currency, such as USDC or USDT.'],
   ['Staking', 'Supporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.'],
