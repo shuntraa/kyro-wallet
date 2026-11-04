@@ -26,6 +26,7 @@
 - Hardware wallets: Algorand USDC and USDt can be enabled and sent from Ledger accounts.
 - Hardware wallets: NEAR USDC and USDt can be sent from Ledger accounts; the device shows the
   contract and the recipient, and the amount in raw units (Kyro's window names the token).
+- Ledger device check: real signatures, never broadcast, on TON, NEAR, XRP and Litecoin.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited

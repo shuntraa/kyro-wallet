@@ -3,8 +3,8 @@
 //!
 //! For each chain Kyro supports on Ledger: opens its app from the dashboard (the user approves),
 //! reads the account key, re-derives the address in Rust from the returned key and compares;
-//! for EVM, Solana, Bitcoin and Litecoin it also has the device sign a dummy message or a
-//! transaction with a fake blockhash (never broadcast, nothing goes online) and verifies the
+//! for EVM, Solana, Bitcoin, Litecoin, TON, NEAR and XRP it also has the device sign a dummy
+//! message or an expired, never-broadcast transaction (nothing goes online) and verifies the
 //! signature against the key read. Every step prints OK / FAIL with the last status word.
 
 use std::str::FromStr;
@@ -12,14 +12,19 @@ use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin::bip32::{ChildNumber, DerivationPath, Xpub};
+use bitcoin::absolute::LockTime;
+use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
 use bitcoin::hashes::{sha256d, Hash};
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1};
-use bitcoin::{CompressedPublicKey, ScriptBuf};
+use bitcoin::transaction::Version;
+use bitcoin::{
+    Amount, CompressedPublicKey, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
+};
 use ledger_bitcoin_client::apdu::{APDUCommand, StatusWord};
 use ledger_bitcoin_client::BitcoinClient;
 use sha3::{Digest, Keccak256};
-use wallet_core::{BtcKind, Network, UtxoCoin};
+use wallet_core::{BtcKind, HwKeyChain, Network, UtxoAccount, UtxoCoin};
 
 use super::ledger::{self, ApduLink, HidLink, Ledger};
 use super::ledger_apdu::{self as apdu, SwContext, SW_OK};
@@ -323,10 +328,296 @@ fn check_ltc(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
     let link = dev.apdu_link().expect("Ledger link");
     if legacy {
         check_ltc_legacy(r, link, c, &acc.xpub, &kyro);
-        return;
+    } else {
+        let magic = "Litecoin Signed Message:\n";
+        check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
     }
-    let magic = "Litecoin Signed Message:\n";
-    check_v2(r, magic, link, c, &acc.xpub, &acc.path, &kyro, &addr);
+    check_ltc_transaction(dev, r, c, &acc);
+}
+
+/// Litecoin spend of a made-up coin paying our first address: its previous transaction spends
+/// nothing, so the network has never heard of it and could not accept this one.
+fn ltc_dummy_psbt(acc: &UtxoAccount) -> Result<Psbt, String> {
+    let e = |e: &dyn std::fmt::Debug| format!("{e:?}");
+    let secp = Secp256k1::verification_only();
+    let zero = ChildNumber::Normal { index: 0 };
+    let xpub = Xpub::from_str(&acc.xpub).map_err(|x| e(&x))?;
+    let leaf = xpub
+        .derive_pub(&secp, &[zero, zero])
+        .map_err(|x| e(&x))?
+        .public_key;
+    let path = DerivationPath::from_str(&format!("{}/0/0", acc.path)).map_err(|x| e(&x))?;
+    let fingerprint = Fingerprint::from_str(&acc.fingerprint).map_err(|x| e(&x))?;
+    let mine = ScriptBuf::new_p2wpkh(&CompressedPublicKey(leaf).wpubkey_hash());
+    let prev = Transaction {
+        version: Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint::null(),
+            script_sig: ScriptBuf::new(),
+            sequence: Sequence::MAX,
+            witness: Witness::new(),
+        }],
+        output: vec![TxOut {
+            value: Amount::from_sat(100_000),
+            script_pubkey: mine,
+        }],
+    };
+    let tx = Transaction {
+        version: Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: vec![TxIn {
+            previous_output: OutPoint {
+                txid: prev.compute_txid(),
+                vout: 0,
+            },
+            script_sig: ScriptBuf::new(),
+            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+            witness: Witness::new(),
+        }],
+        output: vec![TxOut {
+            value: Amount::from_sat(90_000),
+            script_pubkey: ScriptBuf::from_bytes([&[0x00, 0x14][..], &[0x11; 20]].concat()),
+        }],
+    };
+    let mut psbt = Psbt::from_unsigned_tx(tx).map_err(|x| e(&x))?;
+    psbt.inputs[0].witness_utxo = Some(prev.output[0].clone());
+    psbt.inputs[0].non_witness_utxo = Some(prev);
+    psbt.inputs[0]
+        .bip32_derivation
+        .insert(leaf, (fingerprint, path));
+    Ok(psbt)
+}
+
+/// Runs the Send path on the dummy spend: plan, device, then Rust's check of the signature
+/// against the BIP143 digest of the input and the key read. The result is dropped.
+fn check_ltc_transaction(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl, acc: &UtxoAccount) {
+    let coin = UtxoCoin::Litecoin;
+    let psbt = ltc_dummy_psbt(acc).map_err(HwError::bad);
+    let Some(psbt) = r.step("build dummy transaction", psbt) else {
+        return;
+    };
+    let b64 = psbt.to_string();
+    let plan =
+        wallet_core::utxo_hw_plan(NET, coin, acc, &b64).map_err(|e| HwError::bad(e.to_string()));
+    let Some(plan) = r.step("decode dummy transaction", plan) else {
+        return;
+    };
+    println!("    -> approve sending 0.0009 LTC on the Ledger (made-up coin, never sent)");
+    let sigs = chains::sign_utxo(dev, c, NET, coin, acc, &psbt, &plan);
+    let Some(sigs) = r.step("sign dummy transaction (never broadcast)", sigs) else {
+        return;
+    };
+    let done = wallet_core::utxo_hw_finalize(NET, coin, acc, &b64, &sigs);
+    r.check(
+        "signature verifies with the read key",
+        done.is_ok(),
+        &done.map_or_else(|e| e.to_string(), |_| "BIP143, SIGHASH_ALL".to_string()),
+    );
+}
+
+/// Destination of the XRP dummy payment: the example address of the XRP Ledger docs.
+const XRP_DUMMY_TO: &str = "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY";
+
+/// 1-drop payment whose `LastLedgerSequence` is long past: the network would reject it.
+fn xrp_dummy_payment(pk: &[u8; 33]) -> HwResult<String> {
+    let bad = |e: wallet_core::Error| HwError::bad(e.to_string());
+    let me = wallet_core::xrp_address_of_pubkey(pk).map_err(bad)?;
+    let p = wallet_core::XrpPayment {
+        flags: Some(wallet_core::TF_FULLY_CANONICAL_SIG),
+        source_tag: None,
+        sequence: 1,
+        destination_tag: Some(1),
+        last_ledger_sequence: Some(2),
+        invoice_id: None,
+        amount: wallet_core::XrpAmount::Xrp(1),
+        fee: 12,
+        send_max: None,
+        signing_pub_key: Some(pk.to_vec()),
+        txn_signature: None,
+        account: wallet_core::xrp_account_id(&me).map_err(bad)?,
+        destination: wallet_core::xrp_account_id(XRP_DUMMY_TO).map_err(bad)?,
+        memos: Vec::new(),
+    };
+    Ok(hex::encode_upper(p.encode(false)))
+}
+
+fn check_xrp(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
+    let keys = chains::read_keys(dev, c, NET, Chain::Xrp, 0);
+    let Some(key) = r
+        .step("read key m/44'/144'/0'/0/0", keys)
+        .and_then(|k| k.key)
+    else {
+        return;
+    };
+    let pk = key
+        .pubkey_bytes()
+        .ok()
+        .and_then(|p| <[u8; 33]>::try_from(p).ok());
+    let from_key = pk.and_then(|p| wallet_core::xrp_address_of_pubkey(&p).ok());
+    r.check(
+        "re-derive address from key",
+        from_key.as_deref() == Some(key.address.as_str()),
+        &key.address,
+    );
+    let Some(pk) = pk else {
+        return;
+    };
+    let blob = xrp_dummy_payment(&pk);
+    let Some(blob) = r.step("build dummy payment", blob) else {
+        return;
+    };
+    println!("    -> approve the payment of 0.000001 XRP on the Ledger (expired, never sent)");
+    let der = hex::decode(&blob)
+        .map_err(|e| HwError::bad(e.to_string()))
+        .and_then(|raw| chains::sign_xrp(dev, c, NET, 0, &raw));
+    let Some(der) = r.step("sign dummy payment (never broadcast)", der) else {
+        return;
+    };
+    let done = wallet_core::xrp_hw_assemble(&blob, &pk, &der);
+    r.check(
+        "signature verifies with the read key",
+        done.is_ok(),
+        &done.map_or_else(|e| e.to_string(), |_| "secp256k1, low-S".to_string()),
+    );
+}
+
+/// Unsigned NEAR transfers with a fake block hash: 1 yoctoNEAR, then 1 unit of USDC to `bob.near`.
+fn near_dummy_txs(pk: &[u8; 32]) -> [wallet_core::NearTransfer; 2] {
+    let tx = |receiver_id: &str, deposit, ft| wallet_core::NearTransfer {
+        signer_id: hex::encode(pk),
+        public_key: *pk,
+        nonce: 1,
+        receiver_id: receiver_id.into(),
+        block_hash: [0x42; 32],
+        deposit,
+        ft,
+    };
+    let usdc = wallet_core::near_known_tokens(false)[0].contract;
+    let ft = wallet_core::NearFtTransfer {
+        recipient: "bob.near".into(),
+        amount: 1,
+        storage_deposit: None,
+    };
+    [tx("bob.near", 1, None), tx(usdc, 0, Some(ft))]
+}
+
+fn check_near(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
+    let k = HwKeyChain::Near;
+    let pk = ledger_apps::pubkey(dev, c, k, 0, false, NET);
+    let Some(pk) = r.step(&format!("read key {}", k.path_string(0)), pk) else {
+        return;
+    };
+    let Ok(pk) = <[u8; 32]>::try_from(pk) else {
+        r.check("key length", false, "32 bytes expected");
+        return;
+    };
+    for (tx, what) in near_dummy_txs(&pk)
+        .iter()
+        .zip(["transfer of 1 yoctoNEAR", "USDC ft_transfer of 1 unit"])
+    {
+        let raw = hex::encode(tx.encode());
+        let msg = wallet_core::near_hw_message(&raw).map_err(|e| HwError::bad(e.to_string()));
+        let Some(msg) = r.step("build dummy transaction", msg) else {
+            return;
+        };
+        println!("    -> approve the {what} on the Ledger (fake block, never sent)");
+        let sig = ledger_apps::sign(dev, c, k, 0, &msg);
+        let Some(sig) = r.step(&format!("sign {what} (never broadcast)"), sig) else {
+            return;
+        };
+        let done = wallet_core::near_hw_signed(&raw, &sig);
+        r.check(
+            "signature verifies with the read key",
+            done.is_ok(),
+            &done.map_or_else(|e| e.to_string(), |_| "ed25519".to_string()),
+        );
+    }
+}
+
+/// Unsigned transfers of an expired order (2001): 1 nanoton to ourselves, then 1 unit of USD₮.
+fn ton_dummy_transfers(pk: &[u8; 32]) -> HwResult<[wallet_core::TonTransfer; 2]> {
+    let bad = |e: wallet_core::Error| HwError::bad(e.to_string());
+    let id = wallet_core::ton_wallet_id(false);
+    let me = wallet_core::ton_wallet_address(pk, id).map_err(bad)?;
+    let plain = wallet_core::TonTransfer {
+        public_key: *pk,
+        wallet_id: id,
+        valid_until: 1_000_000_000,
+        seqno: 1,
+        mode: wallet_core::TON_MODE_PAY_FEES,
+        destination: me,
+        bounce: false,
+        amount: 1,
+        comment: None,
+        with_state_init: false,
+        inline_empty_body: true,
+        jetton: None,
+    };
+    let master = wallet_core::ton_known_jettons(false)[0].master;
+    let jetton = wallet_core::TonTransfer {
+        destination: wallet_core::ton_jetton_wallet_address(&master, &me, false).map_err(bad)?,
+        bounce: true,
+        amount: wallet_core::TON_JETTON_ATTACHED_NANOTON,
+        inline_empty_body: false,
+        jetton: Some(wallet_core::TonJettonBody {
+            query_id: 1,
+            amount: 1,
+            destination: me,
+            response_destination: me,
+            forward_ton_amount: wallet_core::TON_JETTON_FORWARD_NANOTON,
+            comment: None,
+        }),
+        ..plain.clone()
+    };
+    Ok([plain, jetton])
+}
+
+fn check_ton(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
+    let k = HwKeyChain::Ton;
+    let pk = ledger_apps::pubkey(dev, c, k, 0, false, NET);
+    let Some(pk) = r.step(&format!("read key {}", k.path_string(0)), pk) else {
+        return;
+    };
+    let addr = k.address_of(&pk, NET);
+    r.check(
+        "address from key",
+        addr.is_ok(),
+        &addr.unwrap_or_else(|e| e.to_string()),
+    );
+    let Ok(pk) = <[u8; 32]>::try_from(pk) else {
+        return;
+    };
+    let Some(txs) = r.step("build dummy transfers", ton_dummy_transfers(&pk)) else {
+        return;
+    };
+    for (t, what) in txs
+        .iter()
+        .zip(["transfer of 1 nanoton", "USDT transfer of 0.000001"])
+    {
+        let bad = |e: wallet_core::Error| HwError::bad(e.to_string());
+        let req = wallet_core::ton_unsigned_transfer(t)
+            .and_then(|boc| Ok((wallet_core::ton_hw_request(&boc, &pk, false)?.0, boc)))
+            .map_err(bad);
+        let Some((request, boc)) = r.step("build device request", req) else {
+            return;
+        };
+        println!("    -> approve the {what} on the Ledger (expired in 2001, never sent)");
+        let out = ledger_apps::sign(dev, c, k, 0, &request);
+        let Some(out) = r.step(&format!("sign {what} (never broadcast)"), out) else {
+            return;
+        };
+        let (hash, sig) = out.split_at(32);
+        let done = wallet_core::ton_hw_signed(&boc, &pk, false, sig, hash);
+        r.check(
+            "signature verifies with the read key",
+            done.is_ok(),
+            &done.map_or_else(
+                |e| e.to_string(),
+                |_| "same order hash, ed25519".to_string(),
+            ),
+        );
+    }
 }
 
 fn check_evm(dev: &mut Ledger<LogLink>, r: &mut Report, c: &Ctl) {
@@ -529,6 +820,9 @@ fn ledger_device_check() {
             Chain::Ltc => check_ltc(&mut dev, &mut r, &c),
             Chain::Evm => check_evm(&mut dev, &mut r, &c),
             Chain::Sol => check_sol(&mut dev, &mut r, &c),
+            Chain::Ton => check_ton(&mut dev, &mut r, &c),
+            Chain::Near => check_near(&mut dev, &mut r, &c),
+            Chain::Xrp => check_xrp(&mut dev, &mut r, &c),
             other => check_other(&mut dev, &mut r, &c, other),
         }
     }
@@ -543,6 +837,75 @@ fn ledger_device_check() {
         }
     );
     assert_eq!(r.fail, 0, "some steps failed (see FAIL lines)");
+}
+
+/// What the device is sent is decoded by Rust and verifies with a software signature, so that a
+/// FAIL on the device can only come from the device or its app.
+#[test]
+fn dummy_transactions_decode_and_verify() {
+    use ed25519_dalek::Signer;
+    let k = ed25519_dalek::SigningKey::from_bytes(&[9; 32]);
+    let pk = k.verifying_key().to_bytes();
+    for tx in near_dummy_txs(&pk) {
+        let raw = hex::encode(tx.encode());
+        assert_eq!(wallet_core::near_hw_message(&raw).unwrap(), tx.encode());
+        let sig = k.sign(&tx.hash()).to_bytes();
+        wallet_core::near_hw_signed(&raw, &sig).unwrap();
+    }
+    for t in ton_dummy_transfers(&pk).unwrap() {
+        let boc = wallet_core::ton_unsigned_transfer(&t).unwrap();
+        let (_, hash) = wallet_core::ton_hw_request(&boc, &pk, false).unwrap();
+        let sig = k.sign(&hash).to_bytes();
+        wallet_core::ton_hw_signed(&boc, &pk, false, &sig, &hash).unwrap();
+    }
+
+    let seed = wallet_core::Mnemonic::parse(
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    )
+    .unwrap()
+    .to_seed("");
+    let pk = wallet_core::xrp_public_key(&seed, 0).unwrap();
+    let blob = xrp_dummy_payment(&pk).unwrap();
+    let (signed, _, _) = wallet_core::xrp_sign(&seed, 0, &blob).unwrap();
+    assert!(signed.len() > blob.len());
+
+    let coin = UtxoCoin::Litecoin;
+    let acc = wallet_core::utxo_account(&seed, NET, coin, 0).unwrap();
+    let psbt = ltc_dummy_psbt(&acc).unwrap();
+    let plan = wallet_core::utxo_hw_plan(NET, coin, &acc, &psbt.to_string()).unwrap();
+    assert_eq!(plan.inputs.len(), 1);
+    assert_eq!(plan.summary.fee, "10000");
+    assert!(plan.change.is_empty());
+    let (signed, _) = wallet_core::utxo_sign_psbt(&seed, NET, coin, 0, &psbt.to_string()).unwrap();
+    assert_ne!(signed, psbt.to_string());
+}
+
+/// The dummy spend through the legacy app's protocol, with its signature checked by Rust.
+#[test]
+fn ltc_dummy_transaction_replays_on_the_legacy_protocol() {
+    let seed = wallet_core::Mnemonic::parse(
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    )
+    .unwrap()
+    .to_seed("");
+    let coin = UtxoCoin::Litecoin;
+    let acc = wallet_core::utxo_account(&seed, NET, coin, 0).unwrap();
+    let psbt = ltc_dummy_psbt(&acc).unwrap();
+    let b64 = psbt.to_string();
+    let plan = wallet_core::utxo_hw_plan(NET, coin, &acc, &b64).unwrap();
+    let (signed, _) = wallet_core::utxo_sign_psbt(&seed, NET, coin, 0, &b64).unwrap();
+    let signed = Psbt::from_str(&signed).unwrap();
+    let (_, der) = signed.inputs[0].partial_sigs.iter().next().unwrap();
+    let der = der.to_vec();
+    let mut call = |a: &[u8], _ctx: SwContext| -> HwResult<Vec<u8>> {
+        Ok(match (a[1], a[2]) {
+            (0x42, 0x80) if a.len() == 9 => vec![0x32; 56], // GET TRUSTED INPUT, last chunk
+            (0x48, _) => der.clone(),                       // HASH SIGN
+            _ => vec![],
+        })
+    };
+    let sigs = ledger_utxo::sign(&mut call, &ctl(), coin, &psbt, &plan).unwrap();
+    wallet_core::utxo_hw_finalize(NET, coin, &acc, &b64, &sigs).unwrap();
 }
 
 #[test]
