@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Swap: best quote after the Kyro fee (0x, LI.FI, Jupiter — the provider is not shown on the main
-// screen, only in the confirmation before signing), slippage, exact approval by default (unlimited
+// Swap: best quote after the Kyro fee (the "Best price" panel shows its provider and costs, the
+// confirmation before signing names the contract), slippage, exact approval by default (unlimited
 // only after explicit confirmation), simulation, "En clair".
 
 import { useEffect, useMemo, useState } from 'react';
@@ -39,6 +39,7 @@ import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { AccountPicker } from '../components/AccountPicker';
+import { BestPrice } from '../components/BestPrice';
 import { Dialog } from '../components/ui/dialog';
 import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
@@ -606,6 +607,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             </div>
             {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">{t('swap.enterAmount')}</p>}
             {params && quotes.loading && !quotes.data && <div className="skeleton h-[62px] rounded-box" />}
+            {params && <BestPrice quotes={list} sell={sell} buy={buy} sellChain={chain.label} buyChain={buyChain?.label ?? buy.chainKey} currency={cur} />}
             {params && quotes.data && list.length === 0 && !quotesTorBlocked && (
               <p className="m-0 px-1 text-[13px] text-mute">{network === 'testnet' ? t('swap.noPriceTestnet') : t('swap.noPrice')}</p>
             )}
