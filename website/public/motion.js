@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: inertial wheel scrolling, scroll reveals, word by word titles, magnetic buttons,
-// the cursor light on cards, and the small-screen menu. All of it off for reduced motion.
+// Kyro Wallet site: the one frame loop and the smooth-scroll driver, scroll reveals, word by word
+// titles, magnetic buttons, the cursor light on cards and the small-screen menu. Motion is off for
+// reduced motion.
 (function () {
   'use strict';
 
@@ -10,31 +11,51 @@
   var header = document.querySelector('.site-header');
   var bar = document.querySelector('[data-progress]');
 
-  // One frame loop for the whole site. scenes.js adds its work with Kyro.frame(fn).
+  /** Exponential damping against real time: the same feel at 60, 144 or 240 Hz, and it cannot overshoot. */
+  function damp(a, b, tau, dt) {
+    return b + (a - b) * Math.exp(-dt / tau);
+  }
+
+  // One frame loop for the whole site. Everyone reads K.y, the eased position, never scrollY.
   var jobs = [];
   var K = (window.Kyro = {
     motion: motion,
     fine: fine,
-    velocity: 0,
+    damp: damp,
+    y: window.scrollY,
+    v: 0, // eased speed, px per second
+    dt: 1 / 60,
     frame: function (fn) {
       jobs.push(fn);
     },
     scrollTo: function (y) {
-      if (smooth) smooth.to(y);
+      if (wheel) wheel.to(y);
       else window.scrollTo(0, y);
     }
   });
 
-  // Wheel input eases towards its target. Keyboard, scrollbar, touch and anchors stay native:
-  // the target simply follows the real position whenever the wheel is idle.
-  var smooth = null;
+  var maxY = 0;
+  function measure() {
+    maxY = root.scrollHeight - window.innerHeight;
+  }
+  measure();
+  window.addEventListener('resize', measure);
+  window.addEventListener('load', measure);
+  if (window.ResizeObserver) new ResizeObserver(measure).observe(document.body);
+
+  // A notched wheel feeds a target and the loop eases towards it. Only notches are taken: trackpads,
+  // touch, keyboard, the scrollbar and anchors stay native, and the target follows them.
+  var wheel = null;
   if (motion && fine) {
-    smooth = (function () {
-      var target = window.scrollY, pos = target, active = false;
-      function max() {
-        return root.scrollHeight - window.innerHeight;
+    wheel = (function () {
+      var TAU = 0.105;
+      var target = window.scrollY, pos = target, active = false, freeUntil = 0;
+      function notched(e) {
+        if (e.deltaMode !== 0) return true;
+        var w = Math.abs(e.wheelDeltaY || 0);
+        return w >= 120 && w % 120 === 0;
       }
-      function scrollable(el, dy) {
+      function nestedScroll(el, dy) {
         for (; el && el !== document.body && el.nodeType === 1; el = el.parentNode) {
           if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) {
             if ((dy > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) || (dy < 0 && el.scrollTop > 0)) return true;
@@ -42,57 +63,95 @@
         }
         return false;
       }
+      function stop() {
+        active = false;
+      }
       window.addEventListener(
         'wheel',
         function (e) {
-          if (e.ctrlKey || e.metaKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || scrollable(e.target, e.deltaY)) return;
+          if (e.ctrlKey || e.metaKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || nestedScroll(e.target, e.deltaY)) return;
+          var now = e.timeStamp;
+          // A trackpad stream stays native until it has been quiet for a moment.
+          if (!notched(e)) {
+            freeUntil = now + 250;
+            stop();
+            return;
+          }
+          if (now < freeUntil) return;
           e.preventDefault();
           if (!active) target = pos = window.scrollY;
-          var unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? window.innerHeight : 1;
-          target = Math.max(0, Math.min(max(), target + e.deltaY * unit));
+          var unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? window.innerHeight : 1;
+          target = Math.max(0, Math.min(maxY, target + e.deltaY * unit));
           active = true;
         },
         { passive: false }
       );
+      window.addEventListener('keydown', stop);
+      window.addEventListener('touchstart', stop, { passive: true });
+      window.addEventListener('pointerdown', function (e) {
+        if (e.target === root) stop(); // the scrollbar
+      });
+      window.addEventListener('hashchange', stop);
       return {
-        tick: function () {
-          if (!active) return;
-          pos += (target - pos) * 0.11;
-          if (Math.abs(target - pos) < 0.4) {
+        tick: function (dt) {
+          if (!active) return false;
+          pos = damp(pos, target, TAU, dt);
+          if (Math.abs(target - pos) < 0.3) {
             pos = target;
             active = false;
           }
           window.scrollTo(0, pos);
+          return active;
+        },
+        pos: function () {
+          return pos;
         },
         to: function (y) {
           if (!active) pos = window.scrollY;
-          target = Math.max(0, Math.min(max(), y));
+          target = Math.max(0, Math.min(maxY, y));
           active = true;
         }
       };
     })();
   }
 
-  var lastY = window.scrollY, marquees = [], barY = -1;
+  var marquees = [], rate = 1, last = 0, barY = -1, shrunk = false;
   function loop(now) {
     requestAnimationFrame(loop);
-    if (smooth) smooth.tick();
-    var y = window.scrollY;
-    K.velocity += (y - lastY - K.velocity) * 0.2;
-    lastY = y;
-    if (header) header.classList.toggle('scrolled', y > 40);
-    if (bar) {
-      var range = root.scrollHeight - window.innerHeight;
-      if (y !== barY) {
-        barY = y;
-        bar.style.transform = 'scaleX(' + (range > 0 ? Math.min(y / range, 1) : 0).toFixed(4) + ')';
+    var raw = now - last;
+    last = now;
+    var dt = raw > 0 ? Math.min(raw / 1000, 0.05) : 1 / 60;
+    K.dt = dt;
+    K.raw = raw;
+    var moving = wheel ? wheel.tick(dt) : false;
+    // Wheel: pos is already eased and unrounded. Anything native gets the same kind of ease here.
+    var y = moving ? wheel.pos() : window.scrollY;
+    var prev = K.y;
+    K.y = moving ? y : damp(K.y, y, 0.07, dt);
+    if (Math.abs(K.y - y) < 0.05) K.y = y;
+    K.v = damp(K.v, (K.y - prev) / dt, 0.18, dt);
+    // Two thresholds: a notch around either one never flips the bar.
+    if (header) {
+      if (!shrunk && K.y > 140) {
+        shrunk = true;
+        header.classList.add('scrolled');
+      } else if (shrunk && K.y < 30) {
+        shrunk = false;
+        header.classList.remove('scrolled');
       }
     }
-    for (var i = 0; i < jobs.length; i++) jobs[i](y, now);
+    if (bar && K.y !== barY) {
+      barY = K.y;
+      bar.style.transform = 'scaleX(' + (maxY > 0 ? Math.min(K.y / maxY, 1) : 0).toFixed(4) + ')';
+    }
+    for (var i = 0; i < jobs.length; i++) jobs[i](K.y, now, dt);
     // The coin rows run faster while the page moves.
     if (marquees.length) {
-      var rate = 1 + Math.min(Math.abs(K.velocity) * 0.09, 5);
-      for (var m = 0; m < marquees.length; m++) marquees[m].updatePlaybackRate(rate);
+      var r = 1 + Math.min(Math.abs(K.v) / 700, 4);
+      if (Math.abs(r - rate) > 0.04) {
+        rate = r;
+        for (var m = 0; m < marquees.length; m++) marquees[m].updatePlaybackRate(rate);
+      }
     }
   }
 
@@ -204,7 +263,7 @@
 
   function cursor() {
     var light = document.querySelector('.cursor-light');
-    var x = 0, y = 0, cx = 0, cy = 0, seen = false, card = null, ex = 0, ey = 0;
+    var x = 0, y = 0, cx = 0, cy = 0, seen = false;
     document.addEventListener(
       'pointermove',
       function (e) {
@@ -216,27 +275,24 @@
           cy = y;
           if (light) light.classList.add('on');
         }
-        ex = x;
-        ey = y;
-        card = e.target.closest ? e.target.closest('.spot') : null;
+        var card = e.target.closest ? e.target.closest('.spot') : null;
+        if (!card) return;
+        var b = card.getBoundingClientRect();
+        card.style.setProperty('--mx', (x - b.left).toFixed(0) + 'px');
+        card.style.setProperty('--my', (y - b.top).toFixed(0) + 'px');
+        if (card.classList.contains('tilt')) {
+          var rx = ((y - b.top) / b.height - 0.5) * -7;
+          var ry = ((x - b.left) / b.width - 0.5) * 7;
+          card.style.transform = 'perspective(900px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg) translateY(-4px)';
+        }
       },
       { passive: true }
     );
-    K.frame(function () {
-      if (!seen) return;
-      cx += (x - cx) * 0.14;
-      cy += (y - cy) * 0.14;
-      if (light) light.style.transform = 'translate3d(' + cx.toFixed(1) + 'px,' + cy.toFixed(1) + 'px,0)';
-      if (card) {
-        var b = card.getBoundingClientRect();
-        card.style.setProperty('--mx', (ex - b.left).toFixed(0) + 'px');
-        card.style.setProperty('--my', (ey - b.top).toFixed(0) + 'px');
-        if (card.classList.contains('tilt')) {
-          var rx = ((ey - b.top) / b.height - 0.5) * -7;
-          var ry = ((ex - b.left) / b.width - 0.5) * 7;
-          card.style.transform = 'perspective(900px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg) translateY(-4px)';
-        }
-      }
+    K.frame(function (sy, now, dt) {
+      if (!seen || !light) return;
+      cx = damp(cx, x, 0.09, dt);
+      cy = damp(cy, y, 0.09, dt);
+      light.style.transform = 'translate3d(' + cx.toFixed(1) + 'px,' + cy.toFixed(1) + 'px,0)';
     });
     Array.prototype.forEach.call(document.querySelectorAll('.tilt'), function (el) {
       el.addEventListener('pointerleave', function () {
@@ -245,6 +301,7 @@
     });
   }
 
+  /** One light that glides between the links. Sizes are read when it moves, never per frame. */
   function navLight() {
     var list = document.querySelector('.nav ul');
     if (!list) return;
@@ -252,15 +309,13 @@
     ind.className = 'nav-ind';
     ind.setAttribute('aria-hidden', 'true');
     list.appendChild(ind);
-    var links = list.querySelectorAll('a');
     var here = null, hover = null;
     function place() {
       var a = hover || here;
       ind.style.opacity = a ? 1 : 0;
       if (!a) return;
       ind.style.width = a.offsetWidth + 'px';
-      ind.style.height = a.offsetHeight + 'px';
-      ind.style.transform = 'translate3d(' + a.offsetLeft + 'px,' + a.offsetTop + 'px,0)';
+      ind.style.transform = 'translate3d(' + a.offsetLeft + 'px,0,0)';
     }
     function current(a) {
       if (here === a) return;
@@ -269,7 +324,7 @@
       if (a) a.classList.add('here');
       place();
     }
-    Array.prototype.forEach.call(links, function (a) {
+    Array.prototype.forEach.call(list.querySelectorAll('a'), function (a) {
       a.addEventListener('pointerenter', function () {
         hover = a;
         place();
@@ -281,23 +336,36 @@
     });
     current(list.querySelector('[aria-current]'));
     window.addEventListener('resize', place);
-    // The pill changes size when it shrinks: keep the light on its link.
-    if (header) header.addEventListener('transitionend', place);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
-    var zones = document.querySelectorAll('[data-nav]');
-    if (!zones.length || !('IntersectionObserver' in window)) return;
-    var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
-          e.target.__in = e.isIntersecting;
-        });
-        var on = null;
-        for (var i = 0; i < zones.length; i++) if (zones[i].__in) on = zones[i];
-        current(on ? list.querySelector('a[href="' + on.getAttribute('data-nav') + '"]') : null);
-      },
-      { rootMargin: '-50% 0px -50% 0px' }
-    );
-    for (var z = 0; z < zones.length; z++) io.observe(zones[z]);
+
+    // Home page: the light follows the section. It only changes once the middle of the screen is
+    // well inside the next section, so a notch back and forth on a boundary changes nothing.
+    var els = document.querySelectorAll('[data-nav], [data-nonav]');
+    if (!els.length) return;
+    var zones = [], cur = -1, EDGE = 90;
+    function measureZones() {
+      var y = window.scrollY;
+      zones = Array.prototype.map.call(els, function (el) {
+        var b = el.getBoundingClientRect();
+        var href = el.getAttribute('data-nav');
+        return { top: b.top + y, bottom: b.bottom + y, link: href ? list.querySelector('a[href="' + href + '"]') : null };
+      });
+    }
+    measureZones();
+    window.addEventListener('resize', measureZones);
+    window.addEventListener('load', measureZones);
+    if (window.ResizeObserver) new ResizeObserver(measureZones).observe(document.body);
+    K.frame(function (y) {
+      var c = y + window.innerHeight * 0.5;
+      if (cur >= 0 && c >= zones[cur].top - EDGE && c < zones[cur].bottom + EDGE) return;
+      for (var i = 0; i < zones.length; i++) {
+        if (c >= zones[i].top + (i > cur ? EDGE : 0) && c < zones[i].bottom - (i < cur ? EDGE : 0)) {
+          cur = i;
+          current(zones[i].link);
+          return;
+        }
+      }
+    });
   }
 
   function menu() {

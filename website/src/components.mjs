@@ -88,7 +88,7 @@ const assetRow = ([f, name, t, val, amt, share, dir]) => `
           <div class="kw-row">
             <span class="kw-coin">${ico(f)}<span><b>${name}</b><small>${t}</small></span></span>
             <span class="kw-trend">${spark(t, dir)}</span>
-            <span class="kw-val"><b>${val}</b><small>${amt}</small></span>
+            <span class="kw-val"><b class="vd"><span class="v">${val}</span><span class="d">•••••</span></b><small class="vd"><span class="v">${amt}</span><span class="d">•••••</span></small></span>
             <span class="kw-share">${share}</span>
           </div>`;
 
@@ -97,8 +97,8 @@ const portfolio = () => `
         <div class="kw-top">
           <div>
             <p class="kw-label">Total value <i class="kw-eye" data-eye>${svg(EYE)}</i></p>
-            <p class="kw-total">$<span data-balance>12,345</span><span class="dim">.67</span></p>
-            <p class="kw-delta"><span>▲ $123.45 · 1.23%</span> today</p>
+            <p class="kw-total vd"><span class="v">$<span data-balance>12,345</span><span class="dim">.67</span></span><span class="d">$•••••</span></p>
+            <p class="kw-delta"><span class="vd kw-up"><span class="v">▲ $123.45 · 1.23%</span><span class="d">▲ ••••• · 1.23%</span></span> today</p>
           </div>
           <div class="kw-actions">
             <div class="kw-seg"><i class="on">1D</i><i>1W</i><i>1M</i><i>1Y</i><i>All</i></div>
@@ -237,6 +237,7 @@ export const vaultCard = () => `
     <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
   </div></div>`;
 
+const LEDGER_SCREENS = [['Open Bitcoin?', 'Press Yes'], ['Bitcoin', 'Ready'], ['Confirm?', '1.2345 BTC'], ['Confirmed', '1.2345 BTC']];
 const LEDGER_COINS = ['btc', 'eth', 'sol', 'ada', 'xrp', 'ltc', 'doge', 'bnb', 'trx', 'near'];
 
 /** Our own drawing of a hardware wallet, wired to the coins it signs for. No vendor artwork. */
@@ -265,9 +266,7 @@ export function ledgerScene() {
         <rect x="240" y="132" width="160" height="292" rx="27" stroke="#ffffff" stroke-opacity=".06"/>
         <rect class="lg-screen" x="250" y="150" width="140" height="176" rx="14" fill="#01050b" stroke="#1d3a58"/>
         <text class="lg-t0" x="320" y="184" text-anchor="middle">Kyro</text>
-        <path class="lg-check" pathLength="1" d="M300 208l14 14 27-30"/>
-        <text class="lg-t1" x="320" y="256" text-anchor="middle" data-lg-t1>Confirmed</text>
-        <text class="lg-t2" x="320" y="280" text-anchor="middle" data-lg-t2>1.2345 BTC</text>
+        ${LEDGER_SCREENS.map(([a, b], i) => `<g class="lg-s"${i < 3 ? ' opacity="0"' : ''}>${i === 3 ? '<path class="lg-check" d="M300 208l14 14 27-30"/>' : ''}<text class="lg-t1" x="320" y="256" text-anchor="middle">${a}</text><text class="lg-t2" x="320" y="280" text-anchor="middle">${b}</text></g>`).join('')}
         <text class="lg-h" x="264" y="314">No</text><text class="lg-h" x="376" y="314" text-anchor="end">Yes</text>
         <circle class="lg-k" cx="276" cy="376" r="20" fill="#0a111a" stroke="#2b4560"/>
         <circle class="lg-k lg-yes" data-lg-yes cx="364" cy="376" r="20" fill="#0a111a" stroke="#7cc4ff"/>

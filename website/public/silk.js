@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Kyro Wallet site: the blue silk behind every page, our own small WebGL shader on one fixed canvas.
-// It leans towards the pointer, changes tone with the section in view ([data-tone], [data-hue]),
-// drops its resolution on slow machines and stops when hidden. Without WebGL, with reduced motion
-// or with Data Saver on, the CSS gradient under the canvas stays.
+// It leans towards the pointer and travels with the page, from the eased scroll value so a wheel
+// notch never shows as a step. Tone follows the section in view ([data-tone], [data-hue]) slowly.
+// Quality only changes between scrolls, rarely. It draws from the loop in motion.js. Without WebGL,
+// with reduced motion or with Data Saver on, the CSS gradient under the canvas stays.
 (function () {
   'use strict';
 
   var canvas = document.querySelector('canvas[data-silk]');
-  if (!canvas || !document.documentElement.classList.contains('js')) return;
+  var K = window.Kyro;
+  if (!canvas || !K || !document.documentElement.classList.contains('js')) return;
   if (navigator.connection && navigator.connection.saveData) return;
 
   var VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
@@ -50,7 +52,9 @@
     '  c=mix(c,vec3(.486,.769,1.),smoothstep(.56,.84,v));',
     '  c=mix(c,vec3(.87,.96,1.),smoothstep(.86,1.2,v));',
     '  c=mix(c*vec3(.62,.8,1.12),c,H);',
-    '  gl_FragColor=vec4(c*A,1.);',
+    // Interleaved gradient noise, one 8-bit step: keeps the long dark ramps free of banding.
+    '  float g=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));',
+    '  gl_FragColor=vec4(c*A+(g-.5)/170.,1.);',
     '}'
   ].join('\n');
 
@@ -84,14 +88,16 @@
 
   var coarse = window.matchMedia('(pointer: coarse)').matches;
   var scale = coarse ? 0.35 : (navigator.hardwareConcurrency || 8) <= 4 ? 0.4 : 0.6;
-  function resize() {
-    var w = Math.max(2, Math.round(canvas.clientWidth * scale));
-    var h = Math.max(2, Math.round(canvas.clientHeight * scale));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-      gl.viewport(0, 0, w, h);
-    }
+  var bufW = 0, bufH = 0;
+  function resize(force) {
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    // A phone's address bar changes the height while scrolling: only ever grow for that.
+    if (!force && w === bufW && h <= bufH) return;
+    bufW = w;
+    bufH = h;
+    canvas.width = Math.max(2, Math.round(w * scale));
+    canvas.height = Math.max(2, Math.round(h * scale));
+    gl.viewport(0, 0, canvas.width, canvas.height);
   }
 
   // Section tones, measured once and on resize.
@@ -104,7 +110,7 @@
     });
   }
   function onResize() {
-    resize();
+    resize(false);
     measure();
   }
   window.addEventListener('resize', onResize);
@@ -112,18 +118,17 @@
   if (window.ResizeObserver) new ResizeObserver(measure).observe(document.body);
   onResize();
 
-  var tone = 1.1, hue = 1;
-  function targets(now) {
-    var c = window.scrollY + window.innerHeight * 0.5;
-    var t = 0.6, h = 0.4;
+  var tone = 1.1, hue = 1, zoneT = 1.1, zoneH = 1;
+  function pickZone(y) {
+    var c = y + window.innerHeight * 0.5;
+    zoneT = 0.6;
+    zoneH = 0.4;
     for (var i = 0; i < zones.length; i++) {
       if (c >= zones[i].top && c < zones[i].bottom) {
-        t = zones[i].tone;
-        h = zones[i].hue;
+        zoneT = zones[i].tone;
+        zoneH = zones[i].hue;
       }
     }
-    tone += (t - tone) * 0.045;
-    hue += (h - hue) * 0.045;
   }
 
   var mx = 0.68, my = 0.62, tx = mx, ty = my, speed = 0;
@@ -139,59 +144,57 @@
     { passive: true }
   );
 
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) start();
-  });
+  var travel = K.y, t0 = performance.now(), dead = false, started = false;
+  // Quality: judged over 4 quiet seconds, at most once every 20 s, never during a scroll.
+  var sum = 0, n = 0, nextCheck = 0;
+  function quality(now) {
+    if (Math.abs(K.v) > 40 || K.raw > 200) return;
+    sum += K.raw;
+    n++;
+    if (now < nextCheck || n < 120) return;
+    var avg = sum / n;
+    sum = n = 0;
+    nextCheck = now + 4000;
+    if (avg < 30) return;
+    nextCheck = now + 20000;
+    if (scale > 0.3) {
+      scale *= 0.75;
+      resize(true); // the frame below redraws at once, so nothing blinks
+    } else if (avg > 45) {
+      canvas.classList.remove('on');
+      dead = true;
+    }
+  }
 
-  var running = false, last = 0, slow = 0, skip = false, t0 = performance.now(), dead = false;
-  function frame(now) {
-    if (document.hidden || dead) {
-      running = false;
-      return;
-    }
-    requestAnimationFrame(frame);
-    if (coarse && (skip = !skip)) return; // phones: 30 fps is plenty for slow cloth
-    var dt = now - last;
-    last = now;
-    // A long run of slow frames: fewer pixels first, then keep the gradient and stop.
-    slow = dt > (coarse ? 60 : 34) ? slow + 1 : Math.max(0, slow - 1);
-    if (slow > 45) {
-      slow = 0;
-      if (scale > 0.2) {
-        scale *= 0.7;
-        resize();
-      } else {
-        canvas.classList.remove('on');
-        dead = true;
-        return;
-      }
-    }
-    targets(now);
-    mx += (tx - mx) * 0.07;
-    my += (ty - my) * 0.07;
-    speed *= 0.965;
+  K.frame(function (y, now, dt) {
+    if (!started || dead) return;
+    quality(now);
+    pickZone(y);
+    tone = K.damp(tone, zoneT, 1.1, dt);
+    hue = K.damp(hue, zoneH, 1.1, dt);
+    // The cloth moves with the page, a touch behind it.
+    travel = K.damp(travel, y, 0.16, dt);
+    mx = K.damp(mx, tx, 0.14, dt);
+    my = K.damp(my, ty, 0.14, dt);
+    speed *= Math.exp(-dt / 0.45);
     gl.uniform2f(U.R, canvas.width, canvas.height);
     gl.uniform1f(U.T, (now - t0) / 1000);
     gl.uniform2f(U.M, mx, my);
-    gl.uniform1f(U.S, (window.scrollY || 0) / (window.innerHeight || 800));
+    gl.uniform1f(U.S, travel / (window.innerHeight || 800));
     gl.uniform1f(U.A, tone);
     gl.uniform1f(U.H, hue);
     gl.uniform1f(U.V, speed);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-  }
-  function start() {
-    if (running) return;
-    running = true;
-    last = performance.now();
-    requestAnimationFrame(frame);
-  }
+    K.p && (K.p.silk = (travel / (window.innerHeight || 800)) * 1.25);
+  });
+
+  // After the page is on screen: the hero never waits for the shader.
   function begin() {
-    start();
+    started = true;
     requestAnimationFrame(function () {
       canvas.classList.add('on');
     });
   }
-  // After the page is on screen: the hero never waits for the shader.
   if (document.readyState === 'complete') begin();
   else window.addEventListener('load', begin);
 })();

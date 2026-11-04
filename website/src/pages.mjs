@@ -163,7 +163,7 @@ export function home(chains) {
   const hop = (mark, name, note) => `<li data-hop><span class="rt-dot">${mark}</span><b>${name}</b><small>${note}</small></li>`;
 
   const body = html`
-    <section class="story" id="showcase" aria-labelledby="hero-title" data-story data-tone="1.1" data-hue="1">
+    <section class="story" id="showcase" aria-labelledby="hero-title" data-story data-nonav data-tone="1.1" data-hue="1">
       <div class="story-pin">
         <div class="wrap hero-grid">
           <div class="hero-copy" data-copy>
@@ -188,7 +188,7 @@ export function home(chains) {
           <div class="kw-wrap" data-kw>${appWindow()}</div>
         </div>
         <div class="story-ui" data-ui>
-          <p class="story-cap" data-caption aria-hidden="true">Balances fetched over Tor</p>
+          <p class="story-cap" data-caption aria-hidden="true"><span>Balances fetched over Tor</span><span>Hidden with one click, from anyone behind you</span><span>Swaps without an account</span><span>Rates, with no sign-up</span></p>
           <div class="story-dots">
             <button type="button" class="on" data-go="0" aria-label="Show the Portfolio screen"><span>Portfolio</span></button>
             <button type="button" data-go="1" aria-label="Show the Swap screen"><span>Swap</span></button>
@@ -337,14 +337,14 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="gather" data-gather aria-labelledby="download-title" data-tone="1.05" data-hue="1">
+    <section class="gather" data-gather data-nonav aria-labelledby="download-title" data-tone="1.05" data-hue="1">
       <span class="gather-anchor" id="download"></span>
       <div class="gather-pin">
         <div class="field" data-field aria-hidden="true">
           ${chains.map((c) => `<img class="fc" src="/img/coins/${iconOf(c)}.svg" width="64" height="64" alt="" loading="lazy" decoding="async">`)}
         </div>
         <canvas class="fx" aria-hidden="true"></canvas>
-        <span class="gather-glow" data-glow aria-hidden="true"></span>
+        <span class="gather-glowpos" data-glowpos aria-hidden="true"><span class="gather-glow" data-glow></span></span>
         <svg class="gather-mark" data-mark viewBox="0 0 64 64" aria-hidden="true"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/><rect x="26" y="26" width="12" height="12" fill="#7CC4FF"/></svg>
         <div class="gather-cta" data-cta>
           <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
