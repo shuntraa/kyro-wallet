@@ -175,7 +175,7 @@ function swap(chains) {
   const n = chains.filter((c) => c.features.swap).length;
   const faqs = [
     ['Can I really swap any coin to any coin?', `Almost. ${n} of the ${chains.length} blockchains can swap, across chains in most cases. The table on this page lists the limits: Stellar is arrival only, some EVM networks swap on the same chain only, and Polkadot, Cosmos Hub and Conflux have no route yet.`],
-    ['What does a swap cost?', 'A Kyro fee from 0.7% to 5% depending on the swap value, already taken out of the amount you see, plus the network fee. <a href="/fees/">Full fee table</a>.'],
+    ['What does a swap cost?', 'A Kyro fee from 0.7% to 5% depending on the swap value, plus the provider’s own costs, all already taken out of the amount you see, then the network fee. On routes NEAR Intents serves directly, it takes an amount equal to Kyro’s fee. <a href="/fees/">Full fee table</a>.'],
     ['Do I need an account with a swap provider?', 'No. Kyro talks to the providers directly over Tor. There is nothing to sign up for.'],
     ['Why does a Monero swap send two transactions?', 'Exolix has no integrator fee, so Kyro’s fee cannot be collected inside the swap. It goes as a second ordinary transfer of the sold coin. The same applies to any Exolix route.'],
     ['What if the rate changes before the swap lands?', 'You set a maximum slippage of 0.1%, 0.5%, 1% or your own value, and Kyro shows the guaranteed minimum before you sign.']
@@ -196,7 +196,7 @@ function swap(chains) {
     faqs,
     body: html`
     ${sec('s-how', html`
-        ${head('How it works', 's-how', 'One screen, <em>several providers</em>', 'Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with the fee already out.')}
+        ${head('How it works', 's-how', 'One screen, <em>several providers</em>', 'Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with every fee already out.')}
         <div class="swap-grid"><div class="glow-card swap-main spot g-ice" data-reveal>${swapWidget()}</div></div>`)}
 
     ${sec('s-routes', html`
@@ -207,7 +207,8 @@ function swap(chains) {
     ${row('s-fee', 'Fee', 'Included in the rate, <em>and public</em>', false, html`
           <p>The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, and it is 0.9% when the token price is unknown. It funds the project.</p>
           ${ul([
-            'What you see as “You receive” already has the fee out.',
+            'What you see as “You receive” already includes everything: Kyro’s fee and the provider’s own costs.',
+            'NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).',
             'It is collected through each provider’s official integrator mechanism.',
             'Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.',
             `The rates live in one open file. <a href="${REPO}/blob/main/packages/swap/src/fees.ts">Read fees.ts</a>.`

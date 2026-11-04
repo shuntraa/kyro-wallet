@@ -309,7 +309,7 @@ const GUIDES = () => [
       ${steps([
         'Open <b>Swap</b> and pick the coin you want to sell. Kyro shows any coin you hold, on any network.',
         'Pick <b>XMR</b> as what you want. Search by name or ticker.',
-        'Enter the amount. “You receive” already has Kyro’s fee out.',
+        'Enter the amount. “You receive” already has Kyro’s fee and the provider’s costs out.',
         'Choose <b>Review the swap</b>. Kyro creates the order, checks that it pays your own Monero address, and checks the deposit address.',
         'Confirm in the system window. Kyro sends an ordinary transfer, with no contract involved.',
         'Right after the deposit, Kyro sends a second transfer: its fee, in the coin you sold.',
@@ -564,7 +564,7 @@ const TERMS = () => [
   ['Stablecoin', 'A token designed to track a currency, such as USDC or USDT.'],
   ['Staking', 'Supporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.'],
   ['Stake pool', 'A group stake run by an operator, as on Cardano and NEAR.'],
-  ['Swap', 'Exchanging one coin for another from your wallet, through a provider. Kyro’s fee is included in the rate.'],
+  ['Swap', 'Exchanging one coin for another from your wallet, through a provider. Kyro’s fee and the provider’s costs are included in the rate.'],
   ['Token', 'An asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain’s native coin.'],
   ['Tor', `A network that hides your IP address by routing traffic through volunteer relays. ${a('/tor/', 'How Kyro uses it')}.`],
   ['Tor circuit', 'The path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.'],

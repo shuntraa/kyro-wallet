@@ -251,8 +251,8 @@ export function feeCalc(curve) {
             <div class="calc-big"><span class="calc-l" id="calc-amount-l">Swap value</span><output class="calc-amt" data-calc-amount for="calc-range">$200</output></div>
             <div class="calc-big calc-rate"><span class="calc-l">Kyro fee</span><output data-calc-rate>1.11%</output></div>
             <dl class="calc-dl">
-              <div><dt>Fee in dollars</dt><dd data-calc-fee>$2.22</dd></div>
-              <div><dt>You receive, in value</dt><dd data-calc-out>$197.78</dd></div>
+              <div><dt>Kyro fee in dollars</dt><dd data-calc-fee>$2.22</dd></div>
+              <div><dt>After Kyro’s fee</dt><dd data-calc-out>$197.78</dd></div>
             </dl>
           </div>
           <div class="calc-plot">
@@ -265,7 +265,7 @@ export function feeCalc(curve) {
           </div>
           <input class="calc-range" id="calc-range" type="range" min="0" max="1000" step="1" value="460" aria-labelledby="calc-amount-l" data-calc-range>
           <div class="calc-ticks" aria-hidden="true"><span>$1</span><span>$100</span><span>$10,000</span><span>$100,000</span></div>
-          <p class="small calc-note">Before the network fee, which goes to the network. Some providers cap the rate lower on swaps under about $9.</p>
+          <p class="small calc-note"><strong>This is Kyro’s fee only, not what you receive.</strong> Providers charge their own costs too. NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%). The quote you see in the app already includes everything, so it is the number to trust. The network fee is separate and goes to the network. Some providers cap the rate lower on swaps under about $9.</p>
         </div>`;
 }
 

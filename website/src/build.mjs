@@ -181,7 +181,7 @@ const llms = `# Kyro Wallet
 
 Key facts:
 
-- Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Full table: ${SITE}/fees/
+- Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Providers charge their own costs too: NEAR Intents takes an amount equal to the Kyro fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote shown already includes everything. Full table: ${SITE}/fees/
 - Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
 - Blockchains (${chains.length}): ${P.listNames(chains.map((c) => c.name))}. 220+ tokens.
 - Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON) and NEAR; ETH liquid staking with Lido; lending on Aave v3. 14 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.

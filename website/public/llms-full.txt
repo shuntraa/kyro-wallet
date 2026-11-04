@@ -103,7 +103,7 @@ Swap in and out of XMR without leaving the wallet. Kyro is a full Monero desktop
 
 ### Fee in the rate
 
-From 0.7%, already taken out of the amount you receive. Full swap fee table
+A Kyro fee from 0.7%, plus the provider's own costs, all already out of the amount you receive. Full swap fee table
 
 Routes, limits and checks
 
@@ -317,21 +317,21 @@ Fees
 
 # Kyro is free. Swaps from 0.7%.
 
-Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.
+Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, plus the provider's own costs. The quote you see already includes everything.
 
 Swap value$200
 
 Kyro fee1.11%
 
-Fee in dollars$2.22
+Kyro fee in dollars$2.22
 
-You receive, in value$197.78
+After Kyro's fee$197.78
 
 0% Send and receive You pay the network fee only.
 
 0% Staking SOL, ADA, TRX, NEAR. Network fee only.
 
-from 0.7% Swaps Included in the amount you receive.
+from 0.7% Kyro fee on swaps Providers add their own costs. All included in the quote.
 
 ## Swap fee by swap value
 
@@ -361,7 +361,7 @@ How it is calculated:  The table gives the rate at each listed value. Between tw
 
 Unknown token price:  If Kyro cannot find a price for the token, it cannot work out the swap value. The fee is then 0.9%.
 
-Already included:  The fee is deducted from the amount you receive. Kyro shows only what you send and what you receive, so the "you receive" amount is what arrives, with no further Kyro charge.
+Already included:  The table is Kyro's fee alone. Providers charge their own costs too. NEAR Intents takes an amount equal to Kyro's fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%). The "you receive" amount in the app already has all of this out, so it is what arrives, with nothing further to pay beyond the network fee.
 
 Example
 
@@ -373,13 +373,15 @@ You send200 USDC ~ $200
 
 Kyro fee, about 1.11%~ $2.22 already deducted
 
-You receive~ $197.78 in the token you chose
+After Kyro's fee~ $197.78 before the provider's costs
+
+Provider's costsVary, already in the quote. On a route NEAR Intents serves directly: about 1.11% more, leaving ~ $195.56
 
 Network feeSeparate, paid to the network
 
 ## How the swap fee works
 
-- The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote: the amount you receive is after the fee.
+- The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote.
 
 - It is collected by each provider's official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.
 
@@ -387,7 +389,9 @@ Network feeSeparate, paid to the network
 
 - If a provider cannot apply the fee correctly, its quote is not shown.
 
-- Providers may charge their own fee. It is already in the price they quote.
+- Providers charge their own costs, on top of Kyro's fee. NEAR Intents takes an amount equal to Kyro's fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).
+
+- The quote you see already includes everything. The Best price panel shows the provider, the Kyro rate and, when the quote gives it, the provider's fee.
 
 ## Network fees
 
@@ -617,7 +621,7 @@ Can't find yours? Ask on GitHub.
 ## The basics
 
 Q: Is Kyro Wallet free?
-A: Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. Fee details.
+A: Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee from 0.7%, and providers add their own costs, all built into the quote. Fee details.
 
 Q: Is Kyro custodial?
 A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
@@ -640,7 +644,7 @@ Q: Can I earn from a hardware wallet?
 A: Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. Options and risks.
 
 Q: How much does a swap cost?
-A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. Full fee table.
+A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers charge their own costs as well: NEAR Intents takes an amount equal to Kyro's fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote you see already includes everything. Full fee table.
 
 Q: Can I stake with Kyro?
 A: Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. Options and risks.
@@ -967,7 +971,7 @@ Yes
 
 ### Swap
 
-Swap BTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap BTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1092,7 +1096,7 @@ Yes
 
 ### Swap
 
-Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1219,7 +1223,7 @@ Yes
 
 ### Swap
 
-Swap BNB in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap BNB in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1342,7 +1346,7 @@ Yes
 
 ### Swap
 
-Swap POL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap POL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1465,7 +1469,7 @@ Yes
 
 ### Swap
 
-Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1588,7 +1592,7 @@ Yes
 
 ### Swap
 
-Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1711,7 +1715,7 @@ Yes
 
 ### Swap
 
-Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1834,7 +1838,7 @@ Yes
 
 ### Swap
 
-Swap AVAX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap AVAX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -1957,7 +1961,7 @@ Yes
 
 ### Swap
 
-Swap CRO in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap CRO in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2080,7 +2084,7 @@ Yes
 
 ### Swap
 
-Swap MNT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap MNT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2203,7 +2207,7 @@ Yes
 
 ### Swap
 
-Swap S in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap S in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2326,7 +2330,7 @@ Yes
 
 ### Swap
 
-Swap FLR in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap FLR in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2449,7 +2453,7 @@ Yes
 
 ### Swap
 
-Swap KAIA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap KAIA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2572,7 +2576,7 @@ Yes
 
 ### Swap
 
-Swap xDAI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap xDAI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2695,7 +2699,7 @@ Yes
 
 ### Swap
 
-Swap HYPE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap HYPE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -2818,7 +2822,7 @@ Yes
 
 ### Swap
 
-Swap SEI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap SEI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3064,7 +3068,7 @@ Yes
 
 ### Swap
 
-Swap SOL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap SOL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3189,7 +3193,7 @@ Yes
 
 ### Swap
 
-Swap TRX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap TRX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3314,7 +3318,7 @@ Yes
 
 ### Swap
 
-Swap ADA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ADA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3439,7 +3443,7 @@ Yes
 
 ### Swap
 
-Swap XRP in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap XRP in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3566,7 +3570,7 @@ Yes
 
 ### Swap
 
-Swap LTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap LTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3689,7 +3693,7 @@ Yes
 
 ### Swap
 
-Swap DOGE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap DOGE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3814,7 +3818,7 @@ Yes
 
 ### Swap
 
-Swap BCH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap BCH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -3935,7 +3939,7 @@ Yes
 
 ### Swap
 
-Swap DASH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap DASH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4056,7 +4060,7 @@ Yes
 
 ### Swap
 
-Swap into XLM from other chains (Stellar is a destination only for now). The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap into XLM from other chains (Stellar is a destination only for now). The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4181,7 +4185,7 @@ Yes
 
 ### Swap
 
-Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4306,7 +4310,7 @@ Yes
 
 ### Swap
 
-Swap SUI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap SUI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4429,7 +4433,7 @@ Yes
 
 ### Swap
 
-Swap XMR both ways through Exolix, without an account. Kyro's fee is a second ordinary transfer of the coin you sell. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap XMR both ways through Exolix, without an account. Kyro's fee is a second ordinary transfer of the coin you sell. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4556,7 +4560,7 @@ Yes
 
 ### Swap
 
-Swap GRAM in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap GRAM in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -4931,7 +4935,7 @@ Yes
 
 ### Swap
 
-Swap APT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap APT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -5054,7 +5058,7 @@ Yes
 
 ### Swap
 
-Swap native ALGO in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Algorand. Algorand tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap native ALGO in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Algorand. Algorand tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -5177,7 +5181,7 @@ Yes
 
 ### Swap
 
-Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -5300,7 +5304,7 @@ Yes
 
 ### Swap
 
-Swap ZEC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap ZEC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%, and the provider's own costs.
 Yes
 
 ### Earn
@@ -5707,7 +5711,7 @@ How it works
 
 ## One screen, several providers
 
-Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with the fee already out.
+Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with every fee already out.
 
 Routes
 
@@ -5749,7 +5753,9 @@ Fee
 
 The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, and it is 0.9% when the token price is unknown. It funds the project.
 
-- What you see as "You receive" already has the fee out.
+- What you see as "You receive" already includes everything: Kyro's fee and the provider's own costs.
+
+- NEAR Intents takes an amount equal to Kyro's fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).
 
 - It is collected through each provider's official integrator mechanism.
 
@@ -5807,7 +5813,7 @@ Q: Can I really swap any coin to any coin?
 A: Almost. 33 of the 36 blockchains can swap, across chains in most cases. The table on this page lists the limits: Stellar is arrival only, some EVM networks swap on the same chain only, and Polkadot, Cosmos Hub and Conflux have no route yet.
 
 Q: What does a swap cost?
-A: A Kyro fee from 0.7% to 5% depending on the swap value, already taken out of the amount you see, plus the network fee. Full fee table.
+A: A Kyro fee from 0.7% to 5% depending on the swap value, plus the provider's own costs, all already taken out of the amount you see, then the network fee. On routes NEAR Intents serves directly, it takes an amount equal to Kyro's fee. Full fee table.
 
 Q: Do I need an account with a swap provider?
 A: No. Kyro talks to the providers directly over Tor. There is nothing to sign up for.
@@ -7411,7 +7417,7 @@ These reach XMR through Exolix: BTC, LTC, DOGE, TRX, USDT on TRON, ETH on Ethere
 
 - Pick XMR as what you want. Search by name or ticker.
 
-- Enter the amount. "You receive" already has Kyro's fee out.
+- Enter the amount. "You receive" already has Kyro's fee and the provider's costs out.
 
 - Choose Review the swap. Kyro creates the order, checks that it pays your own Monero address, and checks the deposit address.
 
@@ -7735,7 +7741,7 @@ Glossary
 
 What a recovery phrase is, why gas costs money, what a Tor circuit does. The terms you meet in a crypto wallet, kept short.
 
-AddressThe public string you share to receive coins. Safe to give out, though it can link your activity on a public blockchain.Address poisoningA scam that plants a lookalike address in your history so you copy it by mistake. How to spot it.ApprovalPermission you give a contract to move a token from your account. Kyro approves the exact amount by default. An unlimited approval needs an explicit action and shows a warning.APYAnnual percentage yield: a yearly rate of return, with compounding. In Kyro every APY is an estimate, never a promise.BIP39The standard that turns a random number into 12 or 24 English words. It is why a phrase can move between wallets.Blind signingApproving a transaction your hardware wallet cannot decode. The device shows raw data, so it protects your keys but not your consent.BlockchainA shared public record of transactions, kept by many computers.Clear modeKyro with Tor turned off. Servers see your IP address. You can only reach it by confirming in a system window.Custodial walletA wallet where a company holds the keys for you. You trust it to give your coins back. Kyro is not one.DecoyIn Monero, other outputs mixed with your real one when you send, so an observer cannot tell which was spent.DepegWhen a token meant to track another asset, such as a stablecoin or stETH, drifts from its target price.Derivation pathThe recipe that turns a phrase into a specific key. Two wallets using different paths show different addresses for the same phrase.EpochA fixed period on a proof-of-stake network. Staking changes often take effect at an epoch boundary.Exit relayThe last Tor relay, which connects to the server. The server sees its IP address instead of yours.Fail closedStopping when a protection is missing, rather than carrying on without it. If Tor is down, Kyro sends nothing.GasThe fee for running a transaction on Ethereum and similar networks. It goes to the network, not to Kyro.Hardware walletA small device that keeps your keys and signs on its own screen. Ledger and Trezor in Kyro.LendingDepositing tokens in a protocol such as Aave so borrowers can use them, for a variable rate. Contract risk applies.Liquid stakingStaking through a protocol such as Lido that gives you a token, stETH, standing for your stake.Network feeWhat you pay the blockchain to process a transaction. It is separate from any Kyro fee.NodeA computer that keeps a copy of a blockchain and answers questions about it. Running your own means no third party sees your lookups.Non-custodial walletA wallet where you alone hold the keys. Nobody can freeze your funds or recover them for you.Onion serviceA server reachable only inside Tor, so no exit relay is involved. Kyro uses one for Bitcoin lookups.Private keyThe secret that signs transactions. Kyro derives it for each signature in the Rust core, then wipes it from memory.Recovery phrase12 or 24 words that restore your whole wallet. Also called a seed phrase. How to back it up.RPC serverA server a wallet talks to in order to read a blockchain and broadcast transactions.SeedThe secret value your keys come from. In everyday use, the same thing as your recovery phrase.SlashingA penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON and NEAR are not slashed today.SlippageThe gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.StablecoinA token designed to track a currency, such as USDC or USDT.StakingSupporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.Stake poolA group stake run by an operator, as on Cardano and NEAR.SwapExchanging one coin for another from your wallet, through a provider. Kyro's fee is included in the rate.TokenAn asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain's native coin.TorA network that hides your IP address by routing traffic through volunteer relays. How Kyro uses it.Tor circuitThe path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.ValidatorA computer that helps run a proof-of-stake network and earns rewards. It cannot spend what you delegate.View keyA Monero key that reads incoming payments but cannot spend. In Kyro it stays on your machine.xpubAn extended public key. It can show all addresses of an account, but cannot spend. Kyro stores xpubs for hardware accounts.
+AddressThe public string you share to receive coins. Safe to give out, though it can link your activity on a public blockchain.Address poisoningA scam that plants a lookalike address in your history so you copy it by mistake. How to spot it.ApprovalPermission you give a contract to move a token from your account. Kyro approves the exact amount by default. An unlimited approval needs an explicit action and shows a warning.APYAnnual percentage yield: a yearly rate of return, with compounding. In Kyro every APY is an estimate, never a promise.BIP39The standard that turns a random number into 12 or 24 English words. It is why a phrase can move between wallets.Blind signingApproving a transaction your hardware wallet cannot decode. The device shows raw data, so it protects your keys but not your consent.BlockchainA shared public record of transactions, kept by many computers.Clear modeKyro with Tor turned off. Servers see your IP address. You can only reach it by confirming in a system window.Custodial walletA wallet where a company holds the keys for you. You trust it to give your coins back. Kyro is not one.DecoyIn Monero, other outputs mixed with your real one when you send, so an observer cannot tell which was spent.DepegWhen a token meant to track another asset, such as a stablecoin or stETH, drifts from its target price.Derivation pathThe recipe that turns a phrase into a specific key. Two wallets using different paths show different addresses for the same phrase.EpochA fixed period on a proof-of-stake network. Staking changes often take effect at an epoch boundary.Exit relayThe last Tor relay, which connects to the server. The server sees its IP address instead of yours.Fail closedStopping when a protection is missing, rather than carrying on without it. If Tor is down, Kyro sends nothing.GasThe fee for running a transaction on Ethereum and similar networks. It goes to the network, not to Kyro.Hardware walletA small device that keeps your keys and signs on its own screen. Ledger and Trezor in Kyro.LendingDepositing tokens in a protocol such as Aave so borrowers can use them, for a variable rate. Contract risk applies.Liquid stakingStaking through a protocol such as Lido that gives you a token, stETH, standing for your stake.Network feeWhat you pay the blockchain to process a transaction. It is separate from any Kyro fee.NodeA computer that keeps a copy of a blockchain and answers questions about it. Running your own means no third party sees your lookups.Non-custodial walletA wallet where you alone hold the keys. Nobody can freeze your funds or recover them for you.Onion serviceA server reachable only inside Tor, so no exit relay is involved. Kyro uses one for Bitcoin lookups.Private keyThe secret that signs transactions. Kyro derives it for each signature in the Rust core, then wipes it from memory.Recovery phrase12 or 24 words that restore your whole wallet. Also called a seed phrase. How to back it up.RPC serverA server a wallet talks to in order to read a blockchain and broadcast transactions.SeedThe secret value your keys come from. In everyday use, the same thing as your recovery phrase.SlashingA penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON and NEAR are not slashed today.SlippageThe gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.StablecoinA token designed to track a currency, such as USDC or USDT.StakingSupporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.Stake poolA group stake run by an operator, as on Cardano and NEAR.SwapExchanging one coin for another from your wallet, through a provider. Kyro's fee and the provider's costs are included in the rate.TokenAn asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain's native coin.TorA network that hides your IP address by routing traffic through volunteer relays. How Kyro uses it.Tor circuitThe path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.ValidatorA computer that helps run a proof-of-stake network and earns rewards. It cannot spend what you delegate.View keyA Monero key that reads incoming payments but cannot spend. In Kyro it stays on your machine.xpubAn extended public key. It can show all addresses of an account, but cannot spend. Kyro stores xpubs for hardware accounts.
 
 ## Keep reading
 

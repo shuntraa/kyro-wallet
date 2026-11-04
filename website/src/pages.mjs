@@ -88,7 +88,7 @@ function appLd(chains) {
     publisher: { '@id': ORG_ID },
     featureList: [
       `Send and receive on ${chains.length} blockchains`,
-      'Token swaps with fees from 0.7%, included in the amount you receive',
+      'Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs',
       'Earn: staking on Solana, Cardano, TRON and NEAR, Lido and Aave',
       'Ledger and Trezor hardware wallets',
       'Built-in Tor, no personal data collected',
@@ -305,7 +305,7 @@ export function home(chains) {
           <article class="glow-card spot g-sky" data-reveal>
             <span class="card-num"><span data-roll>0.7</span><small>%</small></span>
             <h3>Fee in the rate</h3>
-            <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full swap fee table</a></p>
+            <p>A Kyro fee from 0.7%, plus the provider’s own costs, all already out of the amount you receive. <a href="/fees/">Full swap fee table</a></p>
           </article>
         </div>
         <p><a class="more" href="/swap/">Routes, limits and checks</a></p>
@@ -494,7 +494,7 @@ export function features(chains) {
             <li>Allocation by asset, and a vault panel with your security status.</li>
           </ul>`, assetsCard())}
     ${row('f-swap', 'Swap', 'The fee <em>in plain sight</em>', true, html`
-          <p>Kyro asks several providers for a quote, including NEAR Intents across chains and Exolix for Monero, then picks the best price after fees. The Kyro fee, from 0.7%, is already out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
+          <p>Kyro asks several providers for a quote, including NEAR Intents across chains and Exolix for Monero, then picks the best price after fees. The Kyro fee, from 0.7%, and the provider’s own costs are already out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
           <ul class="checks">
             <li>Token approvals are for the exact amount. Unlimited approvals are off unless you turn them on.</li>
             <li>The transaction is simulated just before you sign it.</li>
@@ -676,14 +676,14 @@ export function fees(curve) {
   const trail = [['/', 'Home'], [path, 'Fees']];
   const title = 'Fees: free to use, swaps from 0.7% | Kyro Wallet';
   const description =
-    'Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.';
+    'Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee from 0.7% to 5% depending on the swap value, plus the provider’s own costs, all already included in the quote.';
 
   const body = html`
     ${pageHero({
       trail,
       eyebrow: 'Fees',
       h1: 'Kyro is free. <em>Swaps from 0.7%.</em>',
-      lead: 'Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.'
+      lead: 'Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, plus the provider’s own costs. The quote you see already includes everything.'
     })}
 
     <section class="section section-tight" aria-label="Swap fee calculator">
@@ -707,8 +707,8 @@ export function fees(curve) {
           </div>
           <div class="fee-card fee-accent spot">
             <span class="fee-value"><span class="fee-from">from</span> <span data-roll>0.7%</span></span>
-            <span class="fee-name">Swaps</span>
-            <span class="fee-desc">Included in the amount you receive.</span>
+            <span class="fee-name">Kyro fee on swaps</span>
+            <span class="fee-desc">Providers add their own costs. All included in the quote.</span>
           </div>
         </div>
       </div>
@@ -737,7 +737,7 @@ export function fees(curve) {
           </div>
           <p><strong>How it is calculated</strong> The table gives the rate at each listed value. Between two values the rate moves smoothly, interpolated on a logarithmic scale, so there are no sudden jumps.</p>
           <p><strong>Unknown token price</strong> If Kyro cannot find a price for the token, it cannot work out the swap value. The fee is then 0.9%.</p>
-          <p><strong>Already included</strong> The fee is deducted from the amount you receive. Kyro shows only what you send and what you receive, so the “you receive” amount is what arrives, with no further Kyro charge.</p>
+          <p><strong>Already included</strong> The table is Kyro’s fee alone. Providers charge their own costs too. NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%). The “you receive” amount in the app already has all of this out, so it is what arrives, with nothing further to pay beyond the network fee.</p>
         </div>
       </div>
     </section>
@@ -754,7 +754,8 @@ export function fees(curve) {
             <dl>
               <div><dt>You send</dt><dd class="num">200 USDC <small>≈ $200</small></dd></div>
               <div class="hl"><dt>Kyro fee, about 1.11%</dt><dd class="num">≈ $2.22 <small>already deducted</small></dd></div>
-              <div><dt>You receive</dt><dd class="num">≈ $197.78 in the token you chose</dd></div>
+              <div><dt>After Kyro’s fee</dt><dd class="num">≈ $197.78 <small>before the provider’s costs</small></dd></div>
+              <div><dt>Provider’s costs</dt><dd>Vary, already in the quote. On a route NEAR Intents serves directly: about 1.11% more, leaving ≈ $195.56</dd></div>
               <div><dt>Network fee</dt><dd>Separate, paid to the network</dd></div>
             </dl>
           </div>
@@ -767,11 +768,12 @@ export function fees(curve) {
         <div class="prose" data-reveal>
           <h2 id="fee-how">How the swap fee works</h2>
           <ul class="checks">
-            <li>The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote: the amount you receive is after the fee.</li>
+            <li>The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote.</li>
             <li>It is collected by each provider’s official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.</li>
             <li>Quotes are compared after fees: the best price shown already includes them.</li>
             <li>If a provider cannot apply the fee correctly, its quote is not shown.</li>
-            <li>Providers may charge their own fee. It is already in the price they quote.</li>
+            <li>Providers charge their own costs, on top of Kyro’s fee. NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).</li>
+            <li>The quote you see already includes everything. The Best price panel shows the provider, the Kyro rate and, when the quote gives it, the provider’s fee.</li>
           </ul>
 
           <h2 id="network-fees">Network fees</h2>
@@ -950,7 +952,7 @@ const FAQ = [
   {
     title: 'The basics',
     items: [
-      { home: true, q: 'Is Kyro Wallet free?', a: () => `<p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. <a href="/fees/">Fee details</a>.</p>` },
+      { home: true, q: 'Is Kyro Wallet free?', a: () => `<p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee from 0.7%, and providers add their own costs, all built into the quote. <a href="/fees/">Fee details</a>.</p>` },
       { home: true, q: 'Is Kyro custodial?', a: () => `<p>No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.</p>` },
       { home: true, q: 'Which blockchains does Kyro support?', a: (chains) => `<p>${chains.length} blockchains: ${listNames(chains.map((c) => c.name))}. Plus 220+ tokens on them. <a href="/chains/">What works on each one</a>.</p>` },
       { q: 'Which computers does Kyro run on?', a: () => `<p>Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). <a href="/download/">Download</a>.</p>` },
@@ -962,7 +964,7 @@ const FAQ = [
     items: [
       { q: 'Can I swap Monero in Kyro?', a: () => `<p>Yes, both ways, through Exolix. Kyro’s fee is a second ordinary transfer of the coin you sell. <a href="/guides/swap-to-monero/">Swap to Monero</a>.</p>` },
       { q: 'Can I earn from a hardware wallet?', a: () => `<p>Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. <a href="/earn/">Options and risks</a>.</p>` },
-      { home: true, q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p>` },
+      { home: true, q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers charge their own costs as well: NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote you see already includes everything. <a href="/fees/">Full fee table</a>.</p>` },
       { home: true, q: 'Can I stake with Kyro?', a: () => `<p>Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p>` }
     ]
   },
@@ -1143,7 +1145,7 @@ export function chainPage(c, chains) {
 
   const caps = [
     ['ic-send', 'Send and receive', f.send, `Send and receive ${assets}, with address-poisoning alerts and clipboard checks.`, `Not available on ${c.name} yet.`],
-    ['ic-swap', 'Swap', f.swap, `${c.swapNote || `Swap ${c.ticker} in the app.`} The amount you receive already includes Kyro’s swap fee, from 0.7%.`, `Swaps are not available on ${c.name} yet. ${NO_SWAP[c.slug] || ''}`],
+    ['ic-swap', 'Swap', f.swap, `${c.swapNote || `Swap ${c.ticker} in the app.`} The amount you receive already includes Kyro’s swap fee, from 0.7%, and the provider’s own costs.`, `Swaps are not available on ${c.name} yet. ${NO_SWAP[c.slug] || ''}`],
     ['ic-stake', 'Earn', f.staking || !!earnOn, f.staking ? `Stake ${c.ticker} from your own account. Kyro takes no fee on staking. Rates are estimates.` : `${earnOn} Rates are estimates.`, `Kyro offers no staking or lending on ${c.name}.`],
     ['ic-hw', 'Hardware wallet', f.hardware, `Sign ${c.name} transactions with a ${hwDev}.${c.hwNote ? ' ' + c.hwNote : ''}`, `Not supported on ${c.name} yet. Use a software account.`]
   ];
