@@ -2,7 +2,7 @@
 // HTML replicas of the Kyro app, drawn from apps/desktop (same tokens, same screens). All numbers
 // are demo numbers: running digits, so nobody takes them for a real balance, rate or price.
 
-import { VERSION, esc, iconOf } from './layout.mjs';
+import { esc, iconOf } from './layout.mjs';
 
 const ico = (file, cls = '') => `<img class="tok${cls ? ' ' + cls : ''}" src="/img/coins/${file}.svg" width="32" height="32" alt="" decoding="async">`;
 
@@ -12,7 +12,7 @@ export const I = {
   portfolio: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   assets: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5',
   swap: 'M4 8h13l-3-3M20 16H7l3 3',
-  earn: 'M12 21v-8M12 13c0-4 3-7 8-7 0 5-3 7-8 7zM12 16c0-3-2-5-7-5 0 4 3 5 7 5z',
+  earn: 'M3.5 6.5a6 2.5 0 1012 0 6 2.5 0 10-12 0zM3.5 6.5v4.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6.5M3.5 11v4.5c0 1.4 2.7 2.5 6 2.5.9 0 1.8-.1 2.5-.3M18.5 21v-7M15.5 17l3-3 3 3',
   history: 'M12 7v5l3 2M12 21a9 9 0 110-18 9 9 0 010 18z',
   settings: 'M4 7h10M18 7h2M4 17h2M10 17h10M16 9a2 2 0 100-4 2 2 0 000 4zM8 19a2 2 0 100-4 2 2 0 000 4z',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3',
@@ -185,7 +185,8 @@ export const appWindow = () => `
     <div class="kw-in" aria-hidden="true">
       <div class="kw-titlebar">
         <span class="kw-brand"><img src="/img/kyro-mark-dark.svg" width="16" height="16" alt=""><b>Kyro</b><span>/</span><span>Main account</span>${icon('chev')}</span>
-        <span class="kw-search">${icon('search')}Search for an asset, an address…<kbd>Ctrl K</kbd></span>
+        <span class="kw-search">${icon('search')}Search for an asset, an address…</span>
+        <span class="kw-demo">DEMO</span>
         <span class="kw-win"><i></i><i></i><i></i></span>
       </div>
       <div class="kw-body">
@@ -195,7 +196,6 @@ export const appWindow = () => `
         </div>
         <div class="kw-screens">${portfolio()}${swapScreen()}${earnScreen()}</div>
       </div>
-      <div class="kw-status"><span><i class="dot"></i>Synced</span><span class="kw-hide">BTC · block 123,456</span><span class="kw-hide">Ethereum · 123 ms</span><span class="kw-grow"></span><span class="ice">Tor on</span><span class="kw-demo">DEMO MODE</span><span class="kw-hide">v${VERSION}</span></div>
     </div>
   </div>`;
 
