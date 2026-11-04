@@ -4,6 +4,8 @@
 
 - Price charts: "All" really goes back years (Bitcoin: 2013), opens at once, with
   the % from the first point and the year in the date.
+- Swap: the Best price panel now shows the provider, route, minimum received, Kyro fee,
+  provider fee and estimated time, with other quotes listed below.
 
 ## 1.0.6
 

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Changelog: every Kyro release up to 1.0.6 | Kyro Wallet</title>
-  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <title>Changelog: every Kyro release up to 1.0.7 | Kyro Wallet</title>
+  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.">
   <link rel="canonical" href="https://kyrowallet.com/changelog/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#000000">
@@ -17,8 +17,8 @@
   <link rel="stylesheet" href="/chains.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Changelog: every Kyro release up to 1.0.6 | Kyro Wallet">
-  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <meta property="og:title" content="Changelog: every Kyro release up to 1.0.7 | Kyro Wallet">
+  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.">
   <meta property="og:url" content="https://kyrowallet.com/changelog/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
   <meta property="og:image:width" content="1200">
@@ -26,10 +26,10 @@
   <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.0.6 | Kyro Wallet">
-  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.0.7 | Kyro Wallet">
+  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -93,8 +93,12 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           
+          <section class="log-entry" id="v1-0-7" aria-label="Version 1.0.7">
+            <h2>1.0.7<span class="latest">Latest</span></h2>
+            <ul><li>Price charts: &quot;All&quot; really goes back years (Bitcoin: 2013), opens at once, with the % from the first point and the year in the date.</li></ul>
+          </section>
           <section class="log-entry" id="v1-0-6" aria-label="Version 1.0.6">
-            <h2>1.0.6<span class="latest">Latest</span></h2>
+            <h2>1.0.6</h2>
             <ul><li>Switching between Portfolio and Assets no longer slides the tab underline across the screen.</li><li>Ledger Litecoin: the app&#39;s protocol is detected by asking it (Litecoin 2.4.x is still the legacy app), and the account is read without the master key the app refuses, instead of being reported as outdated.</li><li>Address book: the network is detected from the pasted address (a short choice only when several match), Enter saves and the name is optional. Send offers &quot;Save&quot; for a new recipient.</li><li>History is fetched in the background after unlock and kept per wallet, so the History page opens on a ready list; while it refreshes, what is there shows with a small &quot;Updating…&quot;. Unreachable networks are named in a calm line and retried on their own.</li><li>Price charts: &quot;All&quot; now goes back years (Kraken public weekly prices, no account), and is hidden for coins without a long history instead of repeating 1Y.</li><li>Arbitrum history works over Tor again: a second public node (arb1.arbitrum.io) is tried when publicnode refuses.</li><li>Search: one result per coin, with its icon and your balance or its rank.</li><li>Receive: a quieter network note.</li><li>Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.</li><li>Ledger: Litecoin works with the current Litecoin app (keys, address on screen, signing over the new protocol); an app that does not understand Kyro now says to update it in Ledger Live.</li><li>Hardware wallets: Solana tokens (SPL, e.g. USDC/USDT) can be sent from Ledger and Trezor accounts, creating the recipient&#39;s token account when needed; a Trezor shows the recipient wallet, a Ledger that needs it says &quot;Enable Blind signing in the Solana app settings&quot;.</li><li>Hardware wallets: TRON tokens (TRC-20, e.g. USDT) can be sent from Ledger accounts; when the Tron app needs a setting, Kyro names it (&quot;Allow data&quot; or &quot;Custom contracts&quot;).</li><li>Ledger: connect in one step, like Ledger Live. Every chain the Ledger supports is ticked; one &quot;Connect&quot; opens each app in turn, reads the keys, and skips an app that is not installed or refused. A short result per chain follows (Added / Not installed / Skipped).</li></ul>
           </section>
           <section class="log-entry" id="v1-0-5" aria-label="Version 1.0.5">
@@ -130,7 +134,7 @@
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title">Get <em>Kyro</em></h2>
-          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          <p class="dl-sub">Version 1.0.7 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
             <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
@@ -193,7 +197,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>Kyro 1.0.7 · GPL-3.0-or-later</span>
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>

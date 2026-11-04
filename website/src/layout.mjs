@@ -2,7 +2,7 @@
 // Shared page shell for kyrowallet.com: <head>, header, footer and small HTML helpers.
 
 export const SITE = 'https://kyrowallet.com';
-export const VERSION = '1.0.6';
+export const VERSION = '1.0.7';
 export const REPO = 'https://github.com/shuntraa/kyro-wallet';
 export const DL = `${REPO}/releases/latest/download/`;
 export const FILES = {

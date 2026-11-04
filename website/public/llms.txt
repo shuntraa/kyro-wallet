@@ -1,6 +1,6 @@
 # Kyro Wallet
 
-> Kyro Wallet is a free, open-source (GPL-3.0-or-later), non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on the user's computer and every transaction is decoded and confirmed in a system window before signing. Current version: 1.0.6.
+> Kyro Wallet is a free, open-source (GPL-3.0-or-later), non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on the user's computer and every transaction is decoded and confirmed in a system window before signing. Current version: 1.0.7.
 
 Key facts:
 
@@ -19,7 +19,7 @@ Key facts:
 - [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
 - [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
 - [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee from 0.7% to 5% depending on the swap value, plus the provider's own costs, all already included in the quote.
-- [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.6 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
+- [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.7 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
 - [FAQ](https://kyrowallet.com/faq/): Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.
 - [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 36 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
 - [Tor wallet](https://kyrowallet.com/tor/): Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.
@@ -32,7 +32,7 @@ Key facts:
 - [Kyro for Linux](https://kyrowallet.com/wallets/linux/): Install Kyro on Linux x86_64: one command, an AppImage that updates itself or a .deb. Free, open source and non-custodial, with built-in Tor. FUSE and udev notes.
 - [About Kyro](https://kyrowallet.com/about/): Why Kyro exists: a desktop crypto wallet with no account and no analytics, keys on your machine, Tor by default, code anyone can read and a fee anyone can check.
 - [Roadmap](https://kyrowallet.com/roadmap/): What Kyro has shipped and what comes next: staking on Polkadot, Sui and Aptos, token sends on more chains, winget and code signing. No dates we cannot keep.
-- [Changelog](https://kyrowallet.com/changelog/): What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.
+- [Changelog](https://kyrowallet.com/changelog/): What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.
 - [Open source](https://kyrowallet.com/open-source/): Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.
 - [Brand kit](https://kyrowallet.com/brand/): Download Kyro Wallet logos, marks and app icons, with the colours, typefaces, a short description and simple usage rules for writing about the project.
 - [Guides](https://kyrowallet.com/guides/): Plain guides for Kyro Wallet: back up your phrase, verify a download, move from another wallet, swap to Monero, stake SOL and connect a Ledger or Trezor.
