@@ -2,8 +2,8 @@
 // Content of every page on kyrowallet.com.
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
-import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT } from './kit.mjs';
-import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon, term, phraseCard, privateCard, seesCards, moneroCard, roadList } from './components.mjs';
+import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT, routeOf, NO_SWAP, EARN_ON } from './kit.mjs';
+import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon, term, circuits, phraseCard, privateCard, seesCards, moneroCard, roadList } from './components.mjs';
 
 const layers = () => html`
         <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
@@ -89,7 +89,7 @@ function appLd(chains) {
     featureList: [
       `Send and receive on ${chains.length} blockchains`,
       'Token swaps with fees from 0.7%, included in the amount you receive',
-      'Staking for SOL, ADA and TRX',
+      'Earn: staking on Solana, Cardano, TRON and NEAR, Lido and Aave',
       'Ledger and Trezor hardware wallets',
       'Built-in Tor, no personal data collected',
       'Transactions decoded and confirmed in a system window'
@@ -463,7 +463,7 @@ export function features(chains) {
   const path = '/features/';
   const trail = [['/', 'Home'], [path, 'Features']];
   const title = 'Features: send, swap, stake and hardware wallets | Kyro Wallet';
-  const description = `What Kyro Wallet does: one portfolio for ${chains.length} blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.`;
+  const description = `What Kyro Wallet does: one portfolio for ${chains.length} blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.`;
   const hw = chains.filter((c) => c.features.hardware).map((c) => c.name);
 
   const row = (id, label, h, flip, text, visual) => html`
@@ -500,15 +500,22 @@ export function features(chains) {
             <li>The transaction is simulated just before you sign it.</li>
             <li>Maximum slippage of 0.1%, 0.5%, 1% or your own value.</li>
             <li>The provider’s transaction is decoded and checked: recipient, minimum amount and fee.</li>
-          </ul>`, swapWidget())}
-    ${row('f-stake', 'Staking', 'Stake <em>SOL, ADA and TRX</em>', false, html`
-          <p>Delegate from your own accounts. Your coins never go to Kyro or to a pooled contract.</p>
-          <ul class="checks">
-            <li><b>Solana:</b> a stake account in your name, delegated to a validator. Activation and cooldown take about two days each.</li>
-            <li><b>Cardano:</b> delegate to a pool. Your ADA stays on your address and stays spendable. 2 ADA deposit, returned when you stop.</li>
-            <li><b>TRON:</b> stake for energy or bandwidth, then vote for Super Representatives. Unstaking takes 14 days.</li>
           </ul>
-          <p class="small mute">No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.</p>`, earnCard(['sol', 'ada', 'trx']))}
+          <p><a href="/swap/">Routes and limits</a></p>`, swapWidget())}
+    ${row('f-stake', 'Earn', '14 ways <em>to earn</em>', false, html`
+          <p>Stake, liquid-stake or lend from your own accounts, in one list. Rates are estimates, never guaranteed.</p>
+          <ul class="checks">
+            <li><b>Staking:</b> SOL, ADA, TRX and NEAR. A validator, pool or Super Representative cannot spend your coins.</li>
+            <li><b>Liquid staking:</b> ETH with Lido, with unstaking through Lido’s queue.</li>
+            <li><b>Lending:</b> Aave v3 on Ethereum, Arbitrum, Polygon and Base.</li>
+          </ul>
+          <p class="small mute">Contract bugs, depegs and lower rewards are real risks. Staking needs a recovery-phrase account; with a hardware wallet, Earn covers Lido and Aave. <a href="/earn/">Options and risks</a></p>`, earnCard(['sol', 'ada', 'trx']))}
+    ${row('f-tor', 'Tor', 'Tor, <em>on from the start</em>', true, html`
+          <p>Every request leaves through a built-in Tor client, with separate circuits per blockchain family. If Tor is down, Kyro stops.</p>
+          <p><a href="/tor/">What each party sees</a></p>`, circuits())}
+    ${row('f-xmr', 'Monero', 'A real <em>Monero wallet</em>', false, html`
+          <p>Blocks are scanned on your machine and your view key stays there. Swap in and out of XMR through Exolix.</p>
+          <p><a href="/monero/">The private Monero wallet</a></p>`, moneroCard())}
     ${row('f-sign', 'Transaction review', 'Read it <em>before you sign it</em>', true, html`
           <p>The Rust core decodes each transaction and shows it in a native system window, outside the app’s web view.</p>
           <ul class="checks">
@@ -521,7 +528,8 @@ export function features(chains) {
           <ul class="checks">
             <li>Supported on ${listNames(hw)}.</li>
             <li>Software accounts and hardware accounts side by side.</li>
-          </ul>`, ledgerScene())}
+          </ul>
+          <p><a href="/hardware-wallets/">Device table and limits</a></p>`, ledgerScene())}
 
     <section class="section" aria-labelledby="f-more">
       <div class="wrap">
@@ -541,6 +549,11 @@ export function features(chains) {
         </div>
       </div>
     </section>
+    ${nextLinks('f-next', [
+      ['/swap/', 'Swap routes and limits', 'Every provider, and what does not swap yet.'],
+      ['/hardware-wallets/', 'Ledger and Trezor', 'What works on which device.'],
+      ['/guides/', 'Guides', 'Step-by-step articles, from backup to staking.']
+    ], 'Go <em>deeper</em>')}
     ${ctaPanel()}`;
 
   return { path, title, description, body, scripts: ['/download.js', '/scenes.js'], ld: webPage(path, 'Kyro Wallet features', description, trail) };
@@ -638,6 +651,21 @@ export function security() {
         </div>
       </div>
     </section>
+    ${sec('s-scams', html`
+        ${head('Scams', 's-scams', 'Built against <em>the usual tricks</em>', 'Most losses start with a trick, so Kyro checks for the common ones before you sign.')}
+        ${cards([
+          ['Address poisoning', 'A blocking alert when a recipient looks like a known address without being it. The server’s history is never trusted. <a href="/guides/how-to-spot-address-poisoning/">How it works</a>', 'ic-eye'],
+          ['Clipboard swaps', 'After you paste, Kyro watches the field, and shows the address in blocks. A swap before the paste can only be caught by comparing with your source.', 'ic-send'],
+          ['Unlimited approvals', 'Approvals are exact by default. An unlimited one needs an explicit action and shows a warning.', 'ic-lock'],
+          ['Booby-trapped text', 'Memos and token names from the chain are cleaned of line breaks, bidi and invisible characters before you read them.', 'ic-shield'],
+          ['Booby-trapped updates', 'Each update is signed, and verified against a public key pinned in the app.', 'ic-swap'],
+          ['Unknown servers', 'A new custom server is confirmed in a system window before any request goes out.', 'ic-tor']
+        ])}`)}
+    ${nextLinks('s-next', [
+      ['/guides/back-up-your-recovery-phrase/', 'Back up your recovery phrase', 'The one thing Kyro cannot do for you.'],
+      ['/tor/', 'How Kyro uses Tor', 'Who sees what, and what happens when Tor is down.'],
+      ['/open-source/', 'Read, build and verify', 'Check the claims on this page yourself.']
+    ])}
     ${ctaPanel()}`;
 
   return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet security', description, trail) };
@@ -675,7 +703,7 @@ export function fees(curve) {
           <div class="fee-card spot">
             <span class="fee-value">0%</span>
             <span class="fee-name">Staking</span>
-            <span class="fee-desc">SOL, ADA, TRX. Network fee only.</span>
+            <span class="fee-desc">SOL, ADA, TRX, NEAR. Network fee only.</span>
           </div>
           <div class="fee-card fee-accent spot">
             <span class="fee-value"><span class="fee-from">from</span> <span data-roll>0.7%</span></span>
@@ -767,6 +795,18 @@ export function fees(curve) {
         </div>
       </div>
     </section>
+    ${sec('fee-exolix', html`
+        ${head('Exolix routes', 'fee-exolix', 'One route, <em>two transfers</em>', 'Monero, Kaspa, Algorand and NEAR go through Exolix, which has no integrator fee.')}
+        ${cards([
+          ['Same rate', 'The curve is the same as on every other route, taken from the amount you sell.', 'ic-swap'],
+          ['Second transfer', 'The Kyro fee is a second ordinary transfer of the sold coin to Kyro’s fee address on that chain. You approve it, and it carries its own network fee.', 'ic-send'],
+          ['No separate transfer elsewhere', 'On other routes the fee is collected through the provider’s official integrator mechanism.', 'ic-shield']
+        ])}`)}
+    ${nextLinks('fee-next', [
+      ['/swap/', 'Swap routes and limits', 'Which coin goes where, and through whom.'],
+      ['/guides/swap-to-monero/', 'Swap to Monero', 'A worked example, step by step.'],
+      ['/about/', 'How Kyro is paid for', 'Why there is a swap fee at all.']
+    ])}
     ${ctaPanel()}`;
 
   return { path, title, description, body, scripts: ['/download.js', '/feecalc.js'], ld: webPage(path, 'Kyro Wallet fees', description, trail) };
@@ -886,7 +926,15 @@ pnpm install --frozen-lockfile
 pnpm build</code></pre>
         </div>
       </div>
-    </section>`;
+    </section>
+    ${nextLinks('dl-next', [
+      ['/wallets/windows/', 'Kyro for Windows', 'SmartScreen, .exe or .msi, and how updates work.'],
+      ['/wallets/macos/', 'Kyro for macOS', 'Apple Silicon and Intel, and the first launch.'],
+      ['/wallets/linux/', 'Kyro for Linux', 'AppImage or .deb, FUSE and udev rules.'],
+      ['/guides/verify-your-download/', 'Verify your download', 'Check the SHA-256 in two minutes.'],
+      ['/guides/windows-smartscreen/', 'What SmartScreen means', 'Why Windows warns, and what to do.'],
+      ['/guides/first-steps-with-kyro/', 'First steps with Kyro', 'From install to your first small send.']
+    ], 'After <em>the download</em>')}`;
 
   return {
     path,
@@ -912,6 +960,8 @@ const FAQ = [
   {
     title: 'Swaps and staking',
     items: [
+      { q: 'Can I swap Monero in Kyro?', a: () => `<p>Yes, both ways, through Exolix. Kyro’s fee is a second ordinary transfer of the coin you sell. <a href="/guides/swap-to-monero/">Swap to Monero</a>.</p>` },
+      { q: 'Can I earn from a hardware wallet?', a: () => `<p>Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. <a href="/earn/">Options and risks</a>.</p>` },
       { home: true, q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p>` },
       { home: true, q: 'Can I stake with Kyro?', a: () => `<p>Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p>` }
     ]
@@ -1032,7 +1082,7 @@ export function chainsIndex(chains) {
         <div class="head-center" data-reveal>
           <p class="eyebrow">Compare</p>
           <h2 id="matrix-title">What works <em>where</em></h2>
-          <p>Staking is available for SOL, ADA and TRX. Hardware wallets work on Bitcoin, Ethereum, the main EVM chains and Solana.</p>
+          <p>Staking is available for SOL, ADA, TRX and NEAR. See <a href="/swap/">swap routes</a>, <a href="/earn/">Earn</a> and <a href="/hardware-wallets/">hardware wallets</a> for the details.</p>
         </div>
         ${matrix(chains)}
         <p class="center small mute">Missing a blockchain? <a href="${REPO}/issues">Ask on GitHub</a>.</p>
@@ -1057,6 +1107,20 @@ const tokensPhrase = (c) => {
   return /tokens$|currencies$/.test(c.tokens) ? c.tokens : `${c.tokens} tokens`;
 };
 
+function chainFaqs(c, ctx) {
+  const { f, route, earnOn, devices, chains } = ctx;
+  const hwNames = devices.replace(' and ', ' or ');
+  const q = [
+    [`Is Kyro a free ${c.name} wallet?`, `Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ${esc(c.ticker)}, and your keys stay on your own computer.`],
+    [`Can I swap ${c.ticker} in Kyro?`, route ? `${route[1] === 'Yes' ? `Yes, ${route[2] === 'Yes' ? 'in both directions' : 'from it'}.` : 'You can swap into it, not out of it yet.'} Providers: ${route[3]}. <a href="/swap/">Routes and limits</a>.` : `Not yet. ${esc(NO_SWAP[c.slug] || '')}`],
+    [f.staking ? `Can I stake ${c.ticker} in Kyro?` : `Can I earn on ${c.name} in Kyro?`, f.staking ? `Yes, from a recovery-phrase account. It is refused from a hardware wallet. ${esc(c.staking || '')} Rates are estimates, never guaranteed.` : earnOn ? `Yes: ${earnOn} Rates are estimates, never guaranteed, and contract risks apply. <a href="/earn/">Options and risks</a>.` : `Kyro offers no staking or lending on ${esc(c.name)}.`],
+    [`Does Kyro work with a hardware wallet on ${c.name}?`, f.hardware ? `Yes, with a ${hwNames}.${c.hwNote ? ' ' + esc(c.hwNote) : ''} <a href="/hardware-wallets/">Device table</a>.` : `No. ${esc(c.name)} is not supported on hardware wallets in Kyro. Use a software account.`],
+    [`What can a server see when I use ${c.name} in Kyro?`, c.slug === 'monero' ? 'The node sees the blocks you download and the transactions you publish, from a Tor exit relay. It never gets your addresses or your view key, because Kyro scans blocks locally. <a href="/monero/">Details</a>.' : `The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. ${esc(c.name)} has its own circuit family, except that all EVM networks share one. <a href="/tor/">Who sees what</a>.`],
+    [`Can I use my existing recovery phrase for ${c.name}?`, `Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all ${chains.length} blockchains. <a href="/faq/">More questions</a>.`]
+  ];
+  return q;
+}
+
 export function chainPage(c, chains) {
   const f = c.features;
   const path = `/chains/${c.slug}/`;
@@ -1067,7 +1131,11 @@ export function chainPage(c, chains) {
   if (f.swap) verbs.push('swap');
   if (f.staking) verbs.push('stake');
   const verbText = listNames(verbs);
-  const hwDev = (c.hwDevices || 'Ledger and Trezor').replace(' and ', ' or ');
+  const devices = c.hwDevices || (f.hardware ? 'Ledger and Trezor' : '');
+  const hwDev = devices.replace(' and ', ' or ');
+  const route = routeOf(c.slug);
+  const earnOn = EARN_ON[c.slug];
+  const faqs = chainFaqs(c, { f, route, earnOn, devices, chains });
   const capSentence = `${verbText[0].toUpperCase()}${verbText.slice(1)} ${assets}${f.hardware ? `, and sign with a ${hwDev}` : ''}.`;
 
   const title = `${c.name} wallet for Windows, macOS and Linux | Kyro`;
@@ -1075,8 +1143,8 @@ export function chainPage(c, chains) {
 
   const caps = [
     ['ic-send', 'Send and receive', f.send, `Send and receive ${assets}, with address-poisoning alerts and clipboard checks.`, `Not available on ${c.name} yet.`],
-    ['ic-swap', 'Swap', f.swap, `${c.swapNote || `Swap ${c.ticker} in the app.`} The amount you receive already includes Kyro’s swap fee, from 0.7%.`, `Swaps are not available on ${c.name} yet.`],
-    ['ic-stake', 'Staking', f.staking, `Stake ${c.ticker} from your own account. Kyro takes no fee on staking.`, `Kyro does not offer staking for ${c.ticker}.`],
+    ['ic-swap', 'Swap', f.swap, `${c.swapNote || `Swap ${c.ticker} in the app.`} The amount you receive already includes Kyro’s swap fee, from 0.7%.`, `Swaps are not available on ${c.name} yet. ${NO_SWAP[c.slug] || ''}`],
+    ['ic-stake', 'Earn', f.staking || !!earnOn, f.staking ? `Stake ${c.ticker} from your own account. Kyro takes no fee on staking. Rates are estimates.` : `${earnOn} Rates are estimates.`, `Kyro offers no staking or lending on ${c.name}.`],
     ['ic-hw', 'Hardware wallet', f.hardware, `Sign ${c.name} transactions with a ${hwDev}.${c.hwNote ? ' ' + c.hwNote : ''}`, `Not supported on ${c.name} yet. Use a software account.`]
   ];
 
@@ -1130,6 +1198,24 @@ export function chainPage(c, chains) {
       </div>
     </section>
 
+    ${sec('at-glance', html`
+        ${head('At a glance', 'at-glance', `${esc(c.name)} <em>in one table</em>`, 'What works today, and through what.')}
+        ${tbl(`What Kyro supports on ${c.name}`, ['', 'Available', 'Details'], [
+          ['Send and receive', yesNo(f.send), `${esc(assets)}. Over Tor, with address-poisoning alerts.`],
+          ['Swap from', yesNo(route && route[1] === 'Yes'), route ? `Providers: ${route[3]}.` : esc(NO_SWAP[c.slug] || '')],
+          ['Swap to', yesNo(route && route[2] === 'Yes'), route ? 'The amount you see already has Kyro’s fee out.' : 'No route yet.'],
+          ['Earn', yesNo(f.staking || earnOn), f.staking ? `Staking from your own account, with a recovery-phrase account only. Rates are estimates.` : earnOn || 'Not offered.'],
+          ['Ledger', yesNo(f.hardware && devices.includes('Ledger')), f.hardware && devices.includes('Ledger') ? 'Keys stay in the device.' : 'Not supported.'],
+          ['Trezor', yesNo(f.hardware && devices.includes('Trezor')), f.hardware && devices.includes('Trezor') ? 'Keys stay in the device.' : 'Not supported.']
+        ])}
+        <div class="doc-links" data-reveal>
+          ${f.swap ? '<a href="/swap/">Swap routes and limits</a>' : ''}
+          ${f.staking || earnOn ? '<a href="/earn/">Earn options and risks</a>' : ''}
+          ${f.hardware ? '<a href="/hardware-wallets/">Ledger and Trezor in Kyro</a>' : ''}
+          <a href="/tor/">How Kyro uses Tor</a>
+        </div>`)}
+    ${faqBlock('chain-faq', faqs, `${esc(c.name)} <em>questions</em>`)}
+
     <section class="section" aria-labelledby="related-title">
       <div class="wrap">
         <div class="head-center" data-reveal>
@@ -1148,6 +1234,7 @@ export function chainPage(c, chains) {
     ...webPage(path, `${c.name} wallet: Kyro`, description, trail)
   ];
   ld[0].about = [{ '@id': APP_ID }, { '@type': 'Thing', name: c.name, alternateName: c.ticker }];
+  ld.push(faqLd(SITE + path, faqs));
   return { path, title, description, body, scripts: ['/download.js'], ld, chain: c };
 }
 

@@ -29,7 +29,7 @@
   <meta name="twitter:title" content="Aptos wallet for Windows, macOS and Linux | Kyro">
   <meta name="twitter:description" content="Kyro is a free, open-source Aptos (APT) wallet for desktop. Send, receive and swap APT and USDC and USDT tokens, and sign with a Ledger. Your keys stay on your computer.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/aptos/#page","url":"https://kyrowallet.com/chains/aptos/","name":"Aptos wallet: Kyro","description":"Kyro is a free, open-source Aptos (APT) wallet for desktop. Send, receive and swap APT and USDC and USDT tokens, and sign with a Ledger. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Aptos","alternateName":"APT"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Aptos","item":"https://kyrowallet.com/chains/aptos/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/aptos/#page","url":"https://kyrowallet.com/chains/aptos/","name":"Aptos wallet: Kyro","description":"Kyro is a free, open-source Aptos (APT) wallet for desktop. Send, receive and swap APT and USDC and USDT tokens, and sign with a Ledger. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Aptos","alternateName":"APT"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Aptos","item":"https://kyrowallet.com/chains/aptos/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/chains/aptos/#faq","url":"https://kyrowallet.com/chains/aptos/","mainEntity":[{"@type":"Question","name":"Is Kyro a free Aptos wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send APT, and your keys stay on your own computer."}},{"@type":"Question","name":"Can I swap APT in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, in both directions. Providers: 1Click. Routes and limits."}},{"@type":"Question","name":"Can I earn on Aptos in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Kyro offers no staking or lending on Aptos."}},{"@type":"Question","name":"Does Kyro work with a hardware wallet on Aptos?","acceptedAnswer":{"@type":"Answer","text":"Yes, with a Ledger. Device table."}},{"@type":"Question","name":"What can a server see when I use Aptos in Kyro?","acceptedAnswer":{"@type":"Answer","text":"The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Aptos has its own circuit family, except that all EVM networks share one. Who sees what."}},{"@type":"Question","name":"Can I use my existing recovery phrase for Aptos?","acceptedAnswer":{"@type":"Answer","text":"Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -118,8 +118,8 @@
           </li>
           <li class="cap spot c-aptos cap-off">
             <span class="mini-icon ic-stake" aria-hidden="true"></span>
-            <h3>Staking</h3>
-            <p>Kyro does not offer staking for APT.</p>
+            <h3>Earn</h3>
+            <p>Kyro offers no staking or lending on Aptos.</p>
             <span class="state">No</span>
           </li>
           <li class="cap spot c-aptos cap-on">
@@ -158,6 +158,46 @@
     <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
   </div></div></div>
       </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="at-glance">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>At a glance</p>
+          <h2 id="at-glance">Aptos <em>in one table</em></h2>
+          <p data-reveal>What works today, and through what.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">What Kyro supports on Aptos</caption>
+            <thead><tr><th scope="col"></th><th scope="col">Available</th><th scope="col">Details</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Send and receive</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>APT and USDC and USDT tokens. Over Tor, with address-poisoning alerts.</td></tr><tr><th scope="row">Swap from</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>Providers: 1Click.</td></tr><tr><th scope="row">Swap to</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>The amount you see already has Kyro’s fee out.</td></tr><tr><th scope="row">Earn</th><td><span class="no" role="img" aria-label="No"></span></td><td>Not offered.</td></tr><tr><th scope="row">Ledger</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>Keys stay in the device.</td></tr><tr><th scope="row">Trezor</th><td><span class="no" role="img" aria-label="No"></span></td><td>Not supported.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="doc-links" data-reveal>
+          <a href="/swap/">Swap routes and limits</a>
+          
+          <a href="/hardware-wallets/">Ledger and Trezor in Kyro</a>
+          <a href="/tor/">How Kyro uses Tor</a>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="chain-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="chain-faq">Aptos <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Is Kyro a free Aptos wallet?</summary><div class="answer"><p>Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send APT, and your keys stay on your own computer.</p></div></details><details><summary>Can I swap APT in Kyro?</summary><div class="answer"><p>Yes, in both directions. Providers: 1Click. <a href="/swap/">Routes and limits</a>.</p></div></details><details><summary>Can I earn on Aptos in Kyro?</summary><div class="answer"><p>Kyro offers no staking or lending on Aptos.</p></div></details><details><summary>Does Kyro work with a hardware wallet on Aptos?</summary><div class="answer"><p>Yes, with a Ledger. <a href="/hardware-wallets/">Device table</a>.</p></div></details><details><summary>What can a server see when I use Aptos in Kyro?</summary><div class="answer"><p>The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Aptos has its own circuit family, except that all EVM networks share one. <a href="/tor/">Who sees what</a>.</p></div></details><details><summary>Can I use my existing recovery phrase for Aptos?</summary><div class="answer"><p>Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. <a href="/faq/">More questions</a>.</p></div></details>
+        </div></div>
     </section>
 
     <section class="section" aria-labelledby="related-title">

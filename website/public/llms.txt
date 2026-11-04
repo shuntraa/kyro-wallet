@@ -16,7 +16,7 @@ Key facts:
 
 ## Pages
 
-- [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
+- [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
 - [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
 - [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.
 - [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.6 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
@@ -37,6 +37,20 @@ Key facts:
 - [Brand kit](https://kyrowallet.com/brand/): Download Kyro Wallet logos, marks and app icons, with the colours, typefaces, a short description and simple usage rules for writing about the project.
 - [Guides](https://kyrowallet.com/guides/): Plain guides for Kyro Wallet: back up your phrase, verify a download, move from another wallet, swap to Monero, stake SOL and connect a Ledger or Trezor.
 - [Glossary](https://kyrowallet.com/glossary/): 39 crypto wallet terms in plain language: recovery phrase, non-custodial, Tor circuit, seed, gas, slippage, staking, blind signing and more.
+
+## Guides
+
+- [First steps with Kyro: set up your wallet](https://kyrowallet.com/guides/first-steps-with-kyro/): Set up Kyro Wallet from scratch: choose a start, set a password, write down your recovery phrase, receive your first coins and send a small test.
+- [How to verify your Kyro download with SHA-256](https://kyrowallet.com/guides/verify-your-download/): Check that your Kyro installer is the file published on GitHub Releases: compare its SHA-256 with SHA256SUMS on Windows, macOS or Linux, before you run it.
+- [How to back up your recovery phrase safely](https://kyrowallet.com/guides/back-up-your-recovery-phrase/): Your recovery phrase is the only way back into a non-custodial wallet. How to write it down, store it, check it, and what to do if someone sees it.
+- [Move to Kyro from another wallet with your phrase](https://kyrowallet.com/guides/move-from-another-wallet/): Import a 12 or 24-word BIP39 recovery phrase into Kyro, or send your coins to a new phrase instead. What carries over, and what can look different.
+- [Windows SmartScreen warning for Kyro, explained](https://kyrowallet.com/guides/windows-smartscreen/): Why Windows shows "Windows protected your PC" for Kyro, what it does and does not tell you, how to verify the installer, and how to avoid the warning.
+- [Why a crypto wallet should use Tor](https://kyrowallet.com/guides/why-a-wallet-should-use-tor/): Every balance check tells a server your addresses and your IP address. What that leaks, what Tor changes, and what it leaves exposed, in plain words.
+- [Address poisoning: how to spot it and stay safe](https://kyrowallet.com/guides/how-to-spot-address-poisoning/): Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.
+- [How to swap to Monero (XMR) in your wallet](https://kyrowallet.com/guides/swap-to-monero/): Swap BTC, ETH, SOL, USDT and other coins to XMR inside Kyro, with no account. The steps, what the fee looks like, and what the swap provider can see.
+- [How to stake SOL from a desktop wallet](https://kyrowallet.com/guides/stake-sol/): Stake Solana from your own account in Kyro: choose a validator, delegate, wait for activation, then deactivate and withdraw. Risks and timing, without the hype.
+- [How to connect a Ledger to Kyro Wallet](https://kyrowallet.com/guides/connect-a-ledger/): Connect a Ledger to Kyro: close Ledger Live, unlock the device, click Connect once and approve each app. Results per chain, blind signing and the limits.
+- [How to connect a Trezor to Kyro Wallet](https://kyrowallet.com/guides/connect-a-trezor/): Connect a Trezor to Kyro on desktop: close Trezor Suite, add the device, pair a Safe 7 with its code, and sign with the device. What works, and what does not.
 
 ## Blockchains
 

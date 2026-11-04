@@ -29,7 +29,7 @@
   <meta name="twitter:title" content="Sonic wallet for Windows, macOS and Linux | Kyro">
   <meta name="twitter:description" content="Kyro is a free, open-source Sonic (S) wallet for desktop. Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Your keys stay on your computer.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/sonic/#page","url":"https://kyrowallet.com/chains/sonic/","name":"Sonic wallet: Kyro","description":"Kyro is a free, open-source Sonic (S) wallet for desktop. Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Sonic","alternateName":"S"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Sonic","item":"https://kyrowallet.com/chains/sonic/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/sonic/#page","url":"https://kyrowallet.com/chains/sonic/","name":"Sonic wallet: Kyro","description":"Kyro is a free, open-source Sonic (S) wallet for desktop. Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Sonic","alternateName":"S"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Sonic","item":"https://kyrowallet.com/chains/sonic/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/chains/sonic/#faq","url":"https://kyrowallet.com/chains/sonic/","mainEntity":[{"@type":"Question","name":"Is Kyro a free Sonic wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send S, and your keys stay on your own computer."}},{"@type":"Question","name":"Can I swap S in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits."}},{"@type":"Question","name":"Can I earn on Sonic in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Kyro offers no staking or lending on Sonic."}},{"@type":"Question","name":"Does Kyro work with a hardware wallet on Sonic?","acceptedAnswer":{"@type":"Answer","text":"Yes, with a Ledger or Trezor. Device table."}},{"@type":"Question","name":"What can a server see when I use Sonic in Kyro?","acceptedAnswer":{"@type":"Answer","text":"The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sonic has its own circuit family, except that all EVM networks share one. Who sees what."}},{"@type":"Question","name":"Can I use my existing recovery phrase for Sonic?","acceptedAnswer":{"@type":"Answer","text":"Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -118,8 +118,8 @@
           </li>
           <li class="cap spot c-sonic cap-off">
             <span class="mini-icon ic-stake" aria-hidden="true"></span>
-            <h3>Staking</h3>
-            <p>Kyro does not offer staking for S.</p>
+            <h3>Earn</h3>
+            <p>Kyro offers no staking or lending on Sonic.</p>
             <span class="state">No</span>
           </li>
           <li class="cap spot c-sonic cap-on">
@@ -158,6 +158,46 @@
     <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
   </div></div></div>
       </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="at-glance">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>At a glance</p>
+          <h2 id="at-glance">Sonic <em>in one table</em></h2>
+          <p data-reveal>What works today, and through what.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">What Kyro supports on Sonic</caption>
+            <thead><tr><th scope="col"></th><th scope="col">Available</th><th scope="col">Details</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Send and receive</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>S and ERC-20 tokens. Over Tor, with address-poisoning alerts.</td></tr><tr><th scope="row">Swap from</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>Providers: 0x or LI.FI, same chain only.</td></tr><tr><th scope="row">Swap to</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>The amount you see already has Kyro’s fee out.</td></tr><tr><th scope="row">Earn</th><td><span class="no" role="img" aria-label="No"></span></td><td>Not offered.</td></tr><tr><th scope="row">Ledger</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>Keys stay in the device.</td></tr><tr><th scope="row">Trezor</th><td><span class="yes" role="img" aria-label="Yes"></span></td><td>Keys stay in the device.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="doc-links" data-reveal>
+          <a href="/swap/">Swap routes and limits</a>
+          
+          <a href="/hardware-wallets/">Ledger and Trezor in Kyro</a>
+          <a href="/tor/">How Kyro uses Tor</a>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="chain-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="chain-faq">Sonic <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Is Kyro a free Sonic wallet?</summary><div class="answer"><p>Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send S, and your keys stay on your own computer.</p></div></details><details><summary>Can I swap S in Kyro?</summary><div class="answer"><p>Yes, in both directions. Providers: 0x or LI.FI, same chain only. <a href="/swap/">Routes and limits</a>.</p></div></details><details><summary>Can I earn on Sonic in Kyro?</summary><div class="answer"><p>Kyro offers no staking or lending on Sonic.</p></div></details><details><summary>Does Kyro work with a hardware wallet on Sonic?</summary><div class="answer"><p>Yes, with a Ledger or Trezor. <a href="/hardware-wallets/">Device table</a>.</p></div></details><details><summary>What can a server see when I use Sonic in Kyro?</summary><div class="answer"><p>The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sonic has its own circuit family, except that all EVM networks share one. <a href="/tor/">Who sees what</a>.</p></div></details><details><summary>Can I use my existing recovery phrase for Sonic?</summary><div class="answer"><p>Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. <a href="/faq/">More questions</a>.</p></div></details>
+        </div></div>
     </section>
 
     <section class="section" aria-labelledby="related-title">

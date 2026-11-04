@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Features: send, swap, stake and hardware wallets | Kyro Wallet</title>
-  <meta name="description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
+  <meta name="description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
   <link rel="canonical" href="https://kyrowallet.com/features/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#000000">
@@ -18,7 +18,7 @@
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Features: send, swap, stake and hardware wallets | Kyro Wallet">
-  <meta property="og:description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
+  <meta property="og:description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
   <meta property="og:url" content="https://kyrowallet.com/features/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
   <meta property="og:image:width" content="1200">
@@ -27,9 +27,9 @@
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Features: send, swap, stake and hardware wallets | Kyro Wallet">
-  <meta name="twitter:description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
+  <meta name="twitter:description" content="What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/features/#page","url":"https://kyrowallet.com/features/","name":"Kyro Wallet features","description":"What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://kyrowallet.com/features/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/features/#page","url":"https://kyrowallet.com/features/","name":"Kyro Wallet features","description":"What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, staking and lending, Ledger and Trezor, built-in Tor and transactions you can read before you sign.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Features","item":"https://kyrowallet.com/features/"}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -161,7 +161,8 @@
             <li>The transaction is simulated just before you sign it.</li>
             <li>Maximum slippage of 0.1%, 0.5%, 1% or your own value.</li>
             <li>The provider’s transaction is decoded and checked: recipient, minimum amount and fee.</li>
-          </ul></div>
+          </ul>
+          <p><a href="/swap/">Routes and limits</a></p></div>
         </div>
         <div class="feature-visual" data-reveal>
   <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
@@ -182,16 +183,16 @@
     <section class="section" aria-labelledby="f-stake">
       <div class="wrap feature-row">
         <div class="feature-text">
-          <p class="eyebrow" data-reveal>Staking</p>
-          <h2 id="f-stake">Stake <em>SOL, ADA and TRX</em></h2>
+          <p class="eyebrow" data-reveal>Earn</p>
+          <h2 id="f-stake">14 ways <em>to earn</em></h2>
           <div data-reveal>
-          <p>Delegate from your own accounts. Your coins never go to Kyro or to a pooled contract.</p>
+          <p>Stake, liquid-stake or lend from your own accounts, in one list. Rates are estimates, never guaranteed.</p>
           <ul class="checks">
-            <li><b>Solana:</b> a stake account in your name, delegated to a validator. Activation and cooldown take about two days each.</li>
-            <li><b>Cardano:</b> delegate to a pool. Your ADA stays on your address and stays spendable. 2 ADA deposit, returned when you stop.</li>
-            <li><b>TRON:</b> stake for energy or bandwidth, then vote for Super Representatives. Unstaking takes 14 days.</li>
+            <li><b>Staking:</b> SOL, ADA, TRX and NEAR. A validator, pool or Super Representative cannot spend your coins.</li>
+            <li><b>Liquid staking:</b> ETH with Lido, with unstaking through Lido’s queue.</li>
+            <li><b>Lending:</b> Aave v3 on Ethereum, Arbitrum, Polygon and Base.</li>
           </ul>
-          <p class="small mute">No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.</p></div>
+          <p class="small mute">Contract bugs, depegs and lower rewards are real risks. Staking needs a recovery-phrase account; with a hardware wallet, Earn covers Lido and Aave. <a href="/earn/">Options and risks</a></p></div>
         </div>
         <div class="feature-visual" data-reveal>
   <div class="kw-card" role="img" aria-label="Kyro Earn list with demo rates. Rates are estimates."><div aria-hidden="true">
@@ -216,6 +217,61 @@
             <span class="kw-meta kw-min"><small>Minimum</small>1 TRX</span>
             <i class="kw-b">Start</i>
           </div></div></div></div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="f-tor">
+      <div class="wrap feature-row flip">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Tor</p>
+          <h2 id="f-tor">Tor, <em>on from the start</em></h2>
+          <div data-reveal>
+          <p>Every request leaves through a built-in Tor client, with separate circuits per blockchain family. If Tor is down, Kyro stops.</p>
+          <p><a href="/tor/">What each party sees</a></p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="cir spot" role="img" aria-label="Four blockchains, each on its own Tor circuit of three relays. Bitcoin goes to mempool's onion service and never uses an exit relay."><div aria-hidden="true">
+    <div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/btc.svg" width="32" height="32" alt="" decoding="async"><b>Bitcoin</b></span>
+      <span class="cir-line d0"><i></i><i></i><i></i></span>
+      <span class="cir-end">Onion service</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><b>Ethereum</b></span>
+      <span class="cir-line d1"><i></i><i></i><i></i></span>
+      <span class="cir-end">RPC server</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt="" decoding="async"><b>Solana</b></span>
+      <span class="cir-line d2"><i></i><i></i><i></i></span>
+      <span class="cir-end">RPC server</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><b>Monero</b></span>
+      <span class="cir-line d3"><i></i><i></i><i></i></span>
+      <span class="cir-end">Monero node</span>
+    </div>
+  </div></div></div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="f-xmr">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Monero</p>
+          <h2 id="f-xmr">A real <em>Monero wallet</em></h2>
+          <div data-reveal>
+          <p>Blocks are scanned on your machine and your view key stays there. Swap in and out of XMR through Exolix.</p>
+          <p><a href="/monero/">The private Monero wallet</a></p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">12.3456 <span>XMR</span></p>
+    <p class="kw-label scan-l">Scanning Monero blocks on your machine… 87 %</p>
+    <div class="scan"><i></i></div>
+    <div class="kw-kv"><span>View key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Spend key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Node</span><b>Sends blocks, gets no key</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div></div>
       </div>
     </section>
     
@@ -257,7 +313,8 @@
           <ul class="checks">
             <li>Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.</li>
             <li>Software accounts and hardware accounts side by side.</li>
-          </ul></div>
+          </ul>
+          <p><a href="/hardware-wallets/">Device table and limits</a></p></div>
         </div>
         <div class="feature-visual" data-reveal>
   <div class="lg" data-ledger role="img" aria-label="A hardware wallet wired to coins. Its screen asks to open Bitcoin, then confirms a demo transaction."><div class="lg-stage" aria-hidden="true">
@@ -304,6 +361,19 @@
           <article class="glow-card spot g-deep"><span class="mini-icon ic-stake" aria-hidden="true"></span><h3>Open source</h3><p>GPL-3.0-or-later. Read the code, build it yourself, or change it.</p></article>
         </div>
       </div>
+    </section>
+    
+    <section class="section" aria-labelledby="f-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="f-next">Go <em>deeper</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3><a href="/swap/">Swap routes and limits</a></h3><p>Every provider, and what does not swap yet.</p></li><li class="glow-card spot"><h3><a href="/hardware-wallets/">Ledger and Trezor</a></h3><p>What works on which device.</p></li><li class="glow-card spot"><h3><a href="/guides/">Guides</a></h3><p>Step-by-step articles, from backup to staking.</p></li>
+        </ul></div>
     </section>
     
     <section class="section" aria-labelledby="cta-title">

@@ -4,7 +4,7 @@
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, pageHero, dlButton, installBlock, ctaPanel } from './layout.mjs';
 import { swapWidget, earnCard, confirmCard, ledgerScene, coinHero, privateCard, moneroCard, torDownCard, torOffDialog, circuits, term, roadList, assetsCard, vaultCard } from './components.mjs';
-import { head, sec, row, cards, faqBlock, faqLd, nextLinks, ul, tbl, DONE, NEXT } from './kit.mjs';
+import { head, sec, row, cards, faqBlock, faqLd, nextLinks, ul, tbl, DONE, NEXT, ROUTES } from './kit.mjs';
 import { webPage, listNames, yesNo } from './pages.mjs';
 import { guidePages } from './guides.mjs';
 
@@ -170,20 +170,6 @@ function monero(chains) {
     ${ctaPanel('Get <em>Monero</em> on your desktop')}`
   });
 }
-
-export const ROUTES = [
-  ['Ethereum, Arbitrum, Optimism, Base', 'Yes', 'Yes', '0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR'],
-  ['Polygon', 'Yes', 'Yes', '0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR'],
-  ['BNB Chain, Avalanche', 'Yes', 'Yes', '0x and LI.FI. 1Click'],
-  ['Gnosis', 'Yes', 'Yes', 'LI.FI. 1Click'],
-  ['Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM, Sei', 'Yes', 'Yes', '0x or LI.FI, same chain only'],
-  ['Solana and SPL tokens', 'Yes', 'Yes', 'Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC'],
-  ['Bitcoin', 'Yes', 'Yes', '1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR'],
-  ['Litecoin, Dogecoin, TRON (TRX, USDT)', 'Yes', 'Yes', '1Click. Exolix'],
-  ['XRP, Cardano, Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos', 'Yes', 'Yes', '1Click'],
-  ['Stellar', 'No', 'Yes', '1Click, arrival only: a Stellar deposit needs a memo'],
-  ['Monero, Kaspa, Algorand, NEAR (native coin)', 'Yes', 'Yes', 'Exolix. Kyro’s fee is a second transfer']
-];
 
 function swap(chains) {
   const n = chains.filter((c) => c.features.swap).length;

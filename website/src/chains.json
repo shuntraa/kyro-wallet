@@ -41,7 +41,7 @@
         "ETH and ERC-20 tokens in the same account.",
         "Token approvals are set to the exact amount by default. Unlimited approvals are off unless you turn them on.",
         "Contract calls, approvals and high fees ask for a second confirmation.",
-        "Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract."
+        "Native ETH staking is not offered: it needs 32 ETH and a validator running at all times. Liquid staking with Lido and lending on Aave are in Earn."
       ],
       "hwDevices": "Ledger and Trezor"
     },

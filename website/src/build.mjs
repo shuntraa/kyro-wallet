@@ -198,6 +198,13 @@ ${pages
   .map((p) => `- [${named[p.path]}](${SITE}${p.path}): ${ascii(short(p))}`)
   .join('\n')}
 
+## Guides
+
+${pages
+  .filter((p) => /^\/guides\/./.test(p.path))
+  .map((p) => `- [${ascii(p.title.replace(/\s*\|.*$/, ''))}](${SITE}${p.path}): ${ascii(short(p))}`)
+  .join('\n')}
+
 ## Blockchains
 
 ${chains

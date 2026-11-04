@@ -131,6 +131,50 @@ Threat model Servers contacted Architecture
 
 Please report security issues privately through GitHub security advisories, not in a public issue. The security policy explains what is in scope and how reports are handled.
 
+Scams
+
+## Built against the usual tricks
+
+Most losses start with a trick, so Kyro checks for the common ones before you sign.
+
+### Address poisoning
+
+A blocking alert when a recipient looks like a known address without being it. The server's history is never trusted. How it works
+
+### Clipboard swaps
+
+After you paste, Kyro watches the field, and shows the address in blocks. A swap before the paste can only be caught by comparing with your source.
+
+### Unlimited approvals
+
+Approvals are exact by default. An unlimited one needs an explicit action and shows a warning.
+
+### Booby-trapped text
+
+Memos and token names from the chain are cleaned of line breaks, bidi and invisible characters before you read them.
+
+### Booby-trapped updates
+
+Each update is signed, and verified against a public key pinned in the app.
+
+### Unknown servers
+
+A new custom server is confirmed in a system window before any request goes out.
+
+## Keep reading
+
+### Back up your recovery phrase
+
+The one thing Kyro cannot do for you.
+
+### How Kyro uses Tor
+
+Who sees what, and what happens when Tor is down.
+
+### Read, build and verify
+
+Check the claims on this page yourself.
+
 ## Get Kyro
 
 Version 1.0.6 · Free · Windows, macOS and Linux
@@ -160,7 +204,7 @@ You receive, in value$197.78
 
 0% Send and receive You pay the network fee only.
 
-0% Staking SOL, ADA, TRX. Network fee only.
+0% Staking SOL, ADA, TRX, NEAR. Network fee only.
 
 from 0.7% Swaps Included in the amount you receive.
 
@@ -239,6 +283,38 @@ Kyro fees by action
 | Stake, unstake | 0% | Yes
 
 | Swap | From 0.7% | Yes
+
+Exolix routes
+
+## One route, two transfers
+
+Monero, Kaspa, Algorand and NEAR go through Exolix, which has no integrator fee.
+
+### Same rate
+
+The curve is the same as on every other route, taken from the amount you sell.
+
+### Second transfer
+
+The Kyro fee is a second ordinary transfer of the sold coin to Kyro's fee address on that chain. You approve it, and it carries its own network fee.
+
+### No separate transfer elsewhere
+
+On other routes the fee is collected through the provider's official integrator mechanism.
+
+## Keep reading
+
+### Swap routes and limits
+
+Which coin goes where, and through whom.
+
+### Swap to Monero
+
+A worked example, step by step.
+
+### How Kyro is paid for
+
+Why there is a swap fee at all.
 
 ## Get Kyro
 
@@ -376,12 +452,38 @@ pnpm install --frozen-lockfile
 pnpm build
 ```
 
+## After the download
+
+### Kyro for Windows
+
+SmartScreen, .exe or .msi, and how updates work.
+
+### Kyro for macOS
+
+Apple Silicon and Intel, and the first launch.
+
+### Kyro for Linux
+
+AppImage or .deb, FUSE and udev rules.
+
+### Verify your download
+
+Check the SHA-256 in two minutes.
+
+### What SmartScreen means
+
+Why Windows warns, and what to do.
+
+### First steps with Kyro
+
+From install to your first small send.
+
 ================================================================
 Kyro Wallet FAQ: fees, security, blockchains, install
 URL: https://kyrowallet.com/faq/
 ================================================================
 
-18 questions
+20 questions
 
 # Frequently asked questions
 
@@ -405,6 +507,12 @@ Q: Is there a mobile app?
 A: No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.
 
 ## Swaps and staking
+
+Q: Can I swap Monero in Kyro?
+A: Yes, both ways, through Exolix. Kyro's fee is a second ordinary transfer of the coin you sell. Swap to Monero.
+
+Q: Can I earn from a hardware wallet?
+A: Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. Options and risks.
 
 Q: How much does a swap cost?
 A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. Full fee table.
@@ -556,7 +664,7 @@ Compare
 
 ## What works where
 
-Staking is available for SOL, ADA and TRX. Hardware wallets work on Bitcoin, Ethereum, the main EVM chains and Solana.
+Staking is available for SOL, ADA, TRX and NEAR. See swap routes, Earn and hardware wallets for the details.
 
 What Kyro supports on each blockchain
 
@@ -737,9 +845,9 @@ Yes
 Swap BTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for BTC.
+Kyro offers no staking or lending on Bitcoin.
 No
 
 ### Hardware wallet
@@ -762,6 +870,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Bitcoin in one table
+
+What works today, and through what.
+
+What Kyro supports on Bitcoin
+
+|  | Available | Details
+
+| Send and receive |  | BTC. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Bitcoin questions
+
+Q: Is Kyro a free Bitcoin wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send BTC, and your keys stay on your own computer.
+
+Q: Can I swap BTC in Kyro?
+A: Yes, in both directions. Providers: 1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Bitcoin in Kyro?
+A: Kyro offers no staking or lending on Bitcoin.
+
+Q: Does Kyro work with a hardware wallet on Bitcoin?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Bitcoin in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Bitcoin has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Bitcoin?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -816,10 +970,10 @@ Yes
 Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ETH.
-No
+ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -836,13 +990,59 @@ Details
 
 - Contract calls, approvals and high fees ask for a second confirmation.
 
-- Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract.
+- Native ETH staking is not offered: it needs 32 ETH and a validator running at all times. Liquid staking with Lido and lending on Aave are in Earn.
 
 - Same recovery phrase as your other 35 blockchains.
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Ethereum in one table
+
+What works today, and through what.
+
+What Kyro supports on Ethereum
+
+|  | Available | Details
+
+| Send and receive |  | ETH and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Ethereum questions
+
+Q: Is Kyro a free Ethereum wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ETH, and your keys stay on your own computer.
+
+Q: Can I swap ETH in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Ethereum in Kyro?
+A: Yes: ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+
+Q: Does Kyro work with a hardware wallet on Ethereum?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Ethereum in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Ethereum has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Ethereum?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -897,9 +1097,9 @@ Yes
 Swap BNB in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for BNB.
+Kyro offers no staking or lending on BNB Chain.
 No
 
 ### Hardware wallet
@@ -920,6 +1120,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## BNB Chain in one table
+
+What works today, and through what.
+
+What Kyro supports on BNB Chain
+
+|  | Available | Details
+
+| Send and receive |  | BNB and BEP-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI. 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## BNB Chain questions
+
+Q: Is Kyro a free BNB Chain wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send BNB, and your keys stay on your own computer.
+
+Q: Can I swap BNB in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI. 1Click. Routes and limits.
+
+Q: Can I earn on BNB Chain in Kyro?
+A: Kyro offers no staking or lending on BNB Chain.
+
+Q: Does Kyro work with a hardware wallet on BNB Chain?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use BNB Chain in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. BNB Chain has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for BNB Chain?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -974,10 +1220,10 @@ Yes
 Swap POL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for POL.
-No
+Lending USDT and USDC on Aave. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -997,6 +1243,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Polygon in one table
+
+What works today, and through what.
+
+What Kyro supports on Polygon
+
+|  | Available | Details
+
+| Send and receive |  | POL and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Lending USDT and USDC on Aave.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Polygon questions
+
+Q: Is Kyro a free Polygon wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send POL, and your keys stay on your own computer.
+
+Q: Can I swap POL in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Polygon in Kyro?
+A: Yes: Lending USDT and USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+
+Q: Does Kyro work with a hardware wallet on Polygon?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Polygon in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Polygon has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Polygon?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1051,10 +1343,10 @@ Yes
 Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ETH.
-No
+Lending USDT and USDC on Aave. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -1074,6 +1366,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Arbitrum in one table
+
+What works today, and through what.
+
+What Kyro supports on Arbitrum
+
+|  | Available | Details
+
+| Send and receive |  | ETH and ERC-20 tokens on Arbitrum. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Lending USDT and USDC on Aave.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Arbitrum questions
+
+Q: Is Kyro a free Arbitrum wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ETH, and your keys stay on your own computer.
+
+Q: Can I swap ETH in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Arbitrum in Kyro?
+A: Yes: Lending USDT and USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+
+Q: Does Kyro work with a hardware wallet on Arbitrum?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Arbitrum in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Arbitrum has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Arbitrum?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1128,9 +1466,9 @@ Yes
 Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ETH.
+Kyro offers no staking or lending on Optimism.
 No
 
 ### Hardware wallet
@@ -1151,6 +1489,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Optimism in one table
+
+What works today, and through what.
+
+What Kyro supports on Optimism
+
+|  | Available | Details
+
+| Send and receive |  | ETH and ERC-20 tokens on Optimism. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Optimism questions
+
+Q: Is Kyro a free Optimism wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ETH, and your keys stay on your own computer.
+
+Q: Can I swap ETH in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Optimism in Kyro?
+A: Kyro offers no staking or lending on Optimism.
+
+Q: Does Kyro work with a hardware wallet on Optimism?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Optimism in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Optimism has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Optimism?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1205,10 +1589,10 @@ Yes
 Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ETH.
-No
+Lending USDC on Aave. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -1228,6 +1612,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Base in one table
+
+What works today, and through what.
+
+What Kyro supports on Base
+
+|  | Available | Details
+
+| Send and receive |  | ETH and ERC-20 tokens on Base. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Lending USDC on Aave.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Base questions
+
+Q: Is Kyro a free Base wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ETH, and your keys stay on your own computer.
+
+Q: Can I swap ETH in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
+
+Q: Can I earn on Base in Kyro?
+A: Yes: Lending USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+
+Q: Does Kyro work with a hardware wallet on Base?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Base in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Base has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Base?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1282,9 +1712,9 @@ Yes
 Swap AVAX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for AVAX.
+Kyro offers no staking or lending on Avalanche.
 No
 
 ### Hardware wallet
@@ -1305,6 +1735,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Avalanche in one table
+
+What works today, and through what.
+
+What Kyro supports on Avalanche
+
+|  | Available | Details
+
+| Send and receive |  | AVAX and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x and LI.FI. 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Avalanche questions
+
+Q: Is Kyro a free Avalanche wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send AVAX, and your keys stay on your own computer.
+
+Q: Can I swap AVAX in Kyro?
+A: Yes, in both directions. Providers: 0x and LI.FI. 1Click. Routes and limits.
+
+Q: Can I earn on Avalanche in Kyro?
+A: Kyro offers no staking or lending on Avalanche.
+
+Q: Does Kyro work with a hardware wallet on Avalanche?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Avalanche in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Avalanche has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Avalanche?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1359,9 +1835,9 @@ Yes
 Swap CRO in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for CRO.
+Kyro offers no staking or lending on Cronos.
 No
 
 ### Hardware wallet
@@ -1382,6 +1858,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Cronos in one table
+
+What works today, and through what.
+
+What Kyro supports on Cronos
+
+|  | Available | Details
+
+| Send and receive |  | CRO and CRC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Cronos questions
+
+Q: Is Kyro a free Cronos wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send CRO, and your keys stay on your own computer.
+
+Q: Can I swap CRO in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Cronos in Kyro?
+A: Kyro offers no staking or lending on Cronos.
+
+Q: Does Kyro work with a hardware wallet on Cronos?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Cronos in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Cronos has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Cronos?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1436,9 +1958,9 @@ Yes
 Swap MNT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for MNT.
+Kyro offers no staking or lending on Mantle.
 No
 
 ### Hardware wallet
@@ -1459,6 +1981,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Mantle in one table
+
+What works today, and through what.
+
+What Kyro supports on Mantle
+
+|  | Available | Details
+
+| Send and receive |  | MNT and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Mantle questions
+
+Q: Is Kyro a free Mantle wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send MNT, and your keys stay on your own computer.
+
+Q: Can I swap MNT in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Mantle in Kyro?
+A: Kyro offers no staking or lending on Mantle.
+
+Q: Does Kyro work with a hardware wallet on Mantle?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Mantle in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Mantle has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Mantle?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1513,9 +2081,9 @@ Yes
 Swap S in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for S.
+Kyro offers no staking or lending on Sonic.
 No
 
 ### Hardware wallet
@@ -1536,6 +2104,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Sonic in one table
+
+What works today, and through what.
+
+What Kyro supports on Sonic
+
+|  | Available | Details
+
+| Send and receive |  | S and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Sonic questions
+
+Q: Is Kyro a free Sonic wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send S, and your keys stay on your own computer.
+
+Q: Can I swap S in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Sonic in Kyro?
+A: Kyro offers no staking or lending on Sonic.
+
+Q: Does Kyro work with a hardware wallet on Sonic?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Sonic in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sonic has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Sonic?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1590,9 +2204,9 @@ Yes
 Swap FLR in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for FLR.
+Kyro offers no staking or lending on Flare.
 No
 
 ### Hardware wallet
@@ -1613,6 +2227,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Flare in one table
+
+What works today, and through what.
+
+What Kyro supports on Flare
+
+|  | Available | Details
+
+| Send and receive |  | FLR and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Flare questions
+
+Q: Is Kyro a free Flare wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send FLR, and your keys stay on your own computer.
+
+Q: Can I swap FLR in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Flare in Kyro?
+A: Kyro offers no staking or lending on Flare.
+
+Q: Does Kyro work with a hardware wallet on Flare?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Flare in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Flare has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Flare?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1667,9 +2327,9 @@ Yes
 Swap KAIA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for KAIA.
+Kyro offers no staking or lending on Kaia.
 No
 
 ### Hardware wallet
@@ -1690,6 +2350,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Kaia in one table
+
+What works today, and through what.
+
+What Kyro supports on Kaia
+
+|  | Available | Details
+
+| Send and receive |  | KAIA and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Kaia questions
+
+Q: Is Kyro a free Kaia wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send KAIA, and your keys stay on your own computer.
+
+Q: Can I swap KAIA in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Kaia in Kyro?
+A: Kyro offers no staking or lending on Kaia.
+
+Q: Does Kyro work with a hardware wallet on Kaia?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Kaia in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Kaia has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Kaia?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1744,9 +2450,9 @@ Yes
 Swap xDAI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for xDAI.
+Kyro offers no staking or lending on Gnosis.
 No
 
 ### Hardware wallet
@@ -1767,6 +2473,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Gnosis in one table
+
+What works today, and through what.
+
+What Kyro supports on Gnosis
+
+|  | Available | Details
+
+| Send and receive |  | xDAI and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: LI.FI. 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Gnosis questions
+
+Q: Is Kyro a free Gnosis wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send xDAI, and your keys stay on your own computer.
+
+Q: Can I swap xDAI in Kyro?
+A: Yes, in both directions. Providers: LI.FI. 1Click. Routes and limits.
+
+Q: Can I earn on Gnosis in Kyro?
+A: Kyro offers no staking or lending on Gnosis.
+
+Q: Does Kyro work with a hardware wallet on Gnosis?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Gnosis in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Gnosis has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Gnosis?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1821,9 +2573,9 @@ Yes
 Swap HYPE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for HYPE.
+Kyro offers no staking or lending on HyperEVM.
 No
 
 ### Hardware wallet
@@ -1844,6 +2596,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## HyperEVM in one table
+
+What works today, and through what.
+
+What Kyro supports on HyperEVM
+
+|  | Available | Details
+
+| Send and receive |  | HYPE and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## HyperEVM questions
+
+Q: Is Kyro a free HyperEVM wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send HYPE, and your keys stay on your own computer.
+
+Q: Can I swap HYPE in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on HyperEVM in Kyro?
+A: Kyro offers no staking or lending on HyperEVM.
+
+Q: Does Kyro work with a hardware wallet on HyperEVM?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use HyperEVM in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. HyperEVM has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for HyperEVM?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1898,9 +2696,9 @@ Yes
 Swap SEI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for SEI.
+Kyro offers no staking or lending on Sei.
 No
 
 ### Hardware wallet
@@ -1921,6 +2719,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Sei in one table
+
+What works today, and through what.
+
+What Kyro supports on Sei
+
+|  | Available | Details
+
+| Send and receive |  | SEI and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 0x or LI.FI, same chain only.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Sei questions
+
+Q: Is Kyro a free Sei wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send SEI, and your keys stay on your own computer.
+
+Q: Can I swap SEI in Kyro?
+A: Yes, in both directions. Providers: 0x or LI.FI, same chain only. Routes and limits.
+
+Q: Can I earn on Sei in Kyro?
+A: Kyro offers no staking or lending on Sei.
+
+Q: Does Kyro work with a hardware wallet on Sei?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Sei in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sei has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Sei?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -1972,12 +2816,12 @@ Yes
 
 ### Swap
 
-Swaps are not available on Conflux yet.
+Swaps are not available on Conflux yet. There is no provider contract Kyro can check on Conflux yet.
 No
 
-### Staking
+### Earn
 
-Kyro does not offer staking for CFX.
+Kyro offers no staking or lending on Conflux.
 No
 
 ### Hardware wallet
@@ -1998,6 +2842,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How your keys are protected
+
+At a glance
+
+## Conflux in one table
+
+What works today, and through what.
+
+What Kyro supports on Conflux
+
+|  | Available | Details
+
+| Send and receive |  | CFX and ERC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | There is no provider contract Kyro can check on Conflux yet.
+
+| Swap to |  | No route yet.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Conflux questions
+
+Q: Is Kyro a free Conflux wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send CFX, and your keys stay on your own computer.
+
+Q: Can I swap CFX in Kyro?
+A: Not yet. There is no provider contract Kyro can check on Conflux yet.
+
+Q: Can I earn on Conflux in Kyro?
+A: Kyro offers no staking or lending on Conflux.
+
+Q: Does Kyro work with a hardware wallet on Conflux?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Conflux in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Conflux has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Conflux?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2052,9 +2942,9 @@ Yes
 Swap SOL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Stake SOL from your own account. Kyro takes no fee on staking.
+Stake SOL from your own account. Kyro takes no fee on staking. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -2077,6 +2967,52 @@ Delegate SOL to a validator from a stake account in your name. Activation and co
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Solana in one table
+
+What works today, and through what.
+
+What Kyro supports on Solana
+
+|  | Available | Details
+
+| Send and receive |  | SOL and SPL tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Solana questions
+
+Q: Is Kyro a free Solana wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send SOL, and your keys stay on your own computer.
+
+Q: Can I swap SOL in Kyro?
+A: Yes, in both directions. Providers: Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC. Routes and limits.
+
+Q: Can I stake SOL in Kyro?
+A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime. Rates are estimates, never guaranteed.
+
+Q: Does Kyro work with a hardware wallet on Solana?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Solana in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Solana has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Solana?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2131,9 +3067,9 @@ Yes
 Swap TRX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Stake TRX from your own account. Kyro takes no fee on staking.
+Stake TRX from your own account. Kyro takes no fee on staking. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -2156,6 +3092,52 @@ Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representativ
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## TRON in one table
+
+What works today, and through what.
+
+What Kyro supports on TRON
+
+|  | Available | Details
+
+| Send and receive |  | TRX and TRC-20 tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click. Exolix.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## TRON questions
+
+Q: Is Kyro a free TRON wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send TRX, and your keys stay on your own computer.
+
+Q: Can I swap TRX in Kyro?
+A: Yes, in both directions. Providers: 1Click. Exolix. Routes and limits.
+
+Q: Can I stake TRX in Kyro?
+A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk. Rates are estimates, never guaranteed.
+
+Q: Does Kyro work with a hardware wallet on TRON?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use TRON in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. TRON has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for TRON?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2210,9 +3192,9 @@ Yes
 Swap ADA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Stake ADA from your own account. Kyro takes no fee on staking.
+Stake ADA from your own account. Kyro takes no fee on staking. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -2235,6 +3217,52 @@ Delegate to a stake pool. Your ADA stays on your address and remains spendable. 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Cardano in one table
+
+What works today, and through what.
+
+What Kyro supports on Cardano
+
+|  | Available | Details
+
+| Send and receive |  | ADA and native tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Cardano questions
+
+Q: Is Kyro a free Cardano wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ADA, and your keys stay on your own computer.
+
+Q: Can I swap ADA in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I stake ADA in Kyro?
+A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop. Rates are estimates, never guaranteed.
+
+Q: Does Kyro work with a hardware wallet on Cardano?
+A: Yes, with a Ledger or Trezor. Not on the Trezor One. A Ledger gives different Cardano addresses than the software wallet for the same phrase. Device table.
+
+Q: What can a server see when I use Cardano in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Cardano has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Cardano?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2289,9 +3317,9 @@ Yes
 Swap XRP in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for XRP.
+Kyro offers no staking or lending on XRP Ledger.
 No
 
 ### Hardware wallet
@@ -2316,6 +3344,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## XRP Ledger in one table
+
+What works today, and through what.
+
+What Kyro supports on XRP Ledger
+
+|  | Available | Details
+
+| Send and receive |  | XRP and issued currencies. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## XRP Ledger questions
+
+Q: Is Kyro a free XRP Ledger wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send XRP, and your keys stay on your own computer.
+
+Q: Can I swap XRP in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on XRP Ledger in Kyro?
+A: Kyro offers no staking or lending on XRP Ledger.
+
+Q: Does Kyro work with a hardware wallet on XRP Ledger?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use XRP Ledger in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. XRP Ledger has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for XRP Ledger?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2370,9 +3444,9 @@ Yes
 Swap LTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for LTC.
+Kyro offers no staking or lending on Litecoin.
 No
 
 ### Hardware wallet
@@ -2393,6 +3467,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Litecoin in one table
+
+What works today, and through what.
+
+What Kyro supports on Litecoin
+
+|  | Available | Details
+
+| Send and receive |  | LTC. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click. Exolix.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Litecoin questions
+
+Q: Is Kyro a free Litecoin wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send LTC, and your keys stay on your own computer.
+
+Q: Can I swap LTC in Kyro?
+A: Yes, in both directions. Providers: 1Click. Exolix. Routes and limits.
+
+Q: Can I earn on Litecoin in Kyro?
+A: Kyro offers no staking or lending on Litecoin.
+
+Q: Does Kyro work with a hardware wallet on Litecoin?
+A: Yes, with a Ledger or Trezor. Ledger: main network only. Device table.
+
+Q: What can a server see when I use Litecoin in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Litecoin has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Litecoin?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2447,9 +3567,9 @@ Yes
 Swap DOGE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for DOGE.
+Kyro offers no staking or lending on Dogecoin.
 No
 
 ### Hardware wallet
@@ -2472,6 +3592,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Dogecoin in one table
+
+What works today, and through what.
+
+What Kyro supports on Dogecoin
+
+|  | Available | Details
+
+| Send and receive |  | DOGE. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click. Exolix.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Dogecoin questions
+
+Q: Is Kyro a free Dogecoin wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send DOGE, and your keys stay on your own computer.
+
+Q: Can I swap DOGE in Kyro?
+A: Yes, in both directions. Providers: 1Click. Exolix. Routes and limits.
+
+Q: Can I earn on Dogecoin in Kyro?
+A: Kyro offers no staking or lending on Dogecoin.
+
+Q: Does Kyro work with a hardware wallet on Dogecoin?
+A: Yes, with a Ledger or Trezor. Ledger: main network only. Device table.
+
+Q: What can a server see when I use Dogecoin in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Dogecoin has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Dogecoin?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2526,9 +3692,9 @@ Yes
 Swap BCH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for BCH.
+Kyro offers no staking or lending on Bitcoin Cash.
 No
 
 ### Hardware wallet
@@ -2547,6 +3713,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Bitcoin Cash in one table
+
+What works today, and through what.
+
+What Kyro supports on Bitcoin Cash
+
+|  | Available | Details
+
+| Send and receive |  | BCH. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Bitcoin Cash questions
+
+Q: Is Kyro a free Bitcoin Cash wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send BCH, and your keys stay on your own computer.
+
+Q: Can I swap BCH in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on Bitcoin Cash in Kyro?
+A: Kyro offers no staking or lending on Bitcoin Cash.
+
+Q: Does Kyro work with a hardware wallet on Bitcoin Cash?
+A: Yes, with a Ledger or Trezor. Ledger: main network only. Device table.
+
+Q: What can a server see when I use Bitcoin Cash in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Bitcoin Cash has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Bitcoin Cash?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2601,9 +3813,9 @@ Yes
 Swap DASH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for DASH.
+Kyro offers no staking or lending on Dash.
 No
 
 ### Hardware wallet
@@ -2622,6 +3834,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Dash in one table
+
+What works today, and through what.
+
+What Kyro supports on Dash
+
+|  | Available | Details
+
+| Send and receive |  | DASH. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Dash questions
+
+Q: Is Kyro a free Dash wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send DASH, and your keys stay on your own computer.
+
+Q: Can I swap DASH in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on Dash in Kyro?
+A: Kyro offers no staking or lending on Dash.
+
+Q: Does Kyro work with a hardware wallet on Dash?
+A: Yes, with a Ledger or Trezor. Ledger: main network only. Device table.
+
+Q: What can a server see when I use Dash in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Dash has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Dash?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2676,9 +3934,9 @@ Yes
 Swap into XLM from other chains (Stellar is a destination only for now). The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for XLM.
+Kyro offers no staking or lending on Stellar.
 No
 
 ### Hardware wallet
@@ -2701,6 +3959,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Stellar in one table
+
+What works today, and through what.
+
+What Kyro supports on Stellar
+
+|  | Available | Details
+
+| Send and receive |  | XLM and USDC tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click, arrival only: a Stellar deposit needs a memo.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Stellar questions
+
+Q: Is Kyro a free Stellar wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send XLM, and your keys stay on your own computer.
+
+Q: Can I swap XLM in Kyro?
+A: You can swap into it, not out of it yet. Providers: 1Click, arrival only: a Stellar deposit needs a memo. Routes and limits.
+
+Q: Can I earn on Stellar in Kyro?
+A: Kyro offers no staking or lending on Stellar.
+
+Q: Does Kyro work with a hardware wallet on Stellar?
+A: Yes, with a Ledger or Trezor. Device table.
+
+Q: What can a server see when I use Stellar in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Stellar has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Stellar?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2755,9 +4059,9 @@ Yes
 Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Stake NEAR from your own account. Kyro takes no fee on staking.
+Stake NEAR from your own account. Kyro takes no fee on staking. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -2780,6 +4084,52 @@ Stake with a NEAR staking pool from the official factories. Kyro checks the pool
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## NEAR in one table
+
+What works today, and through what.
+
+What Kyro supports on NEAR
+
+|  | Available | Details
+
+| Send and receive |  | NEAR and USDC and USDT tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: Exolix. Kyro's fee is a second transfer.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## NEAR questions
+
+Q: Is Kyro a free NEAR wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send NEAR, and your keys stay on your own computer.
+
+Q: Can I swap NEAR in Kyro?
+A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
+
+Q: Can I stake NEAR in Kyro?
+A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available. Rates are estimates, never guaranteed.
+
+Q: Does Kyro work with a hardware wallet on NEAR?
+A: Yes, with a Ledger. The Ledger account is a different account than the software wallet. Device table.
+
+Q: What can a server see when I use NEAR in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. NEAR has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for NEAR?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2834,9 +4184,9 @@ Yes
 Swap SUI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for SUI.
+Kyro offers no staking or lending on Sui.
 No
 
 ### Hardware wallet
@@ -2857,6 +4207,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Sui in one table
+
+What works today, and through what.
+
+What Kyro supports on Sui
+
+|  | Available | Details
+
+| Send and receive |  | SUI and USDC tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Sui questions
+
+Q: Is Kyro a free Sui wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send SUI, and your keys stay on your own computer.
+
+Q: Can I swap SUI in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on Sui in Kyro?
+A: Kyro offers no staking or lending on Sui.
+
+Q: Does Kyro work with a hardware wallet on Sui?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use Sui in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sui has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Sui?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2911,9 +4307,9 @@ Yes
 Swap XMR both ways through Exolix, without an account. Kyro's fee is a second ordinary transfer of the coin you sell. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for XMR.
+Kyro offers no staking or lending on Monero.
 No
 
 ### Hardware wallet
@@ -2938,6 +4334,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Monero in one table
+
+What works today, and through what.
+
+What Kyro supports on Monero
+
+|  | Available | Details
+
+| Send and receive |  | XMR. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: Exolix. Kyro's fee is a second transfer.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Not supported.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits How Kyro uses Tor
+
+Questions
+
+## Monero questions
+
+Q: Is Kyro a free Monero wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send XMR, and your keys stay on your own computer.
+
+Q: Can I swap XMR in Kyro?
+A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
+
+Q: Can I earn on Monero in Kyro?
+A: Kyro offers no staking or lending on Monero.
+
+Q: Does Kyro work with a hardware wallet on Monero?
+A: No. Monero is not supported on hardware wallets in Kyro. Use a software account.
+
+Q: What can a server see when I use Monero in Kyro?
+A: The node sees the blocks you download and the transactions you publish, from a Tor exit relay. It never gets your addresses or your view key, because Kyro scans blocks locally. Details.
+
+Q: Can I use my existing recovery phrase for Monero?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -2992,9 +4434,9 @@ Yes
 Swap GRAM in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for GRAM.
+Kyro offers no staking or lending on TON.
 No
 
 ### Hardware wallet
@@ -3019,6 +4461,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## TON in one table
+
+What works today, and through what.
+
+What Kyro supports on TON
+
+|  | Available | Details
+
+| Send and receive |  | GRAM and USDT (jetton) tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## TON questions
+
+Q: Is Kyro a free TON wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send GRAM, and your keys stay on your own computer.
+
+Q: Can I swap GRAM in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on TON in Kyro?
+A: Kyro offers no staking or lending on TON.
+
+Q: Does Kyro work with a hardware wallet on TON?
+A: Yes, with a Ledger. The Ledger wallet has a different address than the software wallet. Comments: printable ASCII, up to 120 characters. Device table.
+
+Q: What can a server see when I use TON in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. TON has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for TON?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3070,12 +4558,12 @@ Yes
 
 ### Swap
 
-Swaps are not available on Cosmos Hub yet.
+Swaps are not available on Cosmos Hub yet. 1Click does not list Cosmos Hub, and Exolix refuses the pair.
 No
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ATOM.
+Kyro offers no staking or lending on Cosmos Hub.
 No
 
 ### Hardware wallet
@@ -3098,6 +4586,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How your keys are protected
+
+At a glance
+
+## Cosmos Hub in one table
+
+What works today, and through what.
+
+What Kyro supports on Cosmos Hub
+
+|  | Available | Details
+
+| Send and receive |  | ATOM. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | 1Click does not list Cosmos Hub, and Exolix refuses the pair.
+
+| Swap to |  | No route yet.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Cosmos Hub questions
+
+Q: Is Kyro a free Cosmos Hub wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ATOM, and your keys stay on your own computer.
+
+Q: Can I swap ATOM in Kyro?
+A: Not yet. 1Click does not list Cosmos Hub, and Exolix refuses the pair.
+
+Q: Can I earn on Cosmos Hub in Kyro?
+A: Kyro offers no staking or lending on Cosmos Hub.
+
+Q: Does Kyro work with a hardware wallet on Cosmos Hub?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use Cosmos Hub in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Cosmos Hub has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Cosmos Hub?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3149,12 +4683,12 @@ Yes
 
 ### Swap
 
-Swaps are not available on Polkadot yet.
+Swaps are not available on Polkadot yet. 1Click does not list Polkadot, and delivery to Asset Hub is not confirmed through Exolix.
 No
 
-### Staking
+### Earn
 
-Kyro does not offer staking for DOT.
+Kyro offers no staking or lending on Polkadot.
 No
 
 ### Hardware wallet
@@ -3175,6 +4709,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How your keys are protected
+
+At a glance
+
+## Polkadot in one table
+
+What works today, and through what.
+
+What Kyro supports on Polkadot
+
+|  | Available | Details
+
+| Send and receive |  | DOT. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | 1Click does not list Polkadot, and delivery to Asset Hub is not confirmed through Exolix.
+
+| Swap to |  | No route yet.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Not supported.
+
+| Trezor |  | Not supported.
+
+How Kyro uses Tor
+
+Questions
+
+## Polkadot questions
+
+Q: Is Kyro a free Polkadot wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send DOT, and your keys stay on your own computer.
+
+Q: Can I swap DOT in Kyro?
+A: Not yet. 1Click does not list Polkadot, and delivery to Asset Hub is not confirmed through Exolix.
+
+Q: Can I earn on Polkadot in Kyro?
+A: Kyro offers no staking or lending on Polkadot.
+
+Q: Does Kyro work with a hardware wallet on Polkadot?
+A: No. Polkadot is not supported on hardware wallets in Kyro. Use a software account.
+
+Q: What can a server see when I use Polkadot in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Polkadot has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Polkadot?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3229,9 +4809,9 @@ Yes
 Swap APT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for APT.
+Kyro offers no staking or lending on Aptos.
 No
 
 ### Hardware wallet
@@ -3252,6 +4832,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Aptos in one table
+
+What works today, and through what.
+
+What Kyro supports on Aptos
+
+|  | Available | Details
+
+| Send and receive |  | APT and USDC and USDT tokens. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Aptos questions
+
+Q: Is Kyro a free Aptos wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send APT, and your keys stay on your own computer.
+
+Q: Can I swap APT in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on Aptos in Kyro?
+A: Kyro offers no staking or lending on Aptos.
+
+Q: Does Kyro work with a hardware wallet on Aptos?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use Aptos in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Aptos has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Aptos?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3306,9 +4932,9 @@ Yes
 Swap native ALGO in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Algorand. Algorand tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ALGO.
+Kyro offers no staking or lending on Algorand.
 No
 
 ### Hardware wallet
@@ -3329,6 +4955,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Algorand in one table
+
+What works today, and through what.
+
+What Kyro supports on Algorand
+
+|  | Available | Details
+
+| Send and receive |  | ALGO. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: Exolix. Kyro's fee is a second transfer.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Keys stay in the device.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Algorand questions
+
+Q: Is Kyro a free Algorand wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ALGO, and your keys stay on your own computer.
+
+Q: Can I swap ALGO in Kyro?
+A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
+
+Q: Can I earn on Algorand in Kyro?
+A: Kyro offers no staking or lending on Algorand.
+
+Q: Does Kyro work with a hardware wallet on Algorand?
+A: Yes, with a Ledger. Device table.
+
+Q: What can a server see when I use Algorand in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Algorand has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Algorand?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3383,9 +5055,9 @@ Yes
 Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for KAS.
+Kyro offers no staking or lending on Kaspa.
 No
 
 ### Hardware wallet
@@ -3406,6 +5078,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Kaspa in one table
+
+What works today, and through what.
+
+What Kyro supports on Kaspa
+
+|  | Available | Details
+
+| Send and receive |  | KAS. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: Exolix. Kyro's fee is a second transfer.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Not supported.
+
+| Trezor |  | Not supported.
+
+Swap routes and limits How Kyro uses Tor
+
+Questions
+
+## Kaspa questions
+
+Q: Is Kyro a free Kaspa wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send KAS, and your keys stay on your own computer.
+
+Q: Can I swap KAS in Kyro?
+A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
+
+Q: Can I earn on Kaspa in Kyro?
+A: Kyro offers no staking or lending on Kaspa.
+
+Q: Does Kyro work with a hardware wallet on Kaspa?
+A: No. Kaspa is not supported on hardware wallets in Kyro. Use a software account.
+
+Q: What can a server see when I use Kaspa in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Kaspa has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Kaspa?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 
@@ -3460,9 +5178,9 @@ Yes
 Swap ZEC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
-### Staking
+### Earn
 
-Kyro does not offer staking for ZEC.
+Kyro offers no staking or lending on Zcash.
 No
 
 ### Hardware wallet
@@ -3483,6 +5201,52 @@ Details
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
 All wallet features How swap fees work How your keys are protected
+
+At a glance
+
+## Zcash in one table
+
+What works today, and through what.
+
+What Kyro supports on Zcash
+
+|  | Available | Details
+
+| Send and receive |  | ZEC. Over Tor, with address-poisoning alerts.
+
+| Swap from |  | Providers: 1Click.
+
+| Swap to |  | The amount you see already has Kyro's fee out.
+
+| Earn |  | Not offered.
+
+| Ledger |  | Not supported.
+
+| Trezor |  | Keys stay in the device.
+
+Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+
+Questions
+
+## Zcash questions
+
+Q: Is Kyro a free Zcash wallet?
+A: Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ZEC, and your keys stay on your own computer.
+
+Q: Can I swap ZEC in Kyro?
+A: Yes, in both directions. Providers: 1Click. Routes and limits.
+
+Q: Can I earn on Zcash in Kyro?
+A: Kyro offers no staking or lending on Zcash.
+
+Q: Does Kyro work with a hardware wallet on Zcash?
+A: Yes, with a Trezor. Transparent addresses only. Device table.
+
+Q: What can a server see when I use Zcash in Kyro?
+A: The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Zcash has its own circuit family, except that all EVM networks share one. Who sees what.
+
+Q: Can I use my existing recovery phrase for Zcash?
+A: Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions.
 
 ## Also in Kyro
 

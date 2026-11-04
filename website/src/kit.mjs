@@ -9,6 +9,8 @@ export const strip = (s) =>
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/\s+\n/g, '\n')
     .trim();
 
@@ -109,3 +111,47 @@ export const tbl = (caption, heads, rows, cls = 'matrix') => html`
             </tbody>
           </table>
         </div>`;
+
+export const ROUTES = [
+  ['Ethereum, Arbitrum, Optimism, Base', 'Yes', 'Yes', '0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR'],
+  ['Polygon', 'Yes', 'Yes', '0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR'],
+  ['BNB Chain, Avalanche', 'Yes', 'Yes', '0x and LI.FI. 1Click'],
+  ['Gnosis', 'Yes', 'Yes', 'LI.FI. 1Click'],
+  ['Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM, Sei', 'Yes', 'Yes', '0x or LI.FI, same chain only'],
+  ['Solana and SPL tokens', 'Yes', 'Yes', 'Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC'],
+  ['Bitcoin', 'Yes', 'Yes', '1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR'],
+  ['Litecoin, Dogecoin, TRON (TRX, USDT)', 'Yes', 'Yes', '1Click. Exolix'],
+  ['XRP, Cardano, Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos', 'Yes', 'Yes', '1Click'],
+  ['Stellar', 'No', 'Yes', '1Click, arrival only: a Stellar deposit needs a memo'],
+  ['Monero, Kaspa, Algorand, NEAR (native coin)', 'Yes', 'Yes', 'Exolix. Kyro’s fee is a second transfer']
+];
+
+/** Row of ROUTES for each blockchain. */
+export const ROUTE_SLUGS = [
+  ['ethereum', 'arbitrum', 'optimism', 'base'],
+  ['polygon'],
+  ['bnb-chain', 'avalanche'],
+  ['gnosis'],
+  ['cronos', 'mantle', 'sonic', 'flare', 'kaia', 'hyperevm', 'sei'],
+  ['solana'],
+  ['bitcoin'],
+  ['litecoin', 'dogecoin', 'tron'],
+  ['xrp', 'cardano', 'bitcoin-cash', 'dash', 'zcash', 'sui', 'ton', 'aptos'],
+  ['stellar'],
+  ['monero', 'kaspa', 'algorand', 'near']
+];
+export const routeOf = (slug) => ROUTES[ROUTE_SLUGS.findIndex((r) => r.includes(slug))];
+
+export const NO_SWAP = {
+  polkadot: '1Click does not list Polkadot, and delivery to Asset Hub is not confirmed through Exolix.',
+  cosmos: '1Click does not list Cosmos Hub, and Exolix refuses the pair.',
+  conflux: 'There is no provider contract Kyro can check on Conflux yet.'
+};
+
+/** Earn options on chains without native staking in Kyro. */
+export const EARN_ON = {
+  ethereum: 'ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave.',
+  arbitrum: 'Lending USDT and USDC on Aave.',
+  polygon: 'Lending USDT and USDC on Aave.',
+  base: 'Lending USDC on Aave.'
+};
