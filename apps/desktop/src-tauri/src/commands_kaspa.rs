@@ -238,7 +238,7 @@ pub struct KaspaTxStatus {
 }
 
 /// A watched address: the key fields are unused by the reads, which only go by `address`.
-fn watched(net: Network, address: &str) -> AppResult<Vec<KaspaOwnKey>> {
+pub(crate) fn watched(net: Network, address: &str) -> AppResult<Vec<KaspaOwnKey>> {
     let address = address.trim();
     wallet_core::kaspa_address_decode(net, address)?;
     Ok(vec![KaspaOwnKey {
@@ -259,7 +259,7 @@ pub async fn kas_watch_account(
     let c = ctx(&state);
     let daa = kaspa_backend::network_info(&c).await?;
     let balance = kaspa_backend::balance(&c, &ks).await?;
-    let coins = kaspa_backend::mature(kaspa_backend::utxos(&c, &ks).await?, daa);
+    let coins = kaspa_backend::mature(kaspa_backend::watch_utxos(&c, &ks[0].address).await?, daa);
     let spendable: u64 = coins.iter().map(|c| c.entry.amount).sum();
     Ok(KaspaAccountInfo {
         address: ks[0].address.clone(),

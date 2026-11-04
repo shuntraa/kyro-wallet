@@ -164,11 +164,32 @@ pub async fn utxos(ctx: &KaspaCtx<'_>, keys: &[KaspaOwnKey]) -> AppResult<Vec<Ka
     parse_utxos(&v, keys)
 }
 
+/// Coins of a watch address: same checks, against the script of the address itself (no key is
+/// known, and it may be of any standard kind).
+pub async fn watch_utxos(ctx: &KaspaCtx<'_>, address: &str) -> AppResult<Vec<KaspaSpendable>> {
+    let v = call(
+        ctx,
+        "/addresses/utxos",
+        Some(json!({ "addresses": [address] })),
+    )
+    .await?;
+    parse_watch_utxos(&v, ctx.network, address)
+}
+
 pub fn parse_utxos(v: &Value, keys: &[KaspaOwnKey]) -> AppResult<Vec<KaspaSpendable>> {
     let scripts: BTreeMap<&str, Vec<u8>> = keys
         .iter()
         .map(|k| (k.address.as_str(), k.script()))
         .collect();
+    parse_coins(v, &scripts)
+}
+
+pub fn parse_watch_utxos(v: &Value, net: Network, address: &str) -> AppResult<Vec<KaspaSpendable>> {
+    let script = wallet_core::kaspa_script_pubkey(net, address)?;
+    parse_coins(v, &BTreeMap::from([(address, script)]))
+}
+
+fn parse_coins(v: &Value, scripts: &BTreeMap<&str, Vec<u8>>) -> AppResult<Vec<KaspaSpendable>> {
     let list = v
         .as_array()
         .ok_or_else(|| bad("Kaspa API: list of coins expected"))?;
@@ -481,6 +502,22 @@ mod tests {
                 "isCoinbase": coinbase
             }
         })
+    }
+
+    #[test]
+    fn watched_coins_pay_the_script_of_the_address() {
+        let a = "kaspa:qr85gz7hvp76mtws6p236uv5xxdk57dzfe4p06ues0rlqhtqy3rtqqx7eeq3u";
+        let n = Network::Mainnet;
+        let script = hex::encode(wallet_core::kaspa_script_pubkey(n, a).unwrap());
+        let txid = "2de30034c236ebc4d0c6beeb8b78add2d39f699fb943f5a132de793f462c3d23";
+        let ok = json!([utxo(a, &script, txid, "5", false)]);
+        assert_eq!(parse_watch_utxos(&ok, n, a).unwrap()[0].entry.amount, 5);
+        let k = keys();
+        let wrong = hex::encode(k[0].script());
+        let lie = json!([utxo(a, &wrong, txid, "5", false)]);
+        assert!(parse_watch_utxos(&lie, n, a).is_err());
+        let foreign = json!([utxo(&k[0].address, &wrong, txid, "5", false)]);
+        assert!(parse_watch_utxos(&foreign, n, a).is_err());
     }
 
     #[test]
