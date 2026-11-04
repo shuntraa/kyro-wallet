@@ -191,8 +191,8 @@ export function home(chains) {
     <section class="hero" id="showcase" aria-labelledby="hero-title">
       <div class="wrap hero-copy">
         <a class="badge" href="${REPO}">
-          <span class="badge-tag">${VERSION}</span>
-          Free and open source
+          <span class="badge-tag"><i class="badge-dot" aria-hidden="true"></i>v${VERSION}</span>
+          <span class="badge-text">Free and open source</span>
           <span class="badge-arrow" aria-hidden="true">→</span>
         </a>
         <h1 id="hero-title"><span class="ln"><span>Keep it</span></span> <span class="ln"><em>to yourself.</em></span></h1>

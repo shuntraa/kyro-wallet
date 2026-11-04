@@ -7,7 +7,7 @@ Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
 URL: https://kyrowallet.com/
 ================================================================
 
-1.0.7 Free and open source
+v1.0.7 Free and open source
 
 # Keep it to yourself.
 
