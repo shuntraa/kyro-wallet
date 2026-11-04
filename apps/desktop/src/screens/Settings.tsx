@@ -28,6 +28,7 @@ import { XmrWalletSection } from '../components/Monero';
 import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
 import { BackupSection } from './settings/Backup';
+import { TorBridges } from './settings/TorBridges';
 
 export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -233,7 +234,7 @@ function Privacy() {
             checked={enabled}
             disabled={tor.busy}
             onCheckedChange={(v) => {
-              if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { enabled: true } }));
+              if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { ...settings.tor, enabled: true } }));
               else torStore.requestDisable('settings');
             }}
           />
@@ -273,6 +274,7 @@ function Privacy() {
         )}
         {tor.actionError && tor.dialog === 'none' && <Notice tone="error">{tor.actionError}</Notice>}
       </section>
+      {enabled && <TorBridges />}
     </>
   );
 }

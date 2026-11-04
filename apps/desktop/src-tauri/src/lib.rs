@@ -138,7 +138,9 @@ pub fn run() {
             st.net.tor.set_emitter(move |s| {
                 let _ = handle.emit("tor-status", s);
             });
-            if st.settings().tor.enabled {
+            let tor_settings = st.settings().tor.clone();
+            st.net.tor.set_bridges(tor_settings.bridges);
+            if tor_settings.enabled {
                 st.net.tor.start();
             }
             updater::on_start(app.handle());

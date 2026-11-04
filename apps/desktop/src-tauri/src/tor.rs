@@ -8,13 +8,14 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use arti_client::config::TorClientConfigBuilder;
-use arti_client::TorClient;
+use arti_client::config::{BoolOrAuto, BridgeConfigBuilder, TorClientConfigBuilder};
+use arti_client::{ErrorKind, HasKind, TorClient, TorClientConfig};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{BodyExt, Full};
 use hyper_util::rt::TokioIo;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tokio::sync::{watch, Semaphore};
 use tor_rtcompat::PreferredRuntime;
 
@@ -29,6 +30,66 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 /// Requests in flight per family over Tor (the History screen fires every EVM chain at once on the
 /// single EVM circuit); the others wait their turn instead of piling streams onto the circuit.
 const MAX_IN_FLIGHT_PER_FAMILY: usize = 6;
+/// Bridge lines kept in the settings, and the longest line accepted.
+const MAX_BRIDGES: usize = 32;
+const MAX_BRIDGE_LINE: usize = 256;
+/// Arti refuses bridges while a previous client still holds the state lock: after a change of
+/// bridges, the dropped client lets go within moments.
+const LOCK_TRIES: u32 = 8;
+const LOCK_WAIT: Duration = Duration::from_secs(2);
+
+/// Checks bridge lines with arti's own parser and returns them in one canonical form: no `Bridge`
+/// word, single spaces, no blank line, no duplicate. Only plain bridges (`IP:ORPort FINGERPRINT`):
+/// arti runs pluggable transports as an external program, and Kyro ships none, so `obfs4 …` lines
+/// are refused here rather than failing later.
+pub fn normalize_bridges(lines: &[String]) -> AppResult<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for line in lines {
+        if line.len() > MAX_BRIDGE_LINE || line.chars().any(|c| c.is_control() && c != '\t') {
+            return Err(AppError::InvalidInput("bridge line: not valid".into()));
+        }
+        let words: Vec<&str> = line
+            .split_ascii_whitespace()
+            .skip_while(|w| w.eq_ignore_ascii_case("bridge"))
+            .collect();
+        if words.is_empty() {
+            continue;
+        }
+        let canonical = words.join(" ");
+        canonical
+            .parse::<BridgeConfigBuilder>()
+            .map_err(|e| AppError::InvalidInput(format!("bridge line: {e}")))?;
+        if !out.contains(&canonical) {
+            out.push(canonical);
+        }
+    }
+    if out.len() > MAX_BRIDGES {
+        return Err(AppError::InvalidInput("too many bridges".into()));
+    }
+    Ok(out)
+}
+
+/// Client configuration. With `bridges`, arti only ever reaches Tor through them: its directory
+/// fallbacks and public guards are not used, and if no bridge answers, bootstrap fails.
+fn client_config(
+    state_dir: &std::path::Path,
+    cache_dir: &std::path::Path,
+    bridges: &[String],
+) -> AppResult<TorClientConfig> {
+    let mut builder = TorClientConfigBuilder::from_directories(state_dir, cache_dir);
+    if !bridges.is_empty() {
+        builder.bridges().enabled(BoolOrAuto::Explicit(true));
+        for line in bridges {
+            let bridge = line
+                .parse::<BridgeConfigBuilder>()
+                .map_err(|e| AppError::TorUnavailable(format!("bridge line: {e}")))?;
+            builder.bridges().bridges().push(bridge);
+        }
+    }
+    builder
+        .build()
+        .map_err(|e| AppError::Internal(format!("Tor configuration: {e}")))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -64,6 +125,7 @@ type Emitter = Box<dyn Fn(&TorStatus) + Send + Sync>;
 pub struct TorManager {
     state_dir: PathBuf,
     cache_dir: PathBuf,
+    bridges_dir: PathBuf,
     status: watch::Sender<TorStatus>,
     base: Mutex<Option<Client>>,
     isolated: Mutex<HashMap<Family, Client>>,
@@ -74,6 +136,8 @@ pub struct TorManager {
     in_flight: Mutex<HashMap<Family, Arc<Semaphore>>>,
     emitter: Mutex<Option<Emitter>>,
     generation: Mutex<u64>,
+    /// Empty = the public Tor network. Read at each bootstrap.
+    bridges: Mutex<Vec<String>>,
     tls: tokio_rustls::TlsConnector,
 }
 
@@ -98,6 +162,7 @@ impl TorManager {
         Ok(Self {
             state_dir: dir.join("state"),
             cache_dir: dir.join("cache"),
+            bridges_dir: dir.join("bridges"),
             status,
             base: Mutex::new(None),
             isolated: Mutex::new(HashMap::new()),
@@ -105,6 +170,7 @@ impl TorManager {
             in_flight: Mutex::new(HashMap::new()),
             emitter: Mutex::new(None),
             generation: Mutex::new(0),
+            bridges: Mutex::new(Vec::new()),
             tls: tls_connector()?,
         })
     }
@@ -154,6 +220,22 @@ impl TorManager {
         tauri::async_runtime::spawn(async move { this.bootstrap(generation).await });
     }
 
+    /// The bridges of the next bootstrap. Takes effect at [`Self::start`] or [`Self::reconnect`].
+    pub fn set_bridges(&self, bridges: Vec<String>) {
+        *net::lock(&self.bridges) = bridges;
+    }
+
+    /// New bridges: drops the running client first, so that nothing keeps talking to the old
+    /// path, then bootstraps. Requests wait for the new client or fail; they never go in clear.
+    pub fn reconnect(self: &Arc<Self>) {
+        let generation = self.next_generation();
+        self.publish(generation, TorStatus::new(TorState::Bootstrapping, 0, None));
+        *net::lock(&self.base) = None;
+        self.clear_clients();
+        let this = Arc::clone(self);
+        tauri::async_runtime::spawn(async move { this.bootstrap(generation).await });
+    }
+
     /// Tor disabled by the user: drop the clients and report `off`.
     pub fn stop(&self) {
         let generation = self.next_generation();
@@ -193,13 +275,56 @@ impl TorManager {
     }
 
     async fn try_bootstrap(self: &Arc<Self>, generation: u64) -> AppResult<Client> {
-        let config = TorClientConfigBuilder::from_directories(&self.state_dir, &self.cache_dir)
-            .build()
-            .map_err(|e| AppError::Internal(format!("Tor configuration: {e}")))?;
-        let client = TorClient::builder()
-            .config(config)
-            .create_unbootstrapped()
-            .map_err(|e| AppError::Internal(format!("Tor: {e}")))?;
+        let bridges = net::lock(&self.bridges).clone();
+        let (state_dir, cache_dir) = self.dirs_for(&bridges);
+        let config = client_config(&state_dir, &cache_dir, &bridges)?;
+        let mut tries = 0;
+        loop {
+            tries += 1;
+            let client = TorClient::builder()
+                .config(config.clone())
+                .create_unbootstrapped()
+                .map_err(|e| AppError::Internal(format!("Tor: {e}")))?;
+            self.forward_progress(&client, generation);
+            match self.finish_bootstrap(&client, generation).await? {
+                Ok(()) => return Ok(client),
+                // Arti's words for "a previous client still holds the state lock".
+                Err(e)
+                    if e.kind() == ErrorKind::NotImplemented
+                        && !bridges.is_empty()
+                        && tries < LOCK_TRIES =>
+                {
+                    drop(client);
+                    tokio::time::sleep(LOCK_WAIT).await;
+                    if self.superseded(generation) {
+                        return Err(AppError::TorUnavailable("Tor restarted".into()));
+                    }
+                }
+                Err(e) => return Err(AppError::TorUnavailable(e.to_string())),
+            }
+        }
+    }
+
+    /// Each set of bridges has its own arti directories. A client takes a while to let go of its
+    /// state lock once dropped, and arti refuses bridges without that lock, so changing bridges
+    /// must not depend on it; the guards of a set also stay with that set. Directories of earlier
+    /// sets are removed (best effort): a bridge taken out of the list should not stay on disk.
+    fn dirs_for(&self, bridges: &[String]) -> (PathBuf, PathBuf) {
+        let hash = Sha256::digest(bridges.join("\n").as_bytes());
+        let name = hex::encode(&hash[..8]);
+        if let Ok(old) = std::fs::read_dir(&self.bridges_dir) {
+            for entry in old.flatten().filter(|e| e.file_name() != name.as_str()) {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+        if bridges.is_empty() {
+            return (self.state_dir.clone(), self.cache_dir.clone());
+        }
+        let dir = self.bridges_dir.join(name);
+        (dir.join("state"), dir.join("cache"))
+    }
+
+    fn forward_progress(self: &Arc<Self>, client: &Client, generation: u64) {
         let mut events = client.bootstrap_events();
         let this = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
@@ -215,11 +340,34 @@ impl TorManager {
                 );
             }
         });
-        tokio::time::timeout(BOOTSTRAP_TIMEOUT, client.bootstrap())
-            .await
-            .map_err(|_| AppError::TorUnavailable("start-up timed out".into()))?
-            .map_err(|e| AppError::TorUnavailable(e.to_string()))?;
-        Ok(client)
+    }
+
+    /// Polled so that a superseded bootstrap ends now: its client holds arti's state lock. The
+    /// outer error ends the attempt; the inner one is arti's, for the caller to read.
+    async fn finish_bootstrap(
+        &self,
+        client: &Client,
+        generation: u64,
+    ) -> AppResult<Result<(), arti_client::Error>> {
+        let started = std::time::Instant::now();
+        let bootstrap = client.bootstrap();
+        tokio::pin!(bootstrap);
+        loop {
+            match tokio::time::timeout(Duration::from_secs(1), &mut bootstrap).await {
+                Ok(done) => return Ok(done),
+                Err(_) if self.superseded(generation) => {
+                    return Err(AppError::TorUnavailable("Tor restarted".into()));
+                }
+                Err(_) if started.elapsed() >= BOOTSTRAP_TIMEOUT => {
+                    return Err(AppError::TorUnavailable("start-up timed out".into()));
+                }
+                Err(_) => {}
+            }
+        }
+    }
+
+    fn superseded(&self, generation: u64) -> bool {
+        *net::lock(&self.generation) != generation
     }
 
     /// Waits (bounded) for Tor to be ready, then returns the isolated client for `family`.
@@ -562,6 +710,82 @@ mod tests {
         assert!(m.rotated.lock().unwrap().is_empty());
     }
 
+    const FP: &str = "4352E58420E68F5E40BF7C74FADDCCD9D1349413";
+
+    #[test]
+    fn bridge_lines_are_normalized() {
+        let got = normalize_bridges(&[
+            format!("  Bridge   192.0.2.10:443  {FP} \t"),
+            String::new(),
+            format!("192.0.2.10:443 {FP}"),
+            format!("[2001:db8::1]:9001 {FP}"),
+        ])
+        .unwrap();
+        assert_eq!(
+            got,
+            [
+                format!("192.0.2.10:443 {FP}"),
+                format!("[2001:db8::1]:9001 {FP}")
+            ]
+        );
+    }
+
+    #[test]
+    fn bridge_lines_refused() {
+        for bad in [
+            // Needs an external transport program: Kyro ships none.
+            format!("obfs4 192.0.2.10:443 {FP} cert=abc iat-mode=0"),
+            format!("webtunnel [2001:db8::1]:443 {FP} url=https://example.com/x"),
+            "snowflake 192.0.2.3:80".to_owned(),
+            // Not a usable line.
+            "192.0.2.10:443".to_owned(),
+            format!("example.com:443 {FP}"),
+            format!("192.0.2.10 {FP}"),
+            "192.0.2.10:443 notafingerprint".to_owned(),
+            format!("192.0.2.10:443 {FP} cert=abc"),
+            format!("192.0.2.10:443 {FP}\nBridge 192.0.2.11:443 {FP}"),
+            format!("192.0.2.10:443 {FP} {}", "A".repeat(MAX_BRIDGE_LINE)),
+        ] {
+            assert!(
+                normalize_bridges(std::slice::from_ref(&bad)).is_err(),
+                "{bad}"
+            );
+        }
+        let many: Vec<String> = (0..=MAX_BRIDGES)
+            .map(|i| format!("192.0.2.{i}:443 {FP}"))
+            .collect();
+        assert!(normalize_bridges(&many).is_err());
+    }
+
+    #[test]
+    fn bridges_are_mandatory_once_set() {
+        let dir = std::env::temp_dir().join(format!("kyro-tor-cfg-{}", std::process::id()));
+        let line = format!("192.0.2.10:443 {FP}");
+        let on = client_config(&dir.join("s"), &dir.join("c"), std::slice::from_ref(&line));
+        let on = format!("{:?}", on.unwrap());
+        assert!(on.contains("enabled: Explicit(true)"), "{on}");
+        assert!(on.contains("192.0.2.10:443"), "{on}");
+        let off = client_config(&dir.join("s"), &dir.join("c"), &[]).unwrap();
+        assert!(format!("{off:?}").contains("enabled: Auto"), "{off:?}");
+        // A line that went bad on disk stops the bootstrap; it is never skipped.
+        let bad = client_config(&dir.join("s"), &dir.join("c"), &["obfs4 x".to_owned()]);
+        assert!(matches!(bad, Err(AppError::TorUnavailable(_))));
+    }
+
+    #[test]
+    fn each_bridge_set_has_its_own_directories() {
+        let m = manager();
+        let (a, b) = (
+            format!("192.0.2.10:443 {FP}"),
+            format!("192.0.2.11:443 {FP}"),
+        );
+        assert_eq!(m.dirs_for(&[]), (m.state_dir.clone(), m.cache_dir.clone()));
+        let first = m.dirs_for(std::slice::from_ref(&a));
+        assert_ne!(first.0, m.state_dir);
+        assert_eq!(first, m.dirs_for(std::slice::from_ref(&a)));
+        assert_ne!(first, m.dirs_for(std::slice::from_ref(&b)));
+    }
+
     #[test]
     fn status_payload_shape() {
         let s = TorStatus::new(TorState::Bootstrapping, 42, Some("x".into()));
@@ -620,6 +844,62 @@ mod tests {
     }
 
     /// Real network test: bootstraps Tor, then fetches through it.
+    /// Bootstraps through real bridges, then checks that dead bridges leave Kyro offline.
+    /// `KYRO_TOR_BRIDGE="IP:ORPort FINGERPRINT" cargo test tor_real_bridge -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn tor_real_bridge() {
+        let line = std::env::var("KYRO_TOR_BRIDGE").expect("KYRO_TOR_BRIDGE");
+        let dir = std::env::temp_dir().join(format!("kyro-tor-bridge-{}", std::process::id()));
+        let m = Arc::new(TorManager::new(dir).unwrap());
+        let wait = |m: Arc<TorManager>| async move {
+            let mut rx = m.status.subscribe();
+            loop {
+                let s = rx.borrow_and_update().clone();
+                if matches!(s.state, TorState::Ready | TorState::Error) {
+                    return s;
+                }
+                rx.changed().await.unwrap();
+            }
+        };
+        tauri::async_runtime::block_on(async {
+            // A client on the public network first: reconnect must take its state lock over.
+            m.restart();
+            assert_eq!(wait(Arc::clone(&m)).await.state, TorState::Ready);
+            m.set_bridges(normalize_bridges(&[line]).unwrap());
+            let t = std::time::Instant::now();
+            m.reconnect();
+            let s = wait(Arc::clone(&m)).await;
+            eprintln!("bridge bootstrap: {:.1?} {s:?}", t.elapsed());
+            assert_eq!(s.state, TorState::Ready);
+            // An exit, then an onion service, each through the bridge.
+            let mut p = prepared("https://api.coingecko.com/api/v3/ping");
+            for url in [
+                "https://api.coingecko.com/api/v3/ping",
+                "https://mempool.space/api/blocks/tip/height",
+            ] {
+                p = prepared(url);
+                let mut ok = false;
+                for _ in 0..3 {
+                    let got = m.send(&p).await;
+                    eprintln!("{url}: {:?}", got.as_ref().map(|r| r.0));
+                    if got.is_ok_and(|r| r.0 == 200) {
+                        ok = true;
+                        break;
+                    }
+                }
+                assert!(ok, "{url}");
+            }
+            // Reserved address, nothing answers.
+            m.set_bridges(vec![format!("192.0.2.1:443 {FP}")]);
+            m.reconnect();
+            let s = wait(Arc::clone(&m)).await;
+            eprintln!("dead bridge: {s:?}");
+            assert_eq!(s.state, TorState::Error);
+            assert!(m.send(&p).await.is_err(), "no way out without the bridge");
+        });
+    }
+
     #[test]
     #[ignore]
     fn tor_real_fetch() {

@@ -997,7 +997,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { ...settings.tor, ...(structuredClone(rest.tor) as Settings['tor']), enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();

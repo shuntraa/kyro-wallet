@@ -146,7 +146,7 @@ export interface Settings {
   servers: Servers;
   apiKeysSet: Partial<Record<ApiKeyName, boolean>>;
   /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
-  tor: { enabled: boolean };
+  tor: { enabled: boolean; /** Plain bridge lines; not empty = Tor connects only through them. */ bridges?: string[] };
   /** Display language of the interface AND of the native dialogs (signing, warnings, phrase). */
   language: LanguagePref;
   /** Automatic updates from Kyro's signed GitHub releases (default `true`, docs/IPC.md `update_status`). */

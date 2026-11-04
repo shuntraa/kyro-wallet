@@ -105,6 +105,7 @@ export const shell = {
   'shell.directWarnApis': 'CoinGecko (prix) et les agrégateurs de swap (devis) ;',
   'shell.directWarnIsp': 'ton fournisseur d’accès, qui verra quels serveurs tu contactes.',
   'shell.torFailTitle': 'Tor ne se connecte pas',
+  'shell.torFailBridges': 'Aucun de tes ponts n’a répondu. Kyro reste hors ligne. Essaie d’autres ponts dans Réglages › Confidentialité.',
   'shell.torFailBody': 'Kyro fait passer toutes ses connexions par Tor pour cacher ton adresse IP. Tor n’arrive pas à se connecter pour l’instant.',
   'shell.torRefusesClear': '<b>Kyro refuse d’envoyer quoi que ce soit en clair.</b> Aucune requête n’est partie sans Tor : soldes, prix et historique restent en attente tant que tu n’as pas choisi.',
   'shell.detail': 'Détail : {detail}',

@@ -27,6 +27,8 @@ Per server, in Tor mode: CoinGecko sees the cryptocurrencies and the currency re
 
 Source of the onion address: the `Onion-Location` HTTP header returned by https://mempool.space/ (verified on 2026-10-30, authenticated by mempool.space's TLS certificate): `Onion-Location: http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/`.
 
+**Bridges.** With plain bridge lines in Settings › Privacy, the first hop is one of your bridges instead of a public guard, and Kyro no longer contacts the public guards or directory fallbacks. This adds no host to the list above: a bridge is a Tor relay reached by the embedded client, not a `net_fetch` target. The bridge sees your IP address and that you use Tor, not what you ask for. If no bridge answers, Tor stays in error: nothing is sent, in clear or otherwise. obfs4 and other pluggable transports are not supported (they need an external program that Kyro does not ship).
+
 Switching back to clear mode is an explicit choice in Settings, confirmed in a **native system window** ("Turn Tor off?" (Désactiver Tor ?)): a compromised UI cannot turn Tor off without you. Your custom RPCs also go through Tor when it is enabled. Tor's data (consensus, guard state) is stored in the app folder (`tor/`).
 
 Why the onion: `mempool.space` does not respond to Tor exit relays (timeout at the exit on all our attempts, 2026-10-30); its onion service does respond.

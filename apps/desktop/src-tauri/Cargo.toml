@@ -34,7 +34,7 @@ zeroize = "1"
 base64 = "0.22"
 dotenvy = "0.15"
 # Embedded Tor (B2a). rustls + ring only (no native-tls, no aws-lc-rs), SQLite compiled in.
-arti-client = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls", "static-sqlite", "compression", "onion-service-client"] }
+arti-client = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls", "static-sqlite", "compression", "onion-service-client", "bridge-client"] }
 tor-rtcompat = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls"] }
 # HTTP/1.1 over Tor streams: tokio-rustls (webpki roots) + hyper 1.
 hyper = { version = "=1.12.0", default-features = false, features = ["client", "http1"] }

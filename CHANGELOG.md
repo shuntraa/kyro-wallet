@@ -3,6 +3,9 @@
 ## 1.0.7
 
 - Lightning: pay an invoice from a Bitcoin account. Paste it in Send or tick Lightning. Kyro checks the swap on your device and shows every fee first. The provider can only take your bitcoin by paying the invoice. If it fails, your coins stay locked about 7 days, then you take them back yourself. Not for hardware accounts, and an invoice needs at least an hour left.
+- Tor bridges: if your country blocks Tor, paste plain bridge lines in Settings › Privacy. Kyro
+  then connects only through them and stays offline if none answers. obfs4 and other disguised
+  bridges don't work yet.
 - Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
   settings to one encrypted file, with a password you choose. Import shows what would change
   first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.

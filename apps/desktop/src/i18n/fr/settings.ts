@@ -93,6 +93,14 @@ export const settings = {
   'settings.torDoesNotHideDesc': 'Les adresses et transactions que tu consultes. Utilise tes propres nœuds pour les garder privées aussi.',
   'settings.torFailure': 'Si Tor ne se connecte pas, Kyro te demande avant de passer en direct.',
   'settings.directConnection': 'Connexion directe. Les serveurs voient ton adresse IP.',
+  'settings.bridges': 'Ponts',
+  'settings.bridgesDesc': 'Si ton pays bloque Tor, colle ici des lignes de pont, une par ligne. Elles restent sur cet appareil.',
+  'settings.bridgesPlaceholder': '192.0.2.10:443 4352E58420E68F5E40BF7C74FADDCCD9D1349413',
+  'settings.bridgesPlainOnly': 'Ponts simples uniquement, à prendre sur bridges.torproject.org sans transport. obfs4 et les autres ponts déguisés ne marchent pas encore dans Kyro : un censeur qui repère le trafic Tor peut quand même les bloquer.',
+  'settings.bridgesOnly': 'Kyro se connecte uniquement par ces ponts. Si aucun ne répond, il reste hors ligne.',
+  'settings.bridgesSave': 'Enregistrer et reconnecter',
+  'settings.bridgesBadLine': 'La ligne {n} n’est pas une ligne de pont. Il faut IP:port, puis l’empreinte.',
+  'settings.bridgesTransportLine': 'La ligne {n} demande obfs4 ou un autre transport. Kyro ne gère que les ponts simples pour l’instant.',
 
   // Display
   'settings.currency': 'Devise',

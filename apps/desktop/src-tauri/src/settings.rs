@@ -106,11 +106,17 @@ impl ApiKeys {
 #[serde(rename_all = "camelCase", default)]
 pub struct TorSettings {
     pub enabled: bool,
+    /// Plain bridge lines (`crate::tor::normalize_bridges`). Not empty = Tor only connects through
+    /// them, never to the public network. They stay in this file: no backup, no log.
+    pub bridges: Vec<String>,
 }
 
 impl Default for TorSettings {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            enabled: true,
+            bridges: Vec::new(),
+        }
     }
 }
 
@@ -290,6 +296,7 @@ impl Settings {
         }
         let mut s: Settings = serde_json::from_value(v)
             .map_err(|e| AppError::InvalidInput(format!("invalid settings: {e}")))?;
+        s.tor.bridges = crate::tor::normalize_bridges(&s.tor.bridges)?;
         s.api_keys = current.clone();
         if let Some(p) = patch.filter(|p| !p.is_null()) {
             s.api_keys.apply_patch(&p)?;
@@ -311,6 +318,7 @@ impl Settings {
                 "auto-lock: between 1 and 60 minutes".into(),
             ));
         }
+        crate::tor::normalize_bridges(&self.tor.bridges)?;
         self.servers.validate(self.tor.enabled)
     }
 }
@@ -538,6 +546,18 @@ mod tests {
             ui["apiKeys"] = bad.clone();
             assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn bridges_are_normalized_on_input_and_a_bad_line_is_refused() {
+        let line = "192.0.2.10:443 4352E58420E68F5E40BF7C74FADDCCD9D1349413";
+        let mut ui = Settings::default().for_ui();
+        ui["tor"]["bridges"] = serde_json::json!([format!("Bridge {line}"), ""]);
+        let s = Settings::from_ui(ui.clone(), &ApiKeys::default()).unwrap();
+        assert_eq!(s.tor.bridges, [line]);
+        assert_eq!(s.for_ui()["tor"]["bridges"][0], line);
+        ui["tor"]["bridges"] = serde_json::json!([format!("obfs4 {line} cert=x iat-mode=0")]);
+        assert!(Settings::from_ui(ui, &ApiKeys::default()).is_err());
     }
 
     #[test]
