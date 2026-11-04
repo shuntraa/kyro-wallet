@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Sonic</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Sonic · S</p>
+            <p class="eyebrow">Sonic desktop wallet · S</p>
             <h1 id="page-title">Sonic wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-sonic spot" role="img" aria-label="Sonic in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/s.svg" width="32" height="32" alt=""><span><b>Sonic</b><small>S</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>S</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 49.3C4.4 50.2 17.8 52.0 26.7 54.5C35.6 57.0 44.4 63.3 53.3 64.1C62.2 64.9 71.1 61.2 80.0 59.5C88.9 57.8 97.8 53.2 106.7 54.0C115.6 54.8 124.4 63.2 133.3 64.1C142.2 65.0 151.1 61.6 160.0 59.3C168.9 56.9 177.8 50.5 186.7 50.0C195.6 49.4 204.4 56.5 213.3 56.1C222.2 55.7 231.1 50.1 240.0 47.5C248.9 45.0 257.8 44.4 266.7 40.7C275.6 37.1 284.4 27.1 293.3 25.6C302.2 24.1 311.1 31.0 320.0 32.0C328.9 33.0 337.8 33.3 346.7 31.5C355.6 29.7 364.4 23.9 373.3 21.0C382.2 18.2 395.6 15.5 400.0 14.4"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
-  </div></div>
+  <div class="coin-hero c-sonic spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/s.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/s.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/s.svg" width="240" height="240" alt="Sonic (S) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Sonic <em>in Kyro</em></h2>
           
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            <a href="/fees/">How swap fees work</a>
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-sonic spot" role="img" aria-label="Sonic in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/s.svg" width="32" height="32" alt=""><span><b>Sonic</b><small>S</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>S</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 49.3C4.4 50.2 17.8 52.0 26.7 54.5C35.6 57.0 44.4 63.3 53.3 64.1C62.2 64.9 71.1 61.2 80.0 59.5C88.9 57.8 97.8 53.2 106.7 54.0C115.6 54.8 124.4 63.2 133.3 64.1C142.2 65.0 151.1 61.6 160.0 59.3C168.9 56.9 177.8 50.5 186.7 50.0C195.6 49.4 204.4 56.5 213.3 56.1C222.2 55.7 231.1 50.1 240.0 47.5C248.9 45.0 257.8 44.4 266.7 40.7C275.6 37.1 284.4 27.1 293.3 25.6C302.2 24.1 311.1 31.0 320.0 32.0C328.9 33.0 337.8 33.3 346.7 31.5C355.6 29.7 364.4 23.9 373.3 21.0C382.2 18.2 395.6 15.5 400.0 14.4"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Sonic</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

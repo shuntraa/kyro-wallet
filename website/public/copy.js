@@ -44,6 +44,8 @@
 
     var done = function () {
       button.textContent = 'Copied';
+      button.classList.remove('copied');
+      void button.offsetWidth; // restart the animation on a second click
       button.classList.add('copied');
       announce(button, what + ' copied.');
       window.setTimeout(function () {

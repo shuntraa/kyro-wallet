@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE, VERSION, REPO, page, iconOf } from './layout.mjs';
 import * as P from './pages.mjs';
+import { feeBps } from './components.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', 'public');
@@ -68,11 +69,19 @@ for (const f of ['install.ps1', 'install.sh']) {
   write(f, src);
 }
 
+// The /fees/ slider runs on the curve the app ships, read from its source so the two cannot drift.
+const feeSrc = readFileSync(resolve(HERE, '..', '..', 'packages', 'swap', 'src', 'fees.ts'), 'utf8');
+const curveSrc = feeSrc.slice(feeSrc.indexOf('KYRO_FEE_CURVE'), feeSrc.indexOf('UNKNOWN_PRICE_FEE_BPS'));
+const curve = [...curveSrc.matchAll(/usd:\s*([\d_]+),\s*bps:\s*(\d+)/g)].map((m) => ({ usd: Number(m[1].replace(/_/g, '')), bps: Number(m[2]) }));
+if (curve.length < 2) fail(['fees.ts: KYRO_FEE_CURVE not found']);
+// The worked examples in docs/SWAP_FEES.md and on /fees/.
+for (const [usd, bps] of [[7, 354], [200, 111], [300, 106], [3000, 80]]) if (feeBps(curve, usd) !== bps) errors.push(`fee curve: $${usd} gives ${feeBps(curve, usd)} bps, expected ${bps}`);
+
 const pages = [
   P.home(chains),
   P.features(chains),
   P.security(),
-  P.fees(),
+  P.fees(curve),
   P.download(chains),
   P.faq(chains),
   P.chainsIndex(chains),

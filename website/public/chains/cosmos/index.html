@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Cosmos Hub</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Cosmos Hub · ATOM</p>
+            <p class="eyebrow">Cosmos Hub desktop wallet · ATOM</p>
             <h1 id="page-title">Cosmos Hub wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send and receive ATOM, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send and receive ATOM, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-cosmos spot" role="img" aria-label="Cosmos Hub in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/atom.svg" width="32" height="32" alt=""><span><b>Cosmos Hub</b><small>ATOM</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>ATOM</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 60.1C4.4 58.9 17.8 55.1 26.7 52.8C35.6 50.5 44.4 48.7 53.3 46.1C62.2 43.5 71.1 39.7 80.0 37.0C88.9 34.4 97.8 30.3 106.7 30.1C115.6 29.9 124.4 37.3 133.3 35.7C142.2 34.1 151.1 25.5 160.0 20.4C168.9 15.4 177.8 8.0 186.7 5.5C195.6 3.0 204.4 4.0 213.3 5.4C222.2 6.8 231.1 11.1 240.0 13.9C248.9 16.6 257.8 23.2 266.7 22.0C275.6 20.7 284.4 8.0 293.3 6.5C302.2 5.1 311.1 10.6 320.0 13.2C328.9 15.7 337.8 19.8 346.7 22.1C355.6 24.5 364.4 28.8 373.3 27.2C382.2 25.7 395.6 15.1 400.0 12.6"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i></div>
-  </div></div>
+  <div class="coin-hero c-cosmos spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/atom.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/atom.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/atom.svg" width="240" height="240" alt="Cosmos Hub (ATOM) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Cosmos Hub <em>in Kyro</em></h2>
           
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-cosmos spot" role="img" aria-label="Cosmos Hub in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/atom.svg" width="32" height="32" alt=""><span><b>Cosmos Hub</b><small>ATOM</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>ATOM</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 60.1C4.4 58.9 17.8 55.1 26.7 52.8C35.6 50.5 44.4 48.7 53.3 46.1C62.2 43.5 71.1 39.7 80.0 37.0C88.9 34.4 97.8 30.3 106.7 30.1C115.6 29.9 124.4 37.3 133.3 35.7C142.2 34.1 151.1 25.5 160.0 20.4C168.9 15.4 177.8 8.0 186.7 5.5C195.6 3.0 204.4 4.0 213.3 5.4C222.2 6.8 231.1 11.1 240.0 13.9C248.9 16.6 257.8 23.2 266.7 22.0C275.6 20.7 284.4 8.0 293.3 6.5C302.2 5.1 311.1 10.6 320.0 13.2C328.9 15.7 337.8 19.8 346.7 22.1C355.6 24.5 364.4 28.8 373.3 27.2C382.2 25.7 395.6 15.1 400.0 12.6"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Cosmos Hub</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

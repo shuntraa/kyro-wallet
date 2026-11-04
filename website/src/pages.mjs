@@ -2,7 +2,7 @@
 // Content of every page on kyrowallet.com.
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
-import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, deviceCard, swapWidget, coinCard, icon } from './components.mjs';
+import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon } from './components.mjs';
 
 const layers = () => html`
         <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
@@ -163,9 +163,8 @@ export function home(chains) {
   const hop = (mark, name, note) => `<li data-hop><span class="rt-dot">${mark}</span><b>${name}</b><small>${note}</small></li>`;
 
   const body = html`
-    <section class="story" id="showcase" aria-labelledby="hero-title" data-story>
+    <section class="story" id="showcase" aria-labelledby="hero-title" data-story data-tone="1.1" data-hue="1">
       <div class="story-pin">
-        <div class="silk silk-hero" aria-hidden="true"><canvas data-silk></canvas></div>
         <div class="wrap hero-grid">
           <div class="hero-copy" data-copy>
             <a class="badge" href="${REPO}">
@@ -174,13 +173,13 @@ export function home(chains) {
               <span class="badge-arrow" aria-hidden="true">→</span>
             </a>
             <h1 id="hero-title"><span class="ln"><span>Keep it</span></span> <span class="ln"><em>to yourself.</em></span></h1>
-            <p class="lead hero-lead">A desktop wallet for ${n} blockchains, with Tor on from the first launch and your keys on your own machine.</p>
+            <p class="lead hero-lead">A private crypto wallet for your desktop: ${n} blockchains, Tor on from the first launch, your keys on your own machine.</p>
             <div class="hero-cta">
               ${dlButton()}
               <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
             </div>
             <div class="stats">
-              <p><strong>${n}</strong> blockchains</p>
+              <p><strong data-roll>${n}</strong> blockchains</p>
               ${usage()}
             </div>
           </div>
@@ -189,7 +188,7 @@ export function home(chains) {
           <div class="kw-wrap" data-kw>${appWindow()}</div>
         </div>
         <div class="story-ui" data-ui>
-          <p class="story-cap" data-caption aria-hidden="true">Every coin on one screen</p>
+          <p class="story-cap" data-caption aria-hidden="true">Balances fetched over Tor</p>
           <div class="story-dots">
             <button type="button" class="on" data-go="0" aria-label="Show the Portfolio screen"><span>Portfolio</span></button>
             <button type="button" data-go="1" aria-label="Show the Swap screen"><span>Swap</span></button>
@@ -199,25 +198,25 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section coins" id="chains" aria-labelledby="chains-title">
+    <section class="section coins" id="chains" aria-labelledby="chains-title" data-tone=".8" data-hue=".3" data-nav="/chains/">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Blockchains</p>
           <h2 id="chains-title" data-words>${n} blockchains. <em>One phrase.</em></h2>
-          <p data-reveal>Bitcoin to Zcash, plus 220+ tokens, all from the same recovery phrase.</p>
+          <p data-reveal>Bitcoin to Zcash, plus 220+ tokens, from the same recovery phrase. No account, no email, nothing to sign up for.</p>
         </div>
       </div>
       ${marquee(chains)}
       <p class="center"><a class="more" href="/chains/">What works on each blockchain</a></p>
     </section>
 
-    <section class="tor" id="tor" data-tor aria-labelledby="tor-title">
+    <section class="tor" id="tor" data-tor aria-labelledby="tor-title" data-tone=".42" data-hue="0" data-nav="/features/">
       <div class="tor-pin">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
             <h2 id="tor-title" data-words>Everything goes <em>through Tor</em></h2>
-            <p data-reveal>Balances, prices, swaps and broadcasts. The client is built in, each blockchain gets its own circuit, and if Tor fails, Kyro stops.</p>
+            <p data-reveal>Kyro is a Tor wallet from the first launch. Balances, prices, swaps and broadcasts leave through the built-in client, each blockchain gets its own circuit, and if Tor fails, Kyro stops.</p>
           </div>
           <div class="route spot">
             <div class="ip" aria-hidden="true">
@@ -234,6 +233,7 @@ export function home(chains) {
                 ${hop('3', 'Relay 3', 'Sees the request, never you')}
                 ${hop(icon('assets'), 'Network', 'Sees a Tor exit')}
               </ol>
+              <canvas class="fx" aria-hidden="true"></canvas>
               <div class="rt-packet" data-packet aria-hidden="true"><i></i><i></i><i></i><b></b></div>
             </div>
           </div>
@@ -241,7 +241,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" id="fees" aria-labelledby="swap-title">
+    <section class="section" id="fees" aria-labelledby="swap-title" data-tone=".95" data-hue="1" data-nav="/fees/">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -250,51 +250,57 @@ export function home(chains) {
         </div>
         <div class="swap-grid">
           <div class="glow-card swap-main spot g-ice" data-reveal>${swapWidget()}</div>
-          <article class="glow-card spot g-orange" data-reveal>
+          <article class="glow-card spot g-deep" data-reveal>
             <img class="card-coin" src="/img/coins/xmr.svg" width="40" height="40" alt="" loading="lazy">
             <h3>Monero included</h3>
-            <p>Swap in and out of XMR without leaving the wallet.</p>
+            <p>Swap in and out of XMR without leaving the wallet. Kyro is a full <a href="/chains/monero/">Monero desktop wallet</a> too.</p>
           </article>
-          <article class="glow-card spot g-green" data-reveal>
-            <span class="card-num">0.7<small>%</small></span>
+          <article class="glow-card spot g-sky" data-reveal>
+            <span class="card-num"><span data-roll>0.7</span><small>%</small></span>
             <h3>Fee in the rate</h3>
-            <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full table</a></p>
+            <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full swap fee table</a></p>
           </article>
         </div>
       </div>
     </section>
 
-    <section class="section" id="features" aria-labelledby="earn-title">
+    <section class="section" id="features" aria-labelledby="earn-title" data-tone=".6" data-hue=".2" data-nav="/features/">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
-          <h2 id="earn-title" data-words>Earn on <em>what you hold</em></h2>
-          <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list, side by side.</p>
+          <h2 id="earn-title" data-words>Earn <em>without an account</em></h2>
+          <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list. No sign-up, and your keys stay with you.</p>
         </div>
         <div class="earn-wrap" data-reveal data-rows>${earnCard()}</div>
         <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.</p>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="hw-title">
-      <div class="wrap">
-        <div class="glow-card hw-card spot g-ice">
+    <section class="hw-scene" data-ledger-track aria-labelledby="hw-title" data-tone="1" data-hue=".7" data-nav="/features/">
+      <div class="hw-pin">
+        <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
             <h2 id="hw-title" data-words>Ledger <em>and</em> Trezor</h2>
-            <p data-reveal>Plug it in, click connect, confirm on the device. ${hwChains} blockchains, Trezor Safe 7 included.</p>
+            <ol class="hw-steps" data-reveal>
+              <li class="on"><span>1</span>Plug it in</li>
+              <li class="on"><span>2</span>Click connect</li>
+              <li class="on"><span>3</span>Confirm on the device</li>
+            </ol>
+            <p class="hw-count" data-reveal><strong data-ledger-n>${hwChains}</strong> blockchains, Trezor Safe 7 included.</p>
             <a class="more" href="/features/#f-hw" data-reveal>Which device on which chain</a>
           </div>
-          ${deviceCard()}
+          ${ledgerScene()}
         </div>
       </div>
     </section>
 
-    <section class="section" id="security" aria-labelledby="security-title">
+    <section class="section" id="security" aria-labelledby="security-title" data-tone=".7" data-hue=".4" data-nav="/security/">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
           <h2 id="security-title" data-words>Yours, <em>start to finish</em></h2>
+          <p data-reveal>A non-custodial, open-source wallet. No account and no analytics. Only an anonymous weekly count over Tor, which you can turn off.</p>
         </div>
         <div class="glow-grid" data-reveal-group>
           <article class="glow-card spot tilt g-ice">
@@ -302,12 +308,12 @@ export function home(chains) {
             <h3>Keys stay on your device</h3>
             <p>Encrypted with your password and kept in the Rust core. No server has a copy.</p>
           </article>
-          <article class="glow-card spot tilt g-violet">
+          <article class="glow-card spot tilt g-deep">
             <span class="card-ic">${icon('window')}</span>
             <h3>Native confirmation</h3>
             <p>Every signature opens a system window with the decoded amount, recipient and fee.</p>
           </article>
-          <article class="glow-card spot tilt g-green">
+          <article class="glow-card spot tilt g-sky">
             <span class="card-ic">${icon('code')}</span>
             <h3>Open source</h3>
             <p>GPL-3.0. Read the code, build it yourself, change it.</p>
@@ -317,7 +323,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" aria-labelledby="faq-title">
+    <section class="section" aria-labelledby="faq-title" data-tone=".42" data-hue="0" data-nav="/faq/">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Questions</p>
@@ -331,12 +337,14 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="gather" data-gather aria-labelledby="download-title">
+    <section class="gather" data-gather aria-labelledby="download-title" data-tone="1.05" data-hue="1">
       <span class="gather-anchor" id="download"></span>
       <div class="gather-pin">
         <div class="field" data-field aria-hidden="true">
           ${chains.map((c) => `<img class="fc" src="/img/coins/${iconOf(c)}.svg" width="64" height="64" alt="" loading="lazy" decoding="async">`)}
         </div>
+        <canvas class="fx" aria-hidden="true"></canvas>
+        <span class="gather-glow" data-glow aria-hidden="true"></span>
         <svg class="gather-mark" data-mark viewBox="0 0 64 64" aria-hidden="true"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/><rect x="26" y="26" width="12" height="12" fill="#7CC4FF"/></svg>
         <div class="gather-cta" data-cta>
           <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
@@ -346,7 +354,6 @@ export function home(chains) {
             <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
           </div>
         </div>
-        <p class="wordmark" aria-hidden="true">Kyro</p>
       </div>
     </section>`;
 
@@ -389,14 +396,14 @@ export function features(chains) {
         <div class="feature-visual" data-reveal>${visual}</div>
       </div>
     </section>`;
-  const mini = (ic, g, h, p) => `<article class="glow-card spot ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
+  const mini = (ic, g, h, p) => `<article class="glow-card spot tilt ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
 
   const body = html`
     ${pageHero({
       trail,
       eyebrow: 'Features',
       h1: 'What Kyro <em>does</em>',
-      lead: `Send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase. You read every transaction before it is signed.`
+      lead: `A private crypto wallet: send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase, over Tor, and read every transaction before it is signed.`
     })}
     ${row('f-portfolio', 'Portfolio', 'All your coins <em>in one list</em>', false, html`
           <p>Total value, a price chart from one day to all time, and every asset with its balance, 7-day trend and share.</p>
@@ -433,7 +440,7 @@ export function features(chains) {
           <ul class="checks">
             <li>Supported on ${listNames(hw)}.</li>
             <li>Software accounts and hardware accounts side by side.</li>
-          </ul>`, deviceCard())}
+          </ul>`, ledgerScene())}
 
     <section class="section" aria-labelledby="f-more">
       <div class="wrap">
@@ -443,13 +450,13 @@ export function features(chains) {
         </div>
         <div class="glow-grid glow-grid-4" data-reveal-group>
           ${mini('ic-accounts', 'g-ice', 'Many accounts', 'Several accounts per blockchain from the same phrase. Move funds between them in two clicks.')}
-          ${mini('ic-tor', 'g-violet', 'Tor built in', 'All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.')}
-          ${mini('ic-eye', 'g-green', 'No personal data', 'No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.')}
-          ${mini('ic-lock', 'g-orange', 'Auto-lock', 'The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.')}
-          ${mini('ic-send', 'g-green', 'Your own servers', 'Point each blockchain at your own node or server. Kyro checks it is on the right network first.')}
-          ${mini('ic-shield', 'g-orange', 'Approvals overview', 'The vault panel shows whether any unlimited token approval is active.')}
-          ${mini('ic-swap', 'g-ice', `${chains.length} blockchains`, 'Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See the list</a>.')}
-          ${mini('ic-stake', 'g-violet', 'Open source', 'GPL-3.0-or-later. Read the code, build it yourself, or change it.')}
+          ${mini('ic-tor', 'g-deep', 'Tor built in', 'All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.')}
+          ${mini('ic-eye', 'g-sky', 'No personal data', 'No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.')}
+          ${mini('ic-lock', 'g-deep', 'Auto-lock', 'The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.')}
+          ${mini('ic-send', 'g-sky', 'Your own servers', 'Point each blockchain at your own node or server. Kyro checks it is on the right network first.')}
+          ${mini('ic-shield', 'g-deep', 'Approvals overview', 'The vault panel shows whether any unlimited token approval is active.')}
+          ${mini('ic-swap', 'g-ice', `${chains.length} blockchains`, 'Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See every blockchain</a>.')}
+          ${mini('ic-stake', 'g-deep', 'Open source', 'GPL-3.0-or-later. Read the code, build it yourself, or change it.')}
         </div>
       </div>
     </section>
@@ -555,7 +562,7 @@ export function security() {
   return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet security', description, trail) };
 }
 
-export function fees() {
+export function fees(curve) {
   const path = '/fees/';
   const trail = [['/', 'Home'], [path, 'Fees']];
   const title = 'Fees: free to use, swaps from 0.7% | Kyro Wallet';
@@ -569,6 +576,12 @@ export function fees() {
       h1: 'Kyro is free. <em>Swaps from 0.7%.</em>',
       lead: 'Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.'
     })}
+
+    <section class="section section-tight" aria-label="Swap fee calculator" data-tone=".9" data-hue="1">
+      <div class="wrap wrap-mid">
+        ${feeCalc(curve)}
+      </div>
+    </section>
 
     <section class="section section-tight" aria-label="Fee summary">
       <div class="wrap">
@@ -584,7 +597,7 @@ export function fees() {
             <span class="fee-desc">SOL, ADA, TRX. Network fee only.</span>
           </div>
           <div class="fee-card fee-accent spot">
-            <span class="fee-value"><span class="fee-from">from</span> 0.7%</span>
+            <span class="fee-value"><span class="fee-from">from</span> <span data-roll>0.7%</span></span>
             <span class="fee-name">Swaps</span>
             <span class="fee-desc">Included in the amount you receive.</span>
           </div>
@@ -646,7 +659,7 @@ export function fees() {
           <h2 id="fee-how">How the swap fee works</h2>
           <ul class="checks">
             <li>The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote: the amount you receive is after the fee.</li>
-            <li>It is collected by each provider’s official integrator fee option. Kyro never adds a separate transfer to your transaction.</li>
+            <li>It is collected by each provider’s official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.</li>
             <li>Quotes are compared after fees: the best price shown already includes them.</li>
             <li>If a provider cannot apply the fee correctly, its quote is not shown.</li>
             <li>Providers may charge their own fee. It is already in the price they quote.</li>
@@ -675,7 +688,7 @@ export function fees() {
     </section>
     ${ctaPanel()}`;
 
-  return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet fees', description, trail) };
+  return { path, title, description, body, scripts: ['/download.js', '/feecalc.js'], ld: webPage(path, 'Kyro Wallet fees', description, trail) };
 }
 
 export function download(chains) {
@@ -818,7 +831,7 @@ const FAQ = [
   {
     title: 'Swaps and staking',
     items: [
-      { q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full table</a>.</p>` },
+      { q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p>` },
       { q: 'Can I stake with Kyro?', a: () => `<p>Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. <a href="/features/#f-stake">How staking works</a>.</p>` }
     ]
   },
@@ -1000,10 +1013,10 @@ export function chainPage(c, chains) {
   const body = html`
     ${pageHero({
       trail,
-      aside: coinCard(c),
-      eyebrow: `${esc(c.name)} · ${esc(c.ticker)}`,
+      aside: coinHero(c),
+      eyebrow: `${esc(c.name)} desktop wallet · ${esc(c.ticker)}`,
       h1: `${esc(c.name)} wallet <em>for Windows, macOS and Linux</em>`,
-      lead: `${capSentence} Kyro is free, open source and keeps your keys on your own computer.`,
+      lead: `${capSentence} Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.`,
       extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>`
     })}
 
@@ -1025,8 +1038,8 @@ export function chainPage(c, chains) {
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>${esc(c.name)} <em>in Kyro</em></h2>
           ${c.staking ? `<p data-reveal>${esc(c.staking)}</p>` : ''}
@@ -1035,7 +1048,13 @@ export function chainPage(c, chains) {
             <li>Same recovery phrase as your other ${chains.length - 1} blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            ${f.swap ? '<a href="/fees/">How swap fees work</a>' : ''}
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>${coinCard(c)}</div>
       </div>
     </section>
 
@@ -1062,8 +1081,7 @@ export function chainPage(c, chains) {
 
 export function notFound() {
   const body = html`
-    <section class="notfound" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="notfound" aria-labelledby="page-title" data-tone="1.1" data-hue="1">
       <div class="wrap">
         <p class="notfound-n" aria-hidden="true">404</p>
         <h1 id="page-title">Page <em>not found</em></h1>

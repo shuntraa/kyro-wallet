@@ -62,6 +62,81 @@
     if (el.textContent !== v) el.textContent = v;
   }
 
+  // Additive light on a small canvas: sparks and rings, shared by the scenes below.
+  function FX(canvas) {
+    var ctx = canvas.getContext('2d');
+    var parts = [], rings = [], w = 0, h = 0, drawn = false;
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    function size() {
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+    size();
+    window.addEventListener('resize', size);
+    return {
+      burst: function (x, y, n, speed) {
+        for (var i = 0; i < n; i++) {
+          var a = Math.random() * 6.283, v = speed * (0.25 + Math.random() * 0.75);
+          parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, fade: 0.012 + Math.random() * 0.02, r: 0.8 + Math.random() * 2.2 });
+        }
+      },
+      ring: function (x, y, max) {
+        rings.push({ x: x, y: y, r: 0, max: max, life: 1 });
+      },
+      /** Runs one frame. extra(ctx) draws scene light in the same pass; it returns true to keep going. */
+      tick: function (extra) {
+        var keep = parts.length || rings.length;
+        if (!keep && !extra && !drawn) return;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'lighter';
+        drawn = false;
+        if (extra) drawn = extra(ctx, w, h) || drawn;
+        for (var i = rings.length - 1; i >= 0; i--) {
+          var g = rings[i];
+          g.r += (g.max - g.r) * 0.075;
+          g.life -= 0.024;
+          if (g.life <= 0) {
+            rings.splice(i, 1);
+            continue;
+          }
+          ctx.strokeStyle = 'rgba(124,196,255,' + (g.life * 0.8).toFixed(3) + ')';
+          ctx.lineWidth = 1 + g.life * 3;
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, g.r, 0, 6.283);
+          ctx.stroke();
+          drawn = true;
+        }
+        for (var j = parts.length - 1; j >= 0; j--) {
+          var p = parts[j];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.97;
+          p.vy *= 0.97;
+          p.life -= p.fade;
+          if (p.life <= 0) {
+            parts.splice(j, 1);
+            continue;
+          }
+          ctx.fillStyle = 'rgba(165,218,255,' + p.life.toFixed(3) + ')';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, 6.283);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(124,196,255,' + (p.life * 0.16).toFixed(3) + ')';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r * 4, 0, 6.283);
+          ctx.fill();
+          drawn = true;
+        }
+      },
+      w: function () {
+        return w;
+      }
+    };
+  }
+
   // ---------- hero: the window, its screens and the story under it
   function story() {
     var el = document.querySelector('[data-story]');
@@ -76,7 +151,24 @@
     var balance = el.querySelector('[data-balance]');
     var from = el.querySelector('[data-sw-from]');
     var to = el.querySelector('[data-sw-to]');
-    var caps = ['Every coin on one screen', 'Any coin to any coin, fee in the rate', 'Rates side by side'];
+    var caps = ['Balances fetched over Tor', 'Swaps without an account', 'Rates, with no sign-up'];
+    var MASK = 'Hidden with one click, from anyone behind you';
+    var money0 = Array.prototype.map.call(el.querySelectorAll('.kw-val b, .kw-val small'), function (n) {
+      return { el: n, v: n.textContent };
+    });
+    var eye = el.querySelector('[data-eye]');
+    var delta = el.querySelector('.kw-delta span');
+    var masked = false;
+    function mask(on) {
+      if (on === masked) return;
+      masked = on;
+      if (eye) eye.classList.toggle('on', on);
+      balance.textContent = on ? '•••••' : '12,345';
+      delta.textContent = on ? '▲ ••••• · 1.23%' : '▲ $123.45 · 1.23%';
+      el.querySelector('.kw-total .dim').style.visibility = on ? 'hidden' : '';
+      for (var i = 0; i < money0.length; i++) money0[i].el.textContent = on ? '•••••' : money0[i].v;
+      if (cap) cap.textContent = on ? MASK : caps[0];
+    }
     var current = -1;
     var tr = track(el);
 
@@ -122,6 +214,10 @@
     var wrapW = 1;
     // Screen boundaries on the pinned track.
     var EDGES = [0.16, 0.46, 0.74];
+    var earnRows = Array.prototype.map.call(el.querySelectorAll('.kw-earn'), function (r) {
+      var num = r.querySelector('[data-rate]');
+      return { el: r, num: num, bar: r.querySelector('.kw-ratebar i'), rate: +num.getAttribute('data-rate'), k: -1 };
+    });
     var X = 0.03;
 
     function pinnedFrame(y) {
@@ -130,9 +226,9 @@
       var t = ease(seg(p, 0, 0.17));
       var vw = window.innerWidth;
       wrap.style.transform =
-        'translate3d(' + (lerp(0.245, 0, t) * vw).toFixed(1) + 'px,' + lerp(34, 0, t).toFixed(1) + 'px,0)' +
+        'translate3d(' + (lerp(0.27, 0, t) * vw).toFixed(1) + 'px,' + lerp(34, 0, t).toFixed(1) + 'px,0)' +
         ' rotateY(' + lerp(-20, 0, t).toFixed(2) + 'deg) rotateX(' + lerp(7, 0, t).toFixed(2) + 'deg) rotateZ(' + lerp(1.2, 0, t).toFixed(2) + 'deg)' +
-        ' scale(' + lerp(0.66, 1, t).toFixed(4) + ')';
+        ' scale(' + lerp(0.7, 1, t).toFixed(4) + ')';
       copy.style.opacity = (1 - seg(p, 0.015, 0.1)).toFixed(3);
       copy.style.transform = 'translate3d(' + (-seg(p, 0, 0.12) * 90).toFixed(1) + 'px,0,0)';
       copy.style.visibility = p > 0.11 ? 'hidden' : 'visible';
@@ -147,11 +243,25 @@
       setScreen(1, a * (1 - b), (1 - a) * w - b * w);
       setScreen(2, b, (1 - b) * w);
       show(b > 0.5 ? 2 : a > 0.5 ? 1 : 0);
+      // The app's Hide balances: the numbers go dark before the screen changes.
+      mask(p > 0.3 && p < 0.47);
 
       // The swap fills in as you scroll through it.
       var s = out(seg(p, EDGES[1], EDGES[1] + 0.14));
       text(from, lerp(0, 1, s).toFixed(4));
       text(to, lerp(0, 100, s).toFixed(2));
+
+      // Earn: the rows arrive in turn and their rates count up.
+      for (var e = 0; e < earnRows.length; e++) {
+        var k = out(seg(p, EDGES[2] + e * 0.018, EDGES[2] + 0.1 + e * 0.018));
+        var row = earnRows[e];
+        if (row.k === k) continue;
+        row.k = k;
+        row.el.style.opacity = k.toFixed(3);
+        row.el.style.transform = 'translate3d(0,' + ((1 - k) * 14).toFixed(1) + 'px,0)';
+        row.bar.style.transform = 'scaleX(' + k.toFixed(3) + ')';
+        text(row.num, (row.rate * k).toFixed(2) + '%');
+      }
     }
 
     // Small screens: no pin. The window sits in the page and cycles by itself.
@@ -229,10 +339,34 @@
       if (i < 3) ip.appendChild(document.createTextNode('.'));
       return s;
     });
-    var lastNote = -1, lastFrame = 0, span = 0;
+    var lastNote = -1, lastFrame = 0, span = 0, lastHop = 0, tailX = 0, px = 0, py = 27;
+    var fx = FX(el.querySelector('.rt .fx'));
+    function comet(ctx) {
+      tailX += (px - tailX) * 0.055;
+      var len = px - tailX;
+      if (Math.abs(len) < 1) return false;
+      var g = ctx.createLinearGradient(tailX, 0, px, 0);
+      g.addColorStop(0, 'rgba(124,196,255,0)');
+      g.addColorStop(0.7, 'rgba(124,196,255,.45)');
+      g.addColorStop(1, 'rgba(225,244,255,1)');
+      ctx.strokeStyle = g;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 9;
+      ctx.globalAlpha = 0.28;
+      ctx.beginPath();
+      ctx.moveTo(tailX, py);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+      ctx.lineWidth = 2.6;
+      ctx.globalAlpha = 1;
+      ctx.stroke();
+      return true;
+    }
     var tr = track(el);
     function size() {
+      rt.__x0 = 0;
       span = rt.offsetWidth * 0.8;
+      py = window.innerWidth <= 640 ? 20 : 27;
     }
     size();
     window.addEventListener('resize', size);
@@ -246,6 +380,23 @@
       fill.style.transform = 'scaleX(' + t.toFixed(4) + ')';
 
       var hop = t * 4; // 0, 1, 2, 3, 4 at the five nodes
+      var x0 = rt.__x0 || (rt.__x0 = rt.offsetWidth * 0.1);
+      px = x0 + t * span;
+      if (Math.floor(hop) > lastHop && hop >= 1) {
+        // The packet reached a relay: the node rings and throws sparks.
+        fx.ring(px, py, 120);
+        fx.ring(px, py, 70);
+        fx.burst(px, py, 26, 3.4);
+        var node = hops[Math.floor(hop)];
+        if (node) {
+          node.classList.remove('pulse');
+          void node.offsetWidth;
+          node.classList.add('pulse');
+        }
+      }
+      lastHop = Math.floor(hop);
+      if (p > 0.02 && p < 0.97 && Math.abs(px - tailX) > 8 && Math.random() < 0.5) fx.burst(px, py, 1, 1.1);
+      fx.tick(comet);
       for (var h = 0; h < hops.length; h++) hops[h].classList.toggle('lit', hop >= h - 0.04);
       for (var r = 0; r < rings.length; r++) rings[r].classList.toggle('off', hop >= 3 - r); // one layer per relay
 
@@ -289,7 +440,9 @@
     var coins = el.querySelectorAll('.fc');
     var mark = el.querySelector('[data-mark]');
     var cta = el.querySelector('[data-cta]');
-    var word = el.querySelector('.wordmark');
+    var glow = el.querySelector('[data-glow]');
+    var fx = FX(el.querySelector('.gather-pin > .fx'));
+    var flashed = false;
     var pinBox = el.querySelector('.gather-pin');
     var N = coins.length;
     var CENTER = 9; // a 3 x 3 block makes the square in the mark
@@ -382,8 +535,23 @@
       cta.style.opacity = ctaIn.toFixed(3);
       cta.style.transform = 'translate3d(0,' + ((1 - ctaIn) * 40).toFixed(1) + 'px,0)';
       cta.style.pointerEvents = ctaIn > 0.5 ? '' : 'none';
-      word.style.opacity = ctaIn.toFixed(3);
-      word.style.transform = 'translate3d(-50%,' + ((1 - ctaIn) * 90).toFixed(1) + 'px,0)';
+      // The moment the coins become the logo: one flash, sparks, then the logo breathes.
+      if (p > 0.69 && !flashed) {
+        flashed = true;
+        glow.classList.remove('flash');
+        void glow.offsetWidth;
+        glow.classList.add('flash');
+        var cx = W / 2, cy = H / 2 - 30;
+        fx.burst(cx, cy, 150, Math.min(W, H) * 0.016);
+        fx.ring(cx, cy, Math.min(W, H) * 0.5);
+        fx.ring(cx, cy, Math.min(W, H) * 0.34);
+      } else if (p < 0.6) {
+        flashed = false;
+      }
+      mark.classList.toggle('alive', p > 0.72);
+      var gy = (H / 2 - 30 - markY) * (1 - rise) + markY;
+      glow.style.top = gy.toFixed(1) + 'px';
+      fx.tick();
     });
   }
 
@@ -407,7 +575,9 @@
       var b = el.querySelector('[data-bn]');
       var bt = el.querySelector('[data-bt]');
       var rate = el.querySelector('[data-rate]');
-      var i = 0, seen = false, t0 = 0, angle = 0, base = 0;
+      var i = 0, seen = false, t0 = 0, angle = 0, base = 0, landed = false;
+      var fx = FX(el.querySelector('.fx'));
+      var coinBox = el.querySelector('.sw-coin');
       var HOLD = 1500, TURN = 1500;
 
       function set(pair) {
@@ -443,9 +613,22 @@
         spin.style.transform = 'rotateY(' + angle.toFixed(2) + 'deg) scale(' + (1 + Math.sin(t * Math.PI) * 0.14).toFixed(3) + ')';
         var shown = (pair[5] * k).toLocaleString('en-US', { minimumFractionDigits: pair[7], maximumFractionDigits: pair[7] });
         text(b, shown);
+        if (t >= 1 && !landed) {
+          landed = true;
+          var bx = coinBox.offsetLeft + coinBox.offsetWidth / 2;
+          var by = coinBox.offsetTop + coinBox.offsetHeight / 2;
+          fx.ring(bx, by, coinBox.offsetWidth * 1.3);
+          fx.ring(bx, by, coinBox.offsetWidth * 0.9);
+          fx.burst(bx, by, 70, coinBox.offsetWidth * 0.075);
+          el.classList.remove('landed');
+          void el.offsetWidth;
+          el.classList.add('landed');
+        }
+        fx.tick();
         if (e > HOLD + TURN + HOLD * 1.6) {
           base = (base + 540) % 360;
           flipped = !flipped;
+          landed = false;
           i = (i + 1) % PAIRS.length;
           t0 = now;
           set(PAIRS[i]);
@@ -455,8 +638,113 @@
     });
   }
 
+  // ---------- Earn list on the page: rates count up, bars light in turn
+  function earn() {
+    var box = document.querySelector('[data-rows]');
+    if (!box || !K || !K.motion) return;
+    var rows = box.querySelectorAll('.kw-earn');
+    var io = new IntersectionObserver(
+      function (e) {
+        if (!e[e.length - 1].isIntersecting) return;
+        io.disconnect();
+        Array.prototype.forEach.call(rows, function (r, i) {
+          var num = r.querySelector('[data-rate]');
+          var rate = +num.getAttribute('data-rate');
+          var t0 = performance.now() + i * 90;
+          num.textContent = '0.00%';
+          (function tick(now) {
+            var t = clamp((now - t0) / 1100, 0, 1);
+            text(num, (rate * out(t)).toFixed(2) + '%');
+            if (t < 1) requestAnimationFrame(tick);
+          })(t0);
+        });
+      },
+      { threshold: 0.2 }
+    );
+    io.observe(box);
+  }
+
+  // ---------- Ledger: the device asks, you answer, the coins connect one by one
+  function ledger() {
+    var list = document.querySelectorAll('[data-ledger]');
+    if (!list.length || !K || !K.motion) return;
+    var pin = window.matchMedia('(min-width: 900px) and (min-height: 640px)');
+    var SCREENS = [['Open Bitcoin?', 'Press Yes'], ['Bitcoin', 'Ready'], ['Confirm?', '1.2345 BTC'], ['Confirmed', '1.2345 BTC']];
+    Array.prototype.forEach.call(list, function (root) {
+      var owner = root.closest('[data-ledger-track]');
+      var tr = track(owner || root);
+      var stage = root.querySelector('.lg-stage');
+      var lines = root.querySelectorAll('.lg-l');
+      var nodes = root.querySelectorAll('.lg-n');
+      var t1 = root.querySelector('[data-lg-t1]');
+      var t2 = root.querySelector('[data-lg-t2]');
+      var check = root.querySelector('.lg-check');
+      var yes = root.querySelector('[data-lg-yes]');
+      var steps = owner ? owner.querySelectorAll('.hw-steps li') : [];
+      var count = owner ? owner.querySelector('[data-ledger-n]') : null;
+      var total = count ? +count.textContent : 0;
+      var fx = FX(root.querySelector('.fx'));
+      var state = -1, mx = 0, my = 0, tx = 0, ty = 0;
+      if (K.fine) {
+        window.addEventListener(
+          'pointermove',
+          function (e) {
+            tx = e.clientX / window.innerWidth - 0.5;
+            ty = e.clientY / window.innerHeight - 0.5;
+          },
+          { passive: true }
+        );
+      }
+      function press() {
+        yes.classList.remove('press');
+        void root.clientWidth;
+        yes.classList.add('press');
+      }
+      K.frame(function (y) {
+        if (!near(tr, y)) return;
+        var p = owner && pin.matches ? pinned(tr, y) : clamp((passing(tr, y) - 0.2) / 0.5, 0, 1);
+        mx += (tx - mx) * 0.07;
+        my += (ty - my) * 0.07;
+        stage.style.transform = 'perspective(1100px) rotateY(' + (mx * 16).toFixed(2) + 'deg) rotateX(' + (-my * 12).toFixed(2) + 'deg)';
+        for (var i = 0; i < lines.length; i++) {
+          var k = seg(p, 0.1 + i * 0.07, 0.17 + i * 0.07);
+          lines[i].style.strokeDashoffset = (1 - k).toFixed(3);
+          nodes[i].classList.toggle('on', k > 0.92);
+        }
+        var s = p < 0.26 ? 0 : p < 0.52 ? 1 : p < 0.8 ? 2 : 3;
+        if (s !== state) {
+          if (s > state && state >= 0) press();
+          state = s;
+          t1.textContent = SCREENS[s][0];
+          t2.textContent = SCREENS[s][1];
+          check.classList.toggle('on', s === 3);
+          root.classList.toggle('done', s === 3);
+          if (s === 3) {
+            var w = fx.w();
+            fx.ring(w / 2, w * 0.4, w * 0.5);
+            fx.burst(w / 2, w * 0.36, 70, w * 0.012);
+          }
+        }
+        for (var n = 0; n < steps.length; n++) steps[n].classList.toggle('on', s >= (n === 0 ? 0 : n === 1 ? 1 : 2));
+        if (count) text(count, String(Math.round(total * seg(p, 0.08, 0.84))));
+        fx.tick();
+      });
+    });
+  }
+
+  // The hero runs at once; the scenes further down wait until the page is idle.
   story();
-  tor();
-  gather();
-  swap();
+  function rest() {
+    earn();
+    ledger();
+    tor();
+    gather();
+    swap();
+  }
+  function idle() {
+    if (window.requestIdleCallback) window.requestIdleCallback(rest, { timeout: 1200 });
+    else window.setTimeout(rest, 300);
+  }
+  if (document.readyState === 'complete') idle();
+  else window.addEventListener('load', idle);
 })();

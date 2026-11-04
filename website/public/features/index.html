@@ -39,6 +39,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -70,8 +72,7 @@
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Features</span></li></ol></nav>
         <div class="ph-grid">
@@ -79,7 +80,7 @@
             
             <p class="eyebrow">Features</p>
             <h1 id="page-title">What Kyro <em>does</em></h1>
-            <p class="lead">Send, receive, swap and stake on 36 blockchains from one recovery phrase. You read every transaction before it is signed.</p>
+            <p class="lead">A private crypto wallet: send, receive, swap and stake on 36 blockchains from one recovery phrase, over Tor, and read every transaction before it is signed.</p>
             
           </div>
           
@@ -159,7 +160,7 @@
           </ul></div>
         </div>
         <div class="feature-visual" data-reveal>
-  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><canvas class="fx" aria-hidden="true"></canvas><div class="sw-in" aria-hidden="true">
     <div class="sw-side">
       <p class="kw-label">You send</p>
       <strong data-a>1.0000</strong><small data-at>BTC</small>
@@ -192,21 +193,21 @@
   <div class="kw-card" role="img" aria-label="Kyro Earn list with demo rates. Rates are estimates."><div aria-hidden="true">
           <div class="kw-earn">
             <span class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt="" decoding="async"><span><b>Solana</b><small>Staking</small></span></span>
-            <span class="kw-apy"><b>4.56%</b><small>est. APY</small></span>
+            <span class="kw-apy"><b data-rate="4.56">4.56%</b><small>est. APY</small><i class="kw-ratebar b5"><i></i></i></span>
             <span class="kw-meta"><small>Lock</small>≈ 2–3 days</span>
             <span class="kw-meta kw-min"><small>Minimum</small>None</span>
             <i class="kw-b">Start</i>
           </div>
           <div class="kw-earn">
             <span class="kw-coin"><img class="tok" src="/img/coins/ada.svg" width="32" height="32" alt="" decoding="async"><span><b>Cardano</b><small>Staking</small></span></span>
-            <span class="kw-apy"><b>5.67%</b><small>est. APY</small></span>
+            <span class="kw-apy"><b data-rate="5.67">5.67%</b><small>est. APY</small><i class="kw-ratebar b6"><i></i></i></span>
             <span class="kw-meta"><small>Lock</small>None</span>
             <span class="kw-meta kw-min"><small>Minimum</small>2 ADA</span>
             <i class="kw-b">Start</i>
           </div>
           <div class="kw-earn">
             <span class="kw-coin"><img class="tok" src="/img/coins/trx.svg" width="32" height="32" alt="" decoding="async"><span><b>TRON</b><small>Staking</small></span></span>
-            <span class="kw-apy"><b>6.78%</b><small>est. APY</small></span>
+            <span class="kw-apy"><b data-rate="6.78">6.78%</b><small>est. APY</small><i class="kw-ratebar b7"><i></i></i></span>
             <span class="kw-meta"><small>Lock</small>14 days</span>
             <span class="kw-meta kw-min"><small>Minimum</small>1 TRX</span>
             <i class="kw-b">Start</i>
@@ -255,16 +256,32 @@
           </ul></div>
         </div>
         <div class="feature-visual" data-reveal>
-  <div class="device" data-device role="img" aria-label="A hardware wallet connected to Kyro, asking you to confirm on the device."><div class="device-in" aria-hidden="true">
-    <div class="device-app">
-      <p class="kw-label">Hardware wallet</p>
-      <div class="device-row"><span class="device-dot"></span><b>Connected</b><i class="kw-b on">Connect</i></div>
-    </div>
-    <svg class="device-cable" viewBox="0 0 300 70" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0 12C90 12 80 58 170 58S240 34 300 34"/></svg>
-    <div class="device-body">
-      <div class="device-screen"><small>Kyro</small><b>Confirm on device</b><span>1.2345 BTC</span></div>
-      <div class="device-keys"><i></i><i></i></div>
-    </div>
+  <div class="lg" data-ledger role="img" aria-label="A hardware wallet wired to coins. Its screen asks to open Bitcoin, then confirms a demo transaction."><div class="lg-stage" aria-hidden="true">
+    <svg viewBox="0 0 640 560" fill="none">
+      <defs>
+        <linearGradient id="lg-body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#25364a"/><stop offset=".5" stop-color="#101a26"/><stop offset="1" stop-color="#070c13"/></linearGradient>
+        <linearGradient id="lg-edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".85"/><stop offset=".5" stop-color="#7cc4ff" stop-opacity=".12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity=".45"/></linearGradient>
+        <radialGradient id="lg-halo"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".5"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <circle class="lg-halo" cx="320" cy="280" r="250" fill="url(#lg-halo)"/>
+      <path class="lg-l" pathLength="1" d="M403 59Q362 121 320 280"/><path class="lg-l" pathLength="1" d="M537 144Q429 182 320 280"/><path class="lg-l" pathLength="1" d="M588 280Q454 280 320 280"/><path class="lg-l" pathLength="1" d="M537 416Q429 378 320 280"/><path class="lg-l" pathLength="1" d="M403 501Q362 439 320 280"/><path class="lg-l" pathLength="1" d="M237 501Q279 439 320 280"/><path class="lg-l" pathLength="1" d="M103 416Q212 378 320 280"/><path class="lg-l" pathLength="1" d="M52 280Q186 280 320 280"/><path class="lg-l" pathLength="1" d="M103 144Q212 182 320 280"/><path class="lg-l" pathLength="1" d="M237 59Q279 121 320 280"/><g class="lg-n on"><circle cx="403" cy="59" r="33"/><image href="/img/coins/btc.svg" x="378" y="34" width="50" height="50"/></g><g class="lg-n on"><circle cx="537" cy="144" r="33"/><image href="/img/coins/eth.svg" x="512" y="119" width="50" height="50"/></g><g class="lg-n on"><circle cx="588" cy="280" r="33"/><image href="/img/coins/sol.svg" x="563" y="255" width="50" height="50"/></g><g class="lg-n on"><circle cx="537" cy="416" r="33"/><image href="/img/coins/ada.svg" x="512" y="391" width="50" height="50"/></g><g class="lg-n on"><circle cx="403" cy="501" r="33"/><image href="/img/coins/xrp.svg" x="378" y="476" width="50" height="50"/></g><g class="lg-n on"><circle cx="237" cy="501" r="33"/><image href="/img/coins/ltc.svg" x="212" y="476" width="50" height="50"/></g><g class="lg-n on"><circle cx="103" cy="416" r="33"/><image href="/img/coins/doge.svg" x="78" y="391" width="50" height="50"/></g><g class="lg-n on"><circle cx="52" cy="280" r="33"/><image href="/img/coins/bnb.svg" x="27" y="255" width="50" height="50"/></g><g class="lg-n on"><circle cx="103" cy="144" r="33"/><image href="/img/coins/trx.svg" x="78" y="119" width="50" height="50"/></g><g class="lg-n on"><circle cx="237" cy="59" r="33"/><image href="/img/coins/near.svg" x="212" y="34" width="50" height="50"/></g>
+      <path class="lg-cable" d="M320 444V560"/>
+      <g class="lg-dev">
+        <rect x="306" y="428" width="28" height="18" rx="4" fill="#0d1520" stroke="#2b4560"/>
+        <rect x="232" y="124" width="176" height="308" rx="34" fill="url(#lg-body)" stroke="url(#lg-edge)" stroke-width="1.6"/>
+        <rect x="240" y="132" width="160" height="292" rx="27" stroke="#ffffff" stroke-opacity=".06"/>
+        <rect class="lg-screen" x="250" y="150" width="140" height="176" rx="14" fill="#01050b" stroke="#1d3a58"/>
+        <text class="lg-t0" x="320" y="184" text-anchor="middle">Kyro</text>
+        <path class="lg-check" pathLength="1" d="M300 208l14 14 27-30"/>
+        <text class="lg-t1" x="320" y="256" text-anchor="middle" data-lg-t1>Confirmed</text>
+        <text class="lg-t2" x="320" y="280" text-anchor="middle" data-lg-t2>1.2345 BTC</text>
+        <text class="lg-h" x="264" y="314">No</text><text class="lg-h" x="376" y="314" text-anchor="end">Yes</text>
+        <circle class="lg-k" cx="276" cy="376" r="20" fill="#0a111a" stroke="#2b4560"/>
+        <circle class="lg-k lg-yes" data-lg-yes cx="364" cy="376" r="20" fill="#0a111a" stroke="#7cc4ff"/>
+        <circle class="lg-led" cx="320" cy="376" r="3.5" fill="#7cc4ff"/>
+      </g>
+    </svg>
+    <canvas class="fx"></canvas>
   </div></div></div>
       </div>
     </section>
@@ -276,36 +293,36 @@
           <h2 id="f-more" data-words>The <em>small things</em></h2>
         </div>
         <div class="glow-grid glow-grid-4" data-reveal-group>
-          <article class="glow-card spot g-ice"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Many accounts</h3><p>Several accounts per blockchain from the same phrase. Move funds between them in two clicks.</p></article>
-          <article class="glow-card spot g-violet"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Tor built in</h3><p>All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.</p></article>
-          <article class="glow-card spot g-green"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>No personal data</h3><p>No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.</p></article>
-          <article class="glow-card spot g-orange"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Auto-lock</h3><p>The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.</p></article>
-          <article class="glow-card spot g-green"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Your own servers</h3><p>Point each blockchain at your own node or server. Kyro checks it is on the right network first.</p></article>
-          <article class="glow-card spot g-orange"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Approvals overview</h3><p>The vault panel shows whether any unlimited token approval is active.</p></article>
-          <article class="glow-card spot g-ice"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>36 blockchains</h3><p>Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See the list</a>.</p></article>
-          <article class="glow-card spot g-violet"><span class="mini-icon ic-stake" aria-hidden="true"></span><h3>Open source</h3><p>GPL-3.0-or-later. Read the code, build it yourself, or change it.</p></article>
+          <article class="glow-card spot tilt g-ice"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Many accounts</h3><p>Several accounts per blockchain from the same phrase. Move funds between them in two clicks.</p></article>
+          <article class="glow-card spot tilt g-deep"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Tor built in</h3><p>All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.</p></article>
+          <article class="glow-card spot tilt g-sky"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>No personal data</h3><p>No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.</p></article>
+          <article class="glow-card spot tilt g-deep"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Auto-lock</h3><p>The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.</p></article>
+          <article class="glow-card spot tilt g-sky"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Your own servers</h3><p>Point each blockchain at your own node or server. Kyro checks it is on the right network first.</p></article>
+          <article class="glow-card spot tilt g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Approvals overview</h3><p>The vault panel shows whether any unlimited token approval is active.</p></article>
+          <article class="glow-card spot tilt g-ice"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>36 blockchains</h3><p>Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See every blockchain</a>.</p></article>
+          <article class="glow-card spot tilt g-deep"><span class="mini-icon ic-stake" aria-hidden="true"></span><h3>Open source</h3><p>GPL-3.0-or-later. Read the code, build it yourself, or change it.</p></article>
         </div>
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get <em>Kyro</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -317,7 +334,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -370,6 +388,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

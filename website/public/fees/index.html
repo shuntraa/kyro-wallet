@@ -35,9 +35,12 @@
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
+  <script src="/feecalc.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,8 +72,7 @@
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Fees</span></li></ol></nav>
         <div class="ph-grid">
@@ -82,6 +84,33 @@
             
           </div>
           
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight" aria-label="Swap fee calculator" data-tone=".9" data-hue="1">
+      <div class="wrap wrap-mid">
+        
+        <div class="calc spot g-ice" data-feecalc data-curve='[{"usd":5,"bps":500},{"usd":10,"bps":200},{"usd":25,"bps":180},{"usd":50,"bps":160},{"usd":80,"bps":140},{"usd":100,"bps":120},{"usd":1000,"bps":90},{"usd":10000,"bps":70}]'>
+          <div class="calc-read">
+            <div class="calc-big"><span class="calc-l" id="calc-amount-l">Swap value</span><output class="calc-amt" data-calc-amount for="calc-range">$200</output></div>
+            <div class="calc-big calc-rate"><span class="calc-l">Kyro fee</span><output data-calc-rate>1.11%</output></div>
+            <dl class="calc-dl">
+              <div><dt>Fee in dollars</dt><dd data-calc-fee>$2.22</dd></div>
+              <div><dt>You receive, in value</dt><dd data-calc-out>$197.78</dd></div>
+            </dl>
+          </div>
+          <div class="calc-plot">
+            <svg viewBox="0 0 800 170" preserveAspectRatio="none" fill="none" aria-hidden="true">
+              <defs><linearGradient id="calc-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".32"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0.0 14.0L4.0 14.0L8.0 14.0L12.0 14.0L16.0 14.0L20.0 14.0L24.0 14.0L28.0 14.0L32.0 14.0L36.0 14.0L40.0 14.0L44.0 14.0L48.0 14.0L52.0 14.0L56.0 14.0L60.0 14.0L64.0 14.0L68.0 14.0L72.0 14.0L76.0 14.0L80.0 14.0L84.0 14.0L88.0 14.0L92.0 14.0L96.0 14.0L100.0 14.0L104.0 14.0L108.0 14.0L112.0 14.2L116.0 17.9L120.0 21.7L124.0 25.7L128.0 29.7L132.0 33.9L136.0 38.3L140.0 42.8L144.0 47.4L148.0 52.3L152.0 57.4L156.0 62.7L160.0 68.4L164.0 68.7L168.0 69.0L172.0 69.3L176.0 69.6L180.0 69.9L184.0 70.2L188.0 70.5L192.0 70.8L196.0 71.1L200.0 71.4L204.0 71.7L208.0 72.0L212.0 72.3L216.0 72.6L220.0 72.9L224.0 73.2L228.0 73.6L232.0 74.1L236.0 74.5L240.0 74.9L244.0 75.3L248.0 75.7L252.0 76.2L256.0 76.6L260.0 77.0L264.0 77.4L268.0 77.9L272.0 78.3L276.0 78.9L280.0 79.6L284.0 80.3L288.0 80.9L292.0 81.6L296.0 82.2L300.0 82.9L304.0 83.6L308.0 85.0L312.0 86.4L316.0 88.0L320.0 89.5L324.0 89.7L328.0 89.9L332.0 90.2L336.0 90.4L340.0 90.6L344.0 90.9L348.0 91.1L352.0 91.3L356.0 91.6L360.0 91.8L364.0 92.0L368.0 92.3L372.0 92.5L376.0 92.7L380.0 93.0L384.0 93.2L388.0 93.5L392.0 93.7L396.0 93.9L400.0 94.2L404.0 94.4L408.0 94.7L412.0 94.9L416.0 95.2L420.0 95.4L424.0 95.6L428.0 95.9L432.0 96.1L436.0 96.4L440.0 96.6L444.0 96.9L448.0 97.1L452.0 97.4L456.0 97.7L460.0 97.9L464.0 98.2L468.0 98.4L472.0 98.7L476.0 98.9L480.0 99.2L484.0 99.4L488.0 99.6L492.0 99.7L496.0 99.9L500.0 100.1L504.0 100.3L508.0 100.4L512.0 100.6L516.0 100.8L520.0 101.0L524.0 101.2L528.0 101.3L532.0 101.5L536.0 101.7L540.0 101.9L544.0 102.1L548.0 102.2L552.0 102.4L556.0 102.6L560.0 102.8L564.0 103.0L568.0 103.2L572.0 103.4L576.0 103.5L580.0 103.7L584.0 103.9L588.0 104.1L592.0 104.3L596.0 104.5L600.0 104.7L604.0 104.9L608.0 105.1L612.0 105.3L616.0 105.4L620.0 105.6L624.0 105.8L628.0 106.0L632.0 106.2L636.0 106.4L640.0 106.6L644.0 106.6L648.0 106.6L652.0 106.6L656.0 106.6L660.0 106.6L664.0 106.6L668.0 106.6L672.0 106.6L676.0 106.6L680.0 106.6L684.0 106.6L688.0 106.6L692.0 106.6L696.0 106.6L700.0 106.6L704.0 106.6L708.0 106.6L712.0 106.6L716.0 106.6L720.0 106.6L724.0 106.6L728.0 106.6L732.0 106.6L736.0 106.6L740.0 106.6L744.0 106.6L748.0 106.6L752.0 106.6L756.0 106.6L760.0 106.6L764.0 106.6L768.0 106.6L772.0 106.6L776.0 106.6L780.0 106.6L784.0 106.6L788.0 106.6L792.0 106.6L796.0 106.6L800.0 106.6L800 170L0 170Z" fill="url(#calc-a)"/>
+              <path class="calc-line" d="M0.0 14.0L4.0 14.0L8.0 14.0L12.0 14.0L16.0 14.0L20.0 14.0L24.0 14.0L28.0 14.0L32.0 14.0L36.0 14.0L40.0 14.0L44.0 14.0L48.0 14.0L52.0 14.0L56.0 14.0L60.0 14.0L64.0 14.0L68.0 14.0L72.0 14.0L76.0 14.0L80.0 14.0L84.0 14.0L88.0 14.0L92.0 14.0L96.0 14.0L100.0 14.0L104.0 14.0L108.0 14.0L112.0 14.2L116.0 17.9L120.0 21.7L124.0 25.7L128.0 29.7L132.0 33.9L136.0 38.3L140.0 42.8L144.0 47.4L148.0 52.3L152.0 57.4L156.0 62.7L160.0 68.4L164.0 68.7L168.0 69.0L172.0 69.3L176.0 69.6L180.0 69.9L184.0 70.2L188.0 70.5L192.0 70.8L196.0 71.1L200.0 71.4L204.0 71.7L208.0 72.0L212.0 72.3L216.0 72.6L220.0 72.9L224.0 73.2L228.0 73.6L232.0 74.1L236.0 74.5L240.0 74.9L244.0 75.3L248.0 75.7L252.0 76.2L256.0 76.6L260.0 77.0L264.0 77.4L268.0 77.9L272.0 78.3L276.0 78.9L280.0 79.6L284.0 80.3L288.0 80.9L292.0 81.6L296.0 82.2L300.0 82.9L304.0 83.6L308.0 85.0L312.0 86.4L316.0 88.0L320.0 89.5L324.0 89.7L328.0 89.9L332.0 90.2L336.0 90.4L340.0 90.6L344.0 90.9L348.0 91.1L352.0 91.3L356.0 91.6L360.0 91.8L364.0 92.0L368.0 92.3L372.0 92.5L376.0 92.7L380.0 93.0L384.0 93.2L388.0 93.5L392.0 93.7L396.0 93.9L400.0 94.2L404.0 94.4L408.0 94.7L412.0 94.9L416.0 95.2L420.0 95.4L424.0 95.6L428.0 95.9L432.0 96.1L436.0 96.4L440.0 96.6L444.0 96.9L448.0 97.1L452.0 97.4L456.0 97.7L460.0 97.9L464.0 98.2L468.0 98.4L472.0 98.7L476.0 98.9L480.0 99.2L484.0 99.4L488.0 99.6L492.0 99.7L496.0 99.9L500.0 100.1L504.0 100.3L508.0 100.4L512.0 100.6L516.0 100.8L520.0 101.0L524.0 101.2L528.0 101.3L532.0 101.5L536.0 101.7L540.0 101.9L544.0 102.1L548.0 102.2L552.0 102.4L556.0 102.6L560.0 102.8L564.0 103.0L568.0 103.2L572.0 103.4L576.0 103.5L580.0 103.7L584.0 103.9L588.0 104.1L592.0 104.3L596.0 104.5L600.0 104.7L604.0 104.9L608.0 105.1L612.0 105.3L616.0 105.4L620.0 105.6L624.0 105.8L628.0 106.0L632.0 106.2L636.0 106.4L640.0 106.6L644.0 106.6L648.0 106.6L652.0 106.6L656.0 106.6L660.0 106.6L664.0 106.6L668.0 106.6L672.0 106.6L676.0 106.6L680.0 106.6L684.0 106.6L688.0 106.6L692.0 106.6L696.0 106.6L700.0 106.6L704.0 106.6L708.0 106.6L712.0 106.6L716.0 106.6L720.0 106.6L724.0 106.6L728.0 106.6L732.0 106.6L736.0 106.6L740.0 106.6L744.0 106.6L748.0 106.6L752.0 106.6L756.0 106.6L760.0 106.6L764.0 106.6L768.0 106.6L772.0 106.6L776.0 106.6L780.0 106.6L784.0 106.6L788.0 106.6L792.0 106.6L796.0 106.6L800.0 106.6" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span class="calc-dot" data-calc-dot aria-hidden="true"></span>
+          </div>
+          <input class="calc-range" id="calc-range" type="range" min="0" max="1000" step="1" value="460" aria-labelledby="calc-amount-l" data-calc-range>
+          <div class="calc-ticks" aria-hidden="true"><span>$1</span><span>$100</span><span>$10,000</span><span>$100,000</span></div>
+          <p class="small calc-note">Before the network fee, which goes to the network. Some providers cap the rate lower on swaps under about $9.</p>
         </div>
       </div>
     </section>
@@ -100,7 +129,7 @@
             <span class="fee-desc">SOL, ADA, TRX. Network fee only.</span>
           </div>
           <div class="fee-card fee-accent spot">
-            <span class="fee-value"><span class="fee-from">from</span> 0.7%</span>
+            <span class="fee-value"><span class="fee-from">from</span> <span data-roll>0.7%</span></span>
             <span class="fee-name">Swaps</span>
             <span class="fee-desc">Included in the amount you receive.</span>
           </div>
@@ -162,7 +191,7 @@
           <h2 id="fee-how">How the swap fee works</h2>
           <ul class="checks">
             <li>The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote: the amount you receive is after the fee.</li>
-            <li>It is collected by each provider’s official integrator fee option. Kyro never adds a separate transfer to your transaction.</li>
+            <li>It is collected by each provider’s official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.</li>
             <li>Quotes are compared after fees: the best price shown already includes them.</li>
             <li>If a provider cannot apply the fee correctly, its quote is not shown.</li>
             <li>Providers may charge their own fee. It is already in the price they quote.</li>
@@ -190,24 +219,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get <em>Kyro</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -219,7 +248,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -272,6 +302,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

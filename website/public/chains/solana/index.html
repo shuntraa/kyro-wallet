@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Solana</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Solana · SOL</p>
+            <p class="eyebrow">Solana desktop wallet · SOL</p>
             <h1 id="page-title">Solana wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send, receive, swap and stake SOL and SPL tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send, receive, swap and stake SOL and SPL tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-solana spot" role="img" aria-label="Solana in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt=""><span><b>Solana</b><small>SOL</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>SOL</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 44.3C4.4 44.0 17.8 44.2 26.7 42.4C35.6 40.6 44.4 33.5 53.3 33.5C62.2 33.6 71.1 43.4 80.0 42.7C88.9 42.1 97.8 34.1 106.7 29.6C115.6 25.1 124.4 19.5 133.3 15.7C142.2 11.9 151.1 8.4 160.0 6.7C168.9 5.0 177.8 5.6 186.7 5.4C195.6 5.2 204.4 5.4 213.3 5.4C222.2 5.4 231.1 5.4 240.0 5.4C248.9 5.4 257.8 5.4 266.7 5.4C275.6 5.4 284.4 5.4 293.3 5.4C302.2 5.4 311.1 4.1 320.0 5.4C328.9 6.7 337.8 10.7 346.7 13.1C355.6 15.5 364.4 21.0 373.3 19.7C382.2 18.4 395.6 7.8 400.0 5.5"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i><i class="kw-b">Stake</i></div>
-  </div></div>
+  <div class="coin-hero c-solana spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/sol.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/sol.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/sol.svg" width="240" height="240" alt="Solana (SOL) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Solana <em>in Kyro</em></h2>
           <p data-reveal>Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime.</p>
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            <a href="/fees/">How swap fees work</a>
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-solana spot" role="img" aria-label="Solana in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt=""><span><b>Solana</b><small>SOL</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>SOL</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 44.3C4.4 44.0 17.8 44.2 26.7 42.4C35.6 40.6 44.4 33.5 53.3 33.5C62.2 33.6 71.1 43.4 80.0 42.7C88.9 42.1 97.8 34.1 106.7 29.6C115.6 25.1 124.4 19.5 133.3 15.7C142.2 11.9 151.1 8.4 160.0 6.7C168.9 5.0 177.8 5.6 186.7 5.4C195.6 5.2 204.4 5.4 213.3 5.4C222.2 5.4 231.1 5.4 240.0 5.4C248.9 5.4 257.8 5.4 266.7 5.4C275.6 5.4 284.4 5.4 293.3 5.4C302.2 5.4 311.1 4.1 320.0 5.4C328.9 6.7 337.8 10.7 346.7 13.1C355.6 15.5 364.4 21.0 373.3 19.7C382.2 18.4 395.6 7.8 400.0 5.5"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i><i class="kw-b">Stake</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Solana</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

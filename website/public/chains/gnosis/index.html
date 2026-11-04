@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Gnosis</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Gnosis · xDAI</p>
+            <p class="eyebrow">Gnosis desktop wallet · xDAI</p>
             <h1 id="page-title">Gnosis wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send, receive and swap xDAI and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send, receive and swap xDAI and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-gnosis spot" role="img" aria-label="Gnosis in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/gno.svg" width="32" height="32" alt=""><span><b>Gnosis</b><small>xDAI</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>xDAI</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 51.2C4.4 52.5 17.8 57.8 26.7 58.7C35.6 59.6 44.4 54.9 53.3 56.4C62.2 57.8 71.1 68.0 80.0 67.6C88.9 67.3 97.8 54.9 106.7 54.2C115.6 53.6 124.4 61.4 133.3 63.7C142.2 66.0 151.1 69.9 160.0 68.0C168.9 66.2 177.8 55.3 186.7 52.6C195.6 50.0 204.4 53.2 213.3 52.1C222.2 50.9 231.1 49.0 240.0 45.9C248.9 42.7 257.8 36.7 266.7 33.3C275.6 30.0 284.4 27.2 293.3 25.7C302.2 24.2 311.1 27.2 320.0 24.4C328.9 21.6 337.8 12.0 346.7 8.8C355.6 5.7 364.4 6.0 373.3 5.4C382.2 4.8 395.6 5.4 400.0 5.4"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
-  </div></div>
+  <div class="coin-hero c-gnosis spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/gno.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/gno.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/gno.svg" width="240" height="240" alt="Gnosis (xDAI) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Gnosis <em>in Kyro</em></h2>
           
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            <a href="/fees/">How swap fees work</a>
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-gnosis spot" role="img" aria-label="Gnosis in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/gno.svg" width="32" height="32" alt=""><span><b>Gnosis</b><small>xDAI</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>xDAI</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 51.2C4.4 52.5 17.8 57.8 26.7 58.7C35.6 59.6 44.4 54.9 53.3 56.4C62.2 57.8 71.1 68.0 80.0 67.6C88.9 67.3 97.8 54.9 106.7 54.2C115.6 53.6 124.4 61.4 133.3 63.7C142.2 66.0 151.1 69.9 160.0 68.0C168.9 66.2 177.8 55.3 186.7 52.6C195.6 50.0 204.4 53.2 213.3 52.1C222.2 50.9 231.1 49.0 240.0 45.9C248.9 42.7 257.8 36.7 266.7 33.3C275.6 30.0 284.4 27.2 293.3 25.7C302.2 24.2 311.1 27.2 320.0 24.4C328.9 21.6 337.8 12.0 346.7 8.8C355.6 5.7 364.4 6.0 373.3 5.4C382.2 4.8 395.6 5.4 400.0 5.4"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Gnosis</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

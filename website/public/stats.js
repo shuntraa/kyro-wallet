@@ -38,7 +38,10 @@
           var n = count(s[el.getAttribute('data-usage-item')]);
           if (!n) return;
           var num = el.querySelector('[data-usage-n]');
-          if (num) num.textContent = compact(n);
+          if (num) {
+            num.textContent = compact(n);
+            if (window.Kyro && window.Kyro.roll) window.Kyro.roll(num);
+          }
           el.hidden = false;
           shown++;
         });

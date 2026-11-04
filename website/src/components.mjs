@@ -8,6 +8,8 @@ const ico = (file, cls = '') => `<img class="tok${cls ? ' ' + cls : ''}" src="/i
 
 const svg = (d, cls = 'ic') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
+const EYE = 'M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 100-6 3 3 0 000 6z';
+
 export const I = {
   portfolio: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
   assets: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5',
@@ -94,7 +96,7 @@ const portfolio = () => `
       <div class="kw-screen is-on" data-screen="0">
         <div class="kw-top">
           <div>
-            <p class="kw-label">Total value</p>
+            <p class="kw-label">Total value <i class="kw-eye" data-eye>${svg(EYE)}</i></p>
             <p class="kw-total">$<span data-balance>12,345</span><span class="dim">.67</span></p>
             <p class="kw-delta"><span>▲ $123.45 · 1.23%</span> today</p>
           </div>
@@ -125,7 +127,7 @@ const portfolio = () => `
 
 const swapScreen = () => `
       <div class="kw-screen" data-screen="1">
-        <div class="kw-head"><h3>Swap</h3><i class="kw-pill">Bitcoin ${icon('chev')}</i><div class="kw-seg kw-slip"><i>0.1%</i><i class="on">0.5%</i><i>1%</i></div></div>
+        <div class="kw-head"><p class="kw-h">Swap</p><i class="kw-pill">Bitcoin ${icon('chev')}</i><div class="kw-seg kw-slip"><i>0.1%</i><i class="on">0.5%</i><i>1%</i></div></div>
         <div class="kw-swap-grid">
           <div class="kw-panel kw-swapcard">
             <div class="kw-field">
@@ -165,7 +167,7 @@ export const EARN = [
 export const earnRow = ([f, name, type, apy, lock, min]) => `
           <div class="kw-earn">
             <span class="kw-coin">${ico(f)}<span><b>${name}</b><small>${type}</small></span></span>
-            <span class="kw-apy"><b>${apy}</b><small>est. APY</small></span>
+            <span class="kw-apy"><b data-rate="${parseFloat(apy)}">${apy}</b><small>est. APY</small><i class="kw-ratebar b${Math.round(parseFloat(apy))}"><i></i></i></span>
             <span class="kw-meta"><small>Lock</small>${lock}</span>
             <span class="kw-meta kw-min"><small>Minimum</small>${min}</span>
             <i class="kw-b">Start</i>
@@ -173,7 +175,7 @@ export const earnRow = ([f, name, type, apy, lock, min]) => `
 
 const earnScreen = () => `
       <div class="kw-screen" data-screen="2">
-        <div class="kw-head"><div><h3>Earn</h3><p>Rates are estimates, never guaranteed.</p></div><div class="kw-seg"><i class="on">All</i><i>Staking</i><i>Stablecoins</i></div></div>
+        <div class="kw-head"><div><p class="kw-h">Earn</p><p>Rates are estimates, never guaranteed.</p></div><div class="kw-seg"><i class="on">All</i><i>Staking</i><i>Stablecoins</i></div></div>
         <div class="kw-panel kw-earnlist">${EARN.map(earnRow).join('')}</div>
       </div>`;
 
@@ -235,23 +237,50 @@ export const vaultCard = () => `
     <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
   </div></div>`;
 
-/** A generic hardware wallet on a cable, with the app's connect row. No vendor artwork. */
-export const deviceCard = () => `
-  <div class="device" data-device role="img" aria-label="A hardware wallet connected to Kyro, asking you to confirm on the device."><div class="device-in" aria-hidden="true">
-    <div class="device-app">
-      <p class="kw-label">Hardware wallet</p>
-      <div class="device-row"><span class="device-dot"></span><b>Connected</b><i class="kw-b on">Connect</i></div>
-    </div>
-    <svg class="device-cable" viewBox="0 0 300 70" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0 12C90 12 80 58 170 58S240 34 300 34"/></svg>
-    <div class="device-body">
-      <div class="device-screen"><small>Kyro</small><b>Confirm on device</b><span>1.2345 BTC</span></div>
-      <div class="device-keys"><i></i><i></i></div>
-    </div>
+const LEDGER_COINS = ['btc', 'eth', 'sol', 'ada', 'xrp', 'ltc', 'doge', 'bnb', 'trx', 'near'];
+
+/** Our own drawing of a hardware wallet, wired to the coins it signs for. No vendor artwork. */
+export function ledgerScene() {
+  const cx = 320, cy = 280;
+  const nodes = LEDGER_COINS.map((f, i) => {
+    const a = ((-72 + i * 36) * Math.PI) / 180;
+    return { f, x: Math.round(cx + Math.cos(a) * 268), y: Math.round(cy + Math.sin(a) * 232) };
+  });
+  const lines = nodes.map((n) => `<path class="lg-l" pathLength="1" d="M${n.x} ${n.y}Q${Math.round((n.x + cx) / 2)} ${Math.round(n.y * 0.72 + cy * 0.28)} ${cx} ${cy}"/>`).join('');
+  const coins = nodes.map((n) => `<g class="lg-n on"><circle cx="${n.x}" cy="${n.y}" r="33"/><image href="/img/coins/${n.f}.svg" x="${n.x - 25}" y="${n.y - 25}" width="50" height="50"/></g>`).join('');
+  return `
+  <div class="lg" data-ledger role="img" aria-label="A hardware wallet wired to coins. Its screen asks to open Bitcoin, then confirms a demo transaction."><div class="lg-stage" aria-hidden="true">
+    <svg viewBox="0 0 640 560" fill="none">
+      <defs>
+        <linearGradient id="lg-body" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#25364a"/><stop offset=".5" stop-color="#101a26"/><stop offset="1" stop-color="#070c13"/></linearGradient>
+        <linearGradient id="lg-edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".85"/><stop offset=".5" stop-color="#7cc4ff" stop-opacity=".12"/><stop offset="1" stop-color="#7cc4ff" stop-opacity=".45"/></linearGradient>
+        <radialGradient id="lg-halo"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".5"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <circle class="lg-halo" cx="${cx}" cy="${cy}" r="250" fill="url(#lg-halo)"/>
+      ${lines}${coins}
+      <path class="lg-cable" d="M320 444V560"/>
+      <g class="lg-dev">
+        <rect x="306" y="428" width="28" height="18" rx="4" fill="#0d1520" stroke="#2b4560"/>
+        <rect x="232" y="124" width="176" height="308" rx="34" fill="url(#lg-body)" stroke="url(#lg-edge)" stroke-width="1.6"/>
+        <rect x="240" y="132" width="160" height="292" rx="27" stroke="#ffffff" stroke-opacity=".06"/>
+        <rect class="lg-screen" x="250" y="150" width="140" height="176" rx="14" fill="#01050b" stroke="#1d3a58"/>
+        <text class="lg-t0" x="320" y="184" text-anchor="middle">Kyro</text>
+        <path class="lg-check" pathLength="1" d="M300 208l14 14 27-30"/>
+        <text class="lg-t1" x="320" y="256" text-anchor="middle" data-lg-t1>Confirmed</text>
+        <text class="lg-t2" x="320" y="280" text-anchor="middle" data-lg-t2>1.2345 BTC</text>
+        <text class="lg-h" x="264" y="314">No</text><text class="lg-h" x="376" y="314" text-anchor="end">Yes</text>
+        <circle class="lg-k" cx="276" cy="376" r="20" fill="#0a111a" stroke="#2b4560"/>
+        <circle class="lg-k lg-yes" data-lg-yes cx="364" cy="376" r="20" fill="#0a111a" stroke="#7cc4ff"/>
+        <circle class="lg-led" cx="320" cy="376" r="3.5" fill="#7cc4ff"/>
+      </g>
+    </svg>
+    <canvas class="fx"></canvas>
   </div></div>`;
+}
 
 /** Swap widget with the coin that flips from one token to the other (scenes.js drives it). */
 export const swapWidget = () => `
-  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><canvas class="fx" aria-hidden="true"></canvas><div class="sw-in" aria-hidden="true">
     <div class="sw-side">
       <p class="kw-label">You send</p>
       <strong data-a>1.0000</strong><small data-at>BTC</small>
@@ -276,4 +305,57 @@ export function coinCard(c) {
     <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="${line(seedOf(c.slug), 16, 400, 90, 0.4).d}"/></svg>
     <div class="kw-btns">${acts.map((a, i) => `<i class="kw-b${i ? '' : ' on'}">${a}</i>`).join('')}</div>
   </div></div>`;
+}
+
+/** The big coin in a chain page's head: two layers turning slowly, so it has an edge. */
+export const coinHero = (c) => `
+  <div class="coin-hero c-${c.slug} spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt="${esc(c.name)} (${esc(c.ticker)}) coin" fetchpriority="high"></div>
+  </div>`;
+
+/** Rate in basis points for a swap worth `usd`: same curve and maths as packages/swap/src/fees.ts. */
+export function feeBps(curve, usd, round = true) {
+  const first = curve[0], last = curve[curve.length - 1];
+  if (usd <= first.usd) return first.bps;
+  if (usd >= last.usd) return last.bps;
+  for (let i = 1; i < curve.length; i++) {
+    const a = curve[i - 1], b = curve[i];
+    if (usd > b.usd) continue;
+    const v = a.bps + ((b.bps - a.bps) * (Math.log(usd) - Math.log(a.usd))) / (Math.log(b.usd) - Math.log(a.usd));
+    return round ? Math.floor(v + 0.5) : v;
+  }
+  return last.bps;
+}
+
+/** The slider on /fees/. The HTML holds the $200 case; feecalc.js reads data-curve and makes it live. */
+export function feeCalc(curve) {
+  const W = 800, H = 170, X = (usd) => (Math.log10(usd) / 5) * W, Y = (bps) => H - 8 - (Math.sqrt(bps) / Math.sqrt(500)) * (H - 22);
+  let d = '';
+  for (let i = 0; i <= 200; i++) {
+    const usd = 10 ** ((i / 200) * 5);
+    d += `${i ? 'L' : 'M'}${X(usd).toFixed(1)} ${Y(feeBps(curve, usd, false)).toFixed(1)}`;
+  }
+  return `
+        <div class="calc spot g-ice" data-feecalc data-curve='${JSON.stringify(curve)}'>
+          <div class="calc-read">
+            <div class="calc-big"><span class="calc-l" id="calc-amount-l">Swap value</span><output class="calc-amt" data-calc-amount for="calc-range">$200</output></div>
+            <div class="calc-big calc-rate"><span class="calc-l">Kyro fee</span><output data-calc-rate>1.11%</output></div>
+            <dl class="calc-dl">
+              <div><dt>Fee in dollars</dt><dd data-calc-fee>$2.22</dd></div>
+              <div><dt>You receive, in value</dt><dd data-calc-out>$197.78</dd></div>
+            </dl>
+          </div>
+          <div class="calc-plot">
+            <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" fill="none" aria-hidden="true">
+              <defs><linearGradient id="calc-a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".32"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></linearGradient></defs>
+              <path d="${d}L${W} ${H}L0 ${H}Z" fill="url(#calc-a)"/>
+              <path class="calc-line" d="${d}" vector-effect="non-scaling-stroke"/>
+            </svg>
+            <span class="calc-dot" data-calc-dot aria-hidden="true"></span>
+          </div>
+          <input class="calc-range" id="calc-range" type="range" min="0" max="1000" step="1" value="460" aria-labelledby="calc-amount-l" data-calc-range>
+          <div class="calc-ticks" aria-hidden="true"><span>$1</span><span>$100</span><span>$10,000</span><span>$100,000</span></div>
+          <p class="small calc-note">Before the network fee, which goes to the network. Some providers cap the rate lower on swaps under about $9.</p>
+        </div>`;
 }

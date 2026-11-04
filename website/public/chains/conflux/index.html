@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Conflux</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Conflux · CFX</p>
+            <p class="eyebrow">Conflux desktop wallet · CFX</p>
             <h1 id="page-title">Conflux wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send and receive CFX and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send and receive CFX and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-conflux spot" role="img" aria-label="Conflux in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/cfx.svg" width="32" height="32" alt=""><span><b>Conflux</b><small>CFX</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>CFX</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 47.3C4.4 45.5 17.8 40.0 26.7 36.5C35.6 33.0 44.4 27.7 53.3 26.3C62.2 25.0 71.1 26.3 80.0 28.5C88.9 30.8 97.8 36.8 106.7 39.6C115.6 42.4 124.4 44.3 133.3 45.4C142.2 46.5 151.1 46.0 160.0 46.3C168.9 46.7 177.8 49.5 186.7 47.6C195.6 45.8 204.4 35.9 213.3 35.4C222.2 34.8 231.1 42.1 240.0 44.4C248.9 46.6 257.8 50.2 266.7 48.6C275.6 47.0 284.4 35.5 293.3 34.7C302.2 33.9 311.1 43.0 320.0 43.7C328.9 44.5 337.8 38.5 346.7 39.3C355.6 40.1 364.4 45.9 373.3 48.5C382.2 51.1 395.6 53.8 400.0 54.8"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i></div>
-  </div></div>
+  <div class="coin-hero c-conflux spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/cfx.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/cfx.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/cfx.svg" width="240" height="240" alt="Conflux (CFX) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Conflux <em>in Kyro</em></h2>
           
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-conflux spot" role="img" aria-label="Conflux in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/cfx.svg" width="32" height="32" alt=""><span><b>Conflux</b><small>CFX</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>CFX</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 47.3C4.4 45.5 17.8 40.0 26.7 36.5C35.6 33.0 44.4 27.7 53.3 26.3C62.2 25.0 71.1 26.3 80.0 28.5C88.9 30.8 97.8 36.8 106.7 39.6C115.6 42.4 124.4 44.3 133.3 45.4C142.2 46.5 151.1 46.0 160.0 46.3C168.9 46.7 177.8 49.5 186.7 47.6C195.6 45.8 204.4 35.9 213.3 35.4C222.2 34.8 231.1 42.1 240.0 44.4C248.9 46.6 257.8 50.2 266.7 48.6C275.6 47.0 284.4 35.5 293.3 34.7C302.2 33.9 311.1 43.0 320.0 43.7C328.9 44.5 337.8 38.5 346.7 39.3C355.6 40.1 364.4 45.9 373.3 48.5C382.2 51.1 395.6 53.8 400.0 54.8"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Conflux</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

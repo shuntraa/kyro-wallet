@@ -38,6 +38,8 @@
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -69,16 +71,15 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
-      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Cardano</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow">Cardano · ADA</p>
+            <p class="eyebrow">Cardano desktop wallet · ADA</p>
             <h1 id="page-title">Cardano wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send, receive, swap and stake ADA and native tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.</p>
+            <p class="lead">Send, receive, swap and stake ADA and native tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -86,13 +87,10 @@
           </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="kw-card coin-card c-cardano spot" role="img" aria-label="Cardano in Kyro, with demo numbers."><div aria-hidden="true">
-    <div class="kw-coin"><img class="tok" src="/img/coins/ada.svg" width="32" height="32" alt=""><span><b>Cardano</b><small>ADA</small></span><em class="kw-demo">DEMO</em></div>
-    <p class="coin-bal">1.2345 <span>ADA</span></p>
-    <p class="coin-fiat">$123.45</p>
-    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 48.9C4.4 49.1 17.8 51.5 26.7 50.0C35.6 48.6 44.4 40.8 53.3 40.0C62.2 39.1 71.1 43.6 80.0 44.9C88.9 46.3 97.8 47.3 106.7 48.1C115.6 48.8 124.4 49.5 133.3 49.2C142.2 48.9 151.1 47.9 160.0 46.2C168.9 44.4 177.8 42.0 186.7 38.8C195.6 35.5 204.4 31.2 213.3 26.6C222.2 22.0 231.1 13.7 240.0 11.2C248.9 8.7 257.8 9.6 266.7 11.5C275.6 13.3 284.4 22.3 293.3 22.2C302.2 22.2 311.1 13.9 320.0 11.1C328.9 8.3 337.8 6.0 346.7 5.4C355.6 4.8 364.4 7.4 373.3 7.4C382.2 7.4 395.6 5.7 400.0 5.4"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i><i class="kw-b">Stake</i></div>
-  </div></div>
+  <div class="coin-hero c-cardano spot tilt">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/ada.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/ada.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/ada.svg" width="240" height="240" alt="Cardano (ADA) coin" fetchpriority="high"></div>
+  </div>
         </div>
       </div>
     </section>
@@ -131,8 +129,8 @@
     </section>
 
     <section class="section" aria-labelledby="on-chain">
-      <div class="wrap">
-        <div class="prose">
+      <div class="wrap feature-row">
+        <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
           <h2 id="on-chain" data-words>Cardano <em>in Kyro</em></h2>
           <p data-reveal>Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop.</p>
@@ -141,7 +139,20 @@
             <li>Same recovery phrase as your other 35 blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
+          <div class="doc-links" data-reveal>
+            <a href="/features/">All wallet features</a>
+            <a href="/fees/">How swap fees work</a>
+            <a href="/security/">How your keys are protected</a>
+          </div>
         </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card coin-card c-cardano spot" role="img" aria-label="Cardano in Kyro, with demo numbers."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/ada.svg" width="32" height="32" alt=""><span><b>Cardano</b><small>ADA</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">1.2345 <span>ADA</span></p>
+    <p class="coin-fiat">$123.45</p>
+    <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 48.9C4.4 49.1 17.8 51.5 26.7 50.0C35.6 48.6 44.4 40.8 53.3 40.0C62.2 39.1 71.1 43.6 80.0 44.9C88.9 46.3 97.8 47.3 106.7 48.1C115.6 48.8 124.4 49.5 133.3 49.2C142.2 48.9 151.1 47.9 160.0 46.2C168.9 44.4 177.8 42.0 186.7 38.8C195.6 35.5 204.4 31.2 213.3 26.6C222.2 22.0 231.1 13.7 240.0 11.2C248.9 8.7 257.8 9.6 266.7 11.5C275.6 13.3 284.4 22.3 293.3 22.2C302.2 22.2 311.1 13.9 320.0 11.1C328.9 8.3 337.8 6.0 346.7 5.4C355.6 4.8 364.4 7.4 373.3 7.4C382.2 7.4 395.6 5.7 400.0 5.4"/></svg>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i><i class="kw-b">Stake</i></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -165,24 +176,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title">
+    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title" data-words>Get Kyro <em>for Cardano</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -194,7 +205,8 @@
     </section>
   </main>
 
-  <footer class="site-footer">
+  <footer class="site-footer" data-tone="1.15" data-hue="1">
+    <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
@@ -247,6 +259,8 @@
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
   </footer>
 </body>
 </html>

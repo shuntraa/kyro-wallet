@@ -8,6 +8,7 @@
   var motion = root.classList.contains('js');
   var fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   var header = document.querySelector('.site-header');
+  var bar = document.querySelector('[data-progress]');
 
   // One frame loop for the whole site. scenes.js adds its work with Kyro.frame(fn).
   var jobs = [];
@@ -72,14 +73,21 @@
     })();
   }
 
-  var lastY = window.scrollY, marquees = [];
+  var lastY = window.scrollY, marquees = [], barY = -1;
   function loop(now) {
     requestAnimationFrame(loop);
     if (smooth) smooth.tick();
     var y = window.scrollY;
     K.velocity += (y - lastY - K.velocity) * 0.2;
     lastY = y;
-    if (header) header.classList.toggle('scrolled', y > 8);
+    if (header) header.classList.toggle('scrolled', y > 40);
+    if (bar) {
+      var range = root.scrollHeight - window.innerHeight;
+      if (y !== barY) {
+        barY = y;
+        bar.style.transform = 'scaleX(' + (range > 0 ? Math.min(y / range, 1) : 0).toFixed(4) + ')';
+      }
+    }
     for (var i = 0; i < jobs.length; i++) jobs[i](y, now);
     // The coin rows run faster while the page moves.
     if (marquees.length) {
@@ -112,6 +120,24 @@
     })(el);
   }
 
+  /** Rolls the number inside el up from zero, keeping its prefix, suffix and decimals. */
+  function roll(el, ms) {
+    var full = el.textContent;
+    var m = /[\d,]*\.?\d+/.exec(full);
+    if (!m || !motion) return;
+    var target = parseFloat(m[0].replace(/,/g, ''));
+    var dec = (m[0].split('.')[1] || '').length;
+    var head = full.slice(0, m.index), tail = full.slice(m.index + m[0].length);
+    var t0 = performance.now();
+    (function tick(now) {
+      var t = Math.min(1, (now - t0) / (ms || 1300));
+      var k = 1 - Math.pow(1 - t, 4);
+      el.textContent = t < 1 ? head + (target * k).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + tail : full;
+      if (t < 1) requestAnimationFrame(tick);
+    })(t0);
+  }
+  K.roll = roll;
+
   function reveals() {
     var titles = document.querySelectorAll('[data-words]');
     for (var t = 0; t < titles.length; t++) words(titles[t]);
@@ -134,6 +160,7 @@
           var el = e.target;
           el.classList.add('in');
           io.unobserve(el);
+          if (el.hasAttribute('data-roll')) roll(el);
           // Hover transitions must not wait for the entrance delay.
           if (el.style.transitionDelay) {
             window.setTimeout(function () {
@@ -144,7 +171,9 @@
       },
       { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }
     );
-    var items = document.querySelectorAll('[data-reveal], [data-words], [data-device]');
+    var fees = document.querySelectorAll('.fee-value');
+    for (var f = 0; f < fees.length; f++) if (!fees[f].querySelector('[data-roll]')) fees[f].setAttribute('data-roll', '');
+    var items = document.querySelectorAll('[data-reveal], [data-words], [data-roll]');
     for (var j = 0; j < items.length; j++) io.observe(items[j]);
     window.addEventListener('beforeprint', function () {
       for (var p = 0; p < items.length; p++) items[p].classList.add('in');
@@ -216,6 +245,61 @@
     });
   }
 
+  function navLight() {
+    var list = document.querySelector('.nav ul');
+    if (!list) return;
+    var ind = document.createElement('li');
+    ind.className = 'nav-ind';
+    ind.setAttribute('aria-hidden', 'true');
+    list.appendChild(ind);
+    var links = list.querySelectorAll('a');
+    var here = null, hover = null;
+    function place() {
+      var a = hover || here;
+      ind.style.opacity = a ? 1 : 0;
+      if (!a) return;
+      ind.style.width = a.offsetWidth + 'px';
+      ind.style.height = a.offsetHeight + 'px';
+      ind.style.transform = 'translate3d(' + a.offsetLeft + 'px,' + a.offsetTop + 'px,0)';
+    }
+    function current(a) {
+      if (here === a) return;
+      if (here) here.classList.remove('here');
+      here = a;
+      if (a) a.classList.add('here');
+      place();
+    }
+    Array.prototype.forEach.call(links, function (a) {
+      a.addEventListener('pointerenter', function () {
+        hover = a;
+        place();
+      });
+      a.addEventListener('pointerleave', function () {
+        hover = null;
+        place();
+      });
+    });
+    current(list.querySelector('[aria-current]'));
+    window.addEventListener('resize', place);
+    // The pill changes size when it shrinks: keep the light on its link.
+    if (header) header.addEventListener('transitionend', place);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+    var zones = document.querySelectorAll('[data-nav]');
+    if (!zones.length || !('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (e) {
+          e.target.__in = e.isIntersecting;
+        });
+        var on = null;
+        for (var i = 0; i < zones.length; i++) if (zones[i].__in) on = zones[i];
+        current(on ? list.querySelector('a[href="' + on.getAttribute('data-nav') + '"]') : null);
+      },
+      { rootMargin: '-50% 0px -50% 0px' }
+    );
+    for (var z = 0; z < zones.length; z++) io.observe(zones[z]);
+  }
+
   function menu() {
     var m = document.querySelector('.menu');
     if (!m) return;
@@ -241,6 +325,7 @@
   }
 
   menu();
+  navLight();
   hashOpen();
   window.addEventListener('hashchange', hashOpen);
 
