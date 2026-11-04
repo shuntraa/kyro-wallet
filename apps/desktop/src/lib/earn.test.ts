@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { HW_STAKE } from './staking';
 import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, filterOptions, parseReserveData } from './earn';
 
 describe('earn', () => {
@@ -56,7 +57,7 @@ describe('earn', () => {
 describe('earn routing', () => {
   const by = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
   const all = () => true;
-  it('Lido and Aave start from a hardware wallet too; staking tabs stay seed-only', () => {
+  it('Lido and Aave start from a hardware wallet too; staking tabs only for its chains', () => {
     for (const id of ['eth-lido', 'usdt-aave', 'usdc-aave-arb', 'usdc-aave-pol']) {
       expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: true }), id).toBeNull();
       expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
@@ -67,5 +68,9 @@ describe('earn routing', () => {
       expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
       expect(earnBlock(by(id), { hw: false, hasAccount: () => false, hasEvm: true }), id).toBe('noAccount');
     }
+    const hwStake = (c: string) => (HW_STAKE.ledger as readonly string[]).includes(c);
+    expect(earnBlock(by('sol'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBeNull();
+    expect(earnBlock(by('sol'), { hw: true, hwStake, hasAccount: () => false, hasEvm: true })).toBe('noAccount');
+    expect(earnBlock(by('trx'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBe('hw');
   });
 });

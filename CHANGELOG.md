@@ -16,6 +16,8 @@
   the % from the first point and the year in the date.
 - Swap: the Best price panel now shows the provider, route, minimum received, Kyro fee,
   provider fee and estimated time, with other quotes listed below.
+- Staking from hardware wallets: Solana on Ledger and Trezor (create, delegate, deactivate,
+  withdraw), decoded on the device.
 - Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the
   device shows the token, the amount and the recipient. No comment on these transfers: the
   app cannot show it.

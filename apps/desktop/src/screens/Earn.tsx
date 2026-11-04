@@ -11,6 +11,7 @@ import { useApp, useVault } from '../state/app';
 import { useAsync, useCachedAsync } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
 import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
+import { HW_STAKE } from '../lib/staking';
 import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
@@ -129,7 +130,7 @@ export function Earn() {
 
   const adapterFor = (o: EarnOption): EvmAdapter | undefined => (o.target.kind === 'aave' ? evm(AAVE_MARKETS[o.target.market]!.chainKey) : o.target.kind === 'lido' ? eth : undefined);
   const unavailable = (o: EarnOption): string | null => {
-    const b = earnBlock(o, { hw: !!activeHw, hasAccount: (c) => !!has[c], hasEvm: !!adapterFor(o) });
+    const b = earnBlock(o, { hw: !!activeHw, hwStake: (c) => !!activeHw && (HW_STAKE[activeHw.device] as readonly string[]).includes(c), hasAccount: (c) => !!has[c], hasEvm: !!adapterFor(o) });
     return b ? t(`earn.${b}` as const) : null;
   };
 

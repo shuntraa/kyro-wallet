@@ -823,8 +823,19 @@ pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool
     },
   };
 
+  // Hardware accounts read and build like the vault; no device is simulated for the signature.
+  const hwStakeDemo = (): never => {
+    throw new IpcError('HW_UNSUPPORTED', l10n('Mode démo : le staking sur hardware wallet n’est pas simulé.', 'Demo mode: staking on a hardware wallet is not simulated.'));
+  };
+  const hwHandlers: Record<Extract<keyof Commands, `hw_${'sol'}_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
+    hw_sol_stake_overview: () => solHandlers.sol_stake_overview({}),
+    hw_sol_stake_build: (a) => solHandlers.sol_stake_build(a),
+    hw_sol_stake_sign: hwStakeDemo,
+    hw_sol_stake_broadcast: hwStakeDemo,
+  };
+
   return {
-    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers, ...suiHandlers, ...aptHandlers },
+    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers, ...suiHandlers, ...aptHandlers, ...hwHandlers },
     tronStakeBroadcast,
     advanceSolEpochs(n: number) {
       solEpochShift += n;

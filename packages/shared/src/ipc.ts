@@ -2689,6 +2689,11 @@ export interface Commands {
   hw_sign_near_tx: { args: { id: string; accountId: string; tx: string }; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
   hw_near_broadcast: { args: { accountId: string; signed: string }; ret: NearTxOutcome };
   hw_near_tx_status: { args: { accountId: string; hash: string }; ret: NearTxOutcome };
+  /** Solana staking on a Ledger or Trezor (§2.8): same operations as `sol_stake_*`. */
+  hw_sol_stake_overview: { args: { accountId: string }; ret: SolStakeOverview };
+  hw_sol_stake_build: { args: { accountId: string; action: SolStakeRequest }; ret: { message: string; summary: SolTxSummary; stake: SolStakePreview } };
+  hw_sol_stake_sign: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary; stake: SolStakePreview } };
+  hw_sol_stake_broadcast: { args: { accountId: string; message: string; signature: string }; ret: string };
   /** TON on a Ledger: the account's own v4R2 wallet (`m/44'/607'/0'/0'/account'/0'`); status: `ton_tx_status`. */
   hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
   hw_ton_build_jetton_tx: { args: { accountId: string; master: string; to: string; amount: string }; ret: TonBuilt };

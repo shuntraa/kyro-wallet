@@ -8,6 +8,7 @@ import { coinPeriods, useCoinChart, type Period } from '../state/charts';
 import { useHistory } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
+import { HW_STAKE } from '../lib/staking';
 import { fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import { CardanoTokensPanel } from '../components/Cardano';
@@ -136,8 +137,8 @@ export function AssetDetail({ id }: { id: string }) {
             {supported.kind === 'native' && stakeChain && (
               <Button
                 size="lg"
-                disabled={!!activeHw || !!activeWatch}
-                title={activeWatch ? t('watch.noSign') : activeHw ? t('portfolio.stakingNoHw') : undefined}
+                disabled={!!activeWatch || (!!activeHw && !HW_STAKE[activeHw.device].includes(stakeChain))}
+                title={activeWatch ? t('watch.noSign') : activeHw && !HW_STAKE[activeHw.device].includes(stakeChain) ? t('portfolio.stakingNoHw') : undefined}
                 onClick={() => navigate({ name: 'staking', chain: stakeChain })}
               >
                 <IconStake size={16} /> Staking

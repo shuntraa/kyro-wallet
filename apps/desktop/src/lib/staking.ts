@@ -2,11 +2,14 @@
 // Staking (docs/IPC.md §2.8): pure helpers for the screens — labels, warning texts that match
 // Rust's reinforced-dialog triggers, picker sorting and badges.
 
-import type { AdaPool, AdaStakeWarning, AptosPool, AptosStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, SuiStakeWarning, SuiValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
+import type { AdaPool, AdaStakeWarning, AptosPool, AptosStakeWarning, HwDeviceKind, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, SuiStakeWarning, SuiValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
 import { fmtCrypto, fmtNumber, shortAddress } from './format';
 import { t } from '../i18n';
 
 export type StakeChain = 'sol' | 'ada' | 'tron' | 'near' | 'sui' | 'apt';
+
+/** Chains Kyro stakes from a hardware account: only what the device shows decoded. */
+export const HW_STAKE: Record<HwDeviceKind, readonly StakeChain[]> = { ledger: ['sol'], trezor: ['sol'] };
 
 /** Rust thresholds (reinforced 2nd dialog). */
 export const SOL_HIGH_COMMISSION = 10;

@@ -25,6 +25,7 @@ mod commands_hw_cosmos;
 mod commands_hw_hbar;
 mod commands_hw_keys;
 mod commands_hw_near;
+mod commands_hw_stake;
 mod commands_hw_sui;
 mod commands_hw_ton;
 mod commands_kaspa;
@@ -471,6 +472,10 @@ pub fn run() {
             commands_hw_near::hw_sign_near_tx,
             commands_hw_near::hw_near_broadcast,
             commands_hw_near::hw_near_tx_status,
+            commands_hw_stake::hw_sol_stake_overview,
+            commands_hw_stake::hw_sol_stake_build,
+            commands_hw_stake::hw_sol_stake_sign,
+            commands_hw_stake::hw_sol_stake_broadcast,
             commands_hw_ton::hw_ton_build_tx,
             commands_hw_ton::hw_ton_build_jetton_tx,
             commands_hw_ton::hw_sign_ton_tx,

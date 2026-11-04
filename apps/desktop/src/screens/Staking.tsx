@@ -37,6 +37,7 @@ import {
   drepLabel,
   fmtDuration,
   fmtStake,
+  HW_STAKE,
   nearUnlockSecs,
   nearWarningText,
   networkLabel,
@@ -68,6 +69,8 @@ import { Badge, Button, Card, Input, Notice, Segmented, Skeleton, Spinner } from
 import { IconCheck, IconChevronRight, IconInfo, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
 import { AccountPicker } from '../components/AccountPicker';
+import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
+import { pickDevice, withDevice } from '../state/hw';
 import { getLanguage, t as tNow, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
@@ -81,8 +84,8 @@ function useStakeAccount(): (chain: StakeChain) => { account?: number } {
  * once and refreshes in the background (`useCachedAsync`).
  */
 function useStakeKey(): (cmd: string, args?: { account?: number }) => string {
-  const { network } = useApp();
-  return (cmd, args) => `stake.${network}.${cmd}.${args?.account ?? 0}`;
+  const { network, activeHw } = useApp();
+  return (cmd, args) => `stake.${network}.${cmd}.${activeHw?.id ?? args?.account ?? 0}`;
 }
 
 type Ret<K extends keyof Commands> = Commands[K]['ret'];
@@ -105,6 +108,9 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const { t } = useT();
   const tab: 'home' | StakeChain = chain ?? 'home';
   const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui, apt: !!accounts.aptos };
+  const hwChains = activeHw ? HW_STAKE[activeHw.device] : null;
+  const refused = (c: StakeChain) => !!hwChains && !hwChains.includes(c);
+  const names: Record<StakeChain, string> = { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR', sui: 'Sui', apt: 'Aptos' };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
       <header className="flex items-end justify-between gap-4">
@@ -116,27 +122,27 @@ export function Staking({ chain }: { chain?: StakeChain }) {
           onChange={(v) => navigate(v === 'home' ? { name: 'staking' } : { name: 'staking', chain: v })}
           options={[
             { value: 'home', label: t('staking.overview') },
-            { value: 'sol', label: 'Solana', disabled: !!activeHw || !has.sol },
-            { value: 'ada', label: 'Cardano', disabled: !!activeHw || !has.ada },
-            { value: 'tron', label: 'TRON', disabled: !!activeHw || !has.tron },
-            { value: 'near', label: 'NEAR', disabled: !!activeHw || !has.near },
-            { value: 'sui', label: 'Sui', disabled: !!activeHw || !has.sui },
-            { value: 'apt', label: 'Aptos', disabled: !!activeHw || !has.apt },
+            { value: 'sol', label: 'Solana', disabled: refused('sol') || !has.sol },
+            { value: 'ada', label: 'Cardano', disabled: refused('ada') || !has.ada },
+            { value: 'tron', label: 'TRON', disabled: refused('tron') || !has.tron },
+            { value: 'near', label: 'NEAR', disabled: refused('near') || !has.near },
+            { value: 'sui', label: 'Sui', disabled: refused('sui') || !has.sui },
+            { value: 'apt', label: 'Aptos', disabled: refused('apt') || !has.apt },
           ]}
         />
       </header>
-      {activeHw && (
+      {activeHw && hwChains && (tab === 'home' || refused(tab)) && (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          <strong className="font-semibold text-text">{t('staking.hwTitle')}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
+          <strong className="font-semibold text-text">{t('staking.hwTitle', { chains: hwChains.map((c) => names[c]).join(', ') })}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
         </Notice>
       )}
-      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : tab === 'near' ? <NearStaking /> : tab === 'sui' ? <SuiStaking /> : <AptosStaking />}
+      {tab === 'home' || refused(tab) ? <StakingHome refused={refused} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : tab === 'near' ? <NearStaking /> : tab === 'sui' ? <SuiStaking /> : <AptosStaking />}
     </div>
   );
 }
 
-function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeChain, boolean> }) {
-  const { navigate, network, hideBalances } = useApp();
+function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; has: Record<StakeChain, boolean> }) {
+  const { navigate, network, hideBalances, activeHw } = useApp();
   const acct = useStakeAccount();
   const { t, tp } = useT();
   // Persisted per wallet (address fingerprint): the cards render from the last launch's answer
@@ -146,12 +152,12 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '', sui: accounts.sui?.address ?? '', apt: accounts.aptos?.address ?? '' };
   const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
   const p = { persist: true };
-  const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account], p);
-  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account], p);
-  const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account], p);
-  const near = useCachedAsync(sk('near_stake_overview', 'near'), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account], p);
-  const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !disabled && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [disabled, has.sui, acct('sui').account], p);
-  const aptos = useCachedAsync(sk('aptos_stake_overview', 'apt'), !disabled && has.apt ? () => call('aptos_stake_overview', acct('apt')) : null, [disabled, has.apt, acct('apt').account], p);
+  const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !refused('sol') && has.sol ? () => (activeHw ? call('hw_sol_stake_overview', { accountId: activeHw.id }) : call('sol_stake_overview', acct('sol'))) : null, [activeHw?.id, has.sol, acct('sol').account], p);
+  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !refused('ada') && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [activeHw?.id, has.ada, acct('ada').account], p);
+  const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !refused('tron') && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [activeHw?.id, has.tron, acct('tron').account], p);
+  const near = useCachedAsync(sk('near_stake_overview', 'near'), !refused('near') && has.near ? () => call('near_stake_overview', acct('near')) : null, [activeHw?.id, has.near, acct('near').account], p);
+  const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !refused('sui') && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [activeHw?.id, has.sui, acct('sui').account], p);
+  const aptos = useCachedAsync(sk('aptos_stake_overview', 'apt'), !refused('apt') && has.apt ? () => call('aptos_stake_overview', acct('apt')) : null, [activeHw?.id, has.apt, acct('apt').account], p);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
@@ -234,8 +240,8 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
             </div>
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{c.what}</p>
             <div className="min-h-5 border-t border-line pt-3 text-[13px] font-medium">
-              {disabled || !has[c.chain] ? (
-                <span className="font-normal text-mute">{disabled ? t('staking.homeHwUnavailable') : t('staking.homeNoAccount')}</span>
+              {refused(c.chain) || !has[c.chain] ? (
+                <span className="font-normal text-mute">{refused(c.chain) ? t('staking.homeHwUnavailable') : t('staking.homeNoAccount')}</span>
               ) : c.error ? (
                 <ErrorLine error={c.error}>{c.error.message}</ErrorLine>
               ) : (
@@ -243,7 +249,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
               )}
             </div>
             <div className="flex-1" />
-            <Button variant="outline" className="justify-between" disabled={disabled || !has[c.chain]} onClick={() => navigate({ name: 'staking', chain: c.chain })}>
+            <Button variant="outline" className="justify-between" disabled={refused(c.chain) || !has[c.chain]} onClick={() => navigate({ name: 'staking', chain: c.chain })}>
               {t('staking.homeOpen', { chain: c.name })}
               <IconChevronRight size={15} className="nudge text-mute" />
             </Button>
@@ -267,6 +273,8 @@ interface FlowSpec<B, S> {
   review: (b: B) => ReactNode;
   warnings: (b: B) => string[];
   sign: (b: B, password: string) => Promise<S>;
+  /** Signature on the device `id` (hardware account). */
+  signHw?: (b: B, id: string) => Promise<S>;
   broadcast: (s: S) => Promise<string>;
   doneText: string;
 }
@@ -284,6 +292,8 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
   const [password, setPassword] = useState('');
   const [wrongPw, setWrongPw] = useState(0);
   const [txid, setTxid] = useState<string | null>(null);
+  const [hwDevice, setHwDevice] = useState<string | null>(null);
+  const { activeHw } = useApp();
   const { t } = useT();
 
   const build = async () => {
@@ -307,7 +317,16 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
     setBusy('sign');
     setError(null);
     try {
-      const signed = await spec.sign(built, password);
+      let signed: S;
+      if (activeHw) {
+        if (!spec.signHw) throw new Error(t('staking.homeHwUnavailable'));
+        const device = await pickDevice(activeHw.device);
+        setHwDevice(device.id);
+        const signHw = spec.signHw;
+        signed = await withDevice(device.id, () => signHw(built, device.id));
+      } else {
+        signed = await spec.sign(built, password);
+      }
       setPassword('');
       setTxid(await spec.broadcast(signed));
       setStep('done');
@@ -353,8 +372,16 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
               <dl className="m-0 flex flex-col text-[13px]">{spec.review(built)}</dl>
               <SecondConfirmNotice lines={warnings} />
               <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('staking.reviewNote')}</p>
-              <PasswordField id="stake-password" value={password} onChange={setPassword} autoFocus onEnter={() => password && busy === null && void sign()} wrong={wrongPw} />
-              {error !== null && <ErrorLine error={error}>{errText(error)}</ErrorLine>}
+              {activeHw ? (
+                <div className="flex items-center gap-2 rounded-ctl border border-line bg-bg px-3.5 py-2.5 text-[12px] text-mute">
+                  <DeviceBadge device={activeHw.device} model={activeHw.model} />
+                  <span>{t('send.hwNoPassword')}</span>
+                </div>
+              ) : (
+                <PasswordField id="stake-password" value={password} onChange={setPassword} autoFocus onEnter={() => password && busy === null && void sign()} wrong={wrongPw} />
+              )}
+              {busy === 'sign' && activeHw && hwDevice && <HwWaiting deviceId={hwDevice} idle={t('send.hwChecking')} confirm={{ title: t('send.hwConfirmTitle'), detail: t('staking.hwConfirmDetail') }} />}
+              {error !== null && (activeHw && toIpcError(error).code.startsWith('HW_') ? <HwErrorNotice error={error} onRetry={() => void sign()} /> : <ErrorLine error={error}>{errText(error)}</ErrorLine>)}
               <div className="flex justify-end gap-2">
                 {spec.form ? (
                   <Button disabled={busy !== null} onClick={() => (setStep('form'), setBuilt(null), setError(null))}>
@@ -365,8 +392,8 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
                     {t('common.cancel')}
                   </Button>
                 )}
-                <Button variant="primary" disabled={!password || busy !== null} onClick={() => void sign()}>
-                  {busy === 'sign' && <Spinner />} {t('staking.signAndBroadcast')}
+                <Button variant="primary" disabled={(!activeHw && !password) || busy !== null} onClick={() => void sign()}>
+                  {busy === 'sign' && <Spinner />} {activeHw ? t('send.signHw') : t('staking.signAndBroadcast')}
                 </Button>
               </div>
             </>
@@ -529,9 +556,9 @@ type SolSigned = Ret<'sol_stake_sign'> & { message: string };
 type SolOp = { kind: 'create' } | { kind: 'delegate'; acc: SolStakePosition } | { kind: 'deactivate'; acc: SolStakePosition } | { kind: 'withdraw'; acc: SolStakePosition };
 
 function SolStaking() {
-  const { network, hideBalances } = useApp();
+  const { network, hideBalances, activeHw } = useApp();
   const acct = useStakeAccount();
-  const ov = useCachedAsync(useStakeKey()('sol_stake_overview', acct('sol')), () => call('sol_stake_overview', acct('sol')), [acct('sol').account], { intervalMs: 60_000 });
+  const ov = useCachedAsync(useStakeKey()('sol_stake_overview', acct('sol')), () => (activeHw ? call('hw_sol_stake_overview', { accountId: activeHw.id }) : call('sol_stake_overview', acct('sol'))), [activeHw?.id, acct('sol').account], { intervalMs: 60_000 });
   const vals = useCachedAsync(useStakeKey()('sol_stake_validators'), () => call('sol_stake_validators', {}), [], { persist: true });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<SolOp | null>(null);
@@ -628,7 +655,7 @@ function SolStaking() {
 }
 
 function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOverview; onClose: () => void; onDone: () => void }) {
-  const { network } = useApp();
+  const { network, activeHw } = useApp();
   const acct = useStakeAccount();
   const [amount, setAmount] = useState(op.kind === 'withdraw' ? toInputDecimal(BigInt(op.acc.canClose ? op.acc.lamports : op.acc.withdrawable), 9) : '');
   const [vote, setVote] = useState('');
@@ -696,7 +723,7 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('sol_stake_build', { action, ...acct('sol') }),
+    build: () => (activeHw ? call('hw_sol_stake_build', { accountId: activeHw.id, action }) : call('sol_stake_build', { action, ...acct('sol') })),
     enClair: (b) => {
       const s = b.stake;
       const v = s.validator ? t('staking.validatorWithCommission', { name: s.validator.name ?? shortAddress(s.validator.voteAccount), pct: pc(s.validator.commission) }) : '';
@@ -739,7 +766,8 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
     },
     warnings: (b) => b.stake.warnings.map(solWarningText),
     sign: async (b, password) => ({ ...(await call('sol_stake_sign', { message: b.message, password, ...acct('sol') })), message: b.message }),
-    broadcast: (s) => call('sol_stake_broadcast', { message: s.message, signature: s.signature, ...acct('sol') }),
+    signHw: async (b, id) => ({ ...(await call('hw_sol_stake_sign', { id, accountId: activeHw!.id, message: b.message })), message: b.message }),
+    broadcast: (s) => (activeHw ? call('hw_sol_stake_broadcast', { accountId: activeHw.id, message: s.message, signature: s.signature }) : call('sol_stake_broadcast', { message: s.message, signature: s.signature, ...acct('sol') })),
     doneText: t('staking.doneSol'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;

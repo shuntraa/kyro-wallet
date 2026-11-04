@@ -154,10 +154,10 @@ export type EarnBlock = 'hw' | 'noAccount' | 'mainnetOnly';
 
 /**
  * Can this option start? EVM options (Lido, Aave) work from a seed or a hardware wallet (Rust
- * names the pinned call before the device shows it). The staking tabs need the seed: Kyro's
- * hardware signing does not cover stake accounts, certificates, votes or pool calls yet.
+ * names the pinned call before the device shows it). A staking tab opens from a hardware
+ * wallet only for the chains `hwStake` accepts (`HW_STAKE`).
  */
-export function earnBlock(o: EarnOption, ctx: { hw: boolean; hasAccount: (chain: string) => boolean; hasEvm: boolean }): EarnBlock | null {
-  if (o.target.kind === 'tab') return ctx.hw ? 'hw' : ctx.hasAccount(o.target.chain) ? null : 'noAccount';
+export function earnBlock(o: EarnOption, ctx: { hw: boolean; hwStake?: (chain: string) => boolean; hasAccount: (chain: string) => boolean; hasEvm: boolean }): EarnBlock | null {
+  if (o.target.kind === 'tab') return ctx.hw && !ctx.hwStake?.(o.target.chain) ? 'hw' : ctx.hasAccount(o.target.chain) ? null : 'noAccount';
   return ctx.hasEvm ? null : 'mainnetOnly';
 }

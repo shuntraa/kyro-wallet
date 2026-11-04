@@ -561,7 +561,7 @@ pub fn resolve_target(
     }
 }
 
-fn same_device(
+pub(crate) fn same_device(
     dev: &mut dyn hw::HardwareWallet,
     ctl: &hw::Ctl,
     acc: &WatchOnlyAccount,
