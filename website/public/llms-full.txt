@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week103:  downloads in total
+9:  active wallets this week105:  downloads in total
 
 Blockchains
 
@@ -472,7 +472,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week103:  downloads in total
+9:  active wallets this week105:  downloads in total
 
 Recommended
 
