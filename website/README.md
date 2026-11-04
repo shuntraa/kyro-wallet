@@ -8,11 +8,12 @@ Static site for Kyro Wallet. No framework and no dependencies: Node 22+ only.
 | `src/pages.mjs`, `src/layout.mjs` | Page content and shared layout |
 | `src/components.mjs` | HTML replicas of the app (window, swap, Earn, confirmation, device). Demo numbers only |
 | `src/chains.json` | One entry per blockchain: features (send, swap, staking, hardware), tokens, notes |
+| `src/light.mjs` | Bakes the two still blue-light images (`img/light-*.webp`). Run by hand, needs ffmpeg |
 | `src/capture.mjs` | Takes fresh app screenshots from the desktop app in demo mode (headless Edge, ffmpeg for WebP) |
 | `src/preview.mjs` | Full-page previews of the built site (headless Edge) |
 | `src/screenshots/` | App screenshots (WebP; the PNGs from `capture.mjs` are not committed) |
 | `icons/` | Coin icons copied into `public/` by the build |
-| `public/` | The built site, ready to deploy. Hand-written there: `style.css`, `boot.js`, `motion.js` (inertia, reveals), `silk.js` (WebGL background), `scenes.js` (scroll scenes, all driven by the eased value in `motion.js`), `feecalc.js` (fee slider), `stats.js`, `download.js`, `copy.js` |
+| `public/` | The built site, ready to deploy. Hand-written there: `style.css`, `boot.js`, `motion.js` (reveals, header popovers, tabs), `scenes.js` (small time-based scenes), `feecalc.js` (fee slider), `stats.js`, `download.js`, `copy.js` |
 
 ## Build
 

@@ -32,12 +32,10 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/near/#page","url":"https://kyrowallet.com/chains/near/","name":"NEAR wallet: Kyro","description":"Kyro is a free, open-source NEAR (NEAR) wallet for desktop. Send, receive, swap and stake NEAR and USDC and USDT tokens, and sign with a Ledger. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"NEAR","alternateName":"NEAR"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"NEAR","item":"https://kyrowallet.com/chains/near/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/chains/near/#faq","url":"https://kyrowallet.com/chains/near/","mainEntity":[{"@type":"Question","name":"Is Kyro a free NEAR wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send NEAR, and your keys stay on your own computer."}},{"@type":"Question","name":"Can I swap NEAR in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, in both directions. Providers: Exolix. Kyro’s fee is a second transfer. Routes and limits."}},{"@type":"Question","name":"Can I stake NEAR in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, from a recovery-phrase account or a hardware wallet. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available. Rates are estimates, never guaranteed."}},{"@type":"Question","name":"Does Kyro work with a hardware wallet on NEAR?","acceptedAnswer":{"@type":"Answer","text":"Yes, with a Ledger. The Ledger account is a different account than the software wallet. Device table."}},{"@type":"Question","name":"What can a server see when I use NEAR in Kyro?","acceptedAnswer":{"@type":"Answer","text":"The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. NEAR has its own circuit family, except that all EVM networks share one. Who sees what."}},{"@type":"Question","name":"Can I use my existing recovery phrase for NEAR?","acceptedAnswer":{"@type":"Answer","text":"Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -47,7 +45,7 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/" aria-current="page"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/" aria-current="page">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
             <details class="nav-more" data-pop>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
@@ -60,9 +58,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/" aria-current="page">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -75,7 +75,7 @@
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+    <section class="page-hero tone-grid page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">NEAR</span></li></ol></nav>
         <div class="ph-grid">
@@ -187,7 +187,7 @@
         </div></div>
     </section>
     
-    <section class="section" aria-labelledby="chain-faq">
+    <section class="section side-faq" aria-labelledby="chain-faq">
       <div class="wrap">
         
         <div class="head-center">

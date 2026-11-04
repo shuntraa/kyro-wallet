@@ -32,13 +32,11 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/hardware-wallets/#page","url":"https://kyrowallet.com/hardware-wallets/","name":"Ledger and Trezor in Kyro","description":"Use a Ledger or Trezor with Kyro on 33 blockchains: one-click connect, Rust decoding, a signature check after signing, and an honest list of limits per chain.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Hardware wallets","item":"https://kyrowallet.com/hardware-wallets/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/hardware-wallets/#faq","url":"https://kyrowallet.com/hardware-wallets/","mainEntity":[{"@type":"Question","name":"Which Ledger and Trezor models work with Kyro?","acceptedAnswer":{"@type":"Answer","text":"Ledger devices with the current apps, and Trezor including the Trezor Safe 7. Cardano does not work on the Trezor One."}},{"@type":"Question","name":"Can I use Kyro with a hardware wallet only, without a recovery phrase in the app?","acceptedAnswer":{"@type":"Answer","text":"Yes. On the welcome screen choose “Use a Ledger / Trezor”. Kyro stores only public keys, and there is no vault or password to set."}},{"@type":"Question","name":"Can I stake from a Ledger or Trezor?","acceptedAnswer":{"@type":"Answer","text":"Earn works with Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account."}},{"@type":"Question","name":"Can I send tokens from a hardware wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes on EVM chains and Solana (SPL). On a Ledger also TRON (TRC-20), TON (USD₮), Sui (USDC), Aptos, Algorand and NEAR (USDC, USDt). Stellar USDC works on Ledger and Trezor. On other chains, hardware accounts send the native coin."}},{"@type":"Question","name":"Why is my Ledger NEAR or TON address different?","acceptedAnswer":{"@type":"Answer","text":"The Ledger uses a different derivation path, so the same phrase gives a different account on NEAR, TON and Cardano. Kyro labels hardware accounts as such."}},{"@type":"Question","name":"Does Kyro check that my device is genuine?","acceptedAnswer":{"@type":"Answer","text":"No. Run the Genuine check in Ledger’s app or the authenticity check in Trezor Suite. Kyro cannot detect a malicious device that signs what it displays."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/scenes.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -48,9 +46,9 @@
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop data-here>
               <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
               <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/" aria-current="page">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
             </details>
@@ -61,9 +59,11 @@
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          </ul>
+          <ul>
             <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/" aria-current="page">Hardware wallets</a></li><li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
@@ -75,7 +75,7 @@
 
   <main id="content">
 
-    <section class="page-hero" aria-labelledby="page-title">
+    <section class="page-hero tone-grid" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Hardware wallets</span></li></ol></nav>
         <div class="ph-grid">
@@ -190,8 +190,8 @@
           <p data-reveal>Hardware support is the youngest part of Kyro. Read this before you move real money.</p>
         </div>
         
-        <div class="glow-grid" data-reveal-group>
-          <article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Testing status</h3><p>Kyro has run on real Ledger and Trezor devices. On a Ledger Nano X, addresses were checked on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, with test signatures on Bitcoin, Ethereum and Solana. Chains without their app installed were not checked on a device. Start with a small amount.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Blind signing</h3><p>When the device cannot decode a transaction, its screen shows only raw data and it protects your keys, not your consent. Kyro flags this with a hardened confirmation. Keep blind signing off until you need it.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-stake" aria-hidden="true"></span><h3>Earn</h3><p>Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Token sends</h3><p>EVM chains, Solana SPL, and TRC-20 on Ledger. Native coins elsewhere.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Different accounts</h3><p>On NEAR, TON and Cardano, a Ledger gives a different account than the software wallet for the same phrase.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Public keys on disk</h3><p>Hardware account files hold xpubs unencrypted: a privacy matter, not a funds one. Always verify a receive address on the device.</p></article>
+        <div class="bento bento-z" data-reveal-group>
+          <article class="glow-card spot g-ice tile-wide"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Testing status</h3><p>Kyro has run on real Ledger and Trezor devices. On a Ledger Nano X, addresses were checked on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, with test signatures on Bitcoin, Ethereum and Solana. Chains without their app installed were not checked on a device. Start with a small amount.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Blind signing</h3><p>When the device cannot decode a transaction, its screen shows only raw data and it protects your keys, not your consent. Kyro flags this with a hardened confirmation. Keep blind signing off until you need it.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-stake" aria-hidden="true"></span><h3>Earn</h3><p>Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.</p></article><article class="glow-card spot g-ice tile-wide"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Token sends</h3><p>EVM chains, Solana SPL, and TRC-20 on Ledger. Native coins elsewhere.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Different accounts</h3><p>On NEAR, TON and Cardano, a Ledger gives a different account than the software wallet for the same phrase.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Public keys on disk</h3><p>Hardware account files hold xpubs unencrypted: a privacy matter, not a funds one. Always verify a receive address on the device.</p></article>
         </div></div>
     </section>
 
@@ -210,7 +210,7 @@
         </div></div>
     </section>
     
-    <section class="section" aria-labelledby="h-faq">
+    <section class="section side-faq" aria-labelledby="h-faq">
       <div class="wrap">
         
         <div class="head-center">
@@ -232,7 +232,7 @@
           
         </div>
         <ul class="link-cards" data-reveal-group>
-          <li class="glow-card spot"><h3><a href="/guides/connect-a-ledger/">Connect a Ledger</a></h3><p>Close Ledger Live, plug in, one Connect.</p></li><li class="glow-card spot"><h3><a href="/guides/connect-a-trezor/">Connect a Trezor</a></h3><p>Including pairing a Safe 7.</p></li><li class="glow-card spot"><h3><a href="/wallets/linux/">Hardware wallets on Linux</a></h3><p>The udev rules you need first.</p></li>
+          <li class="spot"><h3><a href="/guides/connect-a-ledger/">Connect a Ledger</a></h3><p>Close Ledger Live, plug in, one Connect.</p></li><li class="spot"><h3><a href="/guides/connect-a-trezor/">Connect a Trezor</a></h3><p>Including pairing a Safe 7.</p></li><li class="spot"><h3><a href="/wallets/linux/">Hardware wallets on Linux</a></h3><p>The udev rules you need first.</p></li>
         </ul></div>
     </section>
     

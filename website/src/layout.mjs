@@ -34,11 +34,11 @@ export const coin = (c, extra = '') => {
 const ldJson = (data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
 
 export const NAV = [
-  ['/features/', 'Features', 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'],
-  ['/chains/', 'Blockchains', 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5'],
-  ['/security/', 'Security', 'M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z'],
-  ['/fees/', 'Fees', 'M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z'],
-  ['/faq/', 'FAQ', 'M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z']
+  ['/features/', 'Features'],
+  ['/chains/', 'Blockchains'],
+  ['/security/', 'Security'],
+  ['/fees/', 'Fees'],
+  ['/faq/', 'FAQ']
 ];
 
 /** Extra destinations behind "More" in the header; the rest of the site is in the footer. */
@@ -86,7 +86,6 @@ export function breadcrumbLd(trail) {
 
 function header(path) {
   const current = (href) => (path === href || (href !== '/' && path.startsWith(href)) ? ' aria-current="page"' : '');
-  const link = ([href, label, icon]) => `<li><a href="${href}"${current(href)}>${navIcon(icon)}<span>${label}</span></a></li>`;
   const plain = ([href, label]) => `<li><a href="${href}"${current(href)}>${label}</a></li>`;
   const more = MORE.filter(([href]) => isLive(href));
   return html`
@@ -98,9 +97,9 @@ function header(path) {
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          ${NAV.map(link)}
+          ${NAV.map(plain)}
           <li>
-            <details class="nav-more" data-pop>
+            <details class="nav-more" data-pop${more.some(([href]) => current(href)) ? ' data-here' : ''}>
               <summary>More${navIcon('M6 9l6 6 6-6')}</summary>
               <ul class="nav-more-panel">${more.map(plain)}</ul>
             </details>
@@ -111,9 +110,11 @@ function header(path) {
       <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
-          <ul>
+          <ul class="menu-main">
             <li><a href="/"${path === '/' ? ' aria-current="page"' : ''}>Home</a></li>
             ${NAV.map(plain)}
+          </ul>
+          <ul>
             ${more.map(plain)}
             <li><a href="/download/"${path === '/download/' ? ' aria-current="page"' : ''}>Download</a></li>
             <li><a href="${REPO}">GitHub</a></li>
@@ -207,12 +208,10 @@ export function page(opts) {
   ${graph}
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
-  <script src="/silk.js" defer></script>
   ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n  ')}
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
-  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 ${header(path)}
 
   <main id="content">
@@ -224,10 +223,14 @@ ${footer(chains)}
 `;
 }
 
-/** Hero for inner pages: silk background, breadcrumbs, label, the page's single h1 and a lead paragraph. */
+// Each page gets one still tone for its head, always the same one, so neighbours rarely match.
+const TONES = ['tone-glow', 'tone-grid', 'tone-band', 'tone-dots'];
+const toneOf = (path) => TONES[[...path].reduce((n, ch) => n + ch.charCodeAt(0), 0) % TONES.length];
+
+/** Hero for inner pages: a still tone, breadcrumbs, label, the page's single h1 and a lead paragraph. */
 export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', aside = '' }) {
   return html`
-    <section class="page-hero${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
+    <section class="page-hero ${toneOf(trail[trail.length - 1][0])}${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
       <div class="wrap">
         ${breadcrumbs(trail)}
         <div class="ph-grid">
@@ -282,12 +285,16 @@ export const INSTALL = {
  * internet" mark, so SmartScreen and Gatekeeper do not stop the first launch.
  */
 export const installBlock = (id = 'install') => html`
-          <div class="install" data-install data-copy-scope>
-            <div class="install-row" data-install-os="windows">
+          <div class="install tabs" data-install data-copy-scope>
+            <div class="tab-list" role="tablist" aria-label="Install command for your system">
+              <button class="tab" type="button" role="tab" id="${id}-tab-win" aria-controls="${id}-p-win" aria-selected="true">Windows</button>
+              <button class="tab" type="button" role="tab" id="${id}-tab-unix" aria-controls="${id}-p-unix" aria-selected="false" tabindex="-1">macOS and Linux</button>
+            </div>
+            <div class="install-row tab-panel on" id="${id}-p-win" role="tabpanel" aria-labelledby="${id}-tab-win" data-install-os="windows">
               <p class="install-os"><span class="os-icon os-windows" aria-hidden="true"></span>Windows <span class="mute">· PowerShell</span></p>
               <div class="cmd"><code id="${id}-win">${esc(INSTALL.windows)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="${id}-win" data-copy-label="Windows command" aria-label="Copy the Windows install command">Copy</button></div>
             </div>
-            <div class="install-row" data-install-os="macos linux">
+            <div class="install-row tab-panel" id="${id}-p-unix" role="tabpanel" aria-labelledby="${id}-tab-unix" data-install-os="macos linux">
               <p class="install-os"><span class="os-icon os-apple" aria-hidden="true"></span><span class="os-icon os-linux" aria-hidden="true"></span>macOS and Linux <span class="mute">· Terminal</span></p>
               <div class="cmd"><code id="${id}-unix">${esc(INSTALL.unix)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="${id}-unix" data-copy-label="macOS and Linux command" aria-label="Copy the macOS and Linux install command">Copy</button></div>
             </div>

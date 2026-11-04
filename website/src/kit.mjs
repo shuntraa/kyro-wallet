@@ -42,13 +42,20 @@ export const row = (id, label, h, flip, text, visual) => html`
     </section>`;
 
 const GLOWS = ['g-ice', 'g-deep', 'g-sky'];
-/** Grid of cards: [title, text, optional mini-icon class]. */
-export const cards = (list, four = false) => html`
-        <div class="glow-grid${four ? ' glow-grid-4' : ''}" data-reveal-group>
+// The shape follows the content: three things share one panel, six make a bento, and `rows` is a plain
+// two-column list for what should be read slowly, such as risks and limits.
+const shapeOf = (n, rows) => (rows ? 'rows' : n === 3 ? 'tiles tiles-3' : n === 4 ? 'tiles tiles-2' : 'bento bento-z');
+const wide = (i, shape) => (shape === 'bento bento-z' && (i === 0 || i === 3) ? ' tile-wide' : '');
+/** Cards: [title, text, optional mini-icon class]. */
+export const cards = (list, rows = false) => {
+  const shape = shapeOf(list.length, rows);
+  return html`
+        <div class="${shape}" data-reveal-group>
           ${list.map(
-            ([h, p, ic], i) => `<article class="glow-card spot ${GLOWS[i % 3]}">${ic ? `<span class="mini-icon ${ic}" aria-hidden="true"></span>` : ''}<h3>${h}</h3><p>${p}</p></article>`
+            ([h, p, ic], i) => `<article class="glow-card spot ${GLOWS[i % 3]}${wide(i, shape)}">${ic ? `<span class="mini-icon ${ic}" aria-hidden="true"></span>` : ''}<h3>${h}</h3><p>${p}</p></article>`
           )}
         </div>`;
+};
 
 /** Questions: [question, answer HTML]. */
 export const faqBlock = (id, items, h2 = 'Common <em>questions</em>') =>
@@ -58,7 +65,8 @@ export const faqBlock = (id, items, h2 = 'Common <em>questions</em>') =>
         ${head('Questions', id, h2)}
         <div class="faq" data-reveal>
           ${items.map(([q, ans]) => `<details><summary>${esc(q)}</summary><div class="answer"><p>${ans}</p></div></details>`)}
-        </div>`
+        </div>`,
+    'side-faq'
   );
 
 export const faqLd = (url, items) => ({
@@ -75,7 +83,7 @@ export const nextLinks = (id, list, h2 = 'Keep <em>reading</em>') =>
     html`
         ${head('', id, h2)}
         <ul class="link-cards" data-reveal-group>
-          ${list.map(([href, t, p]) => `<li class="glow-card spot"><h3>${a(href, t)}</h3><p>${p}</p></li>`)}
+          ${list.map(([href, t, p]) => `<li class="spot"><h3>${a(href, t)}</h3><p>${p}</p></li>`)}
         </ul>`
   );
 

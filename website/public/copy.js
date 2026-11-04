@@ -69,7 +69,27 @@
     }
   }
 
+  /** A Copy button on every block of commands in the text. */
+  function codeBlocks() {
+    var blocks = document.querySelectorAll('.prose pre > code, .answer pre > code');
+    for (var i = 0; i < blocks.length; i++) {
+      var pre = blocks[i].parentNode, wrap = document.createElement('div'), button = document.createElement('button');
+      blocks[i].id = blocks[i].id || 'code-' + i;
+      wrap.className = 'code-wrap';
+      button.type = 'button';
+      button.className = 'btn btn-ghost btn-copy';
+      button.textContent = 'Copy';
+      button.setAttribute('aria-label', 'Copy this command');
+      button.setAttribute('data-copy-target', blocks[i].id);
+      button.setAttribute('data-copy-label', 'Command');
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      wrap.appendChild(button);
+    }
+  }
+
   function init() {
+    codeBlocks();
     var buttons = document.querySelectorAll('[data-copy-target]');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function (event) {
