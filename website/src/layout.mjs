@@ -41,6 +41,31 @@ export const NAV = [
   ['/faq/', 'FAQ', 'M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z']
 ];
 
+/** Extra destinations behind "More" in the header; the rest of the site is in the footer. */
+export const MORE = [
+  ['/tor/', 'Tor'],
+  ['/monero/', 'Monero'],
+  ['/swap/', 'Swap'],
+  ['/earn/', 'Earn'],
+  ['/hardware-wallets/', 'Hardware wallets'],
+  ['/guides/', 'Guides'],
+  ['/glossary/', 'Glossary'],
+  ['/roadmap/', 'Roadmap'],
+  ['/open-source/', 'Open source'],
+  ['/about/', 'About']
+];
+
+// Pages this build really produces. build.mjs fills it, so a link to a page that does not exist yet
+// stays plain text instead of breaking the link check.
+const live = new Set();
+export const setLive = (paths) => {
+  live.clear();
+  paths.forEach((p) => live.add(p));
+};
+const isLive = (href) => !live.size || live.has(href.split('#')[0]);
+/** Internal link, by path. */
+export const a = (href, text) => (isLive(href) ? `<a href="${href}">${text}</a>` : text);
+
 const navIcon = (d) => `<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
 export function breadcrumbs(trail) {
@@ -63,6 +88,7 @@ function header(path) {
   const current = (href) => (path === href || (href !== '/' && path.startsWith(href)) ? ' aria-current="page"' : '');
   const link = ([href, label, icon]) => `<li><a href="${href}"${current(href)}>${navIcon(icon)}<span>${label}</span></a></li>`;
   const plain = ([href, label]) => `<li><a href="${href}"${current(href)}>${label}</a></li>`;
+  const more = MORE.filter(([href]) => isLive(href));
   return html`
   <header class="site-header">
     <div class="nav-pill">
@@ -76,12 +102,13 @@ function header(path) {
         </ul>
       </nav>
       <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
-      <details class="menu">
+      <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
           <ul>
             <li><a href="/"${path === '/' ? ' aria-current="page"' : ''}>Home</a></li>
             ${NAV.map(plain)}
+            ${more.map(plain)}
             <li><a href="/download/"${path === '/download/' ? ' aria-current="page"' : ''}>Download</a></li>
             <li><a href="${REPO}">GitHub</a></li>
           </ul>
@@ -91,8 +118,14 @@ function header(path) {
   </header>`;
 }
 
+const FOOT = (chains) => [
+  ['Product', [['/features/', 'Features'], ['/tor/', 'Tor wallet'], ['/monero/', 'Monero wallet'], ['/swap/', 'Swaps'], ['/earn/', 'Earn'], ['/hardware-wallets/', 'Hardware wallets'], ['/security/', 'Security'], ['/fees/', 'Fees'], ['/download/', 'Download']]],
+  ['Platforms', [['/wallets/windows/', 'Windows'], ['/wallets/macos/', 'macOS'], ['/wallets/linux/', 'Linux'], ...chains.slice(0, 4).map((c) => [`/chains/${c.slug}/`, esc(c.name)]), ['/chains/', `All ${chains.length} blockchains`]]],
+  ['Learn', [['/guides/', 'Guides'], ['/glossary/', 'Glossary'], ['/faq/', 'FAQ'], ['/guides/verify-your-download/', 'Verify a download'], ['/guides/first-steps-with-kyro/', 'First steps'], ['/changelog/', 'Changelog'], ['/roadmap/', 'Roadmap']]],
+  ['Project', [['/about/', 'About'], ['/open-source/', 'Open source'], ['/brand/', 'Brand'], [REPO, 'Source code'], [`${REPO}/releases`, 'Releases'], [`${REPO}/security`, 'Report a vulnerability'], ['/privacy/', 'Privacy'], ['/code-signing-policy/', 'Code signing policy'], ['/#support', 'Donate']]]
+];
+
 function footer(chains) {
-  const top = chains.slice(0, 7);
   return html`
   <footer class="site-footer">
     <div class="foot-main">
@@ -105,43 +138,15 @@ function footer(chains) {
           </a>
           <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
         </div>
+        ${FOOT(chains).map(
+          ([title, links]) => html`
         <div>
-          <h2>Product</h2>
+          <h2>${title}</h2>
           <ul>
-            <li><a href="/features/">Features</a></li>
-            <li><a href="/security/">Security</a></li>
-            <li><a href="/fees/">Fees</a></li>
-            <li><a href="/download/">Download</a></li>
-            <li><a href="/faq/">FAQ</a></li>
+            ${links.filter(([href]) => !href.startsWith('/') || isLive(href)).map(([href, label]) => `<li><a href="${href}">${label}</a></li>`)}
           </ul>
-        </div>
-        <div>
-          <h2>Blockchains</h2>
-          <ul>
-            ${top.map((c) => `<li><a href="/chains/${c.slug}/">${esc(c.name)}</a></li>`)}
-            <li><a href="/chains/">All ${chains.length}</a></li>
-          </ul>
-        </div>
-        <div>
-          <h2>Project</h2>
-          <ul>
-            <li><a href="${REPO}">Source code</a></li>
-            <li><a href="${REPO}/releases">Releases</a></li>
-            <li><a href="${REPO}/blob/main/SECURITY.md">Security policy</a></li>
-            <li><a href="${REPO}/blob/main/LICENSE">License</a></li>
-            <li><a href="/privacy/">Privacy</a></li>
-            <li><a href="/code-signing-policy/">Code signing policy</a></li>
-          </ul>
-        </div>
-        <div>
-          <h2>Help</h2>
-          <ul>
-            <li><a href="/download/#verify">Verify a download</a></li>
-            <li><a href="/download/#first-launch">First launch</a></li>
-            <li><a href="${REPO}/security">Report a vulnerability</a></li>
-            <li><a href="/#support">Donate</a></li>
-          </ul>
-        </div>
+        </div>`
+        )}
       </div>
       <div class="footer-bottom">
         <span>Kyro ${VERSION} · GPL-3.0-or-later</span>

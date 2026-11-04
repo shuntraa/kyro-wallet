@@ -575,8 +575,8 @@
       "kind": "account",
       "features": {
         "send": true,
-        "swap": false,
-        "staking": false,
+        "swap": true,
+        "staking": true,
         "hardware": true
       },
       "status": "live",
@@ -586,7 +586,9 @@
       ],
       "hwDevices": "Ledger",
       "hwNote": "The Ledger account is a different account than the software wallet.",
-      "tokens": "USDC and USDT"
+      "tokens": "USDC and USDT",
+      "swapNote": "Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered.",
+      "staking": "Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available."
     },
     {
       "slug": "sui",
@@ -628,7 +630,8 @@
         "Balance and history are scanned on your computer, so your view key never leaves it. Kyro scans against a regular monerod node, over Tor.",
         "The first sync of an old restored wallet can take a while.",
         "Monero has no native staking."
-      ]
+      ],
+      "swapNote": "Swap XMR both ways through Exolix, without an account. Kyro's fee is a second ordinary transfer of the coin you sell."
     },
     {
       "slug": "ton",
@@ -726,7 +729,7 @@
       "kind": "account",
       "features": {
         "send": true,
-        "swap": false,
+        "swap": true,
         "staking": false,
         "hardware": true
       },
@@ -735,7 +738,8 @@
         "The minimum balance of the account is shown before you send.",
         "Same address as the Ledger Algorand app for the same recovery phrase."
       ],
-      "hwDevices": "Ledger"
+      "hwDevices": "Ledger",
+      "swapNote": "Swap native ALGO in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Algorand. Algorand tokens are not offered."
     },
     {
       "slug": "kaspa",
@@ -747,7 +751,7 @@
       "kind": "utxo",
       "features": {
         "send": true,
-        "swap": false,
+        "swap": true,
         "staking": false,
         "hardware": false
       },
@@ -755,7 +759,8 @@
       "notes": [
         "Standard Kaspa addresses (kaspa:…).",
         "Kaspa has no native staking."
-      ]
+      ],
+      "swapNote": "Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa."
     },
     {
       "slug": "hedera",

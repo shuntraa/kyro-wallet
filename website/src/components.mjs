@@ -357,3 +357,109 @@ export function feeCalc(curve) {
           <p class="small calc-note">Before the network fee, which goes to the network. Some providers cap the rate lower on swaps under about $9.</p>
         </div>`;
 }
+
+/** A terminal, as text. '$ ' lines are what you type. */
+export const term = (title, lines) => `
+  <div class="term" role="img" aria-label="${esc(title)}"><div aria-hidden="true">
+    <div class="term-bar"><i></i><i></i><i></i><span>${esc(title)}</span></div>
+    <pre>${lines.map((l) => (l.startsWith('$ ') ? `<b>${esc(l)}</b>` : `<span>${esc(l)}</span>`)).join('\n')}</pre>
+  </div></div>`;
+
+/** The recovery phrase window: the words stay blurred until shown, and are not real words here. */
+export const phraseCard = () => `
+  <div class="kw-card phrase" role="img" aria-label="Kyro's recovery phrase window: numbered words, hidden until you choose to show them."><div aria-hidden="true">
+    <div class="kw-seg"><i class="on">Create</i><i>Import</i></div>
+    <ol>${Array.from({ length: 12 }, (_, i) => `<li><small>${i + 1}</small><i></i></li>`).join('')}</ol>
+    <p class="phrase-note">${icon('lock')}Stays on this device. Paper only.</p>
+  </div></div>`;
+
+/** The status panel after setup. */
+export const privateCard = () => `
+  <div class="kw-card" role="img" aria-label="Kyro status: Tor on, vault encrypted on this device, no account, no analytics."><div aria-hidden="true">
+    <div class="kw-vault">${icon('shield')}<span><b>You’re private</b><small>Nothing to sign up for</small></span><em>Ready</em></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+    <div class="kw-kv"><span>Vault</span><b>On this device</b></div>
+    <div class="kw-kv"><span>Account</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Analytics</span><b class="up">None</b></div>
+  </div></div>`;
+
+/** What a server's log could hold, with and without Tor. 203.0.113.0/24 is the documentation range. */
+export const seesCards = () => `
+  <div class="sees">
+    <article class="sees-col spot">
+      <p class="sees-tag">A direct connection</p>
+      <div class="log" role="img" aria-label="Demo server log: one home IP address asks about three addresses, so they can be linked."><div aria-hidden="true">
+        <p><b class="bad">203.0.113.42</b> balance bc1q…7f3a</p>
+        <p><b class="bad">203.0.113.42</b> balance 0x12…cdef</p>
+        <p><b class="bad">203.0.113.42</b> balance So1a…9xK2</p>
+      </div></div>
+      <ul class="checks minus">
+        <li>Every server sees your IP address.</li>
+        <li>One IP asking about three addresses ties them to each other, and to you.</li>
+        <li>Your internet provider sees the hosts you reach.</li>
+      </ul>
+    </article>
+    <article class="sees-col sees-on spot">
+      <p class="sees-tag">Kyro over Tor</p>
+      <div class="log" role="img" aria-label="Demo server logs: each request arrives from a different Tor exit relay, one circuit per blockchain."><div aria-hidden="true">
+        <p><b>exit relay A</b> balance bc1q…7f3a</p>
+        <p><b>exit relay B</b> balance 0x12…cdef</p>
+        <p><b>exit relay C</b> balance So1a…9xK2</p>
+      </div></div>
+      <ul class="checks">
+        <li>Servers see the IP of a Tor exit relay, not yours.</li>
+        <li>Each blockchain has its own circuit, so the circuit does not link your lookups.</li>
+        <li>Your internet provider sees only that you use Tor.</li>
+      </ul>
+    </article>
+  </div>`;
+
+/** Monero in Kyro: blocks are scanned on your machine. */
+export const moneroCard = () => `
+  <div class="kw-card" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
+    <div class="kw-coin">${ico('xmr')}<span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">12.3456 <span>XMR</span></p>
+    <p class="kw-label scan-l">Scanning Monero blocks on your machine… 87 %</p>
+    <div class="scan"><i></i></div>
+    <div class="kw-kv"><span>View key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Spend key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Node</span><b>Sends blocks, gets no key</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div>`;
+
+/** Fail closed, as the wallet behaves when Tor is not ready. */
+export const torDownCard = () => `
+  <div class="kw-card" role="img" aria-label="Kyro when Tor is not ready within 60 seconds: the request fails and nothing is sent in the clear."><div aria-hidden="true">
+    <div class="kw-vault">${icon('lock')}<span><b>Tor is not ready</b><small>TOR_UNAVAILABLE after 60 s</small></span><em>Stopped</em></div>
+    <div class="kw-kv"><span>Sent in the clear</span><b class="up">Nothing</b></div>
+    <div class="kw-kv"><span>Automatic fallback</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Turning Tor off</span><b>Your choice</b></div>
+  </div></div>`;
+
+/** The system window Kyro opens before leaving Tor. */
+export const torOffDialog = () => `
+  <div class="dlg" role="img" aria-label="Native system window asking: turn Tor off? With Cancel and Turn off buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Turn Tor off?</div>
+    <div class="dlg-body">
+      <p>Servers would see your IP address, and your internet provider the hosts you reach.</p>
+      <div class="dlg-actions"><i class="on">Cancel</i><i>Turn off</i></div>
+    </div>
+  </div></div>`;
+
+const CIRCUITS = [['btc', 'Bitcoin', 'Onion service'], ['eth', 'Ethereum', 'RPC server'], ['sol', 'Solana', 'RPC server'], ['xmr', 'Monero', 'Monero node']];
+
+/** One circuit per blockchain, as rows so it reads the same on a phone. */
+export const circuits = () => `
+  <div class="cir spot" role="img" aria-label="Four blockchains, each on its own Tor circuit of three relays. Bitcoin goes to mempool's onion service and never uses an exit relay."><div aria-hidden="true">
+    ${CIRCUITS.map(([f, n, s], i) => `<div class="cir-row">
+      <span class="kw-coin">${ico(f)}<b>${n}</b></span>
+      <span class="cir-line d${i}"><i></i><i></i><i></i></span>
+      <span class="cir-end">${s}</span>
+    </div>`).join('')}
+  </div></div>`;
+
+/** Done / next rows for the roadmap. */
+export const roadList = (items, state) => `
+  <ul class="road" data-reveal-group>
+    ${items.map(([h, p]) => `<li class="road-i spot ${state}"><span class="road-dot">${state === 'done' ? icon('check') : ''}</span><div><h3>${h}</h3><p>${p}</p></div></li>`).join('')}
+  </ul>`;

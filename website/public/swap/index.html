@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Swap crypto privately, any coin to any coin | Kyro Wallet</title>
+  <meta name="description" content="Swap across 33 blockchains from your own wallet, with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.">
+  <link rel="canonical" href="https://kyrowallet.com/swap/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Swap crypto privately, any coin to any coin | Kyro Wallet">
+  <meta property="og:description" content="Swap across 33 blockchains from your own wallet, with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.">
+  <meta property="og:url" content="https://kyrowallet.com/swap/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Swap crypto privately, any coin to any coin | Kyro Wallet">
+  <meta name="twitter:description" content="Swap across 33 blockchains from your own wallet, with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/swap/#page","url":"https://kyrowallet.com/swap/","name":"Crypto swaps in Kyro","description":"Swap across 33 blockchains from your own wallet, with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Swap","item":"https://kyrowallet.com/swap/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/swap/#faq","url":"https://kyrowallet.com/swap/","mainEntity":[{"@type":"Question","name":"Can I really swap any coin to any coin?","acceptedAnswer":{"@type":"Answer","text":"Almost. 33 of the 36 blockchains can swap, across chains in most cases. The table on this page lists the limits: Stellar is arrival only, some EVM networks swap on the same chain only, and Polkadot, Cosmos Hub and Conflux have no route yet."}},{"@type":"Question","name":"What does a swap cost?","acceptedAnswer":{"@type":"Answer","text":"A Kyro fee from 0.7% to 5% depending on the swap value, already taken out of the amount you see, plus the network fee. Full fee table."}},{"@type":"Question","name":"Do I need an account with a swap provider?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro talks to the providers directly over Tor. There is nothing to sign up for."}},{"@type":"Question","name":"Why does a Monero swap send two transactions?","acceptedAnswer":{"@type":"Answer","text":"Exolix has no integrator fee, so Kyro’s fee cannot be collected inside the swap. It goes as a second ordinary transfer of the sold coin. The same applies to any Exolix route."}},{"@type":"Question","name":"What if the rate changes before the swap lands?","acceptedAnswer":{"@type":"Answer","text":"You set a maximum slippage of 0.1%, 0.5%, 1% or your own value, and Kyro shows the guaranteed minimum before you sign."}}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+  <script src="/scenes.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/" aria-current="page">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Swap</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Swap</p>
+            <h1 id="page-title">Any coin <em>to any coin</em></h1>
+            <p class="lead">Kyro asks several providers, shows what actually lands in your account and decodes the transaction before you sign. 33 blockchains, no account, over Tor.</p>
+            <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
+            <span class="os-icon" data-dl-icon aria-hidden="true"></span>
+            <span data-dl-label>Download Kyro</span>
+          </a><a class="btn btn-ghost btn-xl" href="/fees/">Swap fees</a></div>
+          </div>
+          
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="s-how">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>How it works</p>
+          <h2 id="s-how">One screen, <em>several providers</em></h2>
+          <p data-reveal>Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with the fee already out.</p>
+        </div>
+        <div class="swap-grid"><div class="glow-card swap-main spot g-ice" data-reveal>
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
+    <div class="sw-side">
+      <p class="kw-label">You send</p>
+      <strong data-a>1.0000</strong><small data-at>BTC</small>
+    </div>
+    <div class="sw-coin"><span class="sw-ring"></span><div class="sw-spin" data-spin><img data-f src="/img/coins/btc.svg" width="96" height="96" alt=""><img data-b src="/img/coins/xmr.svg" width="96" height="96" alt=""></div></div>
+    <div class="sw-side sw-right">
+      <p class="kw-label">You receive ≈</p>
+      <strong data-bn>100.00</strong><small data-bt>XMR</small>
+    </div>
+    <div class="sw-foot"><span data-rate>1 BTC ≈ 100 XMR</span><span>Service fee included</span></div>
+  </div></div></div></div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="s-routes">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Routes</p>
+          <h2 id="s-routes">Where each coin <em>can go</em></h2>
+          <p data-reveal>From the live coverage audit in the repo. Providers can change what they list, so a quote is the final word.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">Swap routes by coin</caption>
+            <thead><tr><th scope="col">Coin or network</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Providers</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Ethereum, Arbitrum, Optimism, Base</th><td>Yes</td><td>Yes</td><td>0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR</td></tr><tr><th scope="row">Polygon</th><td>Yes</td><td>Yes</td><td>0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR</td></tr><tr><th scope="row">BNB Chain, Avalanche</th><td>Yes</td><td>Yes</td><td>0x and LI.FI. 1Click</td></tr><tr><th scope="row">Gnosis</th><td>Yes</td><td>Yes</td><td>LI.FI. 1Click</td></tr><tr><th scope="row">Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM, Sei</th><td>Yes</td><td>Yes</td><td>0x or LI.FI, same chain only</td></tr><tr><th scope="row">Solana and SPL tokens</th><td>Yes</td><td>Yes</td><td>Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC</td></tr><tr><th scope="row">Bitcoin</th><td>Yes</td><td>Yes</td><td>1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR</td></tr><tr><th scope="row">Litecoin, Dogecoin, TRON (TRX, USDT)</th><td>Yes</td><td>Yes</td><td>1Click. Exolix</td></tr><tr><th scope="row">XRP, Cardano, Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos</th><td>Yes</td><td>Yes</td><td>1Click</td></tr><tr><th scope="row">Stellar</th><td>No</td><td>Yes</td><td>1Click, arrival only: a Stellar deposit needs a memo</td></tr><tr><th scope="row">Monero, Kaspa, Algorand, NEAR (native coin)</th><td>Yes</td><td>Yes</td><td>Exolix. Kyro’s fee is a second transfer</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tbl-note"><a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/SWAP_COVERAGE.md">Full coverage audit on GitHub</a></p></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="s-fee">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Fee</p>
+          <h2 id="s-fee">Included in the rate, <em>and public</em></h2>
+          <div data-reveal>
+          <p>The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, and it is 0.9% when the token price is unknown. It funds the project.</p>
+          <ul class="checks"><li>What you see as “You receive” already has the fee out.</li><li>It is collected through each provider’s official integrator mechanism.</li><li>Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.</li><li>The rates live in one open file. <a href="https://github.com/shuntraa/kyro-wallet/blob/main/packages/swap/src/fees.ts">Read fees.ts</a>.</li></ul>
+          <p><a href="/fees/">Fee table and calculator</a></p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+    <div class="dlg-body">
+      <div class="dlg-amount"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><strong>1.2345 ETH</strong></div>
+      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
+      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+    </div>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="s-check">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Checks</p>
+          <h2 id="s-check">Swaps <em>you can check</em></h2>
+          <p data-reveal>A swap is a transaction written by someone else. Kyro treats it that way.</p>
+        </div>
+        
+        <div class="glow-grid glow-grid-4" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Decoded first</h3><p>Kyro decodes the provider’s transaction before asking for your password: recipient, minimum amount and fee.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Official contracts</h3><p>It checks that the transaction targets the provider’s official contract.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Exact approvals</h3><p>Token approvals are for the exact amount. An unlimited approval needs an explicit action and shows a warning.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Simulated</h3><p>The transaction is simulated just before you sign it.</p></article>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="s-limits">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Limits</p>
+          <h2 id="s-limits">What does <em>not</em> swap yet</h2>
+          <p data-reveal>Better here than in a failed quote.</p>
+        </div>
+        <div class="prose" data-reveal>
+          <ul class="checks minus"><li><b>Stellar as a source.</b> Stellar deposits need a memo, and Kyro only sends plain transfers to deposit addresses. You can swap into XLM.</li><li><b>Polkadot.</b> 1Click does not list it, and delivery to Asset Hub is not confirmed through Exolix.</li><li><b>Cosmos Hub.</b> 1Click does not list it, and Exolix refuses the pair.</li><li><b>Conflux.</b> No provider contract Kyro can check there.</li><li><b>Tokens on NEAR and Algorand.</b> Only the native coin is offered through Exolix. Other tokens on NEAR, Algorand, Polkadot, Stellar, TON, Sui and Aptos swap only if 1Click lists them.</li><li><b>Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM and Sei.</b> Same chain only.</li></ul>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="s-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="s-faq">Common <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Can I really swap any coin to any coin?</summary><div class="answer"><p>Almost. 33 of the 36 blockchains can swap, across chains in most cases. The table on this page lists the limits: Stellar is arrival only, some EVM networks swap on the same chain only, and Polkadot, Cosmos Hub and Conflux have no route yet.</p></div></details><details><summary>What does a swap cost?</summary><div class="answer"><p>A Kyro fee from 0.7% to 5% depending on the swap value, already taken out of the amount you see, plus the network fee. <a href="/fees/">Full fee table</a>.</p></div></details><details><summary>Do I need an account with a swap provider?</summary><div class="answer"><p>No. Kyro talks to the providers directly over Tor. There is nothing to sign up for.</p></div></details><details><summary>Why does a Monero swap send two transactions?</summary><div class="answer"><p>Exolix has no integrator fee, so Kyro’s fee cannot be collected inside the swap. It goes as a second ordinary transfer of the sold coin. The same applies to any Exolix route.</p></div></details><details><summary>What if the rate changes before the swap lands?</summary><div class="answer"><p>You set a maximum slippage of 0.1%, 0.5%, 1% or your own value, and Kyro shows the guaranteed minimum before you sign.</p></div></details>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="s-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="s-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3>Swap to Monero, step by step</h3><p>From BTC, ETH, SOL, USDT and more.</p></li><li class="glow-card spot"><h3><a href="/fees/">Swap fee table</a></h3><p>Every step of the curve, with a calculator.</p></li><li class="glow-card spot"><h3>Glossary</h3><p>Slippage, approvals, gas and the rest, in plain words.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Swap <em>from your own wallet</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog: every Kyro release up to 1.0.6 | Kyro Wallet</title>
+  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <link rel="canonical" href="https://kyrowallet.com/changelog/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Changelog: every Kyro release up to 1.0.6 | Kyro Wallet">
+  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <meta property="og:url" content="https://kyrowallet.com/changelog/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.0.6 | Kyro Wallet">
+  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Changelog</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Changelog</p>
+            <h1 id="page-title">What <em>changed</em></h1>
+            <p class="lead">Every release of Kyro, newest first. This page is generated from <a href="https://github.com/shuntraa/kyro-wallet/blob/main/CHANGELOG.md">CHANGELOG.md</a> at build time.</p>
+            
+          </div>
+          
+        </div>
+      </div>
+    </section>
+    <section class="section section-tight" aria-label="Releases">
+      <div class="wrap">
+        <div class="prose" data-reveal>
+          
+          <section class="log-entry" id="v1-0-6" aria-label="Version 1.0.6">
+            <h2>1.0.6<span class="latest">Latest</span></h2>
+            <ul><li>Switching between Portfolio and Assets no longer slides the tab underline across the screen.</li><li>Ledger Litecoin: the app&#39;s protocol is detected by asking it (Litecoin 2.4.x is still the legacy app), and the account is read without the master key the app refuses, instead of being reported as outdated.</li><li>Address book: the network is detected from the pasted address (a short choice only when several match), Enter saves and the name is optional. Send offers &quot;Save&quot; for a new recipient.</li><li>History is fetched in the background after unlock and kept per wallet, so the History page opens on a ready list; while it refreshes, what is there shows with a small &quot;Updating…&quot;. Unreachable networks are named in a calm line and retried on their own.</li><li>Price charts: &quot;All&quot; now goes back years (Kraken public weekly prices, no account), and is hidden for coins without a long history instead of repeating 1Y.</li><li>Arbitrum history works over Tor again: a second public node (arb1.arbitrum.io) is tried when publicnode refuses.</li><li>Search: one result per coin, with its icon and your balance or its rank.</li><li>Receive: a quieter network note.</li><li>Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.</li><li>Ledger: Litecoin works with the current Litecoin app (keys, address on screen, signing over the new protocol); an app that does not understand Kyro now says to update it in Ledger Live.</li><li>Hardware wallets: Solana tokens (SPL, e.g. USDC/USDT) can be sent from Ledger and Trezor accounts, creating the recipient&#39;s token account when needed; a Trezor shows the recipient wallet, a Ledger that needs it says &quot;Enable Blind signing in the Solana app settings&quot;.</li><li>Hardware wallets: TRON tokens (TRC-20, e.g. USDT) can be sent from Ledger accounts; when the Tron app needs a setting, Kyro names it (&quot;Allow data&quot; or &quot;Custom contracts&quot;).</li><li>Ledger: connect in one step, like Ledger Live. Every chain the Ledger supports is ticked; one &quot;Connect&quot; opens each app in turn, reads the keys, and skips an app that is not installed or refused. A short result per chain follows (Added / Not installed / Skipped).</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-5" aria-label="Version 1.0.5">
+            <h2>1.0.5</h2>
+            <ul><li>Earn (was Staking): a new page with 14 options and live estimated rates. New: ETH liquid staking with Lido (stake, unstake through the withdrawal queue, claim), and lending on Aave v3: USDT, USDC, DAI and WETH on Ethereum, USDT and USDC on Arbitrum and Polygon, USDC on Base. Every step shows the contract, the function and the exact amount; approvals are for the exact amount only.</li><li>Activity: an asset page only waits for its own blockchain. Empty history is remembered, so &quot;No activity&quot; shows at once; a spinner never stays more than a few seconds.</li><li>Charts fit the window in width and height.</li><li>Earn opens from its last state, without grey placeholders.</li><li>Notifications: one short style everywhere, starting with the update notice.</li><li>Asset page: &quot;Loading activity…&quot; until the first answer, never &quot;No activity&quot; before it. The header wraps on narrow windows (the period selector stays whole).</li><li>Earn: a rate that cannot be read shows &quot;—&quot; after a few seconds; the page scrolls normally.</li><li>Token picker: Escape closes it.</li><li>Swap: pick any coin you hold, on any network, without a network menu; the account choice only shows when you have several. The rate (&quot;1 BTC ≈ 31.2 ETH&quot;) and what you receive show under the amounts.</li><li>Earn: live estimated rates for Solana, Cardano and TRON (network-wide, before the validator, pool or SR commission), read from the servers Kyro already uses.</li><li>Earn with a Ledger or Trezor: Lido and Aave work from hardware wallet accounts. Kyro names the contract and function first, then the device shows the transaction; a Ledger with blind signing off gets a short hint. Staking on Solana, Cardano, TRON and NEAR still needs a recovery-phrase account.</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-4" aria-label="Version 1.0.4">
+            <h2>1.0.4</h2>
+            <ul><li>Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools from the official factories and checks the pool&#39;s code before each transaction.</li><li>Swap: search by name or ticker in the coin picker. Monero shows in the list and can be bought from more coins (ETH on Arbitrum, Base, Optimism, POL, DOGE, TRX, USDT on TRON). Kaspa, Algorand and NEAR can now be received from a swap.</li><li>Faster: charts are kept on your computer and only the recent part is refreshed. Each blockchain shows as soon as it answers. Staking opens from its last state.</li><li>My assets: one row per crypto, with every account under it.</li><li>Tokens from the top 250 (Quant and others) open as supported assets instead of &quot;price only&quot;.</li><li>Charts stay continuous at any window size. No more endless &quot;Loading&quot; on asset pages.</li><li>Updates install when you close the window.</li><li>Simpler texts in Settings, recovery phrase checks and update notices. Cleaner outgoing connections and API key screens.</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-3" aria-label="Version 1.0.3">
+            <h2>1.0.3</h2>
+            <ul><li>Swap: Monero. Swap BTC, LTC, ETH, SOL, USDT or USDC to XMR through Exolix (no account, no key, over Tor). Kyro creates the order, checks that it pays your own Monero address and that the deposit address is valid, then sends a normal transfer. Kyro&#39;s service fee is a second small transfer of the same coin. XMR to other coins comes later. Tested with live quotes only.</li><li>Ledger: Kyro now opens the right app for you. Plug in and unlock the Ledger, click Connect, and approve &quot;Open Bitcoin&quot; (or Ethereum, Solana…) on the device when asked. If another app is open, Kyro closes it first. A missing app shows &quot;Install the app with Ledger Live&quot;. Same when signing from a Ledger account. Not yet tested on a real Ledger.</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-2" aria-label="Version 1.0.2">
+            <h2>1.0.2</h2>
+            <ul><li>Tor: fixed history failing on EVM networks (&quot;Protocol error while launching a data stream&quot;) and the slowness behind it. A server refusing one Tor exit no longer moves every network of the same family onto new circuits; requests per family are bounded; a stream refused by a just-closed circuit is retried on a new one. Tor still never falls back to clear.</li><li>History: no more raw error text. A short message with Retry is shown instead; the technical detail is in Settings &gt; Network diagnostics.</li><li>History: activity shows at once from a local cache (amounts and transaction details only), then refreshes in the background; each blockchain appears as soon as it answers, without waiting for the slowest. No more long grey placeholder rows.</li><li>Privacy: new anonymous weekly count (on by default, Settings &gt; Privacy). Once a week, over Tor only, Kyro downloads a tiny file from its GitHub release so the download counter can estimate active wallets. No identifier and no personal data are sent.</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-1" aria-label="Version 1.0.1">
+            <h2>1.0.1</h2>
+            <ul><li>Windows: new one-click installer. No wizard any more: a single branded Kyro window installs the app for the current user, then starts Kyro and closes. Silent, passive and in-app update installs behave as before.</li><li>Windows: the uninstaller now shows the Kyro icon instead of the default NSIS one.</li></ul>
+          </section>
+          <section class="log-entry" id="v1-0-0" aria-label="Version 1.0.0">
+            <h2>1.0.0</h2>
+            <ul><li>First stable release.</li></ul>
+          </section>
+          <p><a href="https://github.com/shuntraa/kyro-wallet/releases">All releases and files on GitHub</a></p>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Get <em>Kyro</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

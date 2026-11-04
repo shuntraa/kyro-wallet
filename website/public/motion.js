@@ -140,17 +140,18 @@
     );
   }
 
+  // The header's popovers: Escape, a click outside or a followed link closes them.
   function menu() {
-    var m = document.querySelector('.menu');
-    if (!m) return;
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && m.open) {
-        m.open = false;
-        m.querySelector('summary').focus();
-      }
-    });
-    document.addEventListener('click', function (e) {
-      if (m.open && (!m.contains(e.target) || e.target.closest('a'))) m.open = false;
+    document.querySelectorAll('details[data-pop]').forEach(function (m) {
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && m.open) {
+          m.open = false;
+          m.querySelector('summary').focus();
+        }
+      });
+      document.addEventListener('click', function (e) {
+        if (m.open && (!m.contains(e.target) || e.target.closest('a'))) m.open = false;
+      });
     });
   }
 

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open source crypto wallet: read, build, verify | Kyro</title>
+  <meta name="description" content="Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.">
+  <link rel="canonical" href="https://kyrowallet.com/open-source/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Open source crypto wallet: read, build, verify | Kyro">
+  <meta property="og:description" content="Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.">
+  <meta property="og:url" content="https://kyrowallet.com/open-source/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Open source crypto wallet: read, build, verify | Kyro">
+  <meta name="twitter:description" content="Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/open-source/#page","url":"https://kyrowallet.com/open-source/","name":"Kyro is open source","description":"Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Open source","item":"https://kyrowallet.com/open-source/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/open-source/#faq","url":"https://kyrowallet.com/open-source/","mainEntity":[{"@type":"Question","name":"What licence is Kyro under?","acceptedAnswer":{"@type":"Answer","text":"GPL-3.0-or-later. You can read, run, change and share it. If you distribute a changed version, it stays under the same licence, with its source."}},{"@type":"Question","name":"Are Kyro builds reproducible?","acceptedAnswer":{"@type":"Answer","text":"Not bit for bit yet. It is a goal, not a guarantee. Today you can verify the SHA-256 of a release and build from the same source yourself."}},{"@type":"Question","name":"Can I remove the swap fee?","acceptedAnswer":{"@type":"Answer","text":"Yes, in your own build. The rates live in packages/swap/src/fees.ts, and anyone can change them or set the fee to 0."}},{"@type":"Question","name":"Has Kyro been audited?","acceptedAnswer":{"@type":"Answer","text":"An internal security review has been done. No independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty."}}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/" aria-current="page">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Open source</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Open source</p>
+            <h1 id="page-title">Don’t trust it. <em>Read it.</em></h1>
+            <p class="lead">The interface, the Rust core and the app shell are all public under GPL-3.0-or-later. Here is how to read, build and verify what you run.</p>
+            <div class="hero-cta"><a class="btn btn-primary btn-xl" href="https://github.com/shuntraa/kyro-wallet">Source on GitHub</a></div>
+          </div>
+          
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="o-read">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Read</p>
+          <h2 id="o-read">Where <em>to start</em></h2>
+          <p data-reveal>A small map of the repository. Keys live in one place, and it has no network access.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">Repository layout</caption>
+            <thead><tr><th scope="col">Path</th><th scope="col">What it holds</th></tr></thead>
+            <tbody>
+              <tr><th scope="row"><code>crates/wallet-core</code></th><td>Pure Rust: vault, BIP39 and BIP32, derivation, decoding, signing. No network, no files</td></tr><tr><th scope="row"><code>apps/desktop/src-tauri</code></th><td>Tauri 2 shell: commands, session and auto-lock, filtered network access, native windows</td></tr><tr><th scope="row"><code>apps/desktop/src</code></th><td>React and strict TypeScript interface. No secrets</td></tr><tr><th scope="row"><code>packages/chains</code></th><td>Chain adapters that build unsigned transactions</td></tr><tr><th scope="row"><code>packages/swap</code></th><td>Swap providers and fee logic</td></tr><tr><th scope="row"><code>docs/</code></th><td>Architecture, IPC contract, network requests, swap fees</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="doc-links" data-reveal>
+          <a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">Threat model</a>
+          <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">Servers contacted</a>
+          <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+          <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/SWAP_FEES.md">Swap fees</a>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="o-build">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Build</p>
+          <h2 id="o-build">Build it <em>yourself</em></h2>
+          <div data-reveal>
+          <p>You need Rust 1.97.1, which rustup installs from the pinned toolchain file, Node.js 22+, pnpm 11 and the Tauri prerequisites for your system.</p>
+          <ul class="checks"><li>Dependencies are pinned to exact versions, with committed lockfiles.</li><li>CI runs <code>cargo audit</code>, <code>cargo deny</code> and <code>pnpm audit</code>.</li><li>Before a PR: <code>pnpm lint</code>, <code>pnpm typecheck</code>, <code>pnpm test</code>.</li></ul></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="term" role="img" aria-label="Terminal"><div aria-hidden="true">
+    <div class="term-bar"><i></i><i></i><i></i><span>Terminal</span></div>
+    <pre><b>$ git clone https://github.com/shuntraa/kyro-wallet.git</b>
+<b>$ cd kyro-wallet</b>
+<b>$ pnpm install --frozen-lockfile</b>
+<b>$ pnpm dev</b>
+<b>$ pnpm build</b></pre>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="o-verify">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Verify</p>
+          <h2 id="o-verify">What you can <em>check today</em></h2>
+          <p data-reveal>Three things you can verify, and one you cannot yet.</p>
+        </div>
+        
+        <div class="glow-grid glow-grid-4" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Release checksums</h3><p>Each release ships <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a>. Compare your file before you run it.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Signed updates</h3><p>Each update is signed. Kyro verifies it against a public key pinned in the app, and refuses a bad signature.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Servers contacted</h3><p>Every server is listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>, and any new one has to be added there.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Not yet</h3><p>Bit-for-bit reproducible builds are a goal, not a guarantee. The installers are not code-signed yet.</p></article>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="o-contrib">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Contribute</p>
+          <h2 id="o-contrib">Help <em>make it better</em></h2>
+          <p data-reveal>Issues and pull requests are welcome.</p>
+        </div>
+        <div class="prose" data-reveal>
+          <ul class="checks"><li>Run <code>pnpm lint</code>, <code>pnpm typecheck</code> and <code>pnpm test</code> before opening a pull request.</li><li>Any new server Kyro contacts must be listed in <code>docs/NETWORK.md</code>.</li><li>Changes to the IPC contract belong in <code>docs/IPC.md</code>.</li><li><b>Never post a recovery phrase, private key or password</b> in an issue, pull request or log.</li></ul>
+          <h2 id="o-report">Report a vulnerability</h2>
+          <p>Please do not open a public issue. Report privately through <a href="https://github.com/shuntraa/kyro-wallet/security/advisories/new">GitHub security advisories</a>, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.</p>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="o-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="o-faq">Common <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>What licence is Kyro under?</summary><div class="answer"><p>GPL-3.0-or-later. You can read, run, change and share it. If you distribute a changed version, it stays under the same licence, with its source.</p></div></details><details><summary>Are Kyro builds reproducible?</summary><div class="answer"><p>Not bit for bit yet. It is a goal, not a guarantee. Today you can verify the SHA-256 of a release and build from the same source yourself.</p></div></details><details><summary>Can I remove the swap fee?</summary><div class="answer"><p>Yes, in your own build. The rates live in packages/swap/src/fees.ts, and anyone can change them or set the fee to 0.</p></div></details><details><summary>Has Kyro been audited?</summary><div class="answer"><p>An internal security review has been done. No independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty.</p></div></details>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="o-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="o-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>The three layers, and what no software can do.</p></li><li class="glow-card spot"><h3><a href="/changelog/">Changelog</a></h3><p>What changed in each release.</p></li><li class="glow-card spot"><h3><a href="/brand/">Brand kit</a></h3><p>Logos and colours for writing about Kyro.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Get <em>Kyro</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

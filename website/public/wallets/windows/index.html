@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Private crypto wallet for Windows: install and notes | Kyro</title>
+  <meta name="description" content="Install Kyro on Windows: one PowerShell command or the 64-bit installer. Free, open source and non-custodial, with built-in Tor. What SmartScreen means, and how updates work.">
+  <link rel="canonical" href="https://kyrowallet.com/wallets/windows/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Private crypto wallet for Windows: install and notes | Kyro">
+  <meta property="og:description" content="Install Kyro on Windows: one PowerShell command or the 64-bit installer. Free, open source and non-custodial, with built-in Tor. What SmartScreen means, and how updates work.">
+  <meta property="og:url" content="https://kyrowallet.com/wallets/windows/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Private crypto wallet for Windows: install and notes | Kyro">
+  <meta name="twitter:description" content="Install Kyro on Windows: one PowerShell command or the 64-bit installer. Free, open source and non-custodial, with built-in Tor. What SmartScreen means, and how updates work.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/wallets/windows/#page","url":"https://kyrowallet.com/wallets/windows/","name":"Kyro for Windows","description":"Install Kyro on Windows: one PowerShell command or the 64-bit installer. Free, open source and non-custodial, with built-in Tor. What SmartScreen means, and how updates work.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Download","item":"https://kyrowallet.com/download/"},{"@type":"ListItem","position":3,"name":"Windows","item":"https://kyrowallet.com/wallets/windows/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/wallets/windows/#faq","url":"https://kyrowallet.com/wallets/windows/","mainEntity":[{"@type":"Question","name":"Is Kyro safe to run if SmartScreen warns me?","acceptedAnswer":{"@type":"Answer","text":"The warning means the file is unsigned and has little reputation yet. It says nothing about the code either way. Verify the SHA-256 against SHA256SUMS before you click through."}},{"@type":"Question","name":"Does Kyro need administrator rights?","acceptedAnswer":{"@type":"Answer","text":"No. The installer works for the current user."}},{"@type":"Question","name":"Does Kyro run on 32-bit or ARM Windows?","acceptedAnswer":{"@type":"Answer","text":"Kyro publishes a 64-bit x64 build. That is the only Windows build."}}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+  <script src="/copy.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/download/">Download</a></li><li><span aria-current="page">Windows</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Windows desktop wallet</p>
+            <h1 id="page-title">Kyro <em>for Windows</em></h1>
+            <p class="lead">A private crypto wallet for 64-bit Windows. One command, or the installer. It installs for the current user and starts on its own.</p>
+            <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
+            <span class="os-icon" data-dl-icon aria-hidden="true"></span>
+            <span data-dl-label>Download Kyro</span>
+          </a></div>
+          </div>
+          
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro vault panel: keys encrypted on this device, auto-lock timer, no unlimited approvals, Tor on."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
+    <div class="kw-kv"><span>Auto-lock</span><b>14:54</b></div>
+    <div class="kw-bar"><i></i></div>
+    <div class="kw-kv"><span>Hardware wallet</span><b class="ice">Add</b></div>
+    <div class="kw-kv"><span>Unlimited approvals</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Recovery phrase</span><b class="up">Imported</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section section-tight" aria-labelledby="p-cmd">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Install</p>
+          <h2 id="p-cmd">One <em>command</em></h2>
+          <p data-reveal>It downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS and stops if they differ.</p>
+        </div>
+        <div class="prose" data-reveal>
+          <div class="install" data-install data-copy-scope>
+            <div class="install-row" data-install-os="windows">
+              <p class="install-os"><span class="os-icon os-windows" aria-hidden="true"></span>Windows <span class="mute">· PowerShell</span></p>
+              <div class="cmd"><code id="install-windows-win">irm https://kyrowallet.com/install.ps1 | iex</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="install-windows-win" data-copy-label="Windows command" aria-label="Copy the Windows install command">Copy</button></div>
+            </div>
+            <div class="install-row" data-install-os="macos linux">
+              <p class="install-os"><span class="os-icon os-apple" aria-hidden="true"></span><span class="os-icon os-linux" aria-hidden="true"></span>macOS and Linux <span class="mute">· Terminal</span></p>
+              <div class="cmd"><code id="install-windows-unix">curl -fsSL https://kyrowallet.com/install.sh | sh</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="install-windows-unix" data-copy-label="macOS and Linux command" aria-label="Copy the macOS and Linux install command">Copy</button></div>
+            </div>
+            <p class="install-note small mute">Downloads the latest release from GitHub, checks its SHA-256 against <code>SHA256SUMS</code>, then installs it. The scripts are open source: <a href="/install.ps1">install.ps1</a> · <a href="/install.sh">install.sh</a> (<a href="https://github.com/shuntraa/kyro-wallet/tree/main/website/src">website/src</a>).</p>
+            <p class="copy-status" role="status" aria-live="polite"></p>
+          </div></div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="p-file">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Or the file</p>
+          <h2 id="p-file">Install <em>by hand</em></h2>
+          <div data-reveal>
+          <ol class="os-steps"><li>Run the one-line command in PowerShell, or download <code>Kyro-windows-x64-setup.exe</code>.</li><li>If you used the file, verify its SHA-256 first.</li><li>SmartScreen may show “Windows protected your PC”. Click <b>More info</b>, then <b>Run anyway</b>.</li><li>One Kyro window installs the app, starts it and closes. Kyro appears in the Start menu.</li></ol>
+          <div class="doc-links"><a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">Kyro-windows-x64-setup.exe</a><a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi">Kyro-windows-x64.msi</a><a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a></div>
+          <p class="small mute"><code>Kyro-windows-x64-setup.exe</code>: Recommended, updates itself. <code>Kyro-windows-x64.msi</code>: For managed installs, no self-update.</p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="term" role="img" aria-label="PowerShell"><div aria-hidden="true">
+    <div class="term-bar"><i></i><i></i><i></i><span>PowerShell</span></div>
+    <pre><b>$ Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256</b>
+<span>Compare with the line in SHA256SUMS</span></pre>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="p-notes">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Notes</p>
+          <h2 id="p-notes">Good to know <em>on Windows</em></h2>
+          
+        </div>
+        
+        <div class="glow-grid glow-grid-4" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>SmartScreen</h3><p>The installers are not code-signed yet, so a browser download triggers the warning. The one-line command and in-app updates do not. What SmartScreen means for Kyro.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>.exe or .msi</h3><p>Prefer the .exe: it is the only Windows package that updates itself. The .msi does not.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Updates</h3><p>The installed app downloads signed updates over Tor, verifies them and applies them when you close it.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Phrase window</h3><p>The recovery phrase window is excluded from screenshots and screen sharing on Windows.</p></article>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="p-same">
+      <div class="wrap feature-row flip">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Same on every system</p>
+          <h2 id="p-same">The full wallet, <em>everywhere</em></h2>
+          <div data-reveal>
+          <p>The Windows build is the same Kyro: 36 blockchains, swaps, Earn, hardware wallets and Tor from the first launch. The interface is in English and French.</p>
+          <ul class="checks"><li>No account and no analytics.</li><li>Your recovery phrase stays on your computer, encrypted.</li><li>Your phrase also restores your wallet on another system.</li></ul></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card" role="img" aria-label="Kyro asset list with demo numbers: Bitcoin, Ethereum, Monero, Solana and Cardano."><div aria-hidden="true">
+    <div class="kw-tabs"><b>My assets</b><span>Market</span><span>Favorites</span></div>
+    
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/btc.svg" width="32" height="32" alt="" decoding="async"><span><b>Bitcoin</b><small>BTC</small></span></span>
+            <span class="kw-trend"><svg class="spark up" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 11.8C1.0 11.9 4.1 12.5 6.2 12.3C8.2 12.1 10.3 11.5 12.3 10.7C14.4 9.9 16.4 8.4 18.5 7.5C20.5 6.6 22.6 5.5 24.6 5.1C26.7 4.7 28.7 4.7 30.8 4.9C32.8 5.1 34.9 5.9 36.9 6.3C39.0 6.8 41.0 7.3 43.1 7.9C45.1 8.4 47.2 10.2 49.2 9.9C51.3 9.5 53.3 6.7 55.4 5.6C57.4 4.5 59.5 3.9 61.5 3.2C63.6 2.6 65.6 1.7 67.7 1.4C69.7 1.1 71.8 1.4 73.8 1.4C75.9 1.4 79.0 1.4 80.0 1.4"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$5,678.90</span><span class="d">•••••</span></b><small class="vd"><span class="v">0.12345678 BTC</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">46%</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><span><b>Ethereum</b><small>ETH</small></span></span>
+            <span class="kw-trend"><svg class="spark up" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 18.1C1.0 18.4 4.1 20.0 6.2 20.2C8.2 20.4 10.3 19.0 12.3 19.1C14.4 19.2 16.4 20.6 18.5 21.1C20.5 21.6 22.6 22.0 24.6 22.1C26.7 22.2 28.7 21.6 30.8 21.6C32.8 21.6 34.9 22.7 36.9 22.1C39.0 21.5 41.0 18.4 43.1 17.9C45.1 17.4 47.2 18.6 49.2 19.1C51.3 19.7 53.3 20.8 55.4 21.2C57.4 21.7 59.5 21.9 61.5 22.1C63.6 22.2 65.6 22.1 67.7 22.1C69.7 22.1 71.8 22.1 73.8 22.1C75.9 22.0 79.0 21.7 80.0 21.7"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$3,456.78</span><span class="d">•••••</span></b><small class="vd"><span class="v">1.2345 ETH</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">28%</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><span><b>Monero</b><small>XMR</small></span></span>
+            <span class="kw-trend"><svg class="spark down" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 9.5C1.0 9.5 4.1 8.9 6.2 9.4C8.2 9.9 10.3 11.4 12.3 12.3C14.4 13.1 16.4 14.3 18.5 14.6C20.5 15.0 22.6 14.7 24.6 14.3C26.7 13.9 28.7 11.9 30.8 12.0C32.8 12.0 34.9 14.5 36.9 14.7C39.0 14.9 41.0 13.8 43.1 13.1C45.1 12.5 47.2 11.3 49.2 10.7C51.3 10.1 53.3 9.1 55.4 9.6C57.4 10.0 59.5 12.9 61.5 13.1C63.6 13.3 65.6 10.7 67.7 10.5C69.7 10.3 71.8 12.0 73.8 12.0C75.9 12.0 79.0 10.5 80.0 10.2"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$1,234.56</span><span class="d">•••••</span></b><small class="vd"><span class="v">12.3456 XMR</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">10%</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt="" decoding="async"><span><b>Solana</b><small>SOL</small></span></span>
+            <span class="kw-trend"><svg class="spark up" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 15.5C1.0 15.2 4.1 14.5 6.2 13.9C8.2 13.2 10.3 11.8 12.3 11.5C14.4 11.3 16.4 12.5 18.5 12.5C20.5 12.6 22.6 12.4 24.6 12.0C26.7 11.5 28.7 10.2 30.8 9.9C32.8 9.6 34.9 10.8 36.9 10.3C39.0 9.8 41.0 7.3 43.1 7.0C45.1 6.8 47.2 8.4 49.2 8.8C51.3 9.2 53.3 9.7 55.4 9.3C57.4 8.9 59.5 6.9 61.5 6.4C63.6 5.9 65.6 6.9 67.7 6.3C69.7 5.7 71.8 3.6 73.8 2.8C75.9 2.0 79.0 1.7 80.0 1.4"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$987.65</span><span class="d">•••••</span></b><small class="vd"><span class="v">12.34 SOL</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">8%</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/ada.svg" width="32" height="32" alt="" decoding="async"><span><b>Cardano</b><small>ADA</small></span></span>
+            <span class="kw-trend"><svg class="spark down" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 7.5C1.0 8.0 4.1 9.2 6.2 10.3C8.2 11.3 10.3 13.4 12.3 13.9C14.4 14.3 16.4 12.6 18.5 13.0C20.5 13.3 22.6 15.0 24.6 15.8C26.7 16.5 28.7 17.3 30.8 17.7C32.8 18.1 34.9 17.3 36.9 18.0C39.0 18.7 41.0 21.4 43.1 21.8C45.1 22.2 47.2 20.9 49.2 20.4C51.3 19.8 53.3 19.0 55.4 18.4C57.4 17.8 59.5 17.3 61.5 16.9C63.6 16.5 65.6 16.3 67.7 15.9C69.7 15.6 71.8 14.4 73.8 14.6C75.9 14.9 79.0 17.0 80.0 17.4"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$654.32</span><span class="d">•••••</span></b><small class="vd"><span class="v">1,234.5 ADA</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">5%</span>
+          </div>
+          <div class="kw-row">
+            <span class="kw-coin"><img class="tok" src="/img/coins/doge.svg" width="32" height="32" alt="" decoding="async"><span><b>Dogecoin</b><small>DOGE</small></span></span>
+            <span class="kw-trend"><svg class="spark up" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="M0.0 13.4C1.0 12.8 4.1 10.9 6.2 10.1C8.2 9.2 10.3 8.1 12.3 8.1C14.4 8.1 16.4 10.0 18.5 9.9C20.5 9.8 22.6 8.5 24.6 7.5C26.7 6.5 28.7 4.4 30.8 4.0C32.8 3.7 34.9 5.7 36.9 5.5C39.0 5.4 41.0 3.6 43.1 2.9C45.1 2.2 47.2 1.7 49.2 1.4C51.3 1.2 53.3 1.0 55.4 1.5C57.4 1.9 59.5 4.2 61.5 4.2C63.6 4.2 65.6 1.9 67.7 1.4C69.7 1.0 71.8 1.3 73.8 1.4C75.9 1.6 79.0 2.3 80.0 2.4"/></svg></span>
+            <span class="kw-val"><b class="vd"><span class="v">$321.09</span><span class="d">•••••</span></b><small class="vd"><span class="v">1,234 DOGE</span><span class="d">•••••</span></small></span>
+            <span class="kw-share">3%</span>
+          </div>
+  </div></div></div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="p-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="p-faq">Common <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Is Kyro safe to run if SmartScreen warns me?</summary><div class="answer"><p>The warning means the file is unsigned and has little reputation yet. It says nothing about the code either way. Verify the SHA-256 against SHA256SUMS before you click through.</p></div></details><details><summary>Does Kyro need administrator rights?</summary><div class="answer"><p>No. The installer works for the current user.</p></div></details><details><summary>Does Kyro run on 32-bit or ARM Windows?</summary><div class="answer"><p>Kyro publishes a 64-bit x64 build. That is the only Windows build.</p></div></details>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="p-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="p-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3>First steps with Kyro</h3><p>From the welcome screen to your first receive address.</p></li><li class="glow-card spot"><h3>Verify your download</h3><p>Check the SHA-256 in two minutes.</p></li><li class="glow-card spot"><h3>Back up your recovery phrase</h3><p>Paper, in order, offline.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Get Kyro <em>for Windows</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

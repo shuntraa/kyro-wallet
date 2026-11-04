@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week84:  downloads in total
+8:  active wallets this week93:  downloads in total
 
 ================================================================
 Features: send, swap, stake and hardware wallets | Kyro Wallet
@@ -261,7 +261,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week84:  downloads in total
+8:  active wallets this week93:  downloads in total
 
 Recommended
 
@@ -2741,7 +2741,7 @@ NEAR desktop wallet · NEAR
 
 # NEAR wallet for Windows, macOS and Linux
 
-Send and receive NEAR and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
+Send, receive, swap and stake NEAR and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
 
 Download Kyro All blockchains
 
@@ -2752,13 +2752,13 @@ Yes
 
 ### Swap
 
-Swaps are not available on NEAR yet.
-No
+Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
 
 ### Staking
 
-Kyro does not offer staking for NEAR.
-No
+Stake NEAR from your own account. Kyro takes no fee on staking.
+Yes
 
 ### Hardware wallet
 
@@ -2769,6 +2769,8 @@ Details
 
 ## NEAR in Kyro
 
+Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available.
+
 - NEAR Protocol mainnet.
 
 - USDC and USDT on NEAR are supported.
@@ -2777,7 +2779,7 @@ Details
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
-All wallet features How your keys are protected
+All wallet features How swap fees work How your keys are protected
 
 ## Also in Kyro
 
@@ -2906,7 +2908,7 @@ Yes
 
 ### Swap
 
-Swap XMR in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Swap XMR both ways through Exolix, without an account. Kyro's fee is a second ordinary transfer of the coin you sell. The amount you receive already includes Kyro's swap fee, from 0.7%.
 Yes
 
 ### Staking
@@ -3290,7 +3292,7 @@ Algorand desktop wallet · ALGO
 
 # Algorand wallet for Windows, macOS and Linux
 
-Send and receive ALGO, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
+Send, receive and swap ALGO, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
 
 Download Kyro All blockchains
 
@@ -3301,8 +3303,8 @@ Yes
 
 ### Swap
 
-Swaps are not available on Algorand yet.
-No
+Swap native ALGO in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Algorand. Algorand tokens are not offered. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
 
 ### Staking
 
@@ -3326,7 +3328,7 @@ Details
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
-All wallet features How your keys are protected
+All wallet features How swap fees work How your keys are protected
 
 ## Also in Kyro
 
@@ -3367,7 +3369,7 @@ Kaspa desktop wallet · KAS
 
 # Kaspa wallet for Windows, macOS and Linux
 
-Send and receive KAS. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
+Send, receive and swap KAS. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
 
 Download Kyro All blockchains
 
@@ -3378,8 +3380,8 @@ Yes
 
 ### Swap
 
-Swaps are not available on Kaspa yet.
-No
+Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
 
 ### Staking
 
@@ -3403,7 +3405,7 @@ Details
 
 - Keys encrypted on your computer; every signature confirmed in a system window.
 
-All wallet features How your keys are protected
+All wallet features How swap fees work How your keys are protected
 
 ## Also in Kyro
 
@@ -3505,6 +3507,1357 @@ Same app, same recovery phrase.
 All 36 blockchains
 
 ## Get Kyro for Zcash
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Tor wallet: built-in Tor for every request | Kyro Wallet
+URL: https://kyrowallet.com/tor/
+================================================================
+
+Tor wallet
+
+# Tor is built in, and it stays on
+
+Balances, prices, swaps and broadcasts all leave through an embedded Tor client. You install nothing extra and set nothing up. If Tor is not ready, Kyro stops.
+
+Download Kyro
+
+The client
+
+## One app, Tor included
+
+Kyro embeds Arti, the Tor client from The Tor Project. It starts in the background when the app opens, and the wallet shows its state.
+
+- The interface cannot reach any server. Only the Rust shell can, and only over the list below.
+
+- Kyro contacts only the servers listed in docs/NETWORK.md, and refuses every other host.
+
+- Only HTTPS is accepted, with one exception: the onion service for Bitcoin.
+
+- Your custom servers go through Tor as well.
+
+Circuits
+
+## A circuit per blockchain
+
+A server or an exit relay cannot link your Bitcoin lookup to your Solana lookup through the circuit, because they never share one.
+
+### Isolated by family
+
+Each blockchain family has its own isolated circuits. Prices and swaps have their own too. All EVM networks count as one family.
+
+### Bitcoin stays inside Tor
+
+Bitcoin lookups go to mempool's onion service. No exit relay is involved, so no relay sees the hostname or the volume.
+
+### Retries stay on Tor
+
+A stream refused by a closed circuit is retried on a new one. A refusal on one family no longer moves the others. It never falls back to clear.
+
+Who sees what
+
+## What each party sees
+
+In Tor mode, the default. This table comes from the network document in the repo, which lists every server by name.
+
+What each party sees when Kyro uses Tor
+
+| Party | Sees | Does not see
+
+| Your internet provider | That you use Tor | The hosts you reach, your addresses, your amounts
+
+| First relay | Your IP address | The destination and the request
+
+| Middle relay | Two other relays | You, and the request
+
+| Exit relay | The hostname and the volume | You, and the content (TLS runs up to the server)
+
+| Blockchain server | The addresses and transactions requested, from a Tor exit | Your IP address
+
+| Monero node | Blocks downloaded and transactions you publish | Your IP, your addresses, your view key
+
+| Price server (CoinGecko) | The coins and currency requested | Your IP address, your addresses
+
+| Swap provider | Tokens, amounts and the recipient address | Your IP address
+
+With Tor off, every server sees your IP address and your internet provider sees the hosts. Privacy policy
+
+Fails closed
+
+## No Tor, no request
+
+If Tor is not ready within 60 seconds, the request fails with TOR_UNAVAILABLE. Nothing goes out in the clear, and there is no automatic fallback.
+
+Leaving Tor is your decision. Kyro asks in a native system window drawn outside the interface, so a compromised page cannot turn Tor off without you.
+
+Limits
+
+## What Tor does not do
+
+Tor is one layer. It hides your network location. These things stay true with it on.
+
+### Servers still see lookups
+
+The server you query sees the addresses and transactions you ask about. To avoid that, use your own node.
+
+### Blockchains stay public
+
+Most chains publish every transfer. Tor hides your IP, and your addresses remain linked to each other on chain when you link them.
+
+### Swap providers see the order
+
+Swap APIs see the tokens, amounts and recipient. Exolix sees your source and destination addresses, so it can link those two accounts.
+
+### Two background requests
+
+The signed update check and the anonymous weekly count. Both go over Tor and both can be turned off.
+
+Questions
+
+## Common questions
+
+Q: Do I need to install Tor or Tor Browser?
+A: No. Kyro embeds its own Tor client, Arti, from The Tor Project. It starts in the background when the app opens.
+
+Q: Can I turn Tor off?
+A: Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address.
+
+Q: Does Tor make my transactions anonymous?
+A: No. Tor hides who is asking. It does not hide what is asked: the server you query still sees the addresses and transactions you look up, and public blockchains stay public.
+
+Q: Why is Kyro slower over Tor?
+A: Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers.
+
+Q: Do my own servers go through Tor too?
+A: Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family.
+
+## Keep reading
+
+### Why a wallet should use Tor
+
+The problem in plain words: your IP and your addresses in the same log line.
+
+### Monero over Tor
+
+A desktop Monero wallet that scans blocks on your machine.
+
+### How Kyro protects your keys
+
+Tor covers the network. This covers the vault and the signature.
+
+## A wallet that keeps quiet
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Monero desktop wallet with Tor and local scanning | Kyro
+URL: https://kyrowallet.com/monero/
+================================================================
+
+Monero desktop wallet · XMR
+
+# Private Monero, on your desktop
+
+Kyro keeps Monero honest: blocks are scanned on your own machine, your view key never leaves it, and every request goes over Tor.
+
+Download Kyro XMR details
+
+Local scanning
+
+## The node sends blocks. Your machine reads them.
+
+Light-wallet servers need your view key, so they see every incoming payment. Kyro uses none. It downloads blocks from a monerod node and the Rust core analyses them with a view key that stays on your computer.
+
+- Default node: Cake Wallet's public node. You can replace it.
+
+- The node never receives your addresses, spend key or view key.
+
+- The scan state is stored on disk, encrypted.
+
+- A lying node can hide incoming payments or delay your sync. It cannot steal funds.
+
+Who sees what
+
+## What the node learns
+
+A Monero wallet has to talk to someone. Here is exactly what that costs you, with Tor on and off.
+
+What a Monero node sees
+
+|  | Tor on (default) | Tor off
+
+| Block ranges you download | Yes, so your wallet's rough age | Yes
+
+| Decoy outputs requested | Yes | Yes
+
+| Transactions you publish | Yes | Yes
+
+| Your IP address | No, a Tor exit relay. None on a .onion node | Yes, and it can be linked to what you publish
+
+| Your addresses, view key, spend key, phrase | Never | Never
+
+Keys
+
+## One phrase, and an exit
+
+Monero comes from the same recovery phrase as your other coins, with its own 25-word seed if you want to leave.
+
+### Same recovery phrase
+
+Your XMR derives from your BIP39 phrase, using the scheme of Ledger's Monero app. It is not a native 25-word Monero phrase.
+
+### A way out
+
+Kyro shows a 25-word Monero seed in the protected phrase window. It restores the wallet in Monero GUI, Feather or Cake Wallet.
+
+### One limit
+
+A 25-word phrase made elsewhere cannot be imported. Send those XMR to your Kyro address instead.
+
+Swap
+
+## In and out of XMR
+
+Swap to or from Monero through Exolix: no account, no key, over Tor. BTC, LTC, DOGE, TRX, ETH, SOL, USDT and USDC all reach XMR, and XMR reaches them.
+
+- Kyro checks that the order pays your own address and that the deposit address is valid.
+
+- It then sends an ordinary transfer. No contract, no third-party transaction.
+
+- Kyro's fee is a second ordinary transfer of the coin you sell. The swap value is reduced by the same rate as other swaps.
+
+- Exolix sees your source and destination addresses and can link them.
+
+Step by step: swap to Monero
+
+Under the hood
+
+## Rust, and no home-grown crypto
+
+Monero is easy to get subtly wrong, so Kyro leans on a reviewed library and checks its own output.
+
+### monero-oxide
+
+Addresses, scanning, key images, CLSAG, Bulletproofs+ and decoy selection come from monero-oxide / monero-wallet 0.2. Cypher Stack audited that library in May 2025. Kyro itself has not been externally audited.
+
+### Checked after signing
+
+Rust builds the transfer, then verifies that the signed transaction creates exactly the outputs you approved.
+
+### Honest status
+
+This integration is young. There is no Monero on hardware wallets, and it is tested against official vectors. Start small.
+
+Questions
+
+## Common questions
+
+Q: Is Kyro a full Monero wallet?
+A: Yes. Send, receive and swap XMR from the same app as your other coins. Kyro talks to a monerod node and scans blocks itself. No light-wallet server is used.
+
+Q: Does the Monero node see my addresses?
+A: No. Neither your addresses nor your view key are sent. The node sees the block ranges you download, the decoy outputs requested for a send, and the transactions you publish, from a Tor exit relay.
+
+Q: Can I import my 25-word Monero seed?
+A: No. Kyro derives Monero from your BIP39 recovery phrase, and a 25-word phrase created elsewhere cannot be imported. The other way works: Kyro shows a 25-word seed that restores your wallet in Monero GUI, Feather or Cake Wallet.
+
+Q: Can I use my own Monero node?
+A: Yes. Set your own monerod in Settings, or a .onion address. Kyro checks it is on the right network and refuses to fall back to the default node if yours goes down.
+
+Q: Does Monero work on a Ledger or Trezor in Kyro?
+A: No. Monero on a hardware wallet is not supported.
+
+Q: Why do I not see an old XMR payment?
+A: Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings > Security and it scans again from there.
+
+## Keep reading
+
+### Monero in Kyro, feature by feature
+
+Send, receive, swap and hardware availability at a glance.
+
+### Swap to Monero
+
+From any supported coin to XMR, with what each party sees.
+
+### How Kyro uses Tor
+
+Circuits, exit relays and what happens when Tor is down.
+
+## Get Monero on your desktop
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Swap crypto privately, any coin to any coin | Kyro Wallet
+URL: https://kyrowallet.com/swap/
+================================================================
+
+Swap
+
+# Any coin to any coin
+
+Kyro asks several providers, shows what actually lands in your account and decodes the transaction before you sign. 33 blockchains, no account, over Tor.
+
+Download Kyro Swap fees
+
+How it works
+
+## One screen, several providers
+
+Pick what you hold, pick what you want. Kyro compares quotes and shows the amount you receive, with the fee already out.
+
+Routes
+
+## Where each coin can go
+
+From the live coverage audit in the repo. Providers can change what they list, so a quote is the final word.
+
+Swap routes by coin
+
+| Coin or network | From | To | Providers
+
+| Ethereum, Arbitrum, Optimism, Base | Yes | Yes | 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR
+
+| Polygon | Yes | Yes | 0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR
+
+| BNB Chain, Avalanche | Yes | Yes | 0x and LI.FI. 1Click
+
+| Gnosis | Yes | Yes | LI.FI. 1Click
+
+| Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM, Sei | Yes | Yes | 0x or LI.FI, same chain only
+
+| Solana and SPL tokens | Yes | Yes | Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC
+
+| Bitcoin | Yes | Yes | 1Click, LI.FI. Exolix to XMR, KAS, ALGO and NEAR
+
+| Litecoin, Dogecoin, TRON (TRX, USDT) | Yes | Yes | 1Click. Exolix
+
+| XRP, Cardano, Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos | Yes | Yes | 1Click
+
+| Stellar | No | Yes | 1Click, arrival only: a Stellar deposit needs a memo
+
+| Monero, Kaspa, Algorand, NEAR (native coin) | Yes | Yes | Exolix. Kyro's fee is a second transfer
+
+Full coverage audit on GitHub
+
+Fee
+
+## Included in the rate, and public
+
+The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, and it is 0.9% when the token price is unknown. It funds the project.
+
+- What you see as "You receive" already has the fee out.
+
+- It is collected through each provider's official integrator mechanism.
+
+- Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.
+
+- The rates live in one open file. Read fees.ts.
+
+Fee table and calculator
+
+Checks
+
+## Swaps you can check
+
+A swap is a transaction written by someone else. Kyro treats it that way.
+
+### Decoded first
+
+Kyro decodes the provider's transaction before asking for your password: recipient, minimum amount and fee.
+
+### Official contracts
+
+It checks that the transaction targets the provider's official contract.
+
+### Exact approvals
+
+Token approvals are for the exact amount. An unlimited approval needs an explicit action and shows a warning.
+
+### Simulated
+
+The transaction is simulated just before you sign it.
+
+Limits
+
+## What does not swap yet
+
+Better here than in a failed quote.
+
+- Stellar as a source. Stellar deposits need a memo, and Kyro only sends plain transfers to deposit addresses. You can swap into XLM.
+
+- Polkadot. 1Click does not list it, and delivery to Asset Hub is not confirmed through Exolix.
+
+- Cosmos Hub. 1Click does not list it, and Exolix refuses the pair.
+
+- Conflux. No provider contract Kyro can check there.
+
+- Tokens on NEAR and Algorand. Only the native coin is offered through Exolix. Other tokens on NEAR, Algorand, Polkadot, Stellar, TON, Sui and Aptos swap only if 1Click lists them.
+
+- Cronos, Mantle, Sonic, Flare, Kaia, HyperEVM and Sei. Same chain only.
+
+Questions
+
+## Common questions
+
+Q: Can I really swap any coin to any coin?
+A: Almost. 33 of the 36 blockchains can swap, across chains in most cases. The table on this page lists the limits: Stellar is arrival only, some EVM networks swap on the same chain only, and Polkadot, Cosmos Hub and Conflux have no route yet.
+
+Q: What does a swap cost?
+A: A Kyro fee from 0.7% to 5% depending on the swap value, already taken out of the amount you see, plus the network fee. Full fee table.
+
+Q: Do I need an account with a swap provider?
+A: No. Kyro talks to the providers directly over Tor. There is nothing to sign up for.
+
+Q: Why does a Monero swap send two transactions?
+A: Exolix has no integrator fee, so Kyro's fee cannot be collected inside the swap. It goes as a second ordinary transfer of the sold coin. The same applies to any Exolix route.
+
+Q: What if the rate changes before the swap lands?
+A: You set a maximum slippage of 0.1%, 0.5%, 1% or your own value, and Kyro shows the guaranteed minimum before you sign.
+
+## Keep reading
+
+### Swap to Monero, step by step
+
+From BTC, ETH, SOL, USDT and more.
+
+### Swap fee table
+
+Every step of the curve, with a calculator.
+
+### Glossary
+
+Slippage, approvals, gas and the rest, in plain words.
+
+## Swap from your own wallet
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Earn: staking and lending from your own wallet | Kyro
+URL: https://kyrowallet.com/earn/
+================================================================
+
+Earn
+
+# Earn, with the risks in plain sight
+
+14 options in one list: staking, liquid staking and lending. No sign-up. Rates are estimates, never guaranteed.
+
+Download Kyro
+
+Demo numbers. Real rates are estimates, never guaranteed.
+
+Options
+
+## All 14 options
+
+What you can put to work, how long it stays locked, and what works from a hardware wallet.
+
+Earn options in Kyro
+
+| Option | Type | Assets | Lock | Hardware wallet
+
+| Ethereum · Lido | Liquid staking | ETH | stETH can be swapped. Unstaking goes through Lido's queue, often 1 to 5 days | Yes
+
+| Aave · Ethereum | Lending | USDT, USDC, DAI, WETH | None | Yes
+
+| Aave · Arbitrum | Lending | USDT, USDC | None | Yes
+
+| Aave · Polygon | Lending | USDT, USDC | None | Yes
+
+| Aave · Base | Lending | USDC | None | Yes
+
+| Solana | Staking | SOL | About 2 to 3 days | No
+
+| Cardano | Staking | ADA (2 ADA deposit, returned) | None | No
+
+| TRON | Staking | TRX (minimum 1 TRX) | 14 days | No
+
+| NEAR | Staking | NEAR | 4 epochs, about 2 to 3 days | No
+
+Three kinds
+
+## Three ways to earn
+
+They look alike in a list. They are different underneath.
+
+### Staking
+
+SOL, ADA, TRX and NEAR. You delegate from your own account to a validator, pool or Super Representative. They cannot spend your coins. On Cardano your ADA stays spendable.
+
+### Liquid staking
+
+ETH with Lido. You receive stETH, and you can swap it or unstake through Lido's withdrawal queue, then claim in Kyro. You rely on Lido's contracts.
+
+### Lending
+
+Aave v3 on Ethereum, Arbitrum, Polygon and Base. You deposit tokens into a contract and earn the variable rate borrowers pay. You can withdraw when liquidity allows it.
+
+Risks
+
+## What can go wrong
+
+Yields are variable and paid by the protocol. You can lose money. Read this before you start.
+
+### Contract bugs
+
+Lido and Aave are smart contracts Kyro does not control. A bug or an attack there can lose funds.
+
+### Depeg
+
+stETH can trade below ETH, and a stablecoin can lose its peg.
+
+### Lower rewards
+
+Rates move. A validator's commission, downtime or a retiring pool can cut your rewards. A delinquent Solana validator pays nothing until it returns.
+
+### Waiting periods
+
+TRON unstaking takes 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.
+
+### Votes shrink
+
+On TRON, unstaking reduces your votes in proportion. Kyro warns you first.
+
+### Price risk
+
+Staked coins can lose value like any other. A rate does not protect you from that.
+
+Kyro is a tool. Nothing on this site is financial advice.
+
+Signing
+
+## See the contract, then sign
+
+Every step shows the contract, the function and the exact amount. Approvals are for the exact amount only, never unlimited.
+
+- Staking operations are a closed list. Everything else is refused, with your key as the only authority.
+
+- On Solana, Kyro refuses authority changes and lockups.
+
+- On NEAR, only pools from the official factories, with the expected code, are accepted.
+
+- Risky choices, such as a commission above 10% on Solana, get a second confirmation.
+
+- With a Ledger or Trezor, Kyro names the contract and function, then the device shows the transaction.
+
+Step by step: stake SOL
+
+Questions
+
+## Common questions
+
+Q: Are the rates guaranteed?
+A: No. Every rate in Kyro is an estimate and it moves. For Solana, Cardano and TRON it is network-wide, before the validator, pool or Super Representative takes its share.
+
+Q: Does Kyro take a fee on Earn?
+A: Kyro takes no fee on staking. You pay the network fee, and validators, pools and protocols keep their own share of the rewards.
+
+Q: Can I use Earn with a Ledger or Trezor?
+A: Yes for Lido and Aave. Staking on Solana, Cardano, TRON and NEAR still needs a recovery-phrase account, and Kyro refuses it from a hardware account.
+
+Q: Can a validator take my coins?
+A: On Solana, Cardano, TRON and NEAR a validator, pool or Super Representative cannot spend your coins, and there is no slashing for delegators. A poor choice costs rewards.
+
+Q: Is lending on Aave the same risk as staking?
+A: No. Your tokens go into a smart contract. A contract bug or a stablecoin losing its peg can cost you money. Kyro cannot remove those risks.
+
+Q: Is this financial advice?
+A: No. Kyro shows options and their terms. Whether any of them suits you is your decision.
+
+## Keep reading
+
+### How to stake SOL
+
+Pick a validator, delegate, and get your SOL back later.
+
+### Earn on hardware wallets
+
+What works from a Ledger or Trezor account.
+
+### How Kyro signs
+
+The native window, and why it reads Rust's decoding.
+
+## Earn without an account
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Ledger and Trezor wallet app for desktop | Kyro Wallet
+URL: https://kyrowallet.com/hardware-wallets/
+================================================================
+
+Hardware wallets
+
+# Ledger and Trezor
+
+Your keys stay in the device. Kyro is the screen, the decoder and the second pair of eyes, on 33 blockchains.
+
+Download Kyro
+
+One-click connect
+
+## Plug in, click Connect
+
+- 1Unlock the device
+
+- 2Click Connect
+
+- 3Approve on the device
+
+On Ledger, every supported chain is ticked. One Connect opens each app in turn, reads the keys and skips an app that is missing or refused. You get a short result per chain: Added, Not installed or Skipped.
+
+================================================================
+Private crypto wallet for Windows: install and notes | Kyro
+URL: https://kyrowallet.com/wallets/windows/
+================================================================
+
+Windows desktop wallet
+
+# Kyro for Windows
+
+A private crypto wallet for 64-bit Windows. One command, or the installer. It installs for the current user and starts on its own.
+
+Download Kyro
+
+Install
+
+## One command
+
+It downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS and stops if they differ.
+
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+Or the file
+
+## Install by hand
+
+- Run the one-line command in PowerShell, or download Kyro-windows-x64-setup.exe.
+
+- If you used the file, verify its SHA-256 first.
+
+- SmartScreen may show "Windows protected your PC". Click More info, then Run anyway.
+
+- One Kyro window installs the app, starts it and closes. Kyro appears in the Start menu.
+
+Kyro-windows-x64-setup.exeKyro-windows-x64.msiSHA256SUMS
+
+Kyro-windows-x64-setup.exe: Recommended, updates itself. Kyro-windows-x64.msi: For managed installs, no self-update.
+
+Notes
+
+## Good to know on Windows
+
+### SmartScreen
+
+The installers are not code-signed yet, so a browser download triggers the warning. The one-line command and in-app updates do not. What SmartScreen means for Kyro.
+
+### .exe or .msi
+
+Prefer the .exe: it is the only Windows package that updates itself. The .msi does not.
+
+### Updates
+
+The installed app downloads signed updates over Tor, verifies them and applies them when you close it.
+
+### Phrase window
+
+The recovery phrase window is excluded from screenshots and screen sharing on Windows.
+
+Same on every system
+
+## The full wallet, everywhere
+
+The Windows build is the same Kyro: 36 blockchains, swaps, Earn, hardware wallets and Tor from the first launch. The interface is in English and French.
+
+- No account and no analytics.
+
+- Your recovery phrase stays on your computer, encrypted.
+
+- Your phrase also restores your wallet on another system.
+
+================================================================
+Private crypto wallet for Mac: install and notes | Kyro
+URL: https://kyrowallet.com/wallets/macos/
+================================================================
+
+macOS desktop wallet
+
+# Kyro for macOS
+
+A private crypto wallet for your Mac. One universal app for Apple Silicon and Intel.
+
+Download Kyro
+
+Install
+
+## One command
+
+It downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS and stops if they differ.
+
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+Or the file
+
+## Install by hand
+
+- Run the one-line command in Terminal, or download Kyro-macos.dmg.
+
+- If you used the file, verify its SHA-256 first.
+
+- Open the .dmg and drag Kyro to Applications.
+
+- Gatekeeper blocks the first launch: right-click Kyro in Applications and choose Open, or use System Settings > Privacy & Security > Open Anyway.
+
+Kyro-macos.dmgSHA256SUMS
+
+Kyro-macos.dmg: Universal: Apple Silicon and Intel.
+
+Notes
+
+## Good to know on macOS
+
+### Gatekeeper
+
+The app is not code-signed yet, so macOS blocks the first launch of a downloaded file. The one-line command avoids that.
+
+### Where it installs
+
+The one-line command puts Kyro.app in /Applications, or ~/Applications. It needs no sudo.
+
+### Updates
+
+The installed app updates itself with signed updates, downloaded over Tor.
+
+### Phrase window
+
+The phrase window is excluded from most capture on macOS. Check that nobody is watching anyway.
+
+Same on every system
+
+## The full wallet, everywhere
+
+The macOS build is the same Kyro: 36 blockchains, swaps, Earn, hardware wallets and Tor from the first launch. The interface is in English and French.
+
+- No account and no analytics.
+
+- Your recovery phrase stays on your computer, encrypted.
+
+- Your phrase also restores your wallet on another system.
+
+================================================================
+Private crypto wallet for Linux: AppImage and .deb | Kyro
+URL: https://kyrowallet.com/wallets/linux/
+================================================================
+
+Linux desktop wallet
+
+# Kyro for Linux
+
+A private crypto wallet for x86_64 Linux. One command, an AppImage or a .deb. No sudo for the command.
+
+Download Kyro
+
+Install
+
+## One command
+
+It downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS and stops if they differ.
+
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+Or the file
+
+## Install by hand
+
+- Run the one-line command: it installs ~/.local/bin/kyro with a menu entry.
+
+- Or download Kyro-linux-x86_64.AppImage, verify it, make it executable and run it.
+
+- On Debian or Ubuntu you can use the .deb instead: sudo apt install ./Kyro-linux-amd64.deb.
+
+Kyro-linux-x86_64.AppImageKyro-linux-amd64.debSHA256SUMS
+
+Kyro-linux-x86_64.AppImage: Recommended, updates itself. Kyro-linux-amd64.deb: Debian and Ubuntu, no self-update.
+
+Notes
+
+## Good to know on Linux
+
+### FUSE 2
+
+AppImages need FUSE 2. Install libfuse2 on Ubuntu 22.04, or libfuse2t64 on Ubuntu 24.04 and later.
+
+### AppImage or .deb
+
+The AppImage updates itself. The .deb does not: install the new .deb to update.
+
+### udev rules
+
+Hardware wallets need the manufacturer's udev rules so Kyro can open the device. Ledger and Trezor both publish them.
+
+### Phrase window
+
+Screen-capture protection does not exist on Linux. Check that nobody can see your screen.
+
+Same on every system
+
+## The full wallet, everywhere
+
+The Linux build is the same Kyro: 36 blockchains, swaps, Earn, hardware wallets and Tor from the first launch. The interface is in English and French.
+
+- No account and no analytics.
+
+- Your recovery phrase stays on your computer, encrypted.
+
+- Your phrase also restores your wallet on another system.
+
+================================================================
+About Kyro: why this private wallet exists | Kyro Wallet
+URL: https://kyrowallet.com/about/
+================================================================
+
+About
+
+# Why Kyro exists
+
+A wallet sees more about you than almost any other app: what you own, what you spend and where you are. Kyro is built to see as little of that as it can.
+
+## The problem
+
+Holding your own keys protects your coins. It does nothing for your privacy on its own. Every balance check tells a server which addresses you care about and which IP address asked. Put enough of those requests in one log and your wallet has a name on it.
+
+Most of that traffic is invisible, so nobody notices. Kyro starts from the other end: a desktop wallet where the private path is the default, and where you have to choose, in a system window, to leave it.
+
+## What Kyro holds to
+
+- Your keys are yours. The recovery phrase is encrypted on your computer. Nobody else, developers included, can move your funds.
+
+- No account. No email, no sign-up, no server holding funds.
+
+- No analytics. One anonymous weekly count over Tor, which you can turn off.
+
+- You read what you sign. Rust decodes each transaction and a native window shows it.
+
+- Limits are published. What Kyro cannot protect you from is written down, chain by chain.
+
+## How it is paid for
+
+Kyro is free. The swap fee, from 0.7%, funds the project, and it is public: the rates sit in one open source file. Sending, receiving and staking carry no Kyro fee. Donations and GitHub Sponsors help too.
+
+## What Kyro is not
+
+- It is not a bank, an exchange or a custodian. If you lose your phrase and your computer, nobody can recover your funds.
+
+- It is not a promise of anonymity. Tor hides your IP address. Public blockchains stay public.
+
+- It is not externally audited yet. An internal security review has been done; no independent audit has been published.
+
+- It is not on your phone. Kyro is desktop only. A mobile app using the name is not ours.
+
+## Keep reading
+
+### Read the code
+
+Licence, build instructions and how to contribute.
+
+### See what is next
+
+What is done and what comes after.
+
+### See the threat model
+
+What Kyro protects, and what no software can.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Roadmap: what is done and what comes next | Kyro Wallet
+URL: https://kyrowallet.com/roadmap/
+================================================================
+
+Roadmap
+
+# Where Kyro is going
+
+Version 1.0.6 today. This page lists what has shipped and what is planned. There are no dates, because a wallet ships when it is checked.
+
+### Shipped
+
+### 36 blockchains, one phrase
+
+Bitcoin, EVM networks, Solana, TRON, Cardano, Monero and more, with 220+ tokens.
+
+### Tor built in
+
+Default on, a circuit per blockchain family, no fallback to a direct connection.
+
+### Signed automatic updates
+
+Downloaded over Tor, verified against a pinned public key, applied at the next start.
+
+### Swaps across chains
+
+Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.
+
+### Earn
+
+14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.
+
+### Hardware wallets
+
+Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.
+
+### One-click Windows installer
+
+A single branded window since 1.0.1, and one-line install on every system.
+
+### Next, in no fixed order
+
+### More staking
+
+Polkadot, Sui and Aptos.
+
+### Token sends on more chains
+
+From hardware accounts, beyond EVM, Solana and TRON.
+
+### More Ledger chains
+
+Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.
+
+### Code signing
+
+So Windows and macOS stop warning on first launch. See the code signing policy.
+
+### winget
+
+Install and update with the Windows package manager.
+
+### Compact filters for Bitcoin
+
+A private way to read Bitcoin without an address server, once its dependencies pass review.
+
+### Reproducible builds
+
+Bit-for-bit reproducible builds are a goal, not yet a guarantee.
+
+Not today
+
+## What Kyro will not rush
+
+A few things cannot be done safely yet. They stay out until they can.
+
+### Polkadot on Ledger
+
+The Ledger app needs a metadata proof with each transaction, which Kyro does not build yet.
+
+### Device authenticity
+
+Kyro does not run Trezor's authenticity check. Do that in Trezor Suite.
+
+### External audit
+
+An internal review has been done. No independent audit has been published yet.
+
+## More on the project
+
+### Changelog
+
+Every release, in plain words.
+
+### Contribute
+
+Issues and pull requests are welcome.
+
+### About Kyro
+
+Why it exists and how it is paid for.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Changelog: every Kyro release up to 1.0.6 | Kyro Wallet
+URL: https://kyrowallet.com/changelog/
+================================================================
+
+Changelog
+
+# What changed
+
+Every release of Kyro, newest first. This page is generated from CHANGELOG.md at build time.
+
+## 1.0.6Latest
+
+- Switching between Portfolio and Assets no longer slides the tab underline across the screen.
+
+- Ledger Litecoin: the app's protocol is detected by asking it (Litecoin 2.4.x is still the legacy app), and the account is read without the master key the app refuses, instead of being reported as outdated.
+
+- Address book: the network is detected from the pasted address (a short choice only when several match), Enter saves and the name is optional. Send offers "Save" for a new recipient.
+
+- History is fetched in the background after unlock and kept per wallet, so the History page opens on a ready list; while it refreshes, what is there shows with a small "Updating...". Unreachable networks are named in a calm line and retried on their own.
+
+- Price charts: "All" now goes back years (Kraken public weekly prices, no account), and is hidden for coins without a long history instead of repeating 1Y.
+
+- Arbitrum history works over Tor again: a second public node (arb1.arbitrum.io) is tried when publicnode refuses.
+
+- Search: one result per coin, with its icon and your balance or its rank.
+
+- Receive: a quieter network note.
+
+- Swap: Monero, Kaspa, Algorand and NEAR can now be swapped FROM (Exolix), not only to.
+
+- Ledger: Litecoin works with the current Litecoin app (keys, address on screen, signing over the new protocol); an app that does not understand Kyro now says to update it in Ledger Live.
+
+- Hardware wallets: Solana tokens (SPL, e.g. USDC/USDT) can be sent from Ledger and Trezor accounts, creating the recipient's token account when needed; a Trezor shows the recipient wallet, a Ledger that needs it says "Enable Blind signing in the Solana app settings".
+
+- Hardware wallets: TRON tokens (TRC-20, e.g. USDT) can be sent from Ledger accounts; when the Tron app needs a setting, Kyro names it ("Allow data" or "Custom contracts").
+
+- Ledger: connect in one step, like Ledger Live. Every chain the Ledger supports is ticked; one "Connect" opens each app in turn, reads the keys, and skips an app that is not installed or refused. A short result per chain follows (Added / Not installed / Skipped).
+
+## 1.0.5
+
+- Earn (was Staking): a new page with 14 options and live estimated rates. New: ETH liquid staking with Lido (stake, unstake through the withdrawal queue, claim), and lending on Aave v3: USDT, USDC, DAI and WETH on Ethereum, USDT and USDC on Arbitrum and Polygon, USDC on Base. Every step shows the contract, the function and the exact amount; approvals are for the exact amount only.
+
+- Activity: an asset page only waits for its own blockchain. Empty history is remembered, so "No activity" shows at once; a spinner never stays more than a few seconds.
+
+- Charts fit the window in width and height.
+
+- Earn opens from its last state, without grey placeholders.
+
+- Notifications: one short style everywhere, starting with the update notice.
+
+- Asset page: "Loading activity..." until the first answer, never "No activity" before it. The header wraps on narrow windows (the period selector stays whole).
+
+- Earn: a rate that cannot be read shows "-" after a few seconds; the page scrolls normally.
+
+- Token picker: Escape closes it.
+
+- Swap: pick any coin you hold, on any network, without a network menu; the account choice only shows when you have several. The rate ("1 BTC ~ 31.2 ETH") and what you receive show under the amounts.
+
+- Earn: live estimated rates for Solana, Cardano and TRON (network-wide, before the validator, pool or SR commission), read from the servers Kyro already uses.
+
+- Earn with a Ledger or Trezor: Lido and Aave work from hardware wallet accounts. Kyro names the contract and function first, then the device shows the transaction; a Ledger with blind signing off gets a short hint. Staking on Solana, Cardano, TRON and NEAR still needs a recovery-phrase account.
+
+## 1.0.4
+
+- Staking: NEAR. Stake, unstake and withdraw with NEAR staking pools. Kyro only accepts pools from the official factories and checks the pool's code before each transaction.
+
+- Swap: search by name or ticker in the coin picker. Monero shows in the list and can be bought from more coins (ETH on Arbitrum, Base, Optimism, POL, DOGE, TRX, USDT on TRON). Kaspa, Algorand and NEAR can now be received from a swap.
+
+- Faster: charts are kept on your computer and only the recent part is refreshed. Each blockchain shows as soon as it answers. Staking opens from its last state.
+
+- My assets: one row per crypto, with every account under it.
+
+- Tokens from the top 250 (Quant and others) open as supported assets instead of "price only".
+
+- Charts stay continuous at any window size. No more endless "Loading" on asset pages.
+
+- Updates install when you close the window.
+
+- Simpler texts in Settings, recovery phrase checks and update notices. Cleaner outgoing connections and API key screens.
+
+## 1.0.3
+
+- Swap: Monero. Swap BTC, LTC, ETH, SOL, USDT or USDC to XMR through Exolix (no account, no key, over Tor). Kyro creates the order, checks that it pays your own Monero address and that the deposit address is valid, then sends a normal transfer. Kyro's service fee is a second small transfer of the same coin. XMR to other coins comes later. Tested with live quotes only.
+
+- Ledger: Kyro now opens the right app for you. Plug in and unlock the Ledger, click Connect, and approve "Open Bitcoin" (or Ethereum, Solana...) on the device when asked. If another app is open, Kyro closes it first. A missing app shows "Install the app with Ledger Live". Same when signing from a Ledger account. Not yet tested on a real Ledger.
+
+## 1.0.2
+
+- Tor: fixed history failing on EVM networks ("Protocol error while launching a data stream") and the slowness behind it. A server refusing one Tor exit no longer moves every network of the same family onto new circuits; requests per family are bounded; a stream refused by a just-closed circuit is retried on a new one. Tor still never falls back to clear.
+
+- History: no more raw error text. A short message with Retry is shown instead; the technical detail is in Settings > Network diagnostics.
+
+- History: activity shows at once from a local cache (amounts and transaction details only), then refreshes in the background; each blockchain appears as soon as it answers, without waiting for the slowest. No more long grey placeholder rows.
+
+- Privacy: new anonymous weekly count (on by default, Settings > Privacy). Once a week, over Tor only, Kyro downloads a tiny file from its GitHub release so the download counter can estimate active wallets. No identifier and no personal data are sent.
+
+## 1.0.1
+
+- Windows: new one-click installer. No wizard any more: a single branded Kyro window installs the app for the current user, then starts Kyro and closes. Silent, passive and in-app update installs behave as before.
+
+- Windows: the uninstaller now shows the Kyro icon instead of the default NSIS one.
+
+## 1.0.0
+
+- First stable release.
+
+All releases and files on GitHub
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Open source crypto wallet: read, build, verify | Kyro
+URL: https://kyrowallet.com/open-source/
+================================================================
+
+Open source
+
+# Don't trust it. Read it.
+
+The interface, the Rust core and the app shell are all public under GPL-3.0-or-later. Here is how to read, build and verify what you run.
+
+Source on GitHub
+
+Read
+
+## Where to start
+
+A small map of the repository. Keys live in one place, and it has no network access.
+
+Repository layout
+
+| Path | What it holds
+
+| crates/wallet-core | Pure Rust: vault, BIP39 and BIP32, derivation, decoding, signing. No network, no files
+
+| apps/desktop/src-tauri | Tauri 2 shell: commands, session and auto-lock, filtered network access, native windows
+
+| apps/desktop/src | React and strict TypeScript interface. No secrets
+
+| packages/chains | Chain adapters that build unsigned transactions
+
+| packages/swap | Swap providers and fee logic
+
+| docs/ | Architecture, IPC contract, network requests, swap fees
+
+Threat model Servers contacted Architecture Swap fees
+
+Build
+
+## Build it yourself
+
+You need Rust 1.97.1, which rustup installs from the pinned toolchain file, Node.js 22+, pnpm 11 and the Tauri prerequisites for your system.
+
+- Dependencies are pinned to exact versions, with committed lockfiles.
+
+- CI runs cargo audit, cargo deny and pnpm audit.
+
+- Before a PR: pnpm lint, pnpm typecheck, pnpm test.
+
+Verify
+
+## What you can check today
+
+Three things you can verify, and one you cannot yet.
+
+### Release checksums
+
+Each release ships SHA256SUMS. Compare your file before you run it.
+
+### Signed updates
+
+Each update is signed. Kyro verifies it against a public key pinned in the app, and refuses a bad signature.
+
+### Servers contacted
+
+Every server is listed in NETWORK.md, and any new one has to be added there.
+
+### Not yet
+
+Bit-for-bit reproducible builds are a goal, not a guarantee. The installers are not code-signed yet.
+
+Contribute
+
+## Help make it better
+
+Issues and pull requests are welcome.
+
+- Run pnpm lint, pnpm typecheck and pnpm test before opening a pull request.
+
+- Any new server Kyro contacts must be listed in docs/NETWORK.md.
+
+- Changes to the IPC contract belong in docs/IPC.md.
+
+- Never post a recovery phrase, private key or password in an issue, pull request or log.
+
+## Report a vulnerability
+
+Please do not open a public issue. Report privately through GitHub security advisories, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.
+
+Questions
+
+## Common questions
+
+Q: What licence is Kyro under?
+A: GPL-3.0-or-later. You can read, run, change and share it. If you distribute a changed version, it stays under the same licence, with its source.
+
+Q: Are Kyro builds reproducible?
+A: Not bit for bit yet. It is a goal, not a guarantee. Today you can verify the SHA-256 of a release and build from the same source yourself.
+
+Q: Can I remove the swap fee?
+A: Yes, in your own build. The rates live in packages/swap/src/fees.ts, and anyone can change them or set the fee to 0.
+
+Q: Has Kyro been audited?
+A: An internal security review has been done. No independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty.
+
+## Keep reading
+
+### How Kyro protects your keys
+
+The three layers, and what no software can do.
+
+### Changelog
+
+What changed in each release.
+
+### Brand kit
+
+Logos and colours for writing about Kyro.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Brand and press kit: logos and colours | Kyro Wallet
+URL: https://kyrowallet.com/brand/
+================================================================
+
+Brand
+
+# Brand and press kit
+
+Writing about Kyro? Everything you need is here, as SVG files from the repository.
+
+Logos
+
+## Logos and marks
+
+Logo, for dark backgrounds
+kyro-logo-dark.svg
+
+Logo, for light backgrounds
+kyro-logo.svg
+
+Mark, for dark backgrounds
+kyro-mark-dark.svg
+
+Mark, for light backgrounds
+kyro-mark.svg
+
+App icon
+kyro-icon.svg
+
+App icon, blue
+kyro-icon-blue.svg
+
+Colour
+
+## Colours
+
+Kyro ice#7CC4FF
+
+Kyro blue#2F6BFF
+
+Page black#000000
+
+Ink#0A0B0D
+
+Paper#F5F7FA
+
+Grey#8C929D
+
+## Name and description
+
+Write Kyro or Kyro Wallet. Short description:
+
+Kyro Wallet is a free, open-source, non-custodial desktop wallet for Windows, macOS and Linux. One recovery phrase for 36 blockchains, keys on your own computer, Tor on by default.
+
+## Type
+
+Headlines use Archivo. Everything else uses Geist. Both are under the SIL Open Font License, with the licence files in OFL-Geist and OFL-Archivo.
+
+## Usage
+
+- Use the files as they are, with room around them.
+
+- Use the dark version on dark backgrounds and the light version on light ones.
+
+- Link to kyrowallet.com, the only official site, and to GitHub Releases for downloads.
+
+- Do not change the colours or shape of the mark.
+
+- Do not suggest that Kyro endorses your product or service.
+
+- Do not use the name or logo for an app, a token or a download of your own.
+
+## Facts to check
+
+Kyro has no mobile app and no external audit published yet. The current version is 1.0.6. If you are unsure of a claim, the site summary and the repository are the reference.
+
+## Get Kyro
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 

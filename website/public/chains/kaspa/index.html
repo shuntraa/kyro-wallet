@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kaspa wallet for Windows, macOS and Linux | Kyro</title>
-  <meta name="description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send and receive KAS. Your keys stay on your computer.">
+  <meta name="description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send, receive and swap KAS. Your keys stay on your computer.">
   <link rel="canonical" href="https://kyrowallet.com/chains/kaspa/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#000000">
@@ -18,7 +18,7 @@
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Kaspa wallet for Windows, macOS and Linux | Kyro">
-  <meta property="og:description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send and receive KAS. Your keys stay on your computer.">
+  <meta property="og:description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send, receive and swap KAS. Your keys stay on your computer.">
   <meta property="og:url" content="https://kyrowallet.com/chains/kaspa/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
   <meta property="og:image:width" content="1200">
@@ -27,9 +27,9 @@
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Kaspa wallet for Windows, macOS and Linux | Kyro">
-  <meta name="twitter:description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send and receive KAS. Your keys stay on your computer.">
+  <meta name="twitter:description" content="Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send, receive and swap KAS. Your keys stay on your computer.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/kaspa/#page","url":"https://kyrowallet.com/chains/kaspa/","name":"Kaspa wallet: Kyro","description":"Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send and receive KAS. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Kaspa","alternateName":"KAS"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Kaspa","item":"https://kyrowallet.com/chains/kaspa/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/kaspa/#page","url":"https://kyrowallet.com/chains/kaspa/","name":"Kaspa wallet: Kyro","description":"Kyro is a free, open-source Kaspa (KAS) wallet for desktop. Send, receive and swap KAS. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Kaspa","alternateName":"KAS"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Kaspa","item":"https://kyrowallet.com/chains/kaspa/"}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -51,12 +51,13 @@
         </ul>
       </nav>
       <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
-      <details class="menu">
+      <details class="menu" data-pop>
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
           <ul>
             <li><a href="/">Home</a></li>
             <li><a href="/features/">Features</a></li><li><a href="/chains/" aria-current="page">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
             <li><a href="/download/">Download</a></li>
             <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
           </ul>
@@ -76,7 +77,7 @@
             
             <p class="eyebrow">Kaspa desktop wallet · KAS</p>
             <h1 id="page-title">Kaspa wallet <em>for Windows, macOS and Linux</em></h1>
-            <p class="lead">Send and receive KAS. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
+            <p class="lead">Send, receive and swap KAS. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
@@ -103,11 +104,11 @@
             <p>Send and receive KAS, with address-poisoning alerts and clipboard checks.</p>
             <span class="state">Yes</span>
           </li>
-          <li class="cap spot c-kaspa cap-off">
+          <li class="cap spot c-kaspa cap-on">
             <span class="mini-icon ic-swap" aria-hidden="true"></span>
             <h3>Swap</h3>
-            <p>Swaps are not available on Kaspa yet.</p>
-            <span class="state">No</span>
+            <p>Swap native KAS in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on Kaspa. The amount you receive already includes Kyro’s swap fee, from 0.7%.</p>
+            <span class="state">Yes</span>
           </li>
           <li class="cap spot c-kaspa cap-off">
             <span class="mini-icon ic-stake" aria-hidden="true"></span>
@@ -138,7 +139,7 @@
           </ul>
           <div class="doc-links" data-reveal>
             <a href="/features/">All wallet features</a>
-            
+            <a href="/fees/">How swap fees work</a>
             <a href="/security/">How your keys are protected</a>
           </div>
         </div>
@@ -148,7 +149,7 @@
     <p class="coin-bal">1.2345 <span>KAS</span></p>
     <p class="coin-fiat">$123.45</p>
     <svg class="coin-line" viewBox="0 0 400 90" preserveAspectRatio="none" fill="none"><path pathLength="1" vector-effect="non-scaling-stroke" d="M0.0 69.5C4.4 68.5 17.8 65.5 26.7 63.7C35.6 62.0 44.4 61.5 53.3 58.8C62.2 56.0 71.1 50.0 80.0 47.2C88.9 44.4 97.8 41.5 106.7 41.9C115.6 42.4 124.4 47.6 133.3 49.8C142.2 52.0 151.1 55.1 160.0 55.3C168.9 55.4 177.8 52.2 186.7 50.7C195.6 49.2 204.4 45.9 213.3 46.1C222.2 46.4 231.1 53.0 240.0 52.1C248.9 51.3 257.8 43.3 266.7 41.0C275.6 38.7 284.4 37.9 293.3 38.1C302.2 38.2 311.1 39.9 320.0 41.9C328.9 43.9 337.8 51.2 346.7 50.0C355.6 48.8 364.4 37.5 373.3 34.5C382.2 31.6 395.6 32.6 400.0 32.3"/></svg>
-    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i></div>
+    <div class="kw-btns"><i class="kw-b on">Send</i><i class="kw-b">Receive</i><i class="kw-b">Swap</i></div>
   </div></div></div>
       </div>
     </section>
@@ -213,41 +214,29 @@
           </a>
           <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
         </div>
+        
         <div>
           <h2>Product</h2>
           <ul>
-            <li><a href="/features/">Features</a></li>
-            <li><a href="/security/">Security</a></li>
-            <li><a href="/fees/">Fees</a></li>
-            <li><a href="/download/">Download</a></li>
-            <li><a href="/faq/">FAQ</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
           </ul>
         </div>
         <div>
-          <h2>Blockchains</h2>
+          <h2>Platforms</h2>
           <ul>
-            <li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/arbitrum/">Arbitrum</a></li><li><a href="/chains/optimism/">Optimism</a></li><li><a href="/chains/base/">Base</a></li>
-            <li><a href="/chains/">All 36</a></li>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
           </ul>
         </div>
         <div>
           <h2>Project</h2>
           <ul>
-            <li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li>
-            <li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li>
-            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">Security policy</a></li>
-            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/LICENSE">License</a></li>
-            <li><a href="/privacy/">Privacy</a></li>
-            <li><a href="/code-signing-policy/">Code signing policy</a></li>
-          </ul>
-        </div>
-        <div>
-          <h2>Help</h2>
-          <ul>
-            <li><a href="/download/#verify">Verify a download</a></li>
-            <li><a href="/download/#first-launch">First launch</a></li>
-            <li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li>
-            <li><a href="/#support">Donate</a></li>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
           </ul>
         </div>
       </div>

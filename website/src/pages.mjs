@@ -2,6 +2,7 @@
 // Content of every page on kyrowallet.com.
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
+import { strip, head, sec, faqBlock, faqLd } from './kit.mjs';
 import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon } from './components.mjs';
 
 const layers = () => html`
@@ -30,7 +31,7 @@ const docLinks = () => html`
 const chainLinks = (list) =>
   list.map((c) => `<li><a class="coin-tile spot c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`).join('\n          ');
 
-const yesNo = (v) => (v ? '<span class="yes" role="img" aria-label="Yes"></span>' : '<span class="no" role="img" aria-label="No"></span>');
+export const yesNo = (v) => (v ? '<span class="yes" role="img" aria-label="Yes"></span>' : '<span class="no" role="img" aria-label="No"></span>');
 
 function matrix(chains) {
   const rows = chains
@@ -55,11 +56,11 @@ function matrix(chains) {
 
 export const listNames = (arr) => (arr.length < 2 ? arr.join('') : arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1]);
 
-const APP_ID = `${SITE}/#app`;
+export const APP_ID = `${SITE}/#app`;
 const ORG_ID = `${SITE}/#org`;
 const WEB_ID = `${SITE}/#website`;
 
-function webPage(path, name, description, trail) {
+export function webPage(path, name, description, trail) {
   return [
     { '@type': 'WebPage', '@id': `${SITE}${path}#page`, url: SITE + path, name, description, isPartOf: { '@id': WEB_ID }, about: { '@id': APP_ID }, inLanguage: 'en' },
     breadcrumbLd(trail)
@@ -862,18 +863,9 @@ sha256sum -c SHA256SUMS --ignore-missing                      # Linux</code></pr
   }
 ];
 
-function faqItems(items, chains) {
+export function faqItems(items, chains) {
   return items.map((i) => `<details><summary>${esc(i.q)}</summary><div class="answer">${i.a(chains)}</div></details>`).join('\n          ');
 }
-
-const strip = (s) =>
-  s
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+\n/g, '\n')
-    .trim();
 
 export function faq(chains) {
   const path = '/faq/';

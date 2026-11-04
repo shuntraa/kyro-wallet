@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tor wallet: built-in Tor for every request | Kyro Wallet</title>
+  <meta name="description" content="Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.">
+  <link rel="canonical" href="https://kyrowallet.com/tor/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Tor wallet: built-in Tor for every request | Kyro Wallet">
+  <meta property="og:description" content="Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.">
+  <meta property="og:url" content="https://kyrowallet.com/tor/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tor wallet: built-in Tor for every request | Kyro Wallet">
+  <meta name="twitter:description" content="Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/tor/#page","url":"https://kyrowallet.com/tor/","name":"Tor wallet: how Kyro uses Tor","description":"Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Tor","item":"https://kyrowallet.com/tor/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/tor/#faq","url":"https://kyrowallet.com/tor/","mainEntity":[{"@type":"Question","name":"Do I need to install Tor or Tor Browser?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro embeds its own Tor client, Arti, from The Tor Project. It starts in the background when the app opens."}},{"@type":"Question","name":"Can I turn Tor off?","acceptedAnswer":{"@type":"Answer","text":"Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address."}},{"@type":"Question","name":"Does Tor make my transactions anonymous?","acceptedAnswer":{"@type":"Answer","text":"No. Tor hides who is asking. It does not hide what is asked: the server you query still sees the addresses and transactions you look up, and public blockchains stay public."}},{"@type":"Question","name":"Why is Kyro slower over Tor?","acceptedAnswer":{"@type":"Answer","text":"Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers."}},{"@type":"Question","name":"Do my own servers go through Tor too?","acceptedAnswer":{"@type":"Answer","text":"Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family."}}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/" aria-current="page">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Tor</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Tor wallet</p>
+            <h1 id="page-title">Tor is built in, <em>and it stays on</em></h1>
+            <p class="lead">Balances, prices, swaps and broadcasts all leave through an embedded Tor client. You install nothing extra and set nothing up. If Tor is not ready, Kyro stops.</p>
+            <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
+            <span class="os-icon" data-dl-icon aria-hidden="true"></span>
+            <span data-dl-label>Download Kyro</span>
+          </a></div>
+          </div>
+          
+  <div class="kw-card" role="img" aria-label="Kyro status: Tor on, vault encrypted on this device, no account, no analytics."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span><b>You’re private</b><small>Nothing to sign up for</small></span><em>Ready</em></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+    <div class="kw-kv"><span>Vault</span><b>On this device</b></div>
+    <div class="kw-kv"><span>Account</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Analytics</span><b class="up">None</b></div>
+  </div></div>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="t-client">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>The client</p>
+          <h2 id="t-client">One app, <em>Tor included</em></h2>
+          <div data-reveal>
+          <p>Kyro embeds Arti, the Tor client from The Tor Project. It starts in the background when the app opens, and the wallet shows its state.</p>
+          <ul class="checks"><li>The interface cannot reach any server. Only the Rust shell can, and only over the list below.</li><li>Kyro contacts only the servers listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">docs/NETWORK.md</a>, and refuses every other host.</li><li>Only HTTPS is accepted, with one exception: the onion service for Bitcoin.</li><li>Your custom servers go through Tor as well.</li></ul></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="cir spot" role="img" aria-label="Four blockchains, each on its own Tor circuit of three relays. Bitcoin goes to mempool's onion service and never uses an exit relay."><div aria-hidden="true">
+    <div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/btc.svg" width="32" height="32" alt="" decoding="async"><b>Bitcoin</b></span>
+      <span class="cir-line d0"><i></i><i></i><i></i></span>
+      <span class="cir-end">Onion service</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><b>Ethereum</b></span>
+      <span class="cir-line d1"><i></i><i></i><i></i></span>
+      <span class="cir-end">RPC server</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/sol.svg" width="32" height="32" alt="" decoding="async"><b>Solana</b></span>
+      <span class="cir-line d2"><i></i><i></i><i></i></span>
+      <span class="cir-end">RPC server</span>
+    </div><div class="cir-row">
+      <span class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><b>Monero</b></span>
+      <span class="cir-line d3"><i></i><i></i><i></i></span>
+      <span class="cir-end">Monero node</span>
+    </div>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="t-circ">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Circuits</p>
+          <h2 id="t-circ">A circuit <em>per blockchain</em></h2>
+          <p data-reveal>A server or an exit relay cannot link your Bitcoin lookup to your Solana lookup through the circuit, because they never share one.</p>
+        </div>
+        
+        <div class="glow-grid" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-tor" aria-hidden="true"></span><h3>Isolated by family</h3><p>Each blockchain family has its own isolated circuits. Prices and swaps have their own too. All EVM networks count as one family.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Bitcoin stays inside Tor</h3><p>Bitcoin lookups go to mempool’s onion service. No exit relay is involved, so no relay sees the hostname or the volume.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Retries stay on Tor</h3><p>A stream refused by a closed circuit is retried on a new one. A refusal on one family no longer moves the others. It never falls back to clear.</p></article>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="t-sees">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Who sees what</p>
+          <h2 id="t-sees">What each party <em>sees</em></h2>
+          <p data-reveal>In Tor mode, the default. This table comes from the network document in the repo, which lists every server by name.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">What each party sees when Kyro uses Tor</caption>
+            <thead><tr><th scope="col">Party</th><th scope="col">Sees</th><th scope="col">Does not see</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Your internet provider</th><td>That you use Tor</td><td>The hosts you reach, your addresses, your amounts</td></tr><tr><th scope="row">First relay</th><td>Your IP address</td><td>The destination and the request</td></tr><tr><th scope="row">Middle relay</th><td>Two other relays</td><td>You, and the request</td></tr><tr><th scope="row">Exit relay</th><td>The hostname and the volume</td><td>You, and the content (TLS runs up to the server)</td></tr><tr><th scope="row">Blockchain server</th><td>The addresses and transactions requested, from a Tor exit</td><td>Your IP address</td></tr><tr><th scope="row">Monero node</th><td>Blocks downloaded and transactions you publish</td><td>Your IP, your addresses, your view key</td></tr><tr><th scope="row">Price server (CoinGecko)</th><td>The coins and currency requested</td><td>Your IP address, your addresses</td></tr><tr><th scope="row">Swap provider</th><td>Tokens, amounts and the recipient address</td><td>Your IP address</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tbl-note">With Tor off, every server sees your IP address and your internet provider sees the hosts. <a href="/privacy/">Privacy policy</a></p></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="t-closed">
+      <div class="wrap feature-row flip">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Fails closed</p>
+          <h2 id="t-closed">No Tor, <em>no request</em></h2>
+          <div data-reveal>
+          <p>If Tor is not ready within 60 seconds, the request fails with <code>TOR_UNAVAILABLE</code>. Nothing goes out in the clear, and there is no automatic fallback.</p>
+          <p>Leaving Tor is your decision. Kyro asks in a native system window drawn outside the interface, so a compromised page cannot turn Tor off without you.</p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card" role="img" aria-label="Kyro when Tor is not ready within 60 seconds: the request fails and nothing is sent in the clear."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3"/></svg><span><b>Tor is not ready</b><small>TOR_UNAVAILABLE after 60 s</small></span><em>Stopped</em></div>
+    <div class="kw-kv"><span>Sent in the clear</span><b class="up">Nothing</b></div>
+    <div class="kw-kv"><span>Automatic fallback</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Turning Tor off</span><b>Your choice</b></div>
+  </div></div>
+  <div class="dlg" role="img" aria-label="Native system window asking: turn Tor off? With Cancel and Turn off buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Turn Tor off?</div>
+    <div class="dlg-body">
+      <p>Servers would see your IP address, and your internet provider the hosts you reach.</p>
+      <div class="dlg-actions"><i class="on">Cancel</i><i>Turn off</i></div>
+    </div>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="t-limits">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Limits</p>
+          <h2 id="t-limits">What Tor <em>does not do</em></h2>
+          <p data-reveal>Tor is one layer. It hides your network location. These things stay true with it on.</p>
+        </div>
+        
+        <div class="glow-grid glow-grid-4" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Servers still see lookups</h3><p>The server you query sees the addresses and transactions you ask about. To avoid that, use your own node.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-accounts" aria-hidden="true"></span><h3>Blockchains stay public</h3><p>Most chains publish every transfer. Tor hides your IP, and your addresses remain linked to each other on chain when you link them.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Swap providers see the order</h3><p>Swap APIs see the tokens, amounts and recipient. Exolix sees your source and destination addresses, so it can link those two accounts.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>Two background requests</h3><p>The signed update check and the anonymous weekly count. Both go over Tor and both can be turned off.</p></article>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="t-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="t-faq">Common <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Do I need to install Tor or Tor Browser?</summary><div class="answer"><p>No. Kyro embeds its own Tor client, Arti, from The Tor Project. It starts in the background when the app opens.</p></div></details><details><summary>Can I turn Tor off?</summary><div class="answer"><p>Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address.</p></div></details><details><summary>Does Tor make my transactions anonymous?</summary><div class="answer"><p>No. Tor hides who is asking. It does not hide what is asked: the server you query still sees the addresses and transactions you look up, and public blockchains stay public.</p></div></details><details><summary>Why is Kyro slower over Tor?</summary><div class="answer"><p>Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers.</p></div></details><details><summary>Do my own servers go through Tor too?</summary><div class="answer"><p>Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family.</p></div></details>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="t-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="t-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3>Why a wallet should use Tor</h3><p>The problem in plain words: your IP and your addresses in the same log line.</p></li><li class="glow-card spot"><h3><a href="/monero/">Monero over Tor</a></h3><p>A desktop Monero wallet that scans blocks on your machine.</p></li><li class="glow-card spot"><h3><a href="/security/">How Kyro protects your keys</a></h3><p>Tor covers the network. This covers the vault and the signature.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">A wallet that <em>keeps quiet</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

@@ -4,8 +4,9 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, statSync, copyFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SITE, VERSION, REPO, page, iconOf } from './layout.mjs';
+import { SITE, VERSION, REPO, page, iconOf, setLive } from './layout.mjs';
 import * as P from './pages.mjs';
+import * as M from './more.mjs';
 import { feeBps } from './components.mjs';
 
 // Usage counters: read here, at build time, so visitors' browsers never contact anyone else. The last
@@ -101,7 +102,14 @@ if (curve.length < 2) fail(['fees.ts: KYRO_FEE_CURVE not found']);
 // The worked examples in docs/SWAP_FEES.md and on /fees/.
 for (const [usd, bps] of [[7, 354], [200, 111], [300, 106], [3000, 80]]) if (feeBps(curve, usd) !== bps) errors.push(`fee curve: $${usd} gives ${feeBps(curve, usd)} bps, expected ${bps}`);
 
-const pages = [
+const changelog = readFileSync(resolve(HERE, '..', '..', 'CHANGELOG.md'), 'utf8');
+
+// The brand files are served from the repo's brand/ folder, unchanged.
+const brandDir = join(OUT, 'img', 'brand');
+mkdirSync(brandDir, { recursive: true });
+for (const f of readdirSync(resolve(HERE, '..', '..', 'brand'))) copyFileSync(resolve(HERE, '..', '..', 'brand', f), join(brandDir, f));
+
+const allPages = () => [
   P.home(chains),
   P.features(chains),
   P.security(),
@@ -111,8 +119,12 @@ const pages = [
   P.chainsIndex(chains),
   P.privacy(),
   P.codeSigningPolicy(),
-  ...chains.map((c) => P.chainPage(c, chains))
+  ...chains.map((c) => P.chainPage(c, chains)),
+  ...M.morePages(chains, changelog)
 ];
+// Two passes: the first learns which pages exist, the second renders links against that list.
+setLive(allPages().map((p) => p.path));
+const pages = allPages();
 const notFound = P.notFound();
 
 for (const p of [...pages, notFound]) write(fileFor(p.path), page({ ...p, chains }));
@@ -128,7 +140,7 @@ if (existsSync(chainsDir)) {
   }
 }
 
-const priority = (path) => (path === '/' ? '1.0' : path.startsWith('/chains/') && path !== '/chains/' ? '0.6' : '0.8');
+const priority = (path) => (path === '/' ? '1.0' : /^\/(chains|guides)\/./.test(path) ? '0.6' : '0.8');
 write(
   'sitemap.xml',
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
@@ -160,7 +172,7 @@ const ascii = (s) =>
     .replace(/\u00a0/g, ' ');
 
 const short = (p) => p.description.replace(/\s*\|.*$/, '');
-const named = { '/features/': 'Features', '/security/': 'Security', '/fees/': 'Fees', '/download/': 'Download', '/faq/': 'FAQ', '/chains/': 'Supported blockchains' };
+const named = { '/features/': 'Features', '/security/': 'Security', '/fees/': 'Fees', '/download/': 'Download', '/faq/': 'FAQ', '/chains/': 'Supported blockchains', ...M.LLMS_NAMES };
 const hw = chains.filter((c) => c.features.hardware).map((c) => c.name);
 
 const llms = `# Kyro Wallet
@@ -172,10 +184,10 @@ Key facts:
 - Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Full table: ${SITE}/fees/
 - Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
 - Blockchains (${chains.length}): ${P.listNames(chains.map((c) => c.name))}. 220+ tokens.
-- Staking: SOL (Solana), ADA (Cardano), TRX (TRON).
-- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}.
+- Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON) and NEAR; ETH liquid staking with Lido; lending on Aave v3. 14 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.
+- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}. From a hardware account, Earn covers Lido and Aave only.
 - Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
-- Security status: internal security review done; no external audit published yet.
+- Security status: internal security review done; no external audit published yet. Installers are not code-signed yet, so Windows and macOS warn on first launch.
 - Downloads: only from GitHub Releases (${REPO}/releases). No mobile app.
 - Vulnerability reports: privately via GitHub security advisories (${REPO}/security).
 

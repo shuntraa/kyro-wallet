@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monero desktop wallet with Tor and local scanning | Kyro</title>
+  <meta name="description" content="A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.">
+  <link rel="canonical" href="https://kyrowallet.com/monero/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Monero desktop wallet with Tor and local scanning | Kyro">
+  <meta property="og:description" content="A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.">
+  <meta property="og:url" content="https://kyrowallet.com/monero/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Monero desktop wallet with Tor and local scanning | Kyro">
+  <meta name="twitter:description" content="A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/monero/#page","url":"https://kyrowallet.com/monero/","name":"Private Monero desktop wallet","description":"A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Monero","item":"https://kyrowallet.com/monero/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/monero/#faq","url":"https://kyrowallet.com/monero/","mainEntity":[{"@type":"Question","name":"Is Kyro a full Monero wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Send, receive and swap XMR from the same app as your other coins. Kyro talks to a monerod node and scans blocks itself. No light-wallet server is used."}},{"@type":"Question","name":"Does the Monero node see my addresses?","acceptedAnswer":{"@type":"Answer","text":"No. Neither your addresses nor your view key are sent. The node sees the block ranges you download, the decoy outputs requested for a send, and the transactions you publish, from a Tor exit relay."}},{"@type":"Question","name":"Can I import my 25-word Monero seed?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro derives Monero from your BIP39 recovery phrase, and a 25-word phrase created elsewhere cannot be imported. The other way works: Kyro shows a 25-word seed that restores your wallet in Monero GUI, Feather or Cake Wallet."}},{"@type":"Question","name":"Can I use my own Monero node?","acceptedAnswer":{"@type":"Answer","text":"Yes. Set your own monerod in Settings, or a .onion address. Kyro checks it is on the right network and refuses to fall back to the default node if yours goes down."}},{"@type":"Question","name":"Does Monero work on a Ledger or Trezor in Kyro?","acceptedAnswer":{"@type":"Answer","text":"No. Monero on a hardware wallet is not supported."}},{"@type":"Question","name":"Why do I not see an old XMR payment?","acceptedAnswer":{"@type":"Answer","text":"Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings › Security and it scans again from there."}}]}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/" aria-current="page">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Monero</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Monero desktop wallet · XMR</p>
+            <h1 id="page-title">Private Monero, <em>on your desktop</em></h1>
+            <p class="lead">Kyro keeps Monero honest: blocks are scanned on your own machine, your view key never leaves it, and every request goes over Tor.</p>
+            <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
+            <span class="os-icon" data-dl-icon aria-hidden="true"></span>
+            <span data-dl-label>Download Kyro</span>
+          </a><a class="btn btn-ghost btn-xl" href="/chains/monero/">XMR details</a></div>
+          </div>
+          
+  <div class="coin-hero c-monero spot">
+    <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
+    <div class="coin-3d"><img class="c-back" src="/img/coins/xmr.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/xmr.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/xmr.svg" width="240" height="240" alt="Monero (XMR) coin" fetchpriority="high"></div>
+  </div>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="m-scan">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Local scanning</p>
+          <h2 id="m-scan">The node sends blocks. <em>Your machine reads them.</em></h2>
+          <div data-reveal>
+          <p>Light-wallet servers need your view key, so they see every incoming payment. Kyro uses none. It downloads blocks from a monerod node and the Rust core analyses them with a view key that stays on your computer.</p>
+          <ul class="checks"><li>Default node: Cake Wallet’s public node. You can replace it.</li><li>The node never receives your addresses, spend key or view key.</li><li>The scan state is stored on disk, encrypted.</li><li>A lying node can hide incoming payments or delay your sync. It cannot steal funds.</li></ul></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">12.3456 <span>XMR</span></p>
+    <p class="kw-label scan-l">Scanning Monero blocks on your machine… 87 %</p>
+    <div class="scan"><i></i></div>
+    <div class="kw-kv"><span>View key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Spend key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Node</span><b>Sends blocks, gets no key</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="m-sees">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Who sees what</p>
+          <h2 id="m-sees">What the node <em>learns</em></h2>
+          <p data-reveal>A Monero wallet has to talk to someone. Here is exactly what that costs you, with Tor on and off.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix">
+            <caption class="visually-hidden">What a Monero node sees</caption>
+            <thead><tr><th scope="col"></th><th scope="col">Tor on (default)</th><th scope="col">Tor off</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Block ranges you download</th><td>Yes, so your wallet’s rough age</td><td>Yes</td></tr><tr><th scope="row">Decoy outputs requested</th><td>Yes</td><td>Yes</td></tr><tr><th scope="row">Transactions you publish</th><td>Yes</td><td>Yes</td></tr><tr><th scope="row">Your IP address</th><td>No, a Tor exit relay. None on a .onion node</td><td>Yes, and it can be linked to what you publish</td></tr><tr><th scope="row">Your addresses, view key, spend key, phrase</th><td>Never</td><td>Never</td></tr>
+            </tbody>
+          </table>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="m-keys">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Keys</p>
+          <h2 id="m-keys">One phrase, <em>and an exit</em></h2>
+          <p data-reveal>Monero comes from the same recovery phrase as your other coins, with its own 25-word seed if you want to leave.</p>
+        </div>
+        
+        <div class="glow-grid" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Same recovery phrase</h3><p>Your XMR derives from your BIP39 phrase, using the scheme of Ledger’s Monero app. It is not a native 25-word Monero phrase.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-send" aria-hidden="true"></span><h3>A way out</h3><p>Kyro shows a 25-word Monero seed in the protected phrase window. It restores the wallet in Monero GUI, Feather or Cake Wallet.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>One limit</h3><p>A 25-word phrase made elsewhere cannot be imported. Send those XMR to your Kyro address instead.</p></article>
+        </div></div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="m-swap">
+      <div class="wrap feature-row flip">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Swap</p>
+          <h2 id="m-swap">In and out of <em>XMR</em></h2>
+          <div data-reveal>
+          <p>Swap to or from Monero through Exolix: no account, no key, over Tor. BTC, LTC, DOGE, TRX, ETH, SOL, USDT and USDC all reach XMR, and XMR reaches them.</p>
+          <ul class="checks"><li>Kyro checks that the order pays your own address and that the deposit address is valid.</li><li>It then sends an ordinary transfer. No contract, no third-party transaction.</li><li>Kyro’s fee is a second ordinary transfer of the coin you sell. The swap value is reduced by the same rate as other swaps.</li><li>Exolix sees your source and destination addresses and can link them.</li></ul>
+          <p>Step by step: swap to Monero</p></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
+    <div class="sw-side">
+      <p class="kw-label">You send</p>
+      <strong data-a>1.0000</strong><small data-at>BTC</small>
+    </div>
+    <div class="sw-coin"><span class="sw-ring"></span><div class="sw-spin" data-spin><img data-f src="/img/coins/btc.svg" width="96" height="96" alt=""><img data-b src="/img/coins/xmr.svg" width="96" height="96" alt=""></div></div>
+    <div class="sw-side sw-right">
+      <p class="kw-label">You receive ≈</p>
+      <strong data-bn>100.00</strong><small data-bt>XMR</small>
+    </div>
+    <div class="sw-foot"><span data-rate>1 BTC ≈ 100 XMR</span><span>Service fee included</span></div>
+  </div></div></div>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="m-build">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Under the hood</p>
+          <h2 id="m-build">Rust, and <em>no home-grown crypto</em></h2>
+          <p data-reveal>Monero is easy to get subtly wrong, so Kyro leans on a reviewed library and checks its own output.</p>
+        </div>
+        
+        <div class="glow-grid" data-reveal-group>
+          <article class="glow-card spot g-ice"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>monero-oxide</h3><p>Addresses, scanning, key images, CLSAG, Bulletproofs+ and decoy selection come from monero-oxide / monero-wallet 0.2. Cypher Stack audited that library in May 2025. Kyro itself has not been externally audited.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Checked after signing</h3><p>Rust builds the transfer, then verifies that the signed transaction creates exactly the outputs you approved.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Honest status</h3><p>This integration is young. There is no Monero on hardware wallets, and it is tested against official vectors. Start small.</p></article>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="m-faq">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="m-faq">Common <em>questions</em></h2>
+          
+        </div>
+        <div class="faq" data-reveal>
+          <details><summary>Is Kyro a full Monero wallet?</summary><div class="answer"><p>Yes. Send, receive and swap XMR from the same app as your other coins. Kyro talks to a monerod node and scans blocks itself. No light-wallet server is used.</p></div></details><details><summary>Does the Monero node see my addresses?</summary><div class="answer"><p>No. Neither your addresses nor your view key are sent. The node sees the block ranges you download, the decoy outputs requested for a send, and the transactions you publish, from a Tor exit relay.</p></div></details><details><summary>Can I import my 25-word Monero seed?</summary><div class="answer"><p>No. Kyro derives Monero from your BIP39 recovery phrase, and a 25-word phrase created elsewhere cannot be imported. The other way works: Kyro shows a 25-word seed that restores your wallet in Monero GUI, Feather or Cake Wallet.</p></div></details><details><summary>Can I use my own Monero node?</summary><div class="answer"><p>Yes. Set your own monerod in Settings, or a .onion address. Kyro checks it is on the right network and refuses to fall back to the default node if yours goes down.</p></div></details><details><summary>Does Monero work on a Ledger or Trezor in Kyro?</summary><div class="answer"><p>No. Monero on a hardware wallet is not supported.</p></div></details><details><summary>Why do I not see an old XMR payment?</summary><div class="answer"><p>Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings › Security and it scans again from there.</p></div></details>
+        </div></div>
+    </section>
+    
+    <section class="section" aria-labelledby="m-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="m-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3><a href="/chains/monero/">Monero in Kyro, feature by feature</a></h3><p>Send, receive, swap and hardware availability at a glance.</p></li><li class="glow-card spot"><h3>Swap to Monero</h3><p>From any supported coin to XMR, with what each party sees.</p></li><li class="glow-card spot"><h3><a href="/tor/">How Kyro uses Tor</a></h3><p>Circuits, exit relays and what happens when Tor is down.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Get <em>Monero</em> on your desktop</h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/faq/">FAQ</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>
