@@ -59,6 +59,8 @@ export const history: Record<keyof typeof fr, string> = {
   'history.suspect': 'Suspicious transfer (not signed by you)',
   'history.suspectZeroWho': 'Suspicious zero transfer · {who}',
   'history.suspectZero': 'Suspicious zero transfer',
+  'history.suspectTinyWho': 'Tiny transfer, possible scam · {who}',
+  'history.suspectTiny': 'Tiny transfer, possible scam',
   'history.receivedFrom': 'Received from {who}',
   'history.toSelf': 'To your own account',
   'history.sentTo': 'Sent to {who}',

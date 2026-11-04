@@ -60,6 +60,8 @@ export const history = {
   'history.suspect': 'Transfert suspect (pas signé par toi)',
   'history.suspectZeroWho': 'Transfert nul suspect · {who}',
   'history.suspectZero': 'Transfert nul suspect',
+  'history.suspectTinyWho': 'Transfert minuscule, arnaque possible · {who}',
+  'history.suspectTiny': 'Transfert minuscule, arnaque possible',
   'history.receivedFrom': 'Reçu de {who}',
   'history.toSelf': 'Vers ton propre compte',
   'history.sentTo': 'Envoi à {who}',

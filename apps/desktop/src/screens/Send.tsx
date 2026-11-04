@@ -44,6 +44,7 @@ import {
   type EvmAdapter,
   type FeeChoice,
   type FeeEstimates,
+  type SetAside,
   type FeeLevel,
   type FeeParams,
   type SolanaAdapter,
@@ -105,7 +106,7 @@ import { KaspaSpendable, KaspaSummaryView, KaspaTxStatusLine } from '../componen
 import { TonCommentField, TonSummaryView, TonTxStatusLine } from '../components/TonSend';
 import { CosmosMemoField, CosmosSpendable, CosmosSummaryView, CosmosTxStatusLine } from '../components/CosmosSend';
 import { AptosSummaryView, AptosTxStatusLine } from '../components/AptosSend';
-import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
+import { DustOnlyNote, PoisoningWarning, SetAsideNote } from '../components/Poisoning';
 import { XmrDestinationLine, XmrLockedNote, XmrSendNotes, XmrSummaryView, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
@@ -283,6 +284,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [amountStr, setAmountStr] = useState('');
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
+  // Dust protection (UTXO chains): tiny coins from strangers stay out of sends unless included.
+  const [includeDust, setIncludeDust] = useState(false);
+  const dustAdapter = adapter && 'setAside' in adapter ? (adapter as { setAside: () => Promise<SetAside> }) : null;
+  const setAside = useAsync<SetAside>(dustAdapter ? () => dustAdapter.setAside() : null, [dustAdapter]);
+  useEffect(() => setIncludeDust(false), [asset?.id]);
   const decimals = asset?.decimals ?? 18;
   const rateBounds = useMemo(() => feeRateBounds(asset?.family), [asset?.family]);
   const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge' || asset?.family === 'bch' || asset?.family === 'dash';
@@ -471,7 +477,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   }, [asset, fees.data, rateBounds, rateUnit, utxoLike, t]);
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
-  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null, isCosmos ? [memo.trim(), cosmosBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
+  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, includeDust, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null, isCosmos ? [memo.trim(), cosmosBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
   const [built, setBuilt] = useState<Built | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
@@ -494,7 +500,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     const algoNote = isAlgo && memo.trim() ? { memo: memo.trim() } : {};
     const ada = isAda ? { ...(adaToken && adaTokenQty !== null ? { cardanoToken: { policy: adaToken.policy, name: adaToken.name, quantity: adaTokenQty.toString() } } : {}), ...(memo.trim() ? { memo: memo.trim() } : {}) } : isCosmos && memo.trim() ? { memo: memo.trim() } : {};
     const ton = isTon && memo ? { memo } : {};
-    const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max: max && !adaTokenMode, ...tag, ...xlm, ...ada, ...hbarMemo, ...algoNote, ...ton })) as AnyUnsigned;
+    const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max: max && !adaTokenMode, ...(includeDust ? { includeDust } : {}), ...tag, ...xlm, ...ada, ...hbarMemo, ...algoNote, ...ton })) as AnyUnsigned;
     let summary: EvmTxSummary | null = null;
     if (unsigned.family === 'evm') {
       summary = await (adapter as EvmAdapter).decode(unsigned);
@@ -936,6 +942,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 {rt('send.fiatShare', { b: (c) => <strong className="font-semibold">{c}</strong> }, { amount: fmtCrypto(amountBase, decimals, asset.symbol), pct: Math.round(balanceShare), cur, symbol: asset.symbol })}
               </Notice>
             )}
+            {setAside.data && setAside.data.count > 0 && <SetAsideNote amount={fmtCrypto(setAside.data.amount, decimals, asset.symbol)} hidden={hideBalances} include={includeDust} onInclude={setIncludeDust} />}
             {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
             {isXlm && <StellarSpendable account={xlmMe.data} hidden={hideBalances} />}
             {xlmBelowActivation && <span className="text-[12px] text-down">{t('send.xlmBelowActivation')}</span>}

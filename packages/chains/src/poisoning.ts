@@ -185,7 +185,10 @@ export function isSuspectAddress(recipient: string, suspects: string[], family: 
 }
 
 /** Per-chain dust thresholds, base units: 10 × the network's dust limit. */
-const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n, zec: 540n };
+const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 29_400n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n, zec: 540n };
+
+/** Dust threshold of a UTXO chain, base units; undefined elsewhere. */
+export const dustUnits = (family: Family): bigint | undefined => DUST_UNITS[family];
 
 /** Fiat value under which any transfer is dust (planting a look-alike costs less than that). */
 export const DUST_FIAT = 1;
@@ -196,4 +199,9 @@ export function isDustAmount(family: Family, amount: bigint, fiat: number | null
   if (fiat !== null && Number.isFinite(fiat) && fiat < DUST_FIAT) return true;
   const units = DUST_UNITS[family];
   return units !== undefined && amount <= units;
+}
+
+/** EVM: a transfer in worth under 1 (fiat), not already marked. Poisoners also send real tokens, in tiny amounts. */
+export function isTinyLure(e: { direction: string; kind: string; amount: bigint; suspect?: unknown }, family: Family | undefined, fiat: number | null): boolean {
+  return family === 'evm' && e.kind === 'transfer' && e.direction === 'in' && !e.suspect && isDustAmount(family, e.amount, fiat);
 }

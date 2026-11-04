@@ -35,3 +35,4 @@ export * from './watch';
 export { approvalsOfCalldata, simulateCall, type SimApproval, type SimAsset, type SimBackend, type SimCall, type SimContext, type SimMove, type SimReport, type SimWarning } from './evm/simulate';
 export * from './watchScan';
 export * from './poisoning';
+export * from './dust';

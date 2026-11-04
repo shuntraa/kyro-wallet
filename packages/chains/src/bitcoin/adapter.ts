@@ -9,6 +9,7 @@ import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTx
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
+import { setAsideOf, splitDust, type SetAside } from '../dust';
 import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 import { scriptTypeOf } from '../utxo/utxo';
@@ -187,6 +188,18 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     return lists.flat();
   }
 
+  /** Coins to spend, and the dust left out of sends (dust.ts). */
+  private async splitCoins() {
+    const own = new Set((await this.scan()).map((a) => a.address));
+    const coins = (await this.utxos()).map((u) => ({ ...u, address: u.owner.address }));
+    return splitDust(coins, 'btc', (address) => call('btc_address_txs', { address }), own);
+  }
+
+  /** Tiny coins from strangers, left out of sends. */
+  async setAside(): Promise<SetAside> {
+    return setAsideOf((await this.splitCoins()).aside);
+  }
+
   /** First never-used SegWit change address. */
   private async changeAddress(): Promise<DerivedAddress> {
     const addrs = await this.scan();
@@ -209,7 +222,8 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     if (params.fee.family !== 'btc') throw new Error(l10n('Frais Bitcoin attendus', 'Bitcoin fees expected'));
     const to = params.to.trim();
     if (!this.isValidAddress(to)) throw new Error(l10n('Adresse Bitcoin invalide pour ce réseau', 'Invalid Bitcoin address for this network'));
-    const utxos = await this.utxos();
+    const { spend, aside } = await this.splitCoins();
+    const utxos = params.includeDust ? [...spend, ...aside] : spend;
     const recipientType = outputTypeOf(to);
     const feeRate = params.fee.satPerVb;
     let sel: Selection | null = null;

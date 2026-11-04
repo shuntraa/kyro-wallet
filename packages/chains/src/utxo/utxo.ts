@@ -13,6 +13,7 @@ import type { HwSigner } from '../hw';
 import { esploraUsage, scanWatchSource, watchScriptOutput, type WatchSource } from '../watchScan';
 import { isRbfSignaled, planCancel, planSpeedUp, RBF_SEQUENCE, RBF_VSIZE_MARGIN, ReplaceRefused, type UtxoReplacementPlan } from '../replace';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
+import { setAsideOf, splitDust, type SetAside } from '../dust';
 
 bitcoin.initEccLib(ecc);
 
@@ -381,6 +382,18 @@ export class UtxoAdapter {
     return lists.flat();
   }
 
+  /** Coins to spend, and the dust left out of sends (dust.ts). */
+  private async splitCoins() {
+    const own = new Set((await this.scan()).map((a) => a.address));
+    const coins = (await this.coins()).map((c) => ({ ...c, address: c.owner.address }));
+    return splitDust(coins, this.family, (address) => this.backend.addressTxs(address), own);
+  }
+
+  /** Tiny coins from strangers, left out of sends. */
+  async setAside(): Promise<SetAside> {
+    return setAsideOf((await this.splitCoins()).aside);
+  }
+
   private async changeAddress(): Promise<DerivedUtxoAddress> {
     const known = (await this.scan()).filter((a) => a.change === 1);
     for (let i = 0; i < MAX_SCAN; i++) {
@@ -400,7 +413,8 @@ export class UtxoAdapter {
     const recipientScript = this.scriptOf(to);
     const recipientType = scriptTypeOf(recipientScript);
     if (!recipientType) throw new Error(l10n('Type d’adresse non pris en charge', 'Address type not supported'));
-    const coins = await this.coins();
+    const { spend, aside } = await this.splitCoins();
+    const coins = params.includeDust ? [...spend, ...aside] : spend;
     const { model, minOutput } = this.spec;
     const sel = params.max
       ? selectAllUtxoCoins(coins, rate, recipientType, model, minOutput)

@@ -4,6 +4,7 @@
 
 import { lookalikeSegments, type Family, type KnownAddress, type Lookalike } from '@kyro/chains';
 import { IconInfo, IconWarn } from './icons';
+import { HIDDEN } from './kit';
 import { t, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
@@ -61,6 +62,22 @@ export function DustOnlyNote() {
     <div role="status" className="fade-in flex items-start gap-2 rounded-ctl border border-l-2 border-warn/35 border-l-warn bg-warn/[.06] px-3.5 py-2.5 text-[12px] leading-[1.5] text-[#f7d9a4]">
       <IconInfo size={14} className="mt-0.5 shrink-0 text-warn" />
       <span>{t('send.poisonDustOnly')}</span>
+    </div>
+  );
+}
+
+/** Dust protection: tiny coins from strangers, in the balance but left out of sends. */
+export function SetAsideNote({ amount, hidden, include, onInclude }: { amount: string; hidden: boolean; include: boolean; onInclude: (v: boolean) => void }) {
+  const { t } = useT();
+  return (
+    <div className="flex flex-col gap-1 rounded-ctl border border-line-2 px-3 py-2.5 text-[12.5px] leading-[1.5] text-mute">
+      <span>
+        <span className="font-semibold text-text">{t('send.setAside', { amount: hidden ? HIDDEN : amount })}</span> {t('send.setAsideWhy')}
+      </span>
+      <label className="flex cursor-pointer items-center gap-2 font-medium text-text2">
+        <input type="checkbox" checked={include} onChange={(e) => onInclude(e.target.checked)} />
+        {t('send.setAsideInclude')}
+      </label>
     </div>
   );
 }

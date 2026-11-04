@@ -23,6 +23,7 @@ import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } fr
 import { derivePubkey, parseXpub } from '../bitcoin/xpub';
 import type { HwSigner } from '../hw';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
+import { setAsideOf, splitDust, type OwnedCoin, type SetAside } from '../dust';
 import { esploraUsage, scanWatchSource, type WatchSource } from '../watchScan';
 
 export type { ZecTxSummary } from '@kyro/shared';
@@ -224,20 +225,24 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
   }
 
   /** Candidate coins of the account (Rust re-reads each previous transaction). Mined (coinbase) coins are left out. */
-  private async candidates(): Promise<{ coins: ZecCandidate[]; total: bigint }> {
-    const addrs = (await this.scan()).filter((a) => a.used);
+  private async candidates() {
+    const all = await this.scan();
+    const addrs = all.filter((a) => a.used);
     const lists = await Promise.all(addrs.map(async (owner) => ({ owner, list: await this.backend.addressUtxos(owner.address) })));
-    const coins: ZecCandidate[] = [];
-    let total = 0n;
+    const coins: Array<OwnedCoin & { candidate: ZecCandidate }> = [];
     for (const { owner, list } of lists) {
       for (const u of list) {
         if (u.coinbase) continue;
         if (!Number.isSafeInteger(u.value) || u.value < 0) throw new Error(l10n('Montant de sortie hors limites', 'Output amount out of range'));
-        coins.push({ txid: u.txid, vout: u.vout, change: owner.change === 1, index: owner.index });
-        total += BigInt(u.value);
+        coins.push({ candidate: { txid: u.txid, vout: u.vout, change: owner.change === 1, index: owner.index }, txid: u.txid, vout: u.vout, value: BigInt(u.value), address: owner.address });
       }
     }
-    return { coins, total };
+    return splitDust(coins, 'zec', (address) => this.backend.addressTxs(address), new Set(all.map((a) => a.address)));
+  }
+
+  /** Tiny coins from strangers, left out of sends. */
+  async setAside(): Promise<SetAside> {
+    return setAsideOf((await this.candidates()).aside);
   }
 
   private async changeIndex(): Promise<number> {
@@ -255,7 +260,8 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     const problem = zecAddressProblem(to, this.chain.network);
     if (problem) throw new Error(problem);
     if (!params.max && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
-    const { coins } = await this.candidates();
+    const { spend, aside } = await this.candidates();
+    const coins = (params.includeDust ? [...spend, ...aside] : spend).map((c) => c.candidate);
     if (coins.length === 0) throw new Error(l10n('Aucune pièce Zcash transparente à dépenser', 'No transparent Zcash coin to spend'));
     const request: ZecSendArgs = { to, amount: params.max ? '' : params.amount.toString(), max: !!params.max, coins, changeIndex: await this.changeIndex() };
     const summary = await this.backend.preview(request);

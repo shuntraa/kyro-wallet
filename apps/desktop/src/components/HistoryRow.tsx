@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import type { ReactNode } from 'react';
 import type { Currency } from '@kyro/shared';
+import { isTinyLure } from '@kyro/chains';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtFiat, fmtWhen, shortAddress, MINUS } from '../lib/format';
 import type { HistoryEntry } from '../state/history';
@@ -11,7 +12,7 @@ import { CoinIcon, HIDDEN } from './kit';
 import { idx } from './motion';
 import { t } from '../i18n';
 
-export function entryTitle(e: HistoryEntry): string {
+export function entryTitle(e: HistoryEntry, tiny = false): string {
   if (e.label) return e.label;
   const family = (e.asset?.family ?? 'evm') as ContactFamily;
   const who = e.counterparty ? findContact(e.counterparty, family)?.name ?? shortAddress(e.counterparty) : null;
@@ -20,13 +21,14 @@ export function entryTitle(e: HistoryEntry): string {
   // Address-poisoning lure: never « sent to X » / « received from X » (that is the bait).
   if (e.suspect === 'notSigned') return who ? t('history.suspectTo', { who }) : t('history.suspect');
   if (e.suspect === 'zero') return who ? t('history.suspectZeroWho', { who }) : t('history.suspectZero');
+  if (tiny) return who ? t('history.suspectTinyWho', { who }) : t('history.suspectTiny');
   if (e.direction === 'in') return who ? t('history.receivedFrom', { who }) : t('history.received');
   if (e.direction === 'self') return t('history.toSelf');
   return who ? t('history.sentTo', { who }) : t('history.sendShort');
 }
 
-export function statusBadge(e: HistoryEntry) {
-  if (e.suspect) return <Badge tone="warn">{t('history.badgeSuspect')}</Badge>;
+export function statusBadge(e: HistoryEntry, tiny = false) {
+  if (e.suspect || tiny) return <Badge tone="warn">{t('history.badgeSuspect')}</Badge>;
   if (e.status === 'pending') return <Badge tone="warn">{t('history.badgePending')}</Badge>;
   if (e.status === 'failed') return <Badge tone="down">{t('history.badgeFailed')}</Badge>;
   return <Badge tone="mute">{e.asset?.family === 'sol' ? t('history.badgeFinalized') : t('history.badgeConfirmed')}</Badge>;
@@ -38,6 +40,7 @@ export function HistoryRow({ e, price, currency, hidden, compact, i = 0, action 
   const decimals = e.asset?.decimals ?? 18;
   const symbol = e.asset?.symbol ?? '';
   const units = Number(e.amount) / 10 ** decimals;
+  const tiny = isTinyLure(e, e.asset?.family, price === null ? null : units * price);
   const sign = e.kind === 'approval' ? '' : e.direction === 'in' ? '+' : MINUS;
   const sub = [e.time ? fmtWhen(e.time) : t('history.rowInProgress'), e.chainLabel, e.fee && e.feeAsset && e.direction !== 'in' ? t('history.rowFee', { fee: fmtCrypto(e.fee, e.feeAsset.decimals, e.feeAsset.symbol) }) : null, e.note ?? null].filter(Boolean).join(' · ');
   return (
@@ -51,11 +54,11 @@ export function HistoryRow({ e, price, currency, hidden, compact, i = 0, action 
         )}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[14px] font-medium">{entryTitle(e)}</span>
+        <span className="truncate text-[14px] font-medium">{entryTitle(e, tiny)}</span>
         <span className="truncate text-[12px] text-mute">{sub}</span>
       </span>
       {action && <span className="flex shrink-0 items-center gap-1.5">{action}</span>}
-      {!compact && <span className="shrink-0">{statusBadge(e)}</span>}
+      {!compact && <span className="shrink-0">{statusBadge(e, tiny)}</span>}
       <span className="flex w-[150px] shrink-0 flex-col items-end">
         <span className={cn('text-[14px] font-medium', color)}>{hidden ? HIDDEN : `${sign}${fmtCrypto(e.amount, decimals, symbol)}`}</span>
         <span className="text-[12px] text-mute">{hidden ? HIDDEN : price !== null && e.asset ? fmtFiat(units * price, currency) : compact ? (e.status === 'pending' ? t('history.rowPending') : '') : '—'}</span>

@@ -107,6 +107,8 @@ export interface BuildParams {
   fee: FeeParams;
   /** Send everything (native: balance minus fee). */
   max?: boolean;
+  /** UTXO chains: also spend the coins set aside as dust (dust.ts). */
+  includeDust?: boolean;
   /** XRP Ledger only: destination tag (0 … 4 294 967 295). */
   destinationTag?: number;
   /** Cardano only: native token to send (its output carries the min-ADA; `amount` is then ignored). */
