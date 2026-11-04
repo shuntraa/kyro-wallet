@@ -11,6 +11,7 @@
 
 :root {
   --bg: #000;
+  --ink: #04060a;
   --panel: #0b0d10;
   --card: #0e1114;
   --card-2: #13171b;
@@ -43,7 +44,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; background: #000; scroll-padding-top: 96px; }
+html { -webkit-text-size-adjust: 100%; background: var(--ink); scroll-padding-top: 96px; }
 body { margin: 0; background: transparent; color: var(--text-2); font: 400 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; }
 body::after { content: ''; position: fixed; inset: 0; z-index: 90; pointer-events: none; background: url('/img/noise.svg'); opacity: .03; }
 img, svg { display: block; max-width: 100%; }
@@ -143,13 +144,9 @@ h1 em { color: var(--ice); }
 @media (min-width: 900px) { .nav { display: block; } .menu { display: none; } }
 
 /* ---------- silk background: one fixed canvas, the CSS gradient under it is the fallback */
-.silk { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; z-index: 0; overflow: hidden; pointer-events: none; background:
-  radial-gradient(52% 58% at 76% 22%, rgba(124, 196, 255, .62), rgba(42, 120, 215, .34) 42%, transparent 74%),
-  radial-gradient(46% 50% at 14% 86%, rgba(42, 120, 215, .4), transparent 72%),
-  conic-gradient(from 205deg at 64% 36%, #000, #06234d 14%, #000 28%, #0a3a7c 46%, #000 62%, #04183a 82%, #000); }
-.silk canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.4s ease; will-change: transform; }
+.silk { position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; z-index: 0; overflow: hidden; pointer-events: none; background: var(--ink) radial-gradient(60% 60% at 74% 24%, rgba(42, 120, 215, .2), transparent 74%); }
+.silk canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.4s ease; }
 .silk canvas.on { opacity: 1; }
-.silk::before { content: ''; position: absolute; inset: 0; z-index: 1; background-image: radial-gradient(rgba(170, 220, 255, .12) .7px, transparent .8px); background-size: 7px 7px; -webkit-mask-image: linear-gradient(to bottom, #000, transparent 75%); mask-image: linear-gradient(to bottom, #000, transparent 75%); opacity: .4; }
 
 /* ---------- hero */
 .hero { position: relative; }
@@ -680,9 +677,9 @@ pre { margin: 12px 0 0; padding: 16px 18px; overflow-x: auto; border: 1px solid 
 
 /* ---------- footer */
 .site-footer { position: relative; z-index: 2; font-size: 14.5px; }
-.foot-main { padding: 60px 0 30px; border-top: 1px solid var(--line); background: #000; }
+.foot-main { padding: 60px 0 30px; border-top: 1px solid var(--line); background: var(--ink); }
 /* KYRO cut out of a black sheet: the live silk behind the page lights the letters. */
-.foot-word { width: 100%; aspect-ratio: 3696 / 712; background: #000; -webkit-mask: url('/img/kyro-word-cut.svg') center / 100% 100% no-repeat; mask: url('/img/kyro-word-cut.svg') center / 100% 100% no-repeat; }
+.foot-word { width: 100%; aspect-ratio: 3696 / 712; background: var(--ink); -webkit-mask: url('/img/kyro-word-cut.svg') center / 100% 100% no-repeat; mask: url('/img/kyro-word-cut.svg') center / 100% 100% no-repeat; }
 .footer-cols { display: grid; grid-template-columns: repeat(2, 1fr); gap: 34px 24px; }
 .footer-brand { grid-column: 1 / -1; max-width: 300px; }
 .footer-brand p { margin-top: 12px; color: var(--mute); }
