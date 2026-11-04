@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week93:  downloads in total
+8:  active wallets this week96:  downloads in total
 
 ================================================================
 Features: send, swap, stake and hardware wallets | Kyro Wallet
@@ -337,7 +337,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week93:  downloads in total
+8:  active wallets this week96:  downloads in total
 
 Recommended
 
