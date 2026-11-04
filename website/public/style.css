@@ -867,3 +867,15 @@ pre { margin: 12px 0 0; padding: 16px 18px; overflow-x: auto; border: 1px solid 
 .stack2 { display: grid; gap: 16px; }
 .feature-visual .kw-card-narrow, .ph-grid .kw-card-narrow { width: 100%; }
 .step3 .kw-card-narrow { width: 100%; font-size: 12.5px; }
+
+/* Phones: iOS pans the page sideways if anything overflows, even when clipped. Nothing may. */
+html { overflow-x: hidden; touch-action: pan-y pinch-zoom; }
+body { position: relative; max-width: 100%; }
+.hero, .final, .page-hero, .coins { contain: paint; }
+@media (max-width: 1099px), (max-height: 639px) {
+  .hero-stage { perspective: none; }
+  .kw-tilt { transform: none; transform-style: flat; will-change: auto; }
+  .js .kw-wrap { animation-name: kw-rise; }
+  .kw-wrap::before { inset: -6% 0 -10%; }
+}
+@keyframes kw-rise { from { opacity: 0; transform: translateY(36px); } }

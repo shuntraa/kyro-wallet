@@ -179,7 +179,7 @@ Check the claims on this page yourself.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -320,7 +320,7 @@ Why there is a swap fee at all.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -361,7 +361,7 @@ Or
 
 ## Download the file
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 Q: Downloaded the file in your browser?
 A: The installers are not code-signed yet, so Windows and macOS show a warning the first time you open a file downloaded by a browser. Verify the checksum first, then:
@@ -567,7 +567,7 @@ A: Right-click Kyro in Applications and choose Open, or go to System Settings > 
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -748,7 +748,7 @@ Missing a blockchain? Ask on GitHub.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -943,7 +943,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1070,7 +1070,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1193,7 +1193,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1316,7 +1316,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1439,7 +1439,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1562,7 +1562,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1685,7 +1685,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1808,7 +1808,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -1931,7 +1931,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2054,7 +2054,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2177,7 +2177,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2300,7 +2300,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2423,7 +2423,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2546,7 +2546,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2669,7 +2669,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2792,7 +2792,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -2915,7 +2915,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3040,7 +3040,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3165,7 +3165,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3290,7 +3290,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3417,7 +3417,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3540,7 +3540,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3665,7 +3665,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3786,7 +3786,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -3907,7 +3907,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4032,7 +4032,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4157,7 +4157,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4280,7 +4280,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4407,7 +4407,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4534,7 +4534,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4659,7 +4659,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4782,7 +4782,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -4905,7 +4905,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5028,7 +5028,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5151,7 +5151,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5274,7 +5274,7 @@ All 36 blockchains
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5418,7 +5418,7 @@ Tor covers the network. This covers the vault and the signature.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5561,7 +5561,7 @@ Circuits, exit relays and what happens when Tor is down.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5711,7 +5711,7 @@ Slippage, approvals, gas and the rest, in plain words.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -5866,7 +5866,7 @@ The native window, and why it reads Rust's decoding.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6185,7 +6185,7 @@ What Kyro protects, and what no software can.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6296,7 +6296,7 @@ Why it exists and how it is paid for.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6413,7 +6413,7 @@ All releases and files on GitHub
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6540,7 +6540,7 @@ Logos and colours for writing about Kyro.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6625,7 +6625,7 @@ Kyro has no mobile app and no external audit published yet. The current version 
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6698,7 +6698,7 @@ New to the words? Read the glossary
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6791,7 +6791,7 @@ Import your phrase, or send your coins across.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6856,7 +6856,7 @@ The lookalike address in your own history.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -6941,7 +6941,7 @@ The lookalike address in your own history.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7022,7 +7022,7 @@ Your IP and your addresses in the same log line.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7091,7 +7091,7 @@ Paper, in order, offline. What to do and what to avoid.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7178,7 +7178,7 @@ Import your phrase, or send your coins across.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7257,7 +7257,7 @@ Check a release with SHA-256 in two minutes.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7328,7 +7328,7 @@ Pick a validator, delegate, and get your SOL back.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7409,7 +7409,7 @@ From the welcome screen to your first receive address.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7500,7 +7500,7 @@ From the welcome screen to your first receive address.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7595,7 +7595,7 @@ From the welcome screen to your first receive address.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
@@ -7630,6 +7630,6 @@ How Kyro protects your keys.
 
 Version 1.0.6 · Free · Windows, macOS and Linux
 
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums

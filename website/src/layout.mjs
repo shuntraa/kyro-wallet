@@ -266,7 +266,7 @@ export const osCards = () => html`
             <a class="os-card os-row spot" data-os="linux" href="${DL}${FILES.appimage}">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
-              <span class="os-file">AppImage</span>
+              <span class="os-file">AppImage, most x86_64 distros</span>
             </a>
           </div>`;
 
