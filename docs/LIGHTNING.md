@@ -1,10 +1,45 @@
-# Lightning payments through Boltz
+# Paying Lightning invoices
 
-**Status: not built.** Kyro cannot pay Lightning invoices. The check that had to pass before any code was written failed on 2026-11-04: Boltz is suspended and cannot be reached over Tor. No Boltz host is in the allowlist, and nothing in Kyro contacts Boltz.
+Kyro pays a BOLT11 invoice from a Bitcoin account through a **submarine swap**: an on-chain payment to a script the provider can only claim by paying the invoice. No channels, nothing to receive. Boltz itself is gone (see "Boltz, 2026-11-04" below), but other operators run the same open backend.
 
-The plan was to pay a BOLT11 invoice from a Bitcoin account with a Boltz submarine swap (on-chain BTC to Lightning), without channels.
+## Provider check, 2026-11-04
 
-## What was checked
+Every request below went through Kyro's own client (`NetClient::fetch`, embedded Arti, default settings, Tor on), with the hosts allowed for that run. No funds were sent. Orders that were created were left to expire: nothing can happen to them without a deposit.
+
+Test invoices were throwaway BOLT11 strings signed by a random key, with a random payment hash that no one can settle. With no route hint, the providers refuse them ("could not find route to pay invoice"). With one route hint through a public node they pass that check.
+
+| Provider | Keyless | Over Tor | BTC to Lightning | Limits (sat) | Fees |
+|---|---|---|---|---|---|
+| **Coinos** `swap.coinos.io` (Boltz backend, CLN node `030dfc53…45e8`) | Yes | Yes, through an exit, 0.6 to 15 s a request | **Works.** `POST /v2/swap/submarine` gives 201, status reads back | 25,000 to 600,000 | 0.1% + 302 sat miner fee: 100,402 sat for a 100,000 sat invoice |
+| **SATS Routing** `satsrouting.exchange`, onion `w2mqd2fc…auad.onion` (Boltz backend, LND node `02a53f9d…8d1a`) | Yes | Yes, onion and exit, 0.6 to 8 s a request | **Works.** 201 on the onion, status reads back | 50,000 to 5,000,000 | 0.5% + 167 sat miner fee: 100,667 sat for a 100,000 sat invoice |
+| **Exolix** `exolix.com` | Yes | Yes | **Does not work.** `/currencies/BTC/networks` lists `LIGHTNING` (`^lnbc…`), but `/rate` and `POST /transactions` answer 422 "Such exchange pair is not available" for BTC, LTC, XMR, ETH and USDT sources, fixed and float, by amount or by withdrawal amount, and with the invoice in the order. BTC to LTC on the same client answered 200 | none | none |
+| Middle Way `api.middle-way.space` and its onion | No | Reached | `/v2/swap/submarine` answers 401 "unauthorized" | not read | not read |
+| ZEUS Swaps `swaps.zeuslsp.com` | Not established | Reached | `/api/v2/…` answers 502, three runs | not read | not read |
+| SideShift `sideshift.ai` | No: its docs require a key or signed requests | Blocked | Cloudflare challenge, 403 | not read | not read |
+| exch.cx | Not established | No | Timed out at the exit, three tries. Direct connection refused too | not read | not read |
+
+FixedFloat, ChangeNOW, Changelly, SimpleSwap and StealthEX were not tried: they need a key, by their own documentation or from memory of it, which was not re-checked.
+
+**Decision:** build on Coinos and SATS Routing. Exolix stays out, even though it advertises the network: no pair exists behind it.
+
+### What was measured
+
+- **Minimum invoice life.** Both refuse an invoice valid 15 or 20 minutes ("invoice expiry too short") and accept 30 minutes, 45 minutes, 1, 2, 6 and 24 hours. A real invoice from a public Lightning address, valid 15 minutes, was refused the same way, so many short invoices cannot be paid at all.
+- **Refund timeout.** Both set `timeoutBlockHeight` 975576 at height 974568: 1,008 blocks, about 7 days.
+- **Confirmation.** `acceptZeroConf` is false on both: the provider pays once the deposit has one confirmation.
+- **Lockup address.** Rebuilt locally from two live responses, one per provider, and identical: MuSig2 aggregate of the claim key then the refund key, taproot tree of the two leaves. The other key order gives a different address.
+- **Status.** `GET /v2/swap/{id}` gives `{"status":"invoice.set"}` on a fresh swap and 404 on an unknown id.
+- **Time to pay.** Not measured: no swap was funded.
+
+### What this does not prove
+
+No deposit was sent, so no provider has been seen paying an invoice or failing to. The two operators are small, and their endpoints came from SwapMarket's public list (`src/configs/mainnet.ts`, updated 2026-11-03). That matters less here than with a custodial service, because Kyro rebuilds the lockup address itself and a false endpoint gains nothing from it. Boltz's swap backend was suspended after attacks whose details are not public, and these operators run that software or a fork. Those attacks were reported against the service, and nothing read says they could take a user's locked coins, but this was not established either way.
+
+## Boltz, 2026-11-04
+
+**Not used.** Boltz is suspended and could not be reached over Tor. No Boltz host is in the allowlist.
+
+### What was checked
 
 All requests went through Kyro's own client (`NetClient::fetch`, embedded Arti, default settings). No funds were involved.
 
@@ -19,18 +54,18 @@ The control shows that Tor and onion services were working on this client, and t
 
 Requests tried on each base: `GET /v2/version`, `GET /v2/swap/submarine`, `GET /v2/chain/BTC/height`, and `POST /v2/swap/submarine` with a junk invoice.
 
-## Why it fails
+### Why it fails
 
 - **The domain is gone from DNS.** `boltz.exchange`, `www.boltz.exchange`, `api.boltz.exchange` and `api.testnet.boltz.exchange` return NXDOMAIN from Cloudflare's DoH resolver, and `api.boltz.exchange` also from the LAN resolver. `api.docs.boltz.exchange` did not resolve either. The `.exchange` registry (RDAP) shows `client hold`, a registrar transfer on 2026-09-01 and a last change on 2026-09-18. A held domain is not published in DNS. The RDAP record does not say who set the hold, or why.
 - **Boltz suspended swaps.** The web app sets `swapsSuspended: true` (commit "feat: add swap service suspension notice", #1596, 2026-08-04). Its notice says the API stays available for cooperative refunds and that unilateral refunds do not depend on Boltz. That API could not be reached from here either.
 - **Development has slowed.** On the default branches, the last commit on `boltz-backend` is dated 2026-07-27, and the latest `boltz-client` commits are dependency bumps. Neither repository is archived.
 - **Secondary sources, not verified against Boltz directly.** Press reports say swaps stopped on 2026-08-03 after automated attacks, with no restart date. A GitHub issue (Ride-The-Lightning/RTL#1724) says the founders stepped down on 2026-08-12 and an unnamed group is taking over, and it records the NXDOMAIN on 2026-09-30. Boltz's own posts on X were not read.
 
-## What could not be determined
+### What could not be determined
 
 Pairs, fees and limits could not be read: no Boltz server answered, so Kyro has no live figures. The swap creation flow, Tor acceptance and API failure behaviour are also unverified. Figures quoted elsewhere are from before the suspension and should not be relied on.
 
-## Before reconsidering
+### Before reconsidering Boltz itself
 
 All of these need to be true:
 
@@ -40,6 +75,6 @@ All of these need to be true:
 4. The new operator, the suspension's cause and the fixes are understood. Boltz said it could not safely reopen, so its security needs a fresh look rather than trust carried over from before.
 5. The API and script format are re-read from current documentation. The docs host does not resolve today, and the format may change at relaunch.
 
-The requirements for the feature itself are unchanged: local verification of the invoice and of the lockup script, a seed-derived refund key, encrypted swap state with resume after restart, and a script-path refund that needs no Boltz server. A script-path refund matters most here, because a service that disappears mid-swap is no longer a theoretical case.
+The requirements any provider must meet: local verification of the invoice and of the lockup script, a seed-derived refund key, encrypted swap state with resume after restart, and a script-path refund that needs no Boltz server. A script-path refund matters most here, because a service that disappears mid-swap is no longer a theoretical case.
 
 To re-run the check, add a temporary `#[ignore]` test to `apps/desktop/src-tauri/src/live_smoke.rs` that fetches the hosts above, with mempool's onion as the control. The hosts must be added to `ALLOWED_HOSTS` or `ONION_HOSTS` for that run only.
