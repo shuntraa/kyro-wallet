@@ -64,6 +64,7 @@ mod near_backend;
 mod net;
 mod network;
 mod phrase_window;
+mod received_tokens;
 mod server_approval;
 mod servers;
 mod settings;
@@ -249,6 +250,7 @@ pub fn run() {
             commands_utxo::bch_address_info,
             commands_utxo::bch_address_utxos,
             commands_utxo::bch_address_txs,
+            commands_utxo::bch_received_tokens,
             commands_utxo::bch_tx_hex,
             commands_utxo::bch_fee_rates,
             commands_utxo::bch_tip_height,
@@ -315,6 +317,7 @@ pub fn run() {
             commands_sui::sui_balance,
             commands_sui::sui_txs,
             commands_sui::sui_token_balances,
+            commands_sui::sui_received_tokens,
             commands_sui::sui_build_token_tx,
             commands_sui::sui_build_tx,
             commands_sui::sui_sign_tx,
@@ -370,6 +373,7 @@ pub fn run() {
             commands_cosmos::cosmos_address,
             commands_cosmos::cosmos_account,
             commands_cosmos::cosmos_txs,
+            commands_cosmos::cosmos_received_tokens,
             commands_cosmos::cosmos_build_tx,
             commands_cosmos::cosmos_sign_tx,
             commands_cosmos::cosmos_broadcast,

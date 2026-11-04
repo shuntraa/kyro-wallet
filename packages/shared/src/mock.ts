@@ -1025,6 +1025,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     },
     btc_backend_info: () => servers.btc.info(),
     btc_address_info: (a) => servers.btc.addressInfo(a.address),
+    bch_received_tokens: () => Promise.resolve([{ id: 'ab'.repeat(32), symbol: null, decimals: null, amount: '42', known: false, nfts: 1 }]),
     btc_address_utxos: (a) => servers.btc.addressUtxos(a.address),
     btc_address_txs: (a) => servers.btc.addressTxs(a.address),
     btc_fee_rates: () => servers.btc.feeRates(),

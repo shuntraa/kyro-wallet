@@ -12,6 +12,7 @@ import { cn } from '../lib/cn';
 import { HW_STAKE } from '../lib/staking';
 import { fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
+import { ReceivedTokens } from '../components/ReceivedTokens';
 import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
@@ -95,6 +96,8 @@ export function AssetDetail({ id }: { id: string }) {
   const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
   const hbarAccount = useAsync(supported?.family === 'hbar' && adapters.hbar ? () => adapters.hbar!.account() : null, [supported?.id, adapters.hbar], { intervalMs: 30_000 });
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
+  const tokenFamily = supported && !supported.contract && (supported.family === 'sui' || supported.family === 'cosmos' || supported.family === 'bch') ? supported.family : null;
+  const tokenAddress = tokenFamily ? adapters[tokenFamily]?.getAddress() : undefined;
   const xmr = useXmrStatus(supported?.family === 'xmr' ? adapters.xmr : null);
   const xmrRunning = xmr.status?.running ?? false;
   const xmrWasRunning = useRef(false);
@@ -285,6 +288,7 @@ export function AssetDetail({ id }: { id: string }) {
         </aside>
       </div>
 
+      {tokenFamily && tokenAddress && <ReceivedTokens family={tokenFamily} address={tokenAddress} hidden={hideBalances} />}
       <div className="flex min-h-0 flex-1 gap-5">
         {/* Price-only assets have no account here: no activity card. */}
         {supported && (

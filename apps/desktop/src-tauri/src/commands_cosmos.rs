@@ -26,6 +26,15 @@ pub(crate) fn ctx(state: &AppState) -> CosmosCtx<'_> {
     }
 }
 
+/// The other denoms of the address: read only, Kyro can't send them.
+#[tauri::command]
+pub async fn cosmos_received_tokens(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<crate::received_tokens::ReceivedToken>> {
+    cosmos_backend::received_tokens(&ctx(&state), &address).await
+}
+
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((

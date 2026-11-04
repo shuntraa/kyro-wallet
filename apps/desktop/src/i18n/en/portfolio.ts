@@ -2,6 +2,12 @@
 import type { portfolio as fr } from '../fr/portfolio';
 
 export const portfolio: Record<keyof typeof fr, string> = {
+  'portfolio.otherTokens': 'Other tokens on this address',
+  'portfolio.cantSendYet': 'Can’t be sent from Kyro yet',
+  'portfolio.unknownTokens': 'Unknown tokens ({n})',
+  'portfolio.unknownTokensNote': 'Anyone can send tokens to an address, and many of these are spam. Don’t visit a site named by a token.',
+  'portfolio.rawUnits': 'raw units',
+  'portfolio.nft': 'NFT',
   'portfolio.period1J': '1D',
   'portfolio.period1S': '1W',
   'portfolio.period1M': '1M',

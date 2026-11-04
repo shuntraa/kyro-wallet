@@ -6,6 +6,9 @@
 - Tor bridges: if your country blocks Tor, paste plain bridge lines in Settings › Privacy. Kyro
   then connects only through them and stays offline if none answers. obfs4 and other disguised
   bridges don't work yet.
+- Tokens you received on Sui, Cosmos Hub and Bitcoin Cash now show on the SUI, ATOM and BCH pages,
+  read only: they can't be sent from Kyro yet. Tokens Kyro can't name stay folded, since many are
+  spam.
 - Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
   settings to one encrypted file, with a password you choose. Import shows what would change
   first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.

@@ -37,6 +37,8 @@ Why the onion: `mempool.space` does not respond to Tor exit relays (timeout at t
 
 **Gains and losses** add no host: the figures come from the history cache and the kept price charts, and a background round refreshes a year of prices for the coins held (at most 20, one every few seconds) through the same CoinGecko chart request as the asset page.
 
+**Tokens received** add no host: Sui `balances` and `coinMetadata` on the Sui GraphQL API, Cosmos `/cosmos/bank/v1beta1/balances/{address}` and `/ibc/apps/transfer/v1/denoms/{hash}` on the same LCD, `blockchain.scripthash.listunspent` with `tokens_only` on the same Fulcrum servers. They see the address they already see, and only when you open that coin's page.
+
 **Local alerts** (price, funds received) add no request and no host: they read the prices and the history cache the app already holds, and the notification is shown by the operating system.
 
 In clear mode, every server contacted sees your **IP address**; in Tor mode (default), it sees that of an exit relay. In both modes, blockchain nodes see the **public addresses** whose balance you request. To avoid this: use **your own nodes** (Settings → Networks and servers).

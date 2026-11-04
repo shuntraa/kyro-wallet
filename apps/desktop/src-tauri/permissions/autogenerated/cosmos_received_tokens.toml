@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cosmos-received-tokens"
+description = "Enables the cosmos_received_tokens command without any pre-configured scope."
+commands.allow = ["cosmos_received_tokens"]
+
+[[permission]]
+identifier = "deny-cosmos-received-tokens"
+description = "Denies the cosmos_received_tokens command without any pre-configured scope."
+commands.deny = ["cosmos_received_tokens"]

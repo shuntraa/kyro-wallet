@@ -290,6 +290,11 @@ export function createDemoSui(d: DemoSuiDeps) {
       return { bcs, summary, context };
     },
     sui_token_balances: () => Promise.resolve([]),
+    sui_received_tokens: () =>
+      Promise.resolve([
+        { id: '0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP', symbol: 'DEEP', decimals: 6, amount: '1500000', known: true, nfts: 0 },
+        { id: '0x0808969e2d82898562c31228654b98323ca5619ee4bdeda5c813313a7297c7ef::cn::CN', symbol: 'CN', decimals: 9, amount: '4012524291', known: false, nfts: 0 },
+      ]),
     sui_build_token_tx: () => Promise.reject(new Error(l10n('Démo : envoi de jetons Sui non simulé', 'Demo: Sui token sends are not simulated'))),
     sui_sign_tx: async (a) => {
       d.requireUnlocked();

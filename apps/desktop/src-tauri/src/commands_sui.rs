@@ -426,6 +426,15 @@ pub async fn sui_token_balances(
     sui_backend::token_balances(&ctx(&state), &address).await
 }
 
+/// The other coins of the address: read only, Kyro can't send them.
+#[tauri::command]
+pub async fn sui_received_tokens(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<crate::received_tokens::ReceivedToken>> {
+    sui_backend::received_tokens(&ctx(&state), &address).await
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiBuilt {

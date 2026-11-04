@@ -10,6 +10,7 @@ use wallet_core::Network;
 
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
+use crate::received_tokens::{self, ReceivedToken, MAX_TOKENS};
 
 /// `timeout_height` = latest height + this (≈ 10 min at ≈ 6 s per block).
 pub const TIMEOUT_BLOCKS: u64 = 100;
@@ -23,6 +24,8 @@ const DEC: u128 = 1_000_000_000_000_000_000;
 const DEFAULT_GAS_PRICE: u128 = 5_000_000_000_000_000;
 const MAX_GAS_PRICE: u128 = DEC;
 const TXS_PER_QUERY: u32 = 25;
+/// `ibc/…` lines whose origin is looked up for one address.
+const RECEIVED_TRACES: usize = 20;
 
 pub fn default_url(net: Network) -> &'static str {
     match net {
@@ -219,6 +222,42 @@ pub async fn account(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<CosmosAcco
         balance: balance.to_string(),
         spendable: spendable.to_string(),
     })
+}
+
+/// Every denom of `address` but uatom. An `ibc/…` denom is only a hash: its origin is read from the
+/// same node, and only counts if it hashes back (`cosmos_apply_trace`). A failed read leaves the
+/// line unknown. Mainnet only: the table of names is about the Hub's channels.
+pub async fn received_tokens(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<Vec<ReceivedToken>> {
+    let a = wallet_core::cosmos_normalize_address(address)?;
+    let v = get_ok(
+        ctx,
+        &format!("/cosmos/bank/v1beta1/balances/{a}?pagination.limit={MAX_TOKENS}"),
+    )
+    .await?;
+    let balances = v["balances"]
+        .as_array()
+        .ok_or_else(|| bad("Cosmos: unreadable balances"))?;
+    let mut rows = received_tokens::cosmos_rows(balances);
+    if ctx.network == Network::Mainnet {
+        let traces = rows
+            .iter()
+            .filter_map(|r| received_tokens::ibc_hash(&r.id))
+            .take(RECEIVED_TRACES)
+            .map(|h| {
+                let path = format!("/ibc/apps/transfer/v1/denoms/{h}");
+                async move { get_ok(ctx, &path).await }
+            });
+        let traces = futures_util::future::join_all(traces).await;
+        let ibc = rows
+            .iter_mut()
+            .filter(|r| received_tokens::ibc_hash(&r.id).is_some());
+        for (row, answer) in ibc.zip(traces) {
+            if let Ok(answer) = answer {
+                received_tokens::cosmos_apply_trace(row, &answer);
+            }
+        }
+    }
+    Ok(received_tokens::finish(rows))
 }
 
 /// Gas price in uatom per gas, 18 decimals: the fee-market price, or the Hub minimum if the
