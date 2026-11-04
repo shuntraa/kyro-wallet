@@ -2,9 +2,9 @@
 // Application state: vault lifecycle, settings, accounts/adapters, routing.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
-import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
-import { readJson, writeJson } from '../lib/storage';
+import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchAddress, type WatchOnlyAccount } from '@kyro/shared';
+import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, watchToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
+import { readJson, scoped, setWalletScope, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, KYRO_SWAP_FEE, type SwapFeeConfig, type SwapProvider } from '@kyro/swap';
@@ -91,6 +91,11 @@ interface AppContextValue {
   /** Hardware-wallet accounts stored on this computer (public keys only). */
   hwAccounts: WatchOnlyAccount[];
   activeHw: WatchOnlyAccount | null;
+  /** Public addresses and xpubs followed without a key. */
+  watchAddresses: WatchAddress[];
+  /** The active account when it is a watch address: nothing can be signed. */
+  activeWatch: WatchAddress | null;
+  refreshWatchAddresses: (select?: string) => Promise<void>;
   activeAccountId: string;
   selectAccount: (id: string) => void;
   refreshHwAccounts: (select?: string) => Promise<void>;
@@ -135,6 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [extraAccounts, setExtraAccounts] = useState<ReadonlyMap<number, Accounts>>(new Map());
   const [selection, setSelection] = useState<Partial<Record<AccountChain, number>>>({});
   const [hwAccounts, setHwAccounts] = useState<WatchOnlyAccount[]>([]);
+  const [watchAddresses, setWatchAddresses] = useState<WatchAddress[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string>('vault');
   const [history, setHistory] = useState<Route[]>([{ name: 'portfolio' }]);
   const [hideBalances, setHideBalances] = useState(false);
@@ -176,14 +182,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStatus(s);
     const hw = await call('hw_accounts_get').catch(() => [] as WatchOnlyAccount[]);
     setHwAccounts(hw);
+    const watched = await call('watch_addresses_get').catch(() => [] as WatchAddress[]);
+    setWatchAddresses(watched);
+    const known = (id: string) => hw.some((a) => a.id === id) || watched.some((w) => w.id === id);
     if (!s.exists) {
-      // Hardware-wallet-only user: no vault, no password; the device confirms everything.
-      if (hw.length === 0) {
+      // No vault, no password: hardware wallets confirm on the device, watch addresses sign nothing.
+      if (hw.length === 0 && watched.length === 0) {
         setPhase('welcome');
         return;
       }
       setVaultAccounts(null);
-      setActiveAccountId((prev) => (hw.some((a) => a.id === prev) ? prev : (hw[0]?.id ?? 'vault')));
+      setActiveAccountId((prev) => (known(prev) ? prev : (hw[0]?.id ?? watched[0]?.id ?? 'vault')));
       setHideBalances(settingsRef.current.hideBalancesOnStart);
       setHistory([{ name: 'portfolio' }]);
       setPhase('ready');
@@ -196,8 +205,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const acc = await call('accounts_get');
     setVaultAccounts(acc);
     setVaultLists(await call('vault_accounts_get').catch(() => null));
-    setSelection(readJson<Partial<Record<AccountChain, number>>>(`accountSelection.${acc.network}`, {}));
-    setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) ? prev : 'vault'));
+    setSelection(readJson<Partial<Record<AccountChain, number>>>(scoped(`accountSelection.${acc.network}`), {}));
+    setActiveAccountId((prev) => (prev === 'vault' || known(prev) ? prev : 'vault'));
     setHideBalances(settingsRef.current.hideBalancesOnStart);
     setHistory([{ name: 'portfolio' }]);
     setPhase('ready');
@@ -285,6 +294,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const activeHw = activeAccountId === 'vault' ? null : (hwAccounts.find((a) => a.id === activeAccountId) ?? null);
+  const activeWatch = activeAccountId === 'vault' ? null : (watchAddresses.find((a) => a.id === activeAccountId) ?? null);
+  const single = !!activeHw || !!activeWatch;
+  setWalletScope(activeWatch ? activeWatch.id : '');
   const serversKey = JSON.stringify(settings.servers);
 
   const listedIndices = useMemo(() => {
@@ -326,10 +338,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const c of ACCOUNT_CHAINS) {
       const want = selection[c] ?? 0;
       const listed = vaultLists?.[c]?.some((e) => e.index === want) ?? want === 0;
-      out[c] = !activeHw && listed && vaultSets.has(want) ? want : 0;
+      out[c] = !single && listed && vaultSets.has(want) ? want : 0;
     }
     return out;
-  }, [selection, vaultLists, vaultSets, activeHw]);
+  }, [selection, vaultLists, vaultSets, single]);
 
   const accounts = useMemo<WalletAccounts | null>(() => {
     if (activeHw) {
@@ -339,23 +351,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
     }
+    if (activeWatch) {
+      try {
+        return watchToAccounts(activeWatch, config?.network ?? 'testnet');
+      } catch {
+        return null;
+      }
+    }
     if (!vaultAccounts) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.accounts ?? vaultAccounts;
     return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, zec: of('zec').zec, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, ...(of('kas').kas ? { kas: of('kas').kas } : {}), polkadot: of('dot').polkadot, algo: of('algo').algo, xmr: of('xmr').xmr, ton: of('ton').ton, cosmos: of('cosmos').cosmos, aptos: of('apt').aptos };
-  }, [activeHw, vaultAccounts, vaultSets, selectedAccounts]);
+  }, [activeHw, activeWatch, config?.network, vaultAccounts, vaultSets, selectedAccounts]);
   const hwAdapters = useMemo<AdapterSet | null>(
     () => (activeHw && accounts ? createAdapters(visibleAccounts(accounts), settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
     [accounts, serversKey, activeHw?.id],
   );
+  const watchAdapters = useMemo<AdapterSet | null>(() => (activeWatch && accounts ? createAdapters(visibleAccounts(accounts), settingsRef.current.servers) : null), [accounts, serversKey, activeWatch?.id]);
   const adapters = useMemo<AdapterSet | null>(() => {
     if (activeHw) return hwAdapters;
+    if (activeWatch) return watchAdapters;
     const base = vaultSets.get(0)?.adapters;
     if (!base) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.adapters ?? base;
-    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, kaspa: of('kas').kaspa, polkadot: of('dot').polkadot, algo: of('algo').algo, xmr: of('xmr').xmr, ton: of('ton').ton, cosmos: of('cosmos').cosmos, aptos: of('apt').aptos, zec: of('zec').zec, all: [], hw: null };
+    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, kaspa: of('kas').kaspa, polkadot: of('dot').polkadot, algo: of('algo').algo, xmr: of('xmr').xmr, ton: of('ton').ton, cosmos: of('cosmos').cosmos, aptos: of('apt').aptos, zec: of('zec').zec, all: [], hw: null, watch: false };
     set.all = ACCOUNT_CHAINS.flatMap((c) => familyAdapters(set, c));
     return set;
-  }, [activeHw, hwAdapters, vaultSets, selectedAccounts]);
+  }, [activeHw, hwAdapters, activeWatch, watchAdapters, vaultSets, selectedAccounts]);
 
   const accountSources = useMemo<AccountSource[]>(() => {
     const addrs = (a: WalletAccounts | Accounts, c: AccountChain): string[] =>
@@ -387,6 +408,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!hwAdapters || !accounts) return [];
       return ACCOUNT_CHAINS.map((c) => ({ family: c, index: activeHw.account, name: activeHw.label, adapters: familyAdapters(hwAdapters, c), addresses: addrs(accounts, c), path: '' })).filter((x) => x.adapters.length > 0);
     }
+    if (activeWatch) {
+      if (!watchAdapters || !accounts) return [];
+      return ACCOUNT_CHAINS.map((c) => ({ family: c, index: 0, name: activeWatch.label, adapters: familyAdapters(watchAdapters, c), addresses: [...new Set(addrs(accounts, c))], path: '' })).filter((x) => x.adapters.length > 0);
+    }
     const out: AccountSource[] = [];
     for (const c of ACCOUNT_CHAINS) {
       for (const e of vaultLists?.[c] ?? [{ index: 0, name: defaultAccountName(c, 0) }]) {
@@ -395,19 +420,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     return out;
-  }, [activeHw, hwAdapters, accounts, vaultLists, vaultSets]);
+  }, [activeHw, hwAdapters, activeWatch, watchAdapters, accounts, vaultLists, vaultSets]);
 
-  const isMultiAccount = useCallback((c: AccountChain) => !activeHw && (vaultLists?.[c]?.length ?? 1) > 1, [activeHw, vaultLists]);
+  const isMultiAccount = useCallback((c: AccountChain) => !single && (vaultLists?.[c]?.length ?? 1) > 1, [single, vaultLists]);
   const accountName = useCallback(
-    (c: AccountChain) => (activeHw ? activeHw.label : (vaultLists?.[c]?.find((e) => e.index === selectedAccounts[c])?.name ?? t('settings.mainAccount'))),
-    [activeHw, vaultLists, selectedAccounts],
+    (c: AccountChain) => (activeHw ? activeHw.label : activeWatch ? activeWatch.label : (vaultLists?.[c]?.find((e) => e.index === selectedAccounts[c])?.name ?? t('settings.mainAccount'))),
+    [activeHw, activeWatch, vaultLists, selectedAccounts],
   );
   const networkRef = useRef<Network | null>(null);
   networkRef.current = vaultAccounts?.network ?? null;
   const selectChainAccount = useCallback((c: AccountChain, index: number) => {
     setSelection((prev) => {
       const next = { ...prev, [c]: index };
-      if (networkRef.current) writeJson(`accountSelection.${networkRef.current}`, next);
+      if (networkRef.current) writeJson(scoped(`accountSelection.${networkRef.current}`), next);
       return next;
     });
   }, []);
@@ -441,10 +466,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const hw = await call('hw_accounts_get');
       setHwAccounts(hw);
       if (select) setActiveAccountId(select);
-      else setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) ? prev : status?.exists ? 'vault' : (hw[0]?.id ?? 'vault')));
-      if (!status?.exists && hw.length === 0) setPhase('welcome');
+      else setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) || watchAddresses.some((w) => w.id === prev) ? prev : status?.exists ? 'vault' : (hw[0]?.id ?? watchAddresses[0]?.id ?? 'vault')));
+      if (!status?.exists && hw.length === 0 && watchAddresses.length === 0) setPhase('welcome');
     },
-    [status?.exists],
+    [status?.exists, watchAddresses],
+  );
+
+  const refreshWatchAddresses = useCallback(
+    async (select?: string) => {
+      const list = await call('watch_addresses_get');
+      setWatchAddresses(list);
+      if (select) setActiveAccountId(select);
+      else setActiveAccountId((prev) => (prev === 'vault' || hwAccounts.some((a) => a.id === prev) || list.some((w) => w.id === prev) ? prev : status?.exists ? 'vault' : (hwAccounts[0]?.id ?? list[0]?.id ?? 'vault')));
+      if (!status?.exists && hwAccounts.length === 0 && list.length === 0) setPhase('welcome');
+    },
+    [status?.exists, hwAccounts],
   );
 
   const lock = useCallback(async () => {
@@ -488,6 +524,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     accountName,
     hwAccounts,
     activeHw,
+    watchAddresses,
+    activeWatch,
+    refreshWatchAddresses,
     activeAccountId,
     selectAccount,
     refreshHwAccounts,

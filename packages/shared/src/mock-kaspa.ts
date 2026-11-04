@@ -288,6 +288,14 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
       const n = a.account === undefined || a.account === null ? 0 : Number(a.account);
       return n === 0 ? state.history.map((h) => ({ ...h, accepted: h.accepted || (state.submitted.has(h.txid) && d.now() - state.submitted.get(h.txid)! >= ACCEPT_MS) })) : [];
     },
+    kas_watch_account: async (a) => {
+      await backend();
+      return { address: String(a.address), balance: '0', spendable: '0', utxoCount: 0, scanned: 1 };
+    },
+    kas_watch_txs: async () => {
+      await backend();
+      return [];
+    },
     kas_tx_status: async (a) => {
       const id = String(a.txid ?? '').trim();
       if (!/^[0-9a-f]{64}$/.test(id)) throw invalidInput(l10n('identifiant : 64 caractères hexadécimaux minuscules', 'ID: 64 lowercase hexadecimal characters'));

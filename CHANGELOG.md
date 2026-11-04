@@ -9,6 +9,12 @@
 - Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the
   device shows the token, the amount and the recipient. No comment on these transfers: the
   app cannot show it.
+- Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
+  enabled or removed there (Receive), each shown in full on the device.
+- Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
+- Watch addresses: follow any public address or xpub with no key (balance, tokens, history).
+  The network is detected from what you paste. Send, Swap and Earn are off for them, and a Watch
+  tag shows it. Add one in Settings › Accounts, from the title bar, or on the welcome screen.
 
 ## 1.0.6
 

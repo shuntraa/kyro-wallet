@@ -37,6 +37,8 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Send, receive and swap** from the same window. Swaps carry a service fee from 0.7%, included in the rate — see [fees](https://kyrowallet.com/fees/).
 - **Earn**: staking on SOL, ADA, TRX and NEAR from accounts that stay in your name, ETH liquid staking with Lido, and USDT, USDC, DAI and WETH lending on Aave v3. Rates are estimates.
 - **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
+- **Watch addresses**: follow any public address or xpub with no key: balance, tokens and history, nothing signable.
+- **Local alerts**: price levels and funds received, as system notifications, computed on your device.
 - **Automatic signed updates**, downloaded silently over Tor, signature-checked, applied at the next start.
 - **Tor by default.** If Tor is unavailable, Kyro stops instead of silently connecting in the clear.
 - **No account, no tracking, no analytics, no personal data.** Once a week Kyro anonymously downloads a tiny file over Tor so GitHub's download counter can estimate active wallets; turn it off in Settings › Privacy.

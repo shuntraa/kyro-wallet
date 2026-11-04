@@ -56,6 +56,10 @@ pub struct AppState {
     pub hw_accounts_path: PathBuf,
     /// Serialises read-modify-write of `hw_accounts_path`.
     pub hw_store_lock: Mutex<()>,
+    /// Watch addresses (public data only), next to the vault.
+    pub watch_path: PathBuf,
+    /// Serialises read-modify-write of `watch_path`.
+    pub watch_store_lock: Mutex<()>,
     /// Held from the "no vault yet" check until the new vault is written and the session
     /// started (`vault_create` / `vault_import`): two calls can never both create one.
     pub vault_create_lock: tokio::sync::Mutex<()>,
@@ -130,6 +134,8 @@ impl AppState {
             hw: HwManager::default(),
             hw_accounts_path: crate::network::hw_accounts_file(&data_dir, network),
             hw_store_lock: Mutex::new(()),
+            watch_path: crate::network::watch_addresses_file(&data_dir, network),
+            watch_store_lock: Mutex::new(()),
             vault_create_lock: tokio::sync::Mutex::new(()),
             xmr: crate::xmr_backend::XmrManager::default(),
             session: Mutex::new(None),

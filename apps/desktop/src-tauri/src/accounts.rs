@@ -168,7 +168,7 @@ pub fn account_arg(account: Option<u32>) -> AppResult<u32> {
     Ok(a)
 }
 
-fn clean_name(name: &str) -> AppResult<String> {
+pub(crate) fn clean_name(name: &str) -> AppResult<String> {
     let n = name.trim();
     let len = n.chars().count();
     if len == 0

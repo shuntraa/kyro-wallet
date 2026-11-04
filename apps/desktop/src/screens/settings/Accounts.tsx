@@ -13,6 +13,7 @@ import { CopyButton } from '../../components/kit';
 import { Dialog } from '../../components/ui/dialog';
 import { Badge, Button, Input, Label, Notice, Spinner } from '../../components/ui/primitives';
 import { IconPlus, IconTrash } from '../../components/icons';
+import { WatchAddressesSection } from './WatchAddresses';
 import { useT } from '../../i18n';
 
 export function AccountsSection({ family }: { family?: AccountChain }) {
@@ -25,7 +26,12 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
   const { t } = useT();
 
   if (hwOnly) {
-    return <Notice tone="info">{t('settings.accountsHwOnly')}</Notice>;
+    return (
+      <>
+        <Notice tone="info">{t('settings.accountsHwOnly')}</Notice>
+        <WatchAddressesSection />
+      </>
+    );
   }
   if (!vaultLists) {
     return (
@@ -36,6 +42,7 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
   }
   return (
     <>
+      <WatchAddressesSection />
       <section className="flex flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between">
           <span className="text-[15px] font-semibold">{t('settings.vaultAccounts')}</span>

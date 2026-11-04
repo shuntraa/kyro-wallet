@@ -237,6 +237,51 @@ pub struct KaspaTxStatus {
     pub accepted: bool,
 }
 
+/// A watched address: the key fields are unused by the reads, which only go by `address`.
+fn watched(net: Network, address: &str) -> AppResult<Vec<KaspaOwnKey>> {
+    let address = address.trim();
+    wallet_core::kaspa_address_decode(net, address)?;
+    Ok(vec![KaspaOwnKey {
+        change: false,
+        index: 0,
+        xonly: [0; 32],
+        address: address.to_owned(),
+    }])
+}
+
+/// Same as [`kas_account`] for an address that is not ours (watch addresses, no key involved).
+#[tauri::command]
+pub async fn kas_watch_account(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<KaspaAccountInfo> {
+    let ks = watched(state.network, &address)?;
+    let c = ctx(&state);
+    let daa = kaspa_backend::network_info(&c).await?;
+    let balance = kaspa_backend::balance(&c, &ks).await?;
+    let coins = kaspa_backend::mature(kaspa_backend::utxos(&c, &ks).await?, daa);
+    let spendable: u64 = coins.iter().map(|c| c.entry.amount).sum();
+    Ok(KaspaAccountInfo {
+        address: ks[0].address.clone(),
+        balance: balance.to_string(),
+        spendable: spendable.to_string(),
+        utxo_count: coins.len(),
+        scanned: 1,
+    })
+}
+
+/// Same as [`kas_txs`] for a watch address.
+#[tauri::command]
+pub async fn kas_watch_txs(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<KaspaHistoryEntry>> {
+    let ks = watched(state.network, &address)?;
+    let c = ctx(&state);
+    kaspa_backend::network_info(&c).await?;
+    kaspa_backend::history(&c, &ks).await
+}
+
 #[tauri::command]
 pub async fn kas_tx_status(state: State<'_, AppState>, txid: String) -> AppResult<KaspaTxStatus> {
     let s = kaspa_backend::tx_status(&ctx(&state), txid.trim()).await?;

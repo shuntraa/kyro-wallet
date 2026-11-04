@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-watch-addresses-get"
+description = "Enables the watch_addresses_get command without any pre-configured scope."
+commands.allow = ["watch_addresses_get"]
+
+[[permission]]
+identifier = "deny-watch-addresses-get"
+description = "Denies the watch_addresses_get command without any pre-configured scope."
+commands.deny = ["watch_addresses_get"]

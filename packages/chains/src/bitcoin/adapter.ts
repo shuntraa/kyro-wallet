@@ -13,6 +13,7 @@ import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 import { scriptTypeOf } from '../utxo/utxo';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
+import { esploraUsage, scanWatchSource, watchScriptOutput, type WatchSource } from '../watchScan';
 
 bitcoin.initEccLib(ecc);
 
@@ -36,6 +37,8 @@ export interface BitcoinAdapterOptions {
   gapLimit?: number;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Watch address: `accounts` only carries the address to show, reads go through this source. */
+  watch?: WatchSource;
 }
 
 const SCAN_TTL_MS = 30_000;
@@ -51,6 +54,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   /** Vault account index (0 = the historical account). */
   readonly account: number;
   private readonly keys: Record<BtcKind, HDKey>;
+  private readonly watch: WatchSource | null;
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
   /** True when the last `getHistory` hit the cap (`BTC_TXS_CAP` transactions for at least one address, every backend): older ones may exist and are not shown. */
@@ -63,6 +67,11 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     this.account = opts.account ?? 0;
     this.net = opts.chain.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
     this.gap = opts.gapLimit ?? 5;
+    this.watch = opts.watch ?? null;
+    if (this.watch) {
+      this.keys = {} as Record<BtcKind, HDKey>;
+      return;
+    }
     this.keys = { segwit: parseXpub(opts.accounts.segwit.xpub), taproot: parseXpub(opts.accounts.taproot.xpub) };
     // Sanity check: our derivation must match what Rust derived.
     for (const kind of ['segwit', 'taproot'] as const) {
@@ -99,6 +108,17 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     if (!force && this.scanCache && Date.now() - this.scanCache.at < SCAN_TTL_MS) return this.scanCache.addrs;
     if (this.scanning) return this.scanning;
     this.scanning = (async () => {
+      if (this.watch) {
+        const rows = await scanWatchSource(
+          this.watch,
+          (key, script, change, i) => watchScriptOutput(script, derivePubkey(key, change, i), this.net).address,
+          async (address) => esploraUsage(await call('btc_address_info', { address })),
+          this.gap,
+        );
+        const addrs = rows.map((r): DerivedAddress => ({ ...r, kind: 'segwit', pubkey: new Uint8Array(), path: '' }));
+        this.scanCache = { at: Date.now(), addrs };
+        return addrs;
+      }
       const branches: Array<[BtcKind, 0 | 1]> = [['segwit', 0], ['segwit', 1], ['taproot', 0], ['taproot', 1]];
       const run = limiter(SCAN_CONCURRENCY);
       const lists = await Promise.all(

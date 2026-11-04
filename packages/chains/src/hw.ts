@@ -14,6 +14,7 @@ import { DOGECOIN_SPEC } from './dogecoin/adapter';
 import { BITCOINCASH_SPEC } from './bitcoincash/adapter';
 import { DASH_SPEC } from './dash/adapter';
 import { isHiddenFamily } from './registry';
+import type { WatchSource } from './watchScan';
 
 import { l10n, zecP2pkhAddress } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
@@ -46,6 +47,8 @@ export interface WalletAccounts {
   cosmos?: { address: string; path?: string };
   aptos?: { address: string; path?: string };
   zec?: { address: string; xpub: string; fingerprint: string; path: string };
+  /** Watch address: what the adapters read; no key exists behind these accounts. */
+  watch?: WatchSource;
 }
 
 export interface BtcAccountView {

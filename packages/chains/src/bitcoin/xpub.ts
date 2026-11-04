@@ -11,6 +11,9 @@ const VERSIONS = [
   { public: 0x045f1cf6, private: 0x045f18bc }, // vpub
   { public: 0x049d7cb2, private: 0x049d7878 }, // ypub
   { public: 0x044a5262, private: 0x044a4e28 }, // upub
+  { public: 0x019da462, private: 0x019d9cfe }, // Ltub
+  { public: 0x01b26ef6, private: 0x01b26792 }, // Mtub
+  { public: 0x02facafd, private: 0x02fac398 }, // dgub
 ];
 
 /** Thrown when an xprv is given: never swallowed by the version loop. */

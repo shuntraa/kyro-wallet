@@ -27,6 +27,7 @@ import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { UpdateNotice } from './components/UpdateNotice';
 import { AccountSwitcher } from './components/AccountSwitcher';
+import { WatchOnlyScreen } from './components/WatchOnly';
 import { screenEnter } from './components/motion';
 import { t, useT } from './i18n';
 
@@ -114,7 +115,7 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 }
 
 function Unlocked() {
-  const { route, navigate, hideBalances } = useApp();
+  const { route, navigate, hideBalances, activeWatch } = useApp();
   const pf = usePortfolio();
   const { lang } = useT();
   useHistoryWarmup();
@@ -155,6 +156,7 @@ function Unlocked() {
   );
 
   const screen = useMemo(() => {
+    if (activeWatch && (route.name === 'send' || route.name === 'swap' || route.name === 'staking' || route.name === 'receive')) return <WatchOnlyScreen watch={activeWatch} what={route.name} />;
     switch (route.name) {
       case 'portfolio':
         return <Portfolio />;
@@ -185,7 +187,7 @@ function Unlocked() {
       case 'settings':
         return <SettingsScreen {...(route.section ? { section: route.section } : {})} {...(route.family ? { family: route.family } : {})} />;
     }
-  }, [route, lang]);
+  }, [route, lang, activeWatch]);
 
 
   return (

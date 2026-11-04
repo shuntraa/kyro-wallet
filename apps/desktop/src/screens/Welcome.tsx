@@ -16,7 +16,8 @@ import { KyroMark, PasswordField } from '../components/kit';
 import { Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
-import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey } from '../components/icons';
+import { WatchAddForm } from '../components/WatchOnly';
+import { IconBack, IconChevronRight, IconEye, IconImport, IconPlus, IconUsbKey } from '../components/icons';
 import { demoPasswordHint } from './demoHint';
 import { NetworkSwitchDialog, useNetworkInfo } from '../components/NetworkSwitch';
 import { idx } from '../components/motion';
@@ -45,7 +46,7 @@ export function OnboardingFrame({ children, status }: { children: ReactNode; sta
   );
 }
 
-type Mode = 'home' | 'create' | 'import' | 'hw';
+type Mode = 'home' | 'create' | 'import' | 'hw' | 'watch';
 
 export function Welcome() {
   const [mode, setMode] = useState<Mode>('home');
@@ -65,6 +66,19 @@ export function Welcome() {
             {t('welcome.hwIntro')}
           </StepHeader>
           <HwSetup onCancel={() => setMode('home')} onDone={() => void enterVault()} />
+        </div>
+      </OnboardingFrame>
+    );
+  }
+
+  if (mode === 'watch') {
+    return (
+      <OnboardingFrame status={<span className="text-mute">{t('watch.welcomeStatus')}</span>}>
+        <div className="flex max-w-[600px] flex-col gap-6">
+          <StepHeader step={1} total={1} title={t('watch.add')} onBack={() => setMode('home')}>
+            {t('watch.intro')}
+          </StepHeader>
+          <WatchAddForm onAdded={() => enterVault()} />
         </div>
       </OnboardingFrame>
     );
@@ -90,6 +104,7 @@ export function Welcome() {
           />
           <ChoiceCard icon={<IconPlus size={20} />} title={t('welcome.choiceCreate')} subtitle={t('welcome.choiceCreateSub')} onClick={() => setMode('create')} />
           <ChoiceCard icon={<IconImport size={20} />} title={t('welcome.choiceImport')} subtitle={t('welcome.choiceImportSub')} onClick={() => setMode('import')} />
+          <ChoiceCard icon={<IconEye size={20} />} title={t('watch.welcomeChoice')} subtitle={t('watch.welcomeChoiceSub')} onClick={() => setMode('watch')} />
         </div>
 
 

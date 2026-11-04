@@ -26,7 +26,7 @@ function pickForCoin(list: AssetDef[]): AssetDef | undefined {
 }
 
 export function AssetDetail({ id }: { id: string }) {
-  const { back, settings, navigate, hideBalances, network, activeHw, isMultiAccount, selectedAccounts, selectChainAccount } = useApp();
+  const { back, settings, navigate, hideBalances, network, activeHw, activeWatch, isMultiAccount, selectedAccounts, selectChainAccount } = useApp();
   const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
@@ -119,7 +119,7 @@ export function AssetDetail({ id }: { id: string }) {
         </div>
         {supported && !watch ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" size="lg" disabled={supported.readOnly} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
+            <Button variant="primary" size="lg" disabled={supported.readOnly || !!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
               <IconUp size={16} /> {t('common.send')}
             </Button>
             <Button size="lg" onClick={() => navigate({ name: 'receive', family: supported.family })}>
@@ -127,8 +127,8 @@ export function AssetDetail({ id }: { id: string }) {
             </Button>
             <Button
               size="lg"
-              disabled={supported.family !== 'evm' && supported.family !== 'sol'}
-              title={supported.family !== 'evm' && supported.family !== 'sol' ? t('portfolio.swapSoon', { name: supported.name }) : undefined}
+              disabled={!!activeWatch || (supported.family !== 'evm' && supported.family !== 'sol')}
+              title={activeWatch ? t('watch.noSign') : supported.family !== 'evm' && supported.family !== 'sol' ? t('portfolio.swapSoon', { name: supported.name }) : undefined}
               onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}
             >
               <IconSwap size={16} sw={2.2} /> Swap
@@ -136,8 +136,8 @@ export function AssetDetail({ id }: { id: string }) {
             {supported.kind === 'native' && stakeChain && (
               <Button
                 size="lg"
-                disabled={!!activeHw}
-                title={activeHw ? t('portfolio.stakingNoHw') : undefined}
+                disabled={!!activeHw || !!activeWatch}
+                title={activeWatch ? t('watch.noSign') : activeHw ? t('portfolio.stakingNoHw') : undefined}
                 onClick={() => navigate({ name: 'staking', chain: stakeChain })}
               >
                 <IconStake size={16} /> Staking

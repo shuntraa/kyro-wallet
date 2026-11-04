@@ -51,6 +51,11 @@ export function kasToSompi(input: string): bigint {
   return BigInt(int) * 100_000_000n + BigInt(frac.padEnd(8, '0'));
 }
 
+/** Reads of a watch address: Rust goes by the address, no vault key involved. */
+export function rustKaspaWatchBackend(address: string): KaspaBackend {
+  return { ...rustKaspaBackend(0), account: () => call('kas_watch_account', { address }), txs: () => call('kas_watch_txs', { address }) };
+}
+
 export interface KaspaUnsigned {
   family: 'kas';
   /** Unsigned transaction JSON built by Rust (what `kas_sign_tx` signs). */

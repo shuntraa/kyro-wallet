@@ -6,6 +6,18 @@ import type { Network } from '@kyro/shared';
 
 const P = 'kyro.';
 
+/**
+ * Local records (transactions, approvals, account choices) belong to one wallet. The first wallet
+ * keeps the historical keys; any other wallet, and a watch address, has its own.
+ */
+let walletScope = '';
+export function setWalletScope(scope: string): void {
+  walletScope = scope;
+}
+export function scoped(key: string): string {
+  return walletScope ? `${key}@${walletScope}` : key;
+}
+
 export function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(P + key);
@@ -133,15 +145,15 @@ export function isLocalTx(x: unknown, network: Network): x is LocalTx {
 }
 
 export function getLocalTxs(network: Network): LocalTx[] {
-  const v = readJson<unknown>(`txs.${network}`, []);
+  const v = readJson<unknown>(scoped(`txs.${network}`), []);
   return Array.isArray(v) ? v.filter((x): x is LocalTx => isLocalTx(x, network)) : [];
 }
 export function addLocalTx(tx: LocalTx): void {
   const list = getLocalTxs(tx.network).filter((t) => t.id !== tx.id);
-  writeJson(`txs.${tx.network}`, [tx, ...list].slice(0, 300));
+  writeJson(scoped(`txs.${tx.network}`), [tx, ...list].slice(0, 300));
 }
 export function updateLocalTx(network: Network, id: string, patch: Partial<LocalTx>): void {
-  writeJson(`txs.${network}`, getLocalTxs(network).map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  writeJson(scoped(`txs.${network}`), getLocalTxs(network).map((t) => (t.id === id ? { ...t, ...patch } : t)));
 }
 
 /** Last plausible price seen on this device, per coin and currency (fiat-entry check in Envoyer). */
@@ -171,26 +183,26 @@ export interface ApprovalRecord {
 }
 
 export function getApprovals(network: Network): ApprovalRecord[] {
-  const v = readJson<unknown>(`approvals.${network}`, []);
+  const v = readJson<unknown>(scoped(`approvals.${network}`), []);
   return Array.isArray(v) ? (v as ApprovalRecord[]) : [];
 }
 export function addApproval(a: ApprovalRecord): void {
   const key = (x: ApprovalRecord) => `${x.chainId}:${x.token.toLowerCase()}:${x.spender.toLowerCase()}`;
   const list = getApprovals(a.network).filter((x) => key(x) !== key(a));
-  writeJson(`approvals.${a.network}`, [a, ...list]);
+  writeJson(scoped(`approvals.${a.network}`), [a, ...list]);
 }
 export function removeApproval(network: Network, chainId: number, token: string, spender: string): void {
   writeJson(
-    `approvals.${network}`,
+    scoped(`approvals.${network}`),
     getApprovals(network).filter((x) => !(x.chainId === chainId && x.token.toLowerCase() === token.toLowerCase() && x.spender.toLowerCase() === spender.toLowerCase())),
   );
 }
 
 export type BackupState = 'confirmed' | 'imported' | 'unknown';
 export function getBackupState(): BackupState {
-  const v = readJson<string>('backup', 'unknown');
+  const v = readJson<string>(scoped('backup'), 'unknown');
   return v === 'confirmed' || v === 'imported' ? v : 'unknown';
 }
 export function setBackupState(s: BackupState): void {
-  writeJson('backup', s);
+  writeJson(scoped('backup'), s);
 }

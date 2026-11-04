@@ -10,6 +10,7 @@ import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
 import type { HwSigner } from '../hw';
+import { esploraUsage, scanWatchSource, watchScriptOutput, type WatchSource } from '../watchScan';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
 
 bitcoin.initEccLib(ecc);
@@ -190,6 +191,21 @@ export interface UtxoAdapterOptions {
   vaultAccount?: number;
   /** Hardware-wallet account: signing through `hw_sign_utxo_psbt` (every input carries its previous transaction). */
   hw?: HwSigner;
+  /** Watch address: `account` only carries the address to show, reads go through this source. */
+  watch?: WatchSource;
+}
+
+/** Standard address of a chain (what Send accepts), without needing an adapter. */
+export function utxoAddressValid(spec: UtxoCoinSpec, network: Network, address: string): boolean {
+  const a = address.trim();
+  const net = spec.network(network);
+  try {
+    const script = spec.codec ? spec.codec.toScript(a, network) : bitcoin.address.toOutputScript(a, net);
+    if (!scriptTypeOf(script)) return false;
+    return spec.acceptAddress ? spec.acceptAddress(a, net) : true;
+  } catch {
+    return false;
+  }
 }
 
 /** Address `xpub/change/index` of a chain (same derivation as [`UtxoAdapter.addressAt`]). */
@@ -224,6 +240,7 @@ export class UtxoAdapter {
   readonly net: bitcoin.Network;
   private readonly backend: UtxoBackend;
   private readonly key: HDKey;
+  private readonly watch: WatchSource | null;
   private readonly account: UtxoAccountView;
   private readonly gap: number;
   readonly hw: HwSigner | null;
@@ -242,6 +259,11 @@ export class UtxoAdapter {
     this.backend = opts.backend ?? rustUtxoBackend(spec.prefix, opts.vaultAccount ?? 0);
     this.gap = opts.gapLimit ?? 5;
     this.hw = opts.hw ?? null;
+    this.watch = opts.watch ?? null;
+    if (this.watch) {
+      this.key = {} as HDKey;
+      return;
+    }
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
     if (first.address !== opts.account.address) {
@@ -260,14 +282,7 @@ export class UtxoAdapter {
   }
 
   isValidAddress(address: string): boolean {
-    const a = address.trim();
-    try {
-      const script = this.scriptOf(a);
-      if (!scriptTypeOf(script)) return false;
-      return this.spec.acceptAddress ? this.spec.acceptAddress(a, this.net) : true;
-    } catch {
-      return false;
-    }
+    return utxoAddressValid(this.spec, this.chain.network, address);
   }
 
   addressAt(change: 0 | 1, index: number): DerivedUtxoAddress {
@@ -283,6 +298,20 @@ export class UtxoAdapter {
     if (!force && this.scanCache && Date.now() - this.scanCache.at < SCAN_TTL_MS) return this.scanCache.addrs;
     if (this.scanning) return this.scanning;
     this.scanning = (async () => {
+      if (this.watch) {
+        const rows = await scanWatchSource(
+          this.watch,
+          (key, script, change, i) => {
+            const { output, address } = watchScriptOutput(script, derivePubkey(key, change, i), this.net);
+            return this.spec.codec?.toAddress(output, this.chain.network) ?? address;
+          },
+          async (address) => esploraUsage(await this.backend.addressInfo(address)),
+          this.gap,
+        );
+        const addrs = rows.map((r): DerivedUtxoAddress => ({ ...r, pubkey: new Uint8Array(), path: '' }));
+        this.scanCache = { at: Date.now(), addrs };
+        return addrs;
+      }
       const run = limiter(SCAN_CONCURRENCY);
       const lists = await Promise.all(
         ([0, 1] as const).map((change) =>

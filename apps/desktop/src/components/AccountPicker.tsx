@@ -67,7 +67,7 @@ function useNextAccount(family: AccountChain): number | null {
 }
 
 export function AccountPicker({ family, className, label: labelProp }: { family: AccountChain; className?: string; label?: string }) {
-  const { activeHw, vaultLists, selectedAccounts, selectChainAccount, navigate, accountSources } = useApp();
+  const { activeHw, activeWatch, vaultLists, selectedAccounts, selectChainAccount, navigate, accountSources } = useApp();
   const { t } = useT();
   const label = labelProp ?? t('common.account');
   const balance = useAccountBalanceText();
@@ -75,7 +75,7 @@ export function AccountPicker({ family, className, label: labelProp }: { family:
   const next = useNextAccount(family);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (activeHw || !vaultLists) return null;
+  if (activeHw || activeWatch || !vaultLists) return null;
   const list = vaultLists[family];
   const current = list.find((e) => e.index === selectedAccounts[family]) ?? list[0];
   const source = (i: number) => accountSources.find((s) => s.family === family && s.index === i);
@@ -136,13 +136,13 @@ export function AccountPicker({ family, className, label: labelProp }: { family:
 
 /** « Nouveau compte » as a visible button (Recevoir): creates, selects, and the screen shows its address. */
 export function NewAccountButton({ family, className }: { family: AccountChain; className?: string }) {
-  const { activeHw, vaultLists } = useApp();
+  const { activeHw, activeWatch, vaultLists } = useApp();
   const { t } = useT();
   const create = useCreateAccounts();
   const next = useNextAccount(family);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (activeHw || !vaultLists) return null;
+  if (activeHw || activeWatch || !vaultLists) return null;
   return (
     <span className={cn('flex items-center gap-2', className)}>
       <Button

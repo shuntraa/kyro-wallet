@@ -2194,6 +2194,15 @@ export interface HwXpub {
   zec?: HwZecKey;
 }
 
+/** A public address or xpub the user follows: no key behind it, nothing can be signed (docs/IPC.md §2.3b). */
+export interface WatchAddress {
+  /** `wa-` + 16 hex. */
+  id: string;
+  label: string;
+  family: AccountChain;
+  value: string;
+}
+
 /** Watch-only account backed by a hardware wallet (public keys only). */
 export interface WatchOnlyAccount {
   id: string;
@@ -2480,6 +2489,8 @@ export interface Commands {
   kas_account: { args: WithAccount | undefined; ret: KaspaAccountInfo };
   /** Last 50 transactions of the account's active addresses, newest first. */
   kas_txs: { args: WithAccount | undefined; ret: KaspaHistoryEntry[] };
+  kas_watch_account: { args: { address: string }; ret: KaspaAccountInfo };
+  kas_watch_txs: { args: { address: string }; ret: KaspaHistoryEntry[] };
   kas_tx_status: { args: { txid: string }; ret: { found: boolean; accepted: boolean } };
   /** `amount`: sompi, or `max: true` (everything spendable minus the fee, no change). */
   kas_build_tx: { args: { to: string; amount?: string; max?: boolean } & WithAccount; ret: { tx: string; summary: KaspaTxSummary; context: KaspaContext } };
@@ -2550,6 +2561,10 @@ export interface Commands {
   /** Forgets one pairing (`key`) or all (no key: Kyro's THP key too). Returns how many. The device keeps Kyro until it is reset. */
   hw_thp_forget: { args: { key?: string }; ret: number };
   hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
+  watch_addresses_get: { args: undefined; ret: WatchAddress[] };
+  watch_address_add: { args: { family: AccountChain; value: string; label: string }; ret: WatchAddress };
+  watch_address_rename: { args: { id: string; label: string }; ret: WatchAddress };
+  watch_address_remove: { args: { id: string }; ret: void };
   hw_accounts_get: { args: undefined; ret: WatchOnlyAccount[] };
   /** Reads the keys of `chain` and stores them (new account, or merged into `accountId`). */
   hw_account_add: { args: { id: string; chain: HwChain; account: number; accountId?: string; label?: string }; ret: WatchOnlyAccount };

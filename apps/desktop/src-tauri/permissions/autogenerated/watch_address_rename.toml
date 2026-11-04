@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-watch-address-rename"
+description = "Enables the watch_address_rename command without any pre-configured scope."
+commands.allow = ["watch_address_rename"]
+
+[[permission]]
+identifier = "deny-watch-address-rename"
+description = "Denies the watch_address_rename command without any pre-configured scope."
+commands.deny = ["watch_address_rename"]

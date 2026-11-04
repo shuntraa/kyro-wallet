@@ -34,6 +34,7 @@ mod commands_sui;
 mod commands_ton;
 mod commands_tron;
 mod commands_utxo;
+mod commands_watch;
 mod commands_xmr;
 mod commands_xrp;
 mod commands_zcash;
@@ -367,6 +368,12 @@ pub fn run() {
             commands_kaspa::kas_address,
             commands_kaspa::kas_account,
             commands_kaspa::kas_txs,
+            commands_kaspa::kas_watch_account,
+            commands_kaspa::kas_watch_txs,
+            commands_watch::watch_addresses_get,
+            commands_watch::watch_address_add,
+            commands_watch::watch_address_rename,
+            commands_watch::watch_address_remove,
             commands_kaspa::kas_tx_status,
             commands_kaspa::kas_build_tx,
             commands_kaspa::kas_sign_tx,

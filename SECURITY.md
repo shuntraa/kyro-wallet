@@ -259,7 +259,11 @@ Details: [docs/IPC.md §2.9](docs/IPC.md). All accounts come from **your** recov
 - **Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash**: Rust signs only the inputs of the chosen account; an input from another of your accounts is treated as foreign (not signed, 2nd window), and change is recognized only in that account.
 - **Limits**: the accounts of one vault are linked by the same phrase (and, on the server side, by the requests made from the same app — Tor isolates circuits per chain, not per account). Compact filters: only account 0 is watched. Bitcoin Core: an account added after setup requires restarting it. **No real broadcast from an account no. 2 or higher** has been made yet.
 
-## Staking (Solana, Cardano, TRON, NEAR)
+## Watch addresses
+
+A watch address is a public address or xpub followed with no key. Kyro stores it in plain text next to the vault, like hardware-wallet accounts: anyone who reads your disk sees which addresses you follow. Rust refuses private keys and recovery phrases when adding one and when loading the file. Nothing can be signed: Send, Swap and Earn stop on a clear screen, and every build, sign and broadcast method of its adapters refuses. **Limits**: reading an xpub asks servers about each derived address, so a server can link them, as with your own accounts (Tor hides your IP, not that link). A Watch address proves nothing about ownership. Monero cannot be watched: a balance needs a private view key.
+
+## Staking (Solana, Cardano, TRON, NEAR, Sui)
 
 Technical details: [docs/IPC.md §2.8](docs/IPC.md). As with payments, **Kyro builds each operation itself**, Rust **decodes** it (wallet-core) and **re-reads the account state live** before the **native window**; a closed list of operations is accepted, always with **your** key as the only authority, and everything else is **refused** (not merely flagged). No hardware wallet for staking. **None of these operations entrusts your funds to anyone**: the validator, pool or SPO can neither spend nor lock them.
 

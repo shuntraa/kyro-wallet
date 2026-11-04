@@ -357,3 +357,194 @@ impl WatchOnlyStore {
             .map_err(|_| Error::input("cannot serialise watch-only store"))
     }
 }
+
+/// Current watch-address store format version.
+pub const WATCH_ADDRESS_VERSION: u8 = 1;
+
+/// At most this many watch addresses per network.
+pub const MAX_WATCH_ADDRESSES: usize = 100;
+
+/// Networks an address can be watched on. Not Monero: an address alone shows nothing (a private
+/// view key would be needed). Not Hedera: the chain is hidden in this release.
+const WATCH_FAMILIES: [&str; 20] = [
+    "btc", "evm", "sol", "ltc", "doge", "bch", "dash", "zec", "tron", "xrp", "ada", "xlm", "near",
+    "sui", "kas", "dot", "algo", "ton", "cosmos", "apt",
+];
+
+/// Version bytes of the public extended keys Kyro reads: `(version, mainnet?, families)`.
+const XPUB_VERSIONS: [(u32, bool, &[&str]); 9] = [
+    (0x0488_b21e, true, &["btc", "ltc", "bch", "dash", "zec"]), // xpub
+    (0x049d_7cb2, true, &["btc"]),                              // ypub
+    (0x04b2_4746, true, &["btc", "ltc"]),                       // zpub
+    (0x019d_a462, true, &["ltc"]),                              // Ltub
+    (0x01b2_6ef6, true, &["ltc"]),                              // Mtub
+    (0x02fa_cafd, true, &["doge"]),                             // dgub
+    (
+        0x0435_87cf,
+        false,
+        &["btc", "ltc", "doge", "bch", "dash", "zec"],
+    ), // tpub
+    (0x044a_5262, false, &["btc"]),                             // upub
+    (0x045f_1cf6, false, &["btc", "ltc"]),                      // vpub
+];
+
+/// Version bytes of private extended keys (xprv, yprv, zprv, Ltpv, Mtpv, dgpv, tprv, uprv, vprv).
+const XPRV_VERSIONS: [u32; 9] = [
+    0x0488_ade4,
+    0x049d_7878,
+    0x04b2_430c,
+    0x019d_9cfe,
+    0x01b2_6792,
+    0x02fa_c398,
+    0x0435_8394,
+    0x044a_4e28,
+    0x045f_18bc,
+];
+
+/// Version byte of a WIF private key (Bitcoin, testnet, Litecoin, Dogecoin, Dash, Litecoin testnet).
+const WIF_VERSIONS: [u8; 6] = [0x80, 0xef, 0xb0, 0x9e, 0xcc, 0xb0];
+
+/// True when `value` is a private key encoding that must never be stored.
+fn looks_private(value: &str) -> bool {
+    let Ok(raw) = bitcoin::base58::decode_check(value) else {
+        return false;
+    };
+    match raw.len() {
+        78 => XPRV_VERSIONS.contains(&u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])),
+        33 => WIF_VERSIONS.contains(&raw[0]),
+        34 => WIF_VERSIONS.contains(&raw[0]) && raw[33] == 1,
+        _ => false,
+    }
+}
+
+/// True when `value` is an extended public key of `family` on `network`.
+fn is_family_xpub(value: &str, family: &str, network: Network) -> bool {
+    let Ok(raw) = bitcoin::base58::decode_check(value) else {
+        return false;
+    };
+    if raw.len() != 78 {
+        return false;
+    }
+    let version = u32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
+    XPUB_VERSIONS.iter().any(|(v, main, fams)| {
+        *v == version && *main == (network == Network::Mainnet) && fams.contains(&family)
+    })
+}
+
+/// A public address or extended public key the user follows. Never a key that can sign.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WatchAddress {
+    /// `wa-` + 16 lowercase hex characters.
+    pub id: String,
+    /// User label (1–64 characters).
+    pub label: String,
+    /// Network family (`btc`, `evm`, `sol`…).
+    pub family: String,
+    /// Public address, or account xpub for the UTXO chains.
+    pub value: String,
+}
+
+impl WatchAddress {
+    /// Checks the fields, and that `value` cannot be a private key.
+    pub fn validate(&self, network: Network) -> Result<()> {
+        let hex16 = self.id.strip_prefix("wa-").is_some_and(|h| {
+            h.len() == 16 && h.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+        });
+        if !hex16 {
+            return Err(Error::input("invalid watch address id"));
+        }
+        let n = self.label.chars().count();
+        if n == 0 || n > 64 || self.label.chars().any(char::is_control) {
+            return Err(Error::input("watch address label: 1 to 64 characters"));
+        }
+        if !WATCH_FAMILIES.contains(&self.family.as_str()) {
+            return Err(Error::input("this network cannot be watched"));
+        }
+        let v = self.value.as_str();
+        if v.is_empty() || v.len() > 256 || !v.bytes().all(|c| c.is_ascii_graphic()) {
+            return Err(Error::input("invalid address"));
+        }
+        if looks_private(v) {
+            return Err(Error::input(
+                "this is a private key: only a public address or xpub can be watched",
+            ));
+        }
+        match self.family.as_str() {
+            "evm" => {
+                let hex = v.strip_prefix("0x").unwrap_or_default();
+                if hex.len() != 40 || !hex.bytes().all(|c| c.is_ascii_hexdigit()) {
+                    return Err(Error::input("invalid EVM address"));
+                }
+            }
+            "btc" if !is_family_xpub(v, "btc", network) => {
+                crate::btc_watch::btc_script_pubkey(v, network)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// True when `value` is an extended public key.
+    pub fn is_xpub(&self, network: Network) -> bool {
+        is_family_xpub(&self.value, &self.family, network)
+    }
+}
+
+/// On-disk list of watch addresses for one network (JSON). Public data, next to the vault.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WatchAddressStore {
+    /// Format version, see [`WATCH_ADDRESS_VERSION`].
+    pub version: u8,
+    /// Addresses.
+    pub addresses: Vec<WatchAddress>,
+}
+
+impl Default for WatchAddressStore {
+    fn default() -> Self {
+        WatchAddressStore {
+            version: WATCH_ADDRESS_VERSION,
+            addresses: Vec::new(),
+        }
+    }
+}
+
+impl WatchAddressStore {
+    /// Parses and fully validates a store.
+    pub fn from_json(json: &str, network: Network) -> Result<Self> {
+        let store: WatchAddressStore =
+            serde_json::from_str(json).map_err(|_| Error::input("malformed watch address list"))?;
+        if store.version != WATCH_ADDRESS_VERSION {
+            return Err(Error::input(format!(
+                "unsupported watch address list version {}",
+                store.version
+            )));
+        }
+        store.validate(network)?;
+        Ok(store)
+    }
+
+    /// Validates every address; ids and (family, value) pairs are unique.
+    pub fn validate(&self, network: Network) -> Result<()> {
+        if self.addresses.len() > MAX_WATCH_ADDRESSES {
+            return Err(Error::input("too many watch addresses"));
+        }
+        for (i, a) in self.addresses.iter().enumerate() {
+            a.validate(network)?;
+            if self.addresses[..i]
+                .iter()
+                .any(|b| b.id == a.id || (b.family == a.family && b.value == a.value))
+            {
+                return Err(Error::input("this address is already watched"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Serialises to pretty JSON.
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string_pretty(self)
+            .map_err(|_| Error::input("cannot serialise watch address list"))
+    }
+}

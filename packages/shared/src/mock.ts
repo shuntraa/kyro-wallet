@@ -27,6 +27,7 @@ import {
   type Settings,
   type SettingsInput,
   type VaultStatus,
+  type WatchAddress,
 } from './ipc';
 import { emitDemoEvent } from './events';
 import { isCurrency, navigatorCurrency } from './fiat';
@@ -729,6 +730,8 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     return { psbt: psbt.toBase64(), summary: { outputs, feeSats, ...btcWarnings({ outputs, feeSats, vsize }) } };
   };
 
+  let watchList: WatchAddress[] = [];
+
   // Hardware wallets: keys from a separate public demo seed, same native-dialog emulation.
   const hw = createDemoHw(opts.hw ?? detectDemoHwScenario(), {
     network,
@@ -1030,6 +1033,25 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_thp_pairings: () => hw.thpPairings(),
     hw_thp_forget: (a) => hw.thpForget(a.key),
     hw_get_xpub: (a) => hw.getXpub(a),
+    watch_addresses_get: () => watchList,
+    watch_address_add: (a) => {
+      const label = String(a.label ?? '').trim();
+      if (!label) throw new IpcError('INVALID_INPUT', 'label required');
+      if (watchList.some((w) => w.family === a.family && w.value === a.value)) throw new IpcError('INVALID_INPUT', 'this address is already watched');
+      const entry = { id: `wa-${(watchList.length + 1).toString(16).padStart(16, '0')}`, label, family: a.family as WatchAddress['family'], value: String(a.value).trim() };
+      watchList = [...watchList, entry];
+      return entry;
+    },
+    watch_address_rename: (a) => {
+      const found = watchList.find((w) => w.id === a.id);
+      if (!found) throw new IpcError('INVALID_INPUT', 'unknown watch address');
+      const entry = { ...found, label: String(a.label) };
+      watchList = watchList.map((w) => (w.id === a.id ? entry : w));
+      return entry;
+    },
+    watch_address_remove: (a) => {
+      watchList = watchList.filter((w) => w.id !== a.id);
+    },
     hw_accounts_get: () => hw.accountsGet(),
     hw_account_add: (a) => hw.accountAdd(a),
     hw_account_remove: (a) => hw.accountRemove(a.accountId),

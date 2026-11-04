@@ -246,8 +246,9 @@ pub use utxo::{
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
 pub use watch::{
-    sol_path, HwDeviceKind, WatchEvm, WatchKey, WatchOnlyAccount, WatchOnlyStore, WatchSol,
-    EVM_NODE_PATH, MAX_HW_ACCOUNT, WATCH_ONLY_VERSION,
+    sol_path, HwDeviceKind, WatchAddress, WatchAddressStore, WatchEvm, WatchKey, WatchOnlyAccount,
+    WatchOnlyStore, WatchSol, EVM_NODE_PATH, MAX_HW_ACCOUNT, MAX_WATCH_ADDRESSES,
+    WATCH_ADDRESS_VERSION, WATCH_ONLY_VERSION,
 };
 
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers

@@ -45,7 +45,9 @@ import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
 import { suiChain } from './registry';
 import { HbarAdapter, isHbarEd25519Key } from './hedera/adapter';
-import { KaspaAdapter } from './kaspa/adapter';
+import { KaspaAdapter, rustKaspaWatchBackend } from './kaspa/adapter';
+import { sealWatchAdapter } from './watch';
+import type { WatchSource } from './watchScan';
 import { kaspaChain } from './registry';
 import { PolkadotAdapter } from './polkadot/adapter';
 import { polkadotChain } from './registry';
@@ -91,6 +93,8 @@ export interface AdapterSet {
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
+  /** Set for a watch address: every build, sign and broadcast of these adapters refuses. */
+  watch: boolean;
 }
 
 /** Build every adapter for the vault's network. A user RPC replaces the registry default (Rust refuses a disabled default, no fallback). */
@@ -100,9 +104,12 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const h = hw ? { hw } : {};
   // Vault account (§2.9): every signing command of these adapters carries it (absent = 0).
   const a = !hw && account ? { account } : {};
+  // Watch address: reads go through the public source, nothing can sign (sealed below).
+  const watch = accounts.watch;
+  const w = watch ? { watch } : {};
   // Hardware wallet: SegWit v0 inputs carry their full previous tx (`non_witness_utxo`), txid checked by Rust.
   const btcHw = hw ? { hw: { ...hw, prevTx: (txid: string) => call('btc_tx_hex', { txid }) } } : {};
-  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw, ...a }) : null;
+  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw, ...a, ...w }) : null;
   const evm = new Map<string, EvmAdapter>();
   if (accounts.evm) {
     for (const chain of evmChains(network)) {
@@ -112,7 +119,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   }
   const solCustom = servers?.solana[solanaCluster(network)]?.url;
   const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h, ...a }) : null;
-  const { ltc, doge, bch, dash } = createUtxoAdapters(accounts, {}, hw ? 0 : account, hw);
+  const { ltc, doge, bch, dash } = createUtxoAdapters(accounts, {}, hw ? 0 : account, hw, watch);
   const tronTokens = TRC20_TOKENS[network].map((t) => ({ contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals }));
   const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, tokens: tronTokens, ...h, ...a }) : null;
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...h, ...a }) : null;
@@ -122,7 +129,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...h, ...a }) : null;
   // Hedera on a Ledger: only the ED25519 key read with `hw_key_add` (never a vault EVM address).
   const hbar = accounts.hbar && (!hw || isHbarEd25519Key(accounts.hbar.address)) ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...h, ...a }) : null;
-  const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
+  const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a, ...(watch ? { backend: rustKaspaWatchBackend(accounts.kas.address) } : {}) }) : null;
   const polkadot = accounts.polkadot ? new PolkadotAdapter({ chain: polkadotChain(network), address: accounts.polkadot.address, ...a }) : null;
   const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...h, ...a }) : null;
   // Monero: scanned locally by Rust.
@@ -130,7 +137,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...h, ...a }) : null;
   const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...h, ...a }) : null;
   const aptos = accounts.aptos ? new AptosAdapter({ chain: aptosChain(network), address: accounts.aptos.address, ...h, ...a }) : null;
-  const zec = accounts.zec ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account && !hw ? { vaultAccount: account } : {}), ...h }) : null;
+  const zec = accounts.zec ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account && !hw ? { vaultAccount: account } : {}), ...h, ...w }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
@@ -148,7 +155,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(cosmos ? [cosmos] : []),
     ...(aptos ? [aptos] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, aptos, zec, all, hw: hw ?? null };
+  if (watch) all.forEach(sealWatchAdapter);
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, aptos, zec, all, hw: hw ?? null, watch: !!watch };
 }
 
 
@@ -192,9 +200,10 @@ export function createUtxoAdapters(
   backends: { ltc?: UtxoBackend; doge?: UtxoBackend; bch?: UtxoBackend; dash?: UtxoBackend } = {},
   vaultAccount = 0,
   hw?: HwSigner,
+  watch?: WatchSource,
 ): UtxoAdapterSet {
   const n = accounts.network;
-  const a = { ...(vaultAccount ? { vaultAccount } : {}), ...(hw ? { hw } : {}) };
+  const a = { ...(vaultAccount ? { vaultAccount } : {}), ...(hw ? { hw } : {}), ...(watch ? { watch } : {}) };
   return {
     ltc: accounts.ltc ? new LitecoinAdapter({ chain: ltcChain(n), account: accounts.ltc, ...(backends.ltc ? { backend: backends.ltc } : {}), ...a }) : null,
     doge: accounts.doge ? new DogecoinAdapter({ chain: dogeChain(n), account: accounts.doge, ...(backends.doge ? { backend: backends.doge } : {}), ...a }) : null,

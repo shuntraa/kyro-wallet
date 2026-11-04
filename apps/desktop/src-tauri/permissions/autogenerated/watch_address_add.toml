@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-watch-address-add"
+description = "Enables the watch_address_add command without any pre-configured scope."
+commands.allow = ["watch_address_add"]
+
+[[permission]]
+identifier = "deny-watch-address-add"
+description = "Denies the watch_address_add command without any pre-configured scope."
+commands.deny = ["watch_address_add"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-watch-address-remove"
+description = "Enables the watch_address_remove command without any pre-configured scope."
+commands.allow = ["watch_address_remove"]
+
+[[permission]]
+identifier = "deny-watch-address-remove"
+description = "Denies the watch_address_remove command without any pre-configured scope."
+commands.deny = ["watch_address_remove"]

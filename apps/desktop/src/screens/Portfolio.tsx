@@ -15,7 +15,7 @@ import { IconDown, IconEye, IconEyeOff, IconSwap, IconUp } from '../components/i
 import { useT } from '../i18n';
 
 export function Portfolio() {
-  const { settings, hideBalances, setHideBalances, navigate, network } = useApp();
+  const { settings, hideBalances, setHideBalances, navigate, network, activeWatch } = useApp();
   const pf = usePortfolio();
   const { t, tp } = useT();
   const [period, setPeriod] = useState<Period>('1J');
@@ -69,13 +69,13 @@ export function Portfolio() {
           <div className="flex shrink-0 flex-col items-end gap-5">
             <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
             <div className="flex gap-2">
-              <Button variant="primary" size="xl" pill onClick={() => navigate({ name: 'send' })}>
+              <Button variant="primary" size="xl" pill disabled={!!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'send' })}>
                 <IconUp size={18} /> {t('common.send')}
               </Button>
               <Button size="xl" pill onClick={() => navigate({ name: 'receive' })}>
                 <IconDown size={18} /> {t('common.receive')}
               </Button>
-              <Button size="xl" pill onClick={() => navigate({ name: 'swap' })}>
+              <Button size="xl" pill disabled={!!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'swap' })}>
                 <IconSwap size={18} sw={2.1} /> Swap
               </Button>
             </div>

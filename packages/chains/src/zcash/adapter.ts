@@ -23,6 +23,7 @@ import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } fr
 import { derivePubkey, parseXpub } from '../bitcoin/xpub';
 import type { HwSigner } from '../hw';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
+import { esploraUsage, scanWatchSource, type WatchSource } from '../watchScan';
 
 export type { ZecTxSummary } from '@kyro/shared';
 
@@ -97,6 +98,8 @@ export interface ZcashAdapterOptions {
   vaultAccount?: number;
   /** Hardware-wallet account (signing through `hw_sign_zec_tx`, Trezor). */
   hw?: HwSigner;
+  /** Watch address: `account` only carries the address to show, reads go through this source. */
+  watch?: WatchSource;
 }
 
 const SCAN_TTL_MS = 30_000;
@@ -120,6 +123,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
   readonly assetId = 'zec';
   private readonly backend: ZecBackend;
   private readonly key: HDKey;
+  private readonly watch: WatchSource | null;
   private readonly account: UtxoAccountInfo;
   private readonly gap: number;
   readonly hw: HwSigner | null;
@@ -134,6 +138,11 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     this.hw = opts.hw ?? null;
     this.backend = opts.backend ?? (opts.hw ? hwZecBackend(opts.hw.accountId) : rustZecBackend(opts.vaultAccount ?? 0));
     this.gap = opts.gapLimit ?? 5;
+    this.watch = opts.watch ?? null;
+    if (this.watch) {
+      this.key = {} as HDKey;
+      return;
+    }
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
     if (first.address !== opts.account.address) {
@@ -160,6 +169,16 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     if (!force && this.scanCache && Date.now() - this.scanCache.at < SCAN_TTL_MS) return this.scanCache.addrs;
     if (this.scanning) return this.scanning;
     this.scanning = (async () => {
+      if (this.watch) {
+        const addrs = await scanWatchSource(
+          this.watch,
+          (key, _script, change, i) => zecP2pkhAddress(derivePubkey(key, change, i), this.chain.network),
+          async (address) => esploraUsage(await this.backend.addressInfo(address)),
+          this.gap,
+        );
+        this.scanCache = { at: Date.now(), addrs };
+        return addrs;
+      }
       const run = limiter(SCAN_CONCURRENCY);
       const lists = await Promise.all(
         ([0, 1] as const).map((change) =>

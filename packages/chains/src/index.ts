@@ -30,4 +30,6 @@ export {
   type SolanaAdapterOptions,
 } from './solana/adapter';
 export * from './hw';
+export * from './watch';
+export * from './watchScan';
 export * from './poisoning';

@@ -128,6 +128,11 @@ pub fn hw_accounts_file(dir: &Path, n: Network) -> PathBuf {
     dir.join(format!("hw-accounts-{}.json", name(n)))
 }
 
+/// Watch address list of `n` in `dir` (one per network).
+pub fn watch_addresses_file(dir: &Path, n: Network) -> PathBuf {
+    dir.join(format!("watch-addresses-{}.json", name(n)))
+}
+
 fn other(n: Network) -> Network {
     match n {
         Network::Mainnet => Network::Testnet,

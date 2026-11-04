@@ -4,13 +4,13 @@ import { fmtCountdown } from '../lib/format';
 import { getApprovals, getBackupState } from '../lib/storage';
 import { hwFingerprint } from '@kyro/chains';
 import { useApp } from '../state/app';
-import { IconShield, IconUsbKey } from './icons';
+import { IconEye, IconShield, IconUsbKey } from './icons';
 import { Badge } from './ui/primitives';
 import { DeviceBadge } from './hw';
 import { useT } from '../i18n';
 
 export function VaultCard() {
-  const { status, network, navigate, activeHw, hwAccounts } = useApp();
+  const { status, network, navigate, activeHw, activeWatch, hwAccounts } = useApp();
   const { t, tp } = useT();
   const [left, setLeft] = useState<number | null>(status?.lockInSecs ?? null);
 
@@ -26,6 +26,24 @@ export function VaultCard() {
   const unlimited = useMemo(() => getApprovals(network).filter((a) => a.unlimited).length, [network]);
   const backup = getBackupState();
   const pct = status && left !== null && status.autoLockSecs > 0 ? Math.min(100, (left / status.autoLockSecs) * 100) : 0;
+
+  if (activeWatch) {
+    return (
+      <section aria-label={t('watch.tag')} className="flex flex-1 flex-col gap-3.5 px-5 pt-4 pb-[18px]">
+        <div className="flex items-center gap-3">
+          <IconEye size={18} className="shrink-0 text-mute" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{activeWatch.label}</span>
+            <span className="text-[12px] text-mute">{t('watch.cardBody')}</span>
+          </span>
+          <Badge>{t('watch.tag')}</Badge>
+        </div>
+        <button type="button" onClick={() => navigate({ name: 'settings', section: 'accounts' })} className="self-start text-[13px] font-semibold text-ice hover:underline">
+          {t('shell.manage')}
+        </button>
+      </section>
+    );
+  }
 
   if (activeHw) {
     // Hardware-wallet account: no key in Kyro, nothing to lock here.
