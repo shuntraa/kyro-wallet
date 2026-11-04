@@ -789,7 +789,7 @@ function brand() {
           <p>Write <b>Kyro</b> or <b>Kyro Wallet</b>. Short description:</p>
           <p class="note">Kyro Wallet is a free, open-source, non-custodial desktop wallet for Windows, macOS and Linux. One recovery phrase for 36 blockchains, keys on your own computer, Tor on by default.</p>
           <h2>Type</h2>
-          <p>Headlines use Archivo. Everything else uses Geist. Both are under the SIL Open Font License, with the licence files in <a href="/fonts/OFL-Geist.txt">OFL-Geist</a> and <a href="/fonts/OFL-Archivo.txt">OFL-Archivo</a>.</p>
+          <p>Headlines and text use Geist, with Instrument Serif Italic for the accent words in headlines. The Kyro wordmark uses Archivo. All three are under the SIL Open Font License, with the licence files in <a href="/fonts/OFL-Geist.txt">OFL-Geist</a>, <a href="/fonts/OFL-Instrument-Serif.txt">OFL-Instrument-Serif</a> and <a href="/fonts/OFL-Archivo.txt">OFL-Archivo</a>.</p>
           <h2>Usage</h2>
           ${ul(['Use the files as they are, with room around them.', 'Use the dark version on dark backgrounds and the light version on light ones.', 'Link to kyrowallet.com, the only official site, and to GitHub Releases for downloads.'])}
           ${ul(['Do not change the colours or shape of the mark.', 'Do not suggest that Kyro endorses your product or service.', 'Do not use the name or logo for an app, a token or a download of your own.'], 'checks minus')}
