@@ -1,6 +1,6 @@
 # Kyro Wallet: full text of kyrowallet.com
 
-Generated 2026-11-03 from the published pages. Short index: https://kyrowallet.com/llms.txt
+Generated 2026-11-04 from the published pages. Short index: https://kyrowallet.com/llms.txt
 
 ================================================================
 Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
@@ -9,208 +9,15 @@ URL: https://kyrowallet.com/
 
 1.0.6 Free and open source
 
-# Your keys. Your crypto.
+# Keep it to yourself.
 
-A desktop wallet for Bitcoin, Ethereum, Solana and 33 more blockchains. Send, swap and stake, with your keys kept on your own computer.
+A desktop wallet for 36 blockchains, with Tor on from the first launch and your keys on your own machine.
 
-Download Kyro  Windows, macOS and Linux
+Download Kyro  Other platforms
+
+36:  blockchains
 
 :  active wallets this week :  downloads in total
-
-- Open source: GPL-3.0, on GitHub
-
-- Self-custody: No account, no server
-
-- Ledger & Trezor: Hardware wallet support
-
-- Tor built in: No tracking, no personal data
-
-Swap
-
-## Swap inside the wallet
-
-Kyro asks several providers for a quote (including NEAR Intents across chains and Exolix for Monero) and shows what you receive after fees. Token approvals are for the exact amount unless you change it.
-How swap fees work
-
-Send
-
-## Read it before you sign it
-
-The Rust core decodes every transaction and opens a separate system window with the amount, the recipient and the fee. Unusual transactions ask a second time.
-How signing works
-
-Assets
-
-## Every account in one list
-
-Prices, 7-day trends and balances for all your blockchains, from a single recovery phrase. Add as many accounts as you need.
-Supported blockchains
-
-Staking
-
-## Stake from your own accounts
-
-Delegate SOL, ADA and TRX to a validator, a pool or a Super Representative. Kyro takes no fee on staking.
-Staking details
-
-Hardware and privacy
-
-## Ledger, Trezor and Tor
-
-Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, on by default.
-Privacy and network
-
-Features
-
-## Also in the app
-
-Small things that matter when you hold crypto yourself.
-
-### Many accounts
-
-Create as many as you need and move funds between them in two clicks.
-
-### Hardware wallets
-
-Ledger and Trezor, including Trezor Safe 7.
-
-### Scam protection
-
-Address-poisoning alerts, clipboard checks and exact token approvals.
-
-### Private by default
-
-Built-in Tor, no personal data collected. Use your own nodes if you like.
-
-All features
-
-Getting started
-
-## Three steps, no account
-
-### Install
-
-Install Kyro with one command, or download it from GitHub for Windows, macOS or Linux. Check the SHA-256 if you download the file yourself.
-
-### Create or import
-
-Make a new 12 or 24-word recovery phrase, or import yours. It is encrypted with your password, on your computer.
-
-### Send, swap, stake
-
-Every transaction opens a system window that shows what you are signing. Nothing is sent until you confirm.
-
-Security
-
-## Built so you don't have to trust us
-
-Kyro is open source. Anyone can read the code and build the app themselves.
-
-- Keys are encrypted on your device and never leave the Rust core.
-
-- Every signature needs your password and a confirmation in a system window.
-
-- Unusual transactions ask for a second confirmation.
-
-- Traffic goes over Tor. Every server Kyro contacts is listed publicly.
-
-How Kyro protects your keys
-
-01
-
-InterfaceSandboxed web view. Never sees a key.
-
-02
-
-App shellTor, auto-lock, system confirmation window.
-
-03
-
-Rust coreEncryption, keys and signing.
-
-Blockchains
-
-## 36 blockchains. 220+ tokens.
-
-All in the same wallet, from the same recovery phrase.
-
-Swaps from 0.7%, built into the rate you see.
-
-What works on each blockchain
-
-Fees
-
-## Simple fees
-
-Kyro is free. Only swaps carry a fee, built into the rate.
-
-0% Send and receive Only the network fee.
-
-0% Staking Only the network fee.
-
-from 0.7% Swaps Built into the rate you see.
-
-Swap fee table and an example
-
-## Get Kyro
-
-Version 1.0.6 · Free · Windows, macOS and Linux
-
-Windows · PowerShell
-
-irm https://kyrowallet.com/install.ps1 | iex
-
-macOS and Linux · Terminal
-
-curl -fsSL https://kyrowallet.com/install.sh | sh
-
-Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
-
-Or download the file
-
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
-
-Also: .msi · .deb · SHA256SUMS · Opening a downloaded file · Release notes
-
-Questions
-
-## Short answers
-
-Q: Is Kyro Wallet free?
-A: Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. Fee details.
-
-Q: Is Kyro custodial?
-A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
-
-Q: Does Kyro support hardware wallets?
-A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
-
-Q: Is Kyro open source? Has it been audited?
-A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
-
-All questions
-
-Support
-
-## Support the project
-
-Kyro is free. Donations help keep it going. You can also sponsor on GitHub.
-
-| Network | Address |
-
-| Bitcoin  | bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard  |
-
-| Ethereum & EVM  | 0x86cD9af8067fF5e0001c709a550cD62b5e968B44  |
-
-| Solana  | ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM  |
-
-| Litecoin  | LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw  |
-
-| Dogecoin  | DKCSjtypvD9qg3R175YdijmwvKh5FnAU14  |
-
-| TRON  | TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES  |
-
-| Cardano  | addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3  |
 
 ================================================================
 Features: send, swap, stake and hardware wallets | Kyro Wallet
@@ -221,113 +28,19 @@ Features
 
 # What Kyro does
 
-Send, receive, swap and stake on 36 blockchains from one recovery phrase. Every transaction is decoded and confirmed in a system window before it is signed.
+Send, receive, swap and stake on 36 blockchains from one recovery phrase. You read every transaction before it is signed.
 
 Portfolio
 
 ## All your coins in one list
 
-One screen for every blockchain: total value, a price chart from one day to all time, and each asset with its balance, 7-day trend and share of the total.
+Total value, a price chart from one day to all time, and every asset with its balance, 7-day trend and share.
 
 - Market tab with the top 200 coins, and favourites.
 
 - Search assets and addresses with Ctrl K.
 
 - Allocation by asset, and a vault panel with your security status.
-
-Swap
-
-## Swaps with the fee in plain sight
-
-Kyro asks several providers for a quote and picks the best price after fees. You see the amount you send and the amount you receive. The Kyro swap fee, from 0.7%, is already taken out of the amount you receive. How it is calculated.
-
-- Token approvals are for the exact amount. Unlimited approvals are off unless you turn them on.
-
-- The transaction is simulated just before you sign it.
-
-- Maximum slippage of 0.1%, 0.5%, 1% or your own value.
-
-- The provider's transaction is decoded and checked: recipient, minimum amount and fee.
-
-Staking
-
-## Stake SOL, ADA and TRX
-
-Delegate from your own accounts. Your coins never go to Kyro or to a pooled contract.
-
-- Solana: a stake account in your name, delegated to a validator. Activation and cooldown take about two days each.
-
-- Cardano: delegate to a pool. Your ADA stays on your address and stays spendable. 2 ADA deposit, returned when you stop.
-
-- TRON: stake for energy or bandwidth, then vote for Super Representatives. Unstaking takes 14 days.
-
-No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.
-
-Transaction review
-
-## Read it before you sign it
-
-The Rust core decodes each transaction and shows it in a native system window, outside the app's web view. Sign only after you have read the amount, the recipient and the fee.
-
-- Contract calls, token approvals and high fees ask for a second confirmation.
-
-- On Bitcoin: unknown scripts, OP_RETURN data and fees above 100 sat/vB too.
-
-- Address-poisoning alerts and clipboard checks before you send.
-
-Hardware wallets
-
-## Ledger and Trezor
-
-Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.
-
-- Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.
-
-- Software accounts and hardware accounts side by side.
-
-And also
-
-## The details that matter
-
-### Many accounts
-
-Several accounts per blockchain from the same phrase. Move funds between them in two clicks.
-
-### Tor built in
-
-All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.
-
-### No personal data
-
-No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.
-
-### Auto-lock
-
-The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.
-
-### Your own servers
-
-Point each blockchain at your own node or server. Kyro checks it is on the right network first.
-
-### Approvals overview
-
-The vault panel shows whether any unlimited token approval is active.
-
-### 36 blockchains
-
-Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. See the list.
-
-### Open source
-
-GPL-3.0-or-later. Read the code, build it yourself, or change it.
-
-## Get Kyro
-
-Version 1.0.6 · Free · Windows, macOS and Linux
-
-Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
-
-One-line install, all files and checksums
 
 ================================================================
 Security: how Kyro Wallet protects your keys
@@ -338,7 +51,7 @@ Security
 
 # How Kyro protects your keys
 
-Kyro keeps your keys encrypted on your computer and asks you to confirm every signature in a system window. Here is what that covers, and what it does not.
+Encrypted on your computer, confirmed in a system window. Here is what that covers, and what it does not.
 
 Design
 
@@ -368,7 +81,7 @@ Before you sign
 
 ## Nothing is signed without you
 
-Every signature needs your password and a confirmation in a native system window, drawn by the app shell rather than the web view.
+Every signature needs your password and a confirmation in a native system window, drawn by the app shell, outside the web view.
 
 - The window shows the decoded transaction: amount, recipient, fee, account.
 
@@ -435,7 +148,7 @@ Fees
 
 # Kyro is free. Swaps from 0.7%.
 
-Downloading and using Kyro costs nothing. Sending, receiving and staking cost only the blockchain's network fee. Swaps carry a Kyro fee that depends on the swap value, already included in the amount you receive.
+Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.
 
 0% Send and receive You pay the network fee only.
 
@@ -536,9 +249,9 @@ Version 1.0.6
 
 # Download Kyro Wallet
 
-Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.
+Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is published only on GitHub Releases.
 
-Release notes
+Download Kyro Release notes
 
 :  active wallets this week :  downloads in total
 
@@ -1042,7 +755,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - LitecoinLTC
 
@@ -1121,7 +834,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BNB ChainBNB
 
@@ -1196,7 +909,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1271,7 +984,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1346,7 +1059,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1421,7 +1134,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1496,7 +1209,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1571,7 +1284,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1646,7 +1359,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1721,7 +1434,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1796,7 +1509,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1871,7 +1584,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -1946,7 +1659,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -2021,7 +1734,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -2096,7 +1809,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -2171,7 +1884,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -2246,7 +1959,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - EthereumETH
 
@@ -2323,7 +2036,7 @@ Delegate SOL to a validator from a stake account in your name. Activation and co
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2400,7 +2113,7 @@ Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representativ
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2477,7 +2190,7 @@ Delegate to a stake pool. Your ADA stays on your address and remains spendable. 
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2556,7 +2269,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - StellarXLM
 
@@ -2631,7 +2344,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2708,7 +2421,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2781,7 +2494,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2854,7 +2567,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -2931,7 +2644,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3006,7 +2719,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3081,7 +2794,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3160,7 +2873,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3239,7 +2952,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3316,7 +3029,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3391,7 +3104,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3466,7 +3179,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3541,7 +3254,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - XRP LedgerXRP
 
@@ -3616,7 +3329,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 
@@ -3691,7 +3404,7 @@ Details
 
 ## Also in Kyro
 
-Every blockchain lives in the same app, under the same recovery phrase.
+Same app, same recovery phrase.
 
 - BitcoinBTC
 

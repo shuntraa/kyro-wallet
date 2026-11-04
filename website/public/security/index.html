@@ -7,10 +7,12 @@
   <meta name="description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
   <link rel="canonical" href="https://kyrowallet.com/security/">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#07080a">
+  <meta name="theme-color" content="#000000">
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display-italic.woff2" as="font" type="font/woff2" crossorigin>
   
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chains.css">
@@ -29,7 +31,9 @@
   <meta name="twitter:description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/security/#page","url":"https://kyrowallet.com/security/","name":"Kyro Wallet security","description":"Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://kyrowallet.com/security/"}]}]}</script>
-  <script src="/motion.js"></script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
@@ -38,16 +42,15 @@
   <header class="site-header">
     <div class="nav-pill">
       <a class="brand" href="/" aria-label="Kyro Wallet, home">
-        <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-        <span class="brand-name" aria-hidden="true">kyro</span>
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/" aria-current="page">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
-          <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/" aria-current="page"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -62,19 +65,20 @@
     </div>
   </header>
 
+  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 
     
     <section class="page-hero" aria-labelledby="page-title">
-      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Security</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow" data-reveal>Security</p>
-            <h1 id="page-title" data-reveal>How Kyro protects your keys</h1>
-            <p class="lead" data-reveal>Kyro keeps your keys encrypted on your computer and asks you to confirm every signature in a system window. Here is what that covers, and what it does not.</p>
+            <p class="eyebrow">Security</p>
+            <h1 id="page-title">How Kyro protects <em>your keys</em></h1>
+            <p class="lead">Encrypted on your computer, confirmed in a system window. Here is what that covers, and what it does not.</p>
             
           </div>
           
@@ -86,7 +90,7 @@
       <div class="wrap split">
         <div class="split-text" data-reveal>
           <p class="eyebrow">Design</p>
-          <h2 id="s-layers">Three layers, one place for keys</h2>
+          <h2 id="s-layers">Three layers, <em>one place for keys</em></h2>
           <p>The interface you click is a sandboxed web view. It never sees a key. Keys live only in the Rust core, which encrypts them, signs and returns the signed transaction.</p>
           <ul class="checks">
             <li>Recovery phrase and keys encrypted with your password: Argon2id, then XChaCha20-Poly1305.</li>
@@ -96,15 +100,15 @@
         </div>
         
         <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
-          <div class="layer" role="listitem">
+          <div class="layer spot" role="listitem">
             <span class="layer-n">01</span>
             <div><b>Interface</b><span>Sandboxed web view. Never sees a key.</span></div>
           </div>
-          <div class="layer" role="listitem">
+          <div class="layer spot" role="listitem">
             <span class="layer-n">02</span>
             <div><b>App shell</b><span>Tor, auto-lock, system confirmation window.</span></div>
           </div>
-          <div class="layer layer-core" role="listitem">
+          <div class="layer layer-core spot" role="listitem">
             <span class="layer-n">03</span>
             <div><b>Rust core</b><span>Encryption, keys and signing.</span></div>
           </div>
@@ -112,12 +116,12 @@
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="s-sign">
+    <section class="section" aria-labelledby="s-sign">
       <div class="wrap feature-row flip">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Before you sign</p>
-          <h2 id="s-sign">Nothing is signed without you</h2>
-          <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell rather than the web view.</p>
+          <h2 id="s-sign">Nothing is signed <em>without you</em></h2>
+          <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell, outside the web view.</p>
           <ul class="checks">
             <li>The window shows the decoded transaction: amount, recipient, fee, account.</li>
             <li>Unusual transactions ask for a second confirmation: contract calls, any token approval, value sent to a contract, an unknown chain ID, high fees.</li>
@@ -126,24 +130,27 @@
           </ul>
         </div>
         <div class="feature-visual" data-reveal>
-          <figure class="win win-mac win-shot frame-glow hide-sm"><div class="win-bar" aria-hidden="true"><i class="tl"></i><i class="tl"></i><i class="tl"></i><span>Kyro</span></div><img src="/img/shot-approval.webp" width="1250" height="180" alt="Kyro token approval step: approved amount 200 USDC, exact; the unlimited approval switch is off." loading="lazy" decoding="async"><span class="win-glare" aria-hidden="true"></span></figure>
-          <div class="card card-sign spot">
-            <div class="sign-mock" aria-hidden="true">
-              <div class="sm-title">Kyro · confirm transaction</div>
-              <div class="sm-row"><span>Send</span><b class="num">0.25 ETH</b></div>
-              <div class="sm-row"><span>To</span><b class="mono">0x3f5C…9a1E</b></div>
-              <div class="sm-row"><span>Network fee</span><b class="num">0.00018 ETH</b></div>
-              <div class="sm-actions"><i>Cancel</i><i class="on">Confirm</i></div>
-            </div></div>
+          
+  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+    <div class="dlg-body">
+      <div class="dlg-amount"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><strong>1.2345 ETH</strong></div>
+      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
+      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+    </div>
+  </div></div>
         </div>
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="s-net">
+    <section class="section" aria-labelledby="s-net">
       <div class="wrap feature-row">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Network</p>
-          <h2 id="s-net">Private by default</h2>
+          <h2 id="s-net">Private <em>by default</em></h2>
           <p>Kyro talks to blockchains over Tor, which is built into the app. Your IP address is not linked to your addresses.</p>
           <ul class="checks">
             <li>A separate Tor circuit per blockchain.</li>
@@ -154,16 +161,25 @@
           </ul>
         </div>
         <div class="feature-visual" data-reveal>
-          <figure class="win win-mac win-shot frame-narrow frame-glow"><div class="win-bar" aria-hidden="true"><i class="tl"></i><i class="tl"></i><i class="tl"></i><span>Kyro</span></div><img src="/img/shot-vault.webp" width="545" height="705" alt="Kyro vault panel: keys encrypted on this device, auto-lock timer, hardware wallet, unlimited approvals: none, recovery phrase: imported." loading="lazy" decoding="async"><span class="win-glare" aria-hidden="true"></span></figure>
+          
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro vault panel: keys encrypted on this device, auto-lock timer, no unlimited approvals, Tor on."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
+    <div class="kw-kv"><span>Auto-lock</span><b>14:54</b></div>
+    <div class="kw-bar"><i></i></div>
+    <div class="kw-kv"><span>Hardware wallet</span><b class="ice">Add</b></div>
+    <div class="kw-kv"><span>Unlimited approvals</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Recovery phrase</span><b class="up">Imported</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div>
         </div>
       </div>
     </section>
 
-    <section class="section seam band" aria-labelledby="s-limits">
+    <section class="section" aria-labelledby="s-limits">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Limits</p>
-          <h2 id="s-limits">What Kyro cannot protect you from</h2>
+          <h2 id="s-limits">What Kyro <em>cannot</em> protect you from</h2>
           <p>No wallet can. Knowing these helps you avoid them.</p>
           <ul class="checks minus">
             <li>Malware with full control of your computer while the wallet is unlocked.</li>
@@ -189,9 +205,8 @@
     
     <section class="section" aria-labelledby="cta-title">
       <div class="wrap">
-        <div class="download-panel" data-reveal>
-          <div class="aurora aurora-sm" aria-hidden="true"></div>
-          <h2 id="cta-title">Get Kyro</h2>
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title" data-words>Get <em>Kyro</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
@@ -217,13 +232,13 @@
     </section>
   </main>
 
-  <footer class="site-footer seam">
+  <footer class="site-footer">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
           <a class="brand" href="/" aria-label="Kyro Wallet, home">
-            <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-            <span class="brand-name" aria-hidden="true">kyro</span>
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
           </a>
           <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
         </div>
@@ -265,10 +280,9 @@
           </ul>
         </div>
       </div>
-      <p class="footer-word" aria-hidden="true">kyro</p>
       <div class="footer-bottom">
         <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
-        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>)</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
   </footer>

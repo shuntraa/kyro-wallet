@@ -1,50 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Content of every page on kyrowallet.com.
 
-import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, pageHero, dlButton, osCards, installBlock, ctaPanel, shot, breadcrumbLd, window as win, dialog } from './layout.mjs';
-
-const IMG = {
-  portfolio: { src: '/img/win-portfolio.webp', w: 2160, h: 1350 },
-  heroM: { src: '/img/shot-hero-m.webp', w: 1080, h: 945 },
-  assets: { src: '/img/shot-assets.webp', w: 1425, h: 680, alt: 'Kyro asset list: Bitcoin, Ethereum, Dogecoin, Solana, Cardano and Ethereum on Arbitrum, each with price, 7-day trend, balance and share.' },
-  vault: { src: '/img/shot-vault.webp', w: 545, h: 705, alt: 'Kyro vault panel: keys encrypted on this device, auto-lock timer, hardware wallet, unlimited approvals: none, recovery phrase: imported.' },
-  swap: { src: '/img/win-swap.webp', w: 1400, h: 426, alt: 'Kyro swap form on Ethereum: You send USDT, you receive about ETH, service fee included in the rate.' },
-  approval: { src: '/img/shot-approval.webp', w: 1250, h: 180, alt: 'Kyro token approval step: approved amount 200 USDC, exact; the unlimited approval switch is off.' },
-  stakeSol: { src: '/img/shot-stake-sol.webp', w: 651, h: 337, alt: 'Kyro Solana staking card: delegate to a validator from a stake account in your name; activation and cooldown about one epoch each.' },
-  stakeAda: { src: '/img/shot-stake-ada.webp', w: 647, h: 337, alt: 'Kyro Cardano staking card: delegate to a pool, ADA stays on your address; 2 ADA deposit returned when you stop.' },
-  stakeTrx: { src: '/img/shot-stake-trx.webp', w: 652, h: 337, alt: 'Kyro TRON staking card: stake for energy or bandwidth, vote for Super Representatives; unfreeze takes 14 days.' }
-};
-
-const img = (i, extra = '') =>
-  `<img src="${i.src}" width="${i.w}" height="${i.h}" alt="${esc(i.alt || '')}" loading="lazy" decoding="async"${extra}>`;
-
-const deck = (labelled = true) => html`
-            <div class="deck"${labelled ? '' : ' aria-hidden="true"'}>
-              ${img(labelled ? IMG.stakeSol : { ...IMG.stakeSol, alt: '' })}
-              ${img(labelled ? IMG.stakeAda : { ...IMG.stakeAda, alt: '' })}
-              ${img(labelled ? IMG.stakeTrx : { ...IMG.stakeTrx, alt: '' })}
-            </div>`;
-
-const signMock = () => html`
-            <div class="sign-mock" aria-hidden="true">
-              <div class="sm-title">Kyro · confirm transaction</div>
-              <div class="sm-row"><span>Send</span><b class="num">0.25 ETH</b></div>
-              <div class="sm-row"><span>To</span><b class="mono">0x3f5C…9a1E</b></div>
-              <div class="sm-row"><span>Network fee</span><b class="num">0.00018 ETH</b></div>
-              <div class="sm-actions"><i>Cancel</i><i class="on">Confirm</i></div>
-            </div>`;
+import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
+import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, deviceCard, swapWidget, coinCard, icon } from './components.mjs';
 
 const layers = () => html`
         <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
-          <div class="layer" role="listitem">
+          <div class="layer spot" role="listitem">
             <span class="layer-n">01</span>
             <div><b>Interface</b><span>Sandboxed web view. Never sees a key.</span></div>
           </div>
-          <div class="layer" role="listitem">
+          <div class="layer spot" role="listitem">
             <span class="layer-n">02</span>
             <div><b>App shell</b><span>Tor, auto-lock, system confirmation window.</span></div>
           </div>
-          <div class="layer layer-core" role="listitem">
+          <div class="layer layer-core spot" role="listitem">
             <span class="layer-n">03</span>
             <div><b>Rust core</b><span>Encryption, keys and signing.</span></div>
           </div>
@@ -58,7 +28,7 @@ const docLinks = () => html`
           </div>`;
 
 const chainLinks = (list) =>
-  list.map((c) => `<li><a class="c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`).join('\n          ');
+  list.map((c) => `<li><a class="coin-tile spot c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`).join('\n          ');
 
 const yesNo = (v) => (v ? '<span class="yes" role="img" aria-label="Yes"></span>' : '<span class="no" role="img" aria-label="No"></span>');
 
@@ -126,60 +96,55 @@ function appLd(chains) {
   };
 }
 
-// App windows staged on the home page. Screenshots come from the app's demo mode (website/src/capture.mjs).
-const W = {
-  send: { src: '/img/win-send.webp', w: 1416, h: 886 },
-  staking: { src: '/img/win-staking.webp', w: 1600, h: 1000 },
-  status: { src: '/img/win-statusbar.webp', w: 1400, h: 40 }
-};
-
-const confirmDialog = (cls = '') =>
-  dialog({
-    title: 'Kyro · Confirm transaction',
-    cls,
-    rows: [['Send', '0.25 ETH', 'num'], ['To', '0x3f5C…9a1E', 'mono'], ['Network', 'Ethereum'], ['Network fee', '0.00018 ETH', 'num']],
-    note: 'Decoded by the Rust core. Nothing is sent until you confirm.'
-  });
-
-const tourRow = (id, eyebrow, h, text, more, stage, flip = false) => html`
-      <div class="tour-row${flip ? ' tour-flip' : ''}">
-        <div class="tour-text" data-reveal>
-          <p class="eyebrow">${eyebrow}</p>
-          <h2 id="${id}">${h}</h2>
-          <p>${text}</p>
-          ${more}
-        </div>
-        <div class="stage" data-stage data-reveal>${stage}</div>
-      </div>`;
-
-function tour() {
-  return html`
-    <section class="section tour" aria-label="A look at the app">
-      <div class="wrap">
-      ${tourRow('t-swap', 'Swap', 'Swap inside the wallet', 'Kyro asks several providers for a quote (including NEAR Intents across chains and Exolix for Monero) and shows what you receive after fees. Token approvals are for the exact amount unless you change it.', '<a class="more" href="/fees/">How swap fees work</a>',
-        win(IMG.swap.src, IMG.swap.alt, { w: IMG.swap.w, h: IMG.swap.h, title: 'Kyro · Swap', cls: 'win-main' }) + win(IMG.approval.src, IMG.approval.alt, { w: IMG.approval.w, h: IMG.approval.h, title: 'Approval', cls: 'win-side win-low' }))}
-      ${tourRow('t-send', 'Send', 'Read it before you sign it', 'The Rust core decodes every transaction and opens a separate system window with the amount, the recipient and the fee. Unusual transactions ask a second time.', '<a class="more" href="/security/">How signing works</a>',
-        win(W.send.src, 'Kyro send screen: from account, recipient, amount, network fee options and a review panel.', { w: W.send.w, h: W.send.h, chrome: 'none', cls: 'win-main' }) + confirmDialog('win-side win-front'), true)}
-      ${tourRow('t-assets', 'Assets', 'Every account in one list', 'Prices, 7-day trends and balances for all your blockchains, from a single recovery phrase. Add as many accounts as you need.', '<a class="more" href="/chains/">Supported blockchains</a>',
-        win(IMG.assets.src, IMG.assets.alt, { w: IMG.assets.w, h: IMG.assets.h, title: 'Kyro · Assets', cls: 'win-main' }) + win(IMG.vault.src, '', { w: IMG.vault.w, h: IMG.vault.h, title: 'Vault', cls: 'win-side win-tall' }))}
-      ${tourRow('t-stake', 'Staking', 'Stake from your own accounts', 'Delegate SOL, ADA and TRX to a validator, a pool or a Super Representative. Kyro takes no fee on staking.', '<a class="more" href="/features/">Staking details</a>',
-        win(W.staking.src, 'Kyro staking overview: Solana, Cardano and TRON cards.', { w: W.staking.w, h: W.staking.h, chrome: 'none', cls: 'win-main' }), true)}
-      ${tourRow('t-hw', 'Hardware and privacy', 'Ledger, Trezor and Tor', 'Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, on by default.', '<a class="more" href="/security/">Privacy and network</a>',
-        win(IMG.vault.src, IMG.vault.alt, { w: IMG.vault.w, h: IMG.vault.h, title: 'Kyro · Vault', cls: 'win-main win-narrow' }) +
-          dialog({ title: 'Trezor Safe 7', cls: 'win-side win-front', rows: [['Action', 'Confirm on device'], ['Address', 'bc1q…naard', 'mono']], actions: ['Waiting for the device'] }))}
-      </div>
-    </section>`;
-}
-
-function coinWall(chains) {
+function marquee(chains) {
   const half = Math.ceil(chains.length / 2);
   const row = (list, cls) => {
     const items = (hidden) =>
-      list.map((c) => `<li${hidden ? ' aria-hidden="true"' : ''}><a class="coin-tile c-${c.slug}" href="/chains/${c.slug}/"${hidden ? ' tabindex="-1"' : ''}>${coin(c)}<span>${esc(c.name)}</span></a></li>`).join('');
-    return `<ul class="coin-row ${cls}">${items(false)}${items(true)}</ul>`;
+      list
+        .map(
+          (c) =>
+            `<li${hidden ? ' aria-hidden="true"' : ''}><a class="coin-tile spot c-${c.slug}" href="/chains/${c.slug}/"${hidden ? ' tabindex="-1"' : ''}>${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`
+        )
+        .join('');
+    return `<ul class="mq-row ${cls}">${items(false)}${items(true)}</ul>`;
   };
-  return `<nav class="coin-wall" aria-label="All supported blockchains" data-reveal>${row(chains.slice(0, half), 'cr-a')}${row(chains.slice(half), 'cr-b')}</nav>`;
+  return `<nav class="mq" aria-label="All supported blockchains">${row(chains.slice(0, half), 'mq-a')}${row(chains.slice(half), 'mq-b')}</nav>`;
 }
+
+const donateRows = [
+  ['btc', 'Bitcoin', 'bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard', 'Bitcoin'],
+  ['eth', 'Ethereum &amp; EVM', '0x86cD9af8067fF5e0001c709a550cD62b5e968B44', 'Ethereum and EVM'],
+  ['sol', 'Solana', 'ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM', 'Solana'],
+  ['ltc', 'Litecoin', 'LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw', 'Litecoin'],
+  ['doge', 'Dogecoin', 'DKCSjtypvD9qg3R175YdijmwvKh5FnAU14', 'Dogecoin'],
+  ['trx', 'TRON', 'TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES', 'TRON'],
+  ['ada', 'Cardano', 'addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3', 'Cardano']
+];
+
+const donate = () => html`
+          <details id="support">
+            <summary>How can I support Kyro?</summary>
+            <div class="answer">
+              <p>Kyro is free. Donations keep it going. You can also <a href="https://github.com/sponsors/shuntraa">sponsor on GitHub</a>.</p>
+              <div class="donate">
+                <table class="stack">
+                  <thead>
+                    <tr><th scope="col">Network</th><th scope="col">Address</th><th scope="col"><span class="visually-hidden">Action</span></th></tr>
+                  </thead>
+                  <tbody>
+                    ${donateRows.map(
+                      ([id, name, addr, label]) => `<tr>
+                      <th scope="row">${name}</th>
+                      <td data-label="Address"><span class="address" id="addr-${id}">${addr}</span></td>
+                      <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-${id}" aria-label="Copy the ${label} address">Copy</button></td>
+                    </tr>`
+                    )}
+                  </tbody>
+                </table>
+                <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+          </details>`;
 
 /** Usage counters, filled by stats.js from the public `stats` branch; hidden if unavailable. */
 const usage = () => `<p class="usage" data-usage hidden>
@@ -192,255 +157,196 @@ export function home(chains) {
   const path = '/';
   const title = 'Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux';
   const description = `Free, open-source, non-custodial wallet for Bitcoin, Ethereum, Solana and ${n - 3} more blockchains. Send, swap and stake. Your keys stay on your computer.`;
-  const rail = chains
-    .map((c) => `<li><a class="c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}${esc(c.name)}</a></li>`)
-    .join('');
-  const railCopy = chains
-    .map((c) => `<li aria-hidden="true"><a class="c-${c.slug}" href="/chains/${c.slug}/" tabindex="-1">${coin(c)}${esc(c.name)}</a></li>`)
-    .join('');
+  const swapChains = chains.filter((c) => c.features.swap).length;
+  const hwChains = chains.filter((c) => c.features.hardware).length;
+
+  const hop = (mark, name, note) => `<li data-hop><span class="rt-dot">${mark}</span><b>${name}</b><small>${note}</small></li>`;
 
   const body = html`
-    <section class="hero" aria-labelledby="hero-title">
-      <div class="aurora" aria-hidden="true"></div>
-      <div class="wrap hero-inner">
-        <a class="badge" href="${REPO}" data-reveal>
-          <span class="badge-tag">${VERSION}</span>
-          Free and open source
-          <span class="badge-arrow" aria-hidden="true">→</span>
-        </a>
-        <h1 id="hero-title" data-reveal><span class="line">Your keys.</span> <span class="line grad">Your crypto.</span></h1>
-        <p class="lead hero-lead" data-reveal>A desktop wallet for Bitcoin, Ethereum, Solana and ${n - 3} more blockchains. Send, swap and stake, with your keys kept on your own computer.</p>
-        <div class="hero-cta" data-reveal>
-          ${dlButton()}
-          <a class="link-muted" href="/download/" data-dl-other>Windows, macOS and Linux</a>
-        </div>
-        ${usage()}
-      </div>
-
-      <div class="wrap">
-        <div class="stage stage-hero" id="showcase">
-          <div class="horizon" aria-hidden="true"></div>
-          ${win(IMG.portfolio.src, "Kyro's portfolio screen: total value, price chart, asset list with Bitcoin, Ethereum, Dogecoin, Solana and Cardano, and vault status.", { w: IMG.portfolio.w, h: IMG.portfolio.h, chrome: 'none', cls: 'win-hero', eager: true, small: { src: '/img/win-portfolio-sm.webp', w: 1080 }, sizes: '(max-width: 760px) 100vw, 1180px' })}
-          ${win(IMG.vault.src, '', { w: IMG.vault.w, h: IMG.vault.h, title: 'Vault', cls: 'win-float win-f1' })}
-          ${win(IMG.swap.src, '', { w: IMG.swap.w, h: IMG.swap.h, title: 'Kyro · Swap', cls: 'win-float win-f2' })}
-        </div>
-      </div>
-
-      <div class="wrap">
-        <ul class="trust" data-reveal-group>
-          <li><strong>Open source</strong><span>GPL-3.0, on GitHub</span></li>
-          <li><strong>Self-custody</strong><span>No account, no server</span></li>
-          <li><strong>Ledger &amp; Trezor</strong><span>Hardware wallet support</span></li>
-          <li><strong>Tor built in</strong><span>No tracking, no personal data</span></li>
-        </ul>
-      </div>
-
-      <nav class="rail" aria-label="Supported blockchains">
-        <ul class="rail-track">${rail}${railCopy}</ul>
-      </nav>
-    </section>
-${tour()}
-
-    <section class="section seam" id="features" aria-labelledby="features-title">
-      <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Features</p>
-          <h2 id="features-title">Also in the app</h2>
-          <p>Small things that matter when you hold crypto yourself.</p>
-        </div>
-
-        <div class="bento">
-          <article class="card card-mini spot" data-reveal>
-            <span class="mini-icon ic-accounts" aria-hidden="true"></span>
-            <h3>Many accounts</h3>
-            <p>Create as many as you need and move funds between them in two clicks.</p>
-          </article>
-
-          <article class="card card-mini spot" data-reveal>
-            <span class="mini-icon ic-hw" aria-hidden="true"></span>
-            <h3>Hardware wallets</h3>
-            <p>Ledger and Trezor, including Trezor Safe 7.</p>
-          </article>
-
-          <article class="card card-mini spot" data-reveal>
-            <span class="mini-icon ic-shield" aria-hidden="true"></span>
-            <h3>Scam protection</h3>
-            <p>Address-poisoning alerts, clipboard checks and exact token approvals.</p>
-          </article>
-
-          <article class="card card-mini spot" data-reveal>
-            <span class="mini-icon ic-tor" aria-hidden="true"></span>
-            <h3>Private by default</h3>
-            <p>Built-in Tor, no personal data collected. Use your own nodes if you like.</p>
-          </article>
-        </div>
-        <p class="center"><a class="more" href="/features/">All features</a></p>
-      </div>
-    </section>
-
-    <section class="section seam band" aria-labelledby="steps-title">
-      <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Getting started</p>
-          <h2 id="steps-title">Three steps, no account</h2>
-        </div>
-        <ol class="steps" data-reveal-group>
-          <li>
-            <h3>Install</h3>
-            <p>Install Kyro with one command, or download it from GitHub for Windows, macOS or Linux. <a href="/download/#verify">Check the SHA-256</a> if you download the file yourself.</p>
-          </li>
-          <li>
-            <h3>Create or import</h3>
-            <p>Make a new 12 or 24-word recovery phrase, or import yours. It is encrypted with your password, on your computer.</p>
-          </li>
-          <li>
-            <h3>Send, swap, stake</h3>
-            <p>Every transaction opens a system window that shows what you are signing. Nothing is sent until you confirm.</p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="section seam" id="security" aria-labelledby="security-title">
-      <div class="wrap split">
-        <div class="split-text" data-reveal>
-          <p class="eyebrow">Security</p>
-          <h2 id="security-title">Built so you don’t have to trust us</h2>
-          <p>Kyro is open source. Anyone can read the code and build the app themselves.</p>
-          <ul class="checks">
-            <li>Keys are encrypted on your device and never leave the Rust core.</li>
-            <li>Every signature needs your password and a confirmation in a system window.</li>
-            <li>Unusual transactions ask for a second confirmation.</li>
-            <li>Traffic goes over Tor. Every server Kyro contacts is listed publicly.</li>
-          </ul>
-          <a class="more" href="/security/">How Kyro protects your keys</a>
-        </div>
-        ${layers()}
-      </div>
-    </section>
-
-    <section class="section seam band" id="chains" aria-labelledby="chains-title">
-      <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Blockchains</p>
-          <h2 id="chains-title">${n} blockchains. 220+ tokens.</h2>
-          <p>All in the same wallet, from the same recovery phrase.</p>
-        </div>
-      </div>
-      ${coinWall(chains)}
-      <div class="wrap">
-        <p class="center fee-note">Swaps from 0.7%, built into the rate you see.</p>
-        <p class="center"><a class="more" href="/chains/">What works on each blockchain</a></p>
-      </div>
-    </section>
-
-    <section class="section seam" id="fees" aria-labelledby="fees-title">
-      <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Fees</p>
-          <h2 id="fees-title">Simple fees</h2>
-          <p>Kyro is free. Only swaps carry a fee, built into the rate.</p>
-        </div>
-        <div class="fee-cards" data-reveal-group>
-          <div class="fee-card spot">
-            <span class="fee-value">0%</span>
-            <span class="fee-name">Send and receive</span>
-            <span class="fee-desc">Only the network fee.</span>
-          </div>
-          <div class="fee-card spot">
-            <span class="fee-value">0%</span>
-            <span class="fee-name">Staking</span>
-            <span class="fee-desc">Only the network fee.</span>
-          </div>
-          <div class="fee-card fee-accent spot">
-            <span class="fee-value"><span class="fee-from">from</span> 0.7%</span>
-            <span class="fee-name">Swaps</span>
-            <span class="fee-desc">Built into the rate you see.</span>
+    <section class="story" id="showcase" aria-labelledby="hero-title" data-story>
+      <div class="story-pin">
+        <div class="silk silk-hero" aria-hidden="true"><canvas data-silk></canvas></div>
+        <div class="wrap hero-grid">
+          <div class="hero-copy" data-copy>
+            <a class="badge" href="${REPO}">
+              <span class="badge-tag">${VERSION}</span>
+              Free and open source
+              <span class="badge-arrow" aria-hidden="true">→</span>
+            </a>
+            <h1 id="hero-title"><span class="ln"><span>Keep it</span></span> <span class="ln"><em>to yourself.</em></span></h1>
+            <p class="lead hero-lead">A desktop wallet for ${n} blockchains, with Tor on from the first launch and your keys on your own machine.</p>
+            <div class="hero-cta">
+              ${dlButton()}
+              <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
+            </div>
+            <div class="stats">
+              <p><strong>${n}</strong> blockchains</p>
+              ${usage()}
+            </div>
           </div>
         </div>
-        <p class="center"><a class="more" href="/fees/">Swap fee table and an example</a></p>
-      </div>
-    </section>
-
-    <section class="section seam" id="download" aria-labelledby="download-title">
-      <div class="wrap">
-        <div class="download-panel" data-reveal>
-          <div class="aurora aurora-sm" aria-hidden="true"></div>
-          <h2 id="download-title">Get Kyro</h2>
-          <p class="dl-sub">Version ${VERSION} · Free · Windows, macOS and Linux</p>
-          ${installBlock('home')}
-          <p class="dl-alt">Or download the file</p>
-          ${osCards()}
-          <p class="small mute">Also: <a href="${DL}${FILES.msi}">.msi</a> · <a href="${DL}${FILES.deb}">.deb</a> · <a href="${DL}${FILES.sums}">SHA256SUMS</a> · <a href="/download/#first-launch">Opening a downloaded file</a> · <a href="${REPO}/releases/latest">Release notes</a></p>
+        <div class="hero-stage">
+          <div class="kw-wrap" data-kw>${appWindow()}</div>
+        </div>
+        <div class="story-ui" data-ui>
+          <p class="story-cap" data-caption aria-hidden="true">Every coin on one screen</p>
+          <div class="story-dots">
+            <button type="button" class="on" data-go="0" aria-label="Show the Portfolio screen"><span>Portfolio</span></button>
+            <button type="button" data-go="1" aria-label="Show the Swap screen"><span>Swap</span></button>
+            <button type="button" data-go="2" aria-label="Show the Earn screen"><span>Earn</span></button>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="faq-title">
+    <section class="section coins" id="chains" aria-labelledby="chains-title">
       <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Questions</p>
-          <h2 id="faq-title">Short answers</h2>
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Blockchains</p>
+          <h2 id="chains-title" data-words>${n} blockchains. <em>One phrase.</em></h2>
+          <p data-reveal>Bitcoin to Zcash, plus 220+ tokens, all from the same recovery phrase.</p>
+        </div>
+      </div>
+      ${marquee(chains)}
+      <p class="center"><a class="more" href="/chains/">What works on each blockchain</a></p>
+    </section>
+
+    <section class="tor" id="tor" data-tor aria-labelledby="tor-title">
+      <div class="tor-pin">
+        <div class="wrap">
+          <div class="head-center">
+            <p class="eyebrow" data-reveal>Privacy</p>
+            <h2 id="tor-title" data-words>Everything goes <em>through Tor</em></h2>
+            <p data-reveal>Balances, prices, swaps and broadcasts. The client is built in, each blockchain gets its own circuit, and if Tor fails, Kyro stops.</p>
+          </div>
+          <div class="route spot">
+            <div class="ip" aria-hidden="true">
+              <span class="ip-label">The server sees</span>
+              <code class="ip-val" data-ip>•••.•••.•••.•••</code>
+              <span class="ip-note" data-ip-note>A Tor exit relay</span>
+            </div>
+            <div class="rt">
+              <div class="rt-track"><i data-rt-fill></i></div>
+              <ol class="rt-nodes">
+                ${hop('<img src="/img/kyro-mark-dark.svg" width="22" height="22" alt="">', 'Kyro', 'Your computer')}
+                ${hop('1', 'Relay 1', 'Sees your address, blind to the rest')}
+                ${hop('2', 'Relay 2', 'Sees two other relays')}
+                ${hop('3', 'Relay 3', 'Sees the request, never you')}
+                ${hop(icon('assets'), 'Network', 'Sees a Tor exit')}
+              </ol>
+              <div class="rt-packet" data-packet aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="fees" aria-labelledby="swap-title">
+      <div class="wrap">
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Swap</p>
+          <h2 id="swap-title" data-words>Any coin <em>to any coin</em></h2>
+          <p data-reveal>Kyro asks several providers and shows what actually lands in your account, across ${swapChains} blockchains.</p>
+        </div>
+        <div class="swap-grid">
+          <div class="glow-card swap-main spot g-ice" data-reveal>${swapWidget()}</div>
+          <article class="glow-card spot g-orange" data-reveal>
+            <img class="card-coin" src="/img/coins/xmr.svg" width="40" height="40" alt="" loading="lazy">
+            <h3>Monero included</h3>
+            <p>Swap in and out of XMR without leaving the wallet.</p>
+          </article>
+          <article class="glow-card spot g-green" data-reveal>
+            <span class="card-num">0.7<small>%</small></span>
+            <h3>Fee in the rate</h3>
+            <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full table</a></p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="earn-title">
+      <div class="wrap wrap-mid">
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Earn</p>
+          <h2 id="earn-title" data-words>Earn on <em>what you hold</em></h2>
+          <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list, side by side.</p>
+        </div>
+        <div class="earn-wrap" data-reveal data-rows>${earnCard()}</div>
+        <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.</p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="hw-title">
+      <div class="wrap">
+        <div class="glow-card hw-card spot g-ice">
+          <div class="hw-text">
+            <p class="eyebrow" data-reveal>Hardware wallets</p>
+            <h2 id="hw-title" data-words>Ledger <em>and</em> Trezor</h2>
+            <p data-reveal>Plug it in, click connect, confirm on the device. ${hwChains} blockchains, Trezor Safe 7 included.</p>
+            <a class="more" href="/features/#f-hw" data-reveal>Which device on which chain</a>
+          </div>
+          ${deviceCard()}
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="security" aria-labelledby="security-title">
+      <div class="wrap">
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Security</p>
+          <h2 id="security-title" data-words>Yours, <em>start to finish</em></h2>
+        </div>
+        <div class="glow-grid" data-reveal-group>
+          <article class="glow-card spot tilt g-ice">
+            <span class="card-ic">${icon('lock')}</span>
+            <h3>Keys stay on your device</h3>
+            <p>Encrypted with your password and kept in the Rust core. No server has a copy.</p>
+          </article>
+          <article class="glow-card spot tilt g-violet">
+            <span class="card-ic">${icon('window')}</span>
+            <h3>Native confirmation</h3>
+            <p>Every signature opens a system window with the decoded amount, recipient and fee.</p>
+          </article>
+          <article class="glow-card spot tilt g-green">
+            <span class="card-ic">${icon('code')}</span>
+            <h3>Open source</h3>
+            <p>GPL-3.0. Read the code, build it yourself, change it.</p>
+          </article>
+        </div>
+        <p class="center"><a class="more" href="/security/">How Kyro protects your keys</a></p>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Questions</p>
+          <h2 id="faq-title" data-words>Short <em>answers</em></h2>
         </div>
         <div class="faq" data-reveal>
           ${faqItems(FAQ.flatMap((g) => g.items).filter((i) => i.home), chains)}
+          ${donate()}
         </div>
         <p class="center"><a class="more" href="/faq/">All questions</a></p>
       </div>
     </section>
 
-    <section class="section seam band" id="support" aria-labelledby="support-title">
-      <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">Support</p>
-          <h2 id="support-title">Support the project</h2>
-          <p>Kyro is free. Donations help keep it going. You can also <a href="https://github.com/sponsors/shuntraa">sponsor on GitHub</a>.</p>
+    <section class="gather" data-gather aria-labelledby="download-title">
+      <span class="gather-anchor" id="download"></span>
+      <div class="gather-pin">
+        <div class="field" data-field aria-hidden="true">
+          ${chains.map((c) => `<img class="fc" src="/img/coins/${iconOf(c)}.svg" width="64" height="64" alt="" loading="lazy" decoding="async">`)}
         </div>
-        <div class="donate" data-reveal>
-          <table class="stack">
-            <thead>
-              <tr><th scope="col">Network</th><th scope="col">Address</th><th scope="col"><span class="visually-hidden">Action</span></th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">Bitcoin</th>
-                <td data-label="Address"><span class="address" id="addr-btc">bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-btc" aria-label="Copy the Bitcoin address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">Ethereum &amp; EVM</th>
-                <td data-label="Address"><span class="address" id="addr-eth">0x86cD9af8067fF5e0001c709a550cD62b5e968B44</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-eth" aria-label="Copy the Ethereum and EVM address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">Solana</th>
-                <td data-label="Address"><span class="address" id="addr-sol">ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-sol" aria-label="Copy the Solana address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">Litecoin</th>
-                <td data-label="Address"><span class="address" id="addr-ltc">LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-ltc" aria-label="Copy the Litecoin address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">Dogecoin</th>
-                <td data-label="Address"><span class="address" id="addr-doge">DKCSjtypvD9qg3R175YdijmwvKh5FnAU14</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-doge" aria-label="Copy the Dogecoin address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">TRON</th>
-                <td data-label="Address"><span class="address" id="addr-trx">TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-trx" aria-label="Copy the TRON address">Copy</button></td>
-              </tr>
-              <tr>
-                <th scope="row">Cardano</th>
-                <td data-label="Address"><span class="address" id="addr-ada">addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3</span></td>
-                <td class="copy-cell"><button class="btn btn-ghost btn-sm" type="button" data-copy-target="addr-ada" aria-label="Copy the Cardano address">Copy</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+        <svg class="gather-mark" data-mark viewBox="0 0 64 64" aria-hidden="true"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/><rect x="26" y="26" width="12" height="12" fill="#7CC4FF"/></svg>
+        <div class="gather-cta" data-cta>
+          <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
+          <p class="dl-sub">Version ${VERSION} · Free · Windows, macOS and Linux</p>
+          <div class="hero-cta">
+            ${dlButton()}
+            <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
+          </div>
         </div>
+        <p class="wordmark" aria-hidden="true">Kyro</p>
       </div>
     </section>`;
 
@@ -449,8 +355,7 @@ ${tour()}
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js', '/stats.js'],
-    preload: '<link rel="preload" href="/img/win-portfolio.webp" as="image" media="(min-width: 761px)">\n  <link rel="preload" href="/img/win-portfolio-sm.webp" as="image" media="(max-width: 760px)">',
+    scripts: ['/download.js', '/copy.js', '/stats.js', '/scenes.js'],
     ld: [
       {
         '@type': 'Organization',
@@ -473,158 +378,84 @@ export function features(chains) {
   const description = `What Kyro Wallet does: one portfolio for ${chains.length} blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.`;
   const hw = chains.filter((c) => c.features.hardware).map((c) => c.name);
 
+  const row = (id, label, h, flip, text, visual) => html`
+    <section class="section" aria-labelledby="${id}">
+      <div class="wrap feature-row${flip ? ' flip' : ''}">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>${label}</p>
+          <h2 id="${id}" data-words>${h}</h2>
+          <div data-reveal>${text}</div>
+        </div>
+        <div class="feature-visual" data-reveal>${visual}</div>
+      </div>
+    </section>`;
+  const mini = (ic, g, h, p) => `<article class="glow-card spot ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
+
   const body = html`
     ${pageHero({
       trail,
       eyebrow: 'Features',
-      h1: 'What Kyro does',
-      lead: `Send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase. Every transaction is decoded and confirmed in a system window before it is signed.`
+      h1: 'What Kyro <em>does</em>',
+      lead: `Send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase. You read every transaction before it is signed.`
     })}
-
-    <section class="section section-tight" aria-labelledby="f-portfolio">
-      <div class="wrap feature-row">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Portfolio</p>
-          <h2 id="f-portfolio">All your coins in one list</h2>
-          <p>One screen for every blockchain: total value, a price chart from one day to all time, and each asset with its balance, 7-day trend and share of the total.</p>
+    ${row('f-portfolio', 'Portfolio', 'All your coins <em>in one list</em>', false, html`
+          <p>Total value, a price chart from one day to all time, and every asset with its balance, 7-day trend and share.</p>
           <ul class="checks">
             <li>Market tab with the top 200 coins, and favourites.</li>
             <li>Search assets and addresses with Ctrl K.</li>
             <li>Allocation by asset, and a vault panel with your security status.</li>
-          </ul>
-        </div>
-        <div class="feature-visual" data-reveal>
-          ${shot({ ...IMG.assets, cls: 'frame-glow' })}
-        </div>
-      </div>
-    </section>
-
-    <section class="section seam" aria-labelledby="f-swap">
-      <div class="wrap feature-row flip">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Swap</p>
-          <h2 id="f-swap">Swaps with the fee in plain sight</h2>
-          <p>Kyro asks several providers for a quote and picks the best price after fees. You see the amount you send and the amount you receive. The Kyro swap fee, from 0.7%, is already taken out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
+          </ul>`, assetsCard())}
+    ${row('f-swap', 'Swap', 'The fee <em>in plain sight</em>', true, html`
+          <p>Kyro asks several providers for a quote, including NEAR Intents across chains and Exolix for Monero, then picks the best price after fees. The Kyro fee, from 0.7%, is already out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
           <ul class="checks">
             <li>Token approvals are for the exact amount. Unlimited approvals are off unless you turn them on.</li>
             <li>The transaction is simulated just before you sign it.</li>
             <li>Maximum slippage of 0.1%, 0.5%, 1% or your own value.</li>
             <li>The provider’s transaction is decoded and checked: recipient, minimum amount and fee.</li>
-          </ul>
-        </div>
-        <div class="feature-visual" data-reveal>
-          ${shot({ ...IMG.swap, cls: 'frame-glow frame-fade' })}
-        </div>
-      </div>
-    </section>
-
-    <section class="section seam" aria-labelledby="f-stake">
-      <div class="wrap feature-row">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Staking</p>
-          <h2 id="f-stake">Stake SOL, ADA and TRX</h2>
+          </ul>`, swapWidget())}
+    ${row('f-stake', 'Staking', 'Stake <em>SOL, ADA and TRX</em>', false, html`
           <p>Delegate from your own accounts. Your coins never go to Kyro or to a pooled contract.</p>
           <ul class="checks">
             <li><b>Solana:</b> a stake account in your name, delegated to a validator. Activation and cooldown take about two days each.</li>
             <li><b>Cardano:</b> delegate to a pool. Your ADA stays on your address and stays spendable. 2 ADA deposit, returned when you stop.</li>
             <li><b>TRON:</b> stake for energy or bandwidth, then vote for Super Representatives. Unstaking takes 14 days.</li>
           </ul>
-          <p class="small mute">No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.</p>
-        </div>
-        <div class="feature-visual deck-wrap" data-reveal>
-          ${deck()}
-        </div>
-      </div>
-    </section>
-
-    <section class="section seam" aria-labelledby="f-sign">
-      <div class="wrap feature-row flip">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Transaction review</p>
-          <h2 id="f-sign">Read it before you sign it</h2>
-          <p>The Rust core decodes each transaction and shows it in a native system window, outside the app’s web view. Sign only after you have read the amount, the recipient and the fee.</p>
+          <p class="small mute">No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.</p>`, earnCard(['sol', 'ada', 'trx']))}
+    ${row('f-sign', 'Transaction review', 'Read it <em>before you sign it</em>', true, html`
+          <p>The Rust core decodes each transaction and shows it in a native system window, outside the app’s web view.</p>
           <ul class="checks">
             <li>Contract calls, token approvals and high fees ask for a second confirmation.</li>
             <li>On Bitcoin: unknown scripts, OP_RETURN data and fees above 100 sat/vB too.</li>
             <li>Address-poisoning alerts and clipboard checks before you send.</li>
-          </ul>
-        </div>
-        <div class="feature-visual" data-reveal>
-          <div class="card card-sign spot">${signMock()}</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section seam" aria-labelledby="f-hw">
-      <div class="wrap feature-row">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Hardware wallets</p>
-          <h2 id="f-hw">Ledger and Trezor</h2>
+          </ul>`, confirmCard())}
+    ${row('f-hw', 'Hardware wallets', 'Ledger <em>and</em> Trezor', false, html`
           <p>Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.</p>
           <ul class="checks">
             <li>Supported on ${listNames(hw)}.</li>
             <li>Software accounts and hardware accounts side by side.</li>
-          </ul>
-        </div>
-        <div class="feature-visual" data-reveal>
-          ${shot({ ...IMG.vault, cls: 'frame-narrow frame-glow' })}
-        </div>
-      </div>
-    </section>
+          </ul>`, deviceCard())}
 
-    <section class="section seam band" aria-labelledby="f-more">
+    <section class="section" aria-labelledby="f-more">
       <div class="wrap">
-        <div class="head-center" data-reveal>
-          <p class="eyebrow">And also</p>
-          <h2 id="f-more">The details that matter</h2>
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>And also</p>
+          <h2 id="f-more" data-words>The <em>small things</em></h2>
         </div>
-        <div class="bento" data-reveal-group>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-accounts" aria-hidden="true"></span>
-            <h3>Many accounts</h3>
-            <p>Several accounts per blockchain from the same phrase. Move funds between them in two clicks.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-tor" aria-hidden="true"></span>
-            <h3>Tor built in</h3>
-            <p>All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-eye" aria-hidden="true"></span>
-            <h3>No personal data</h3>
-            <p>No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-lock" aria-hidden="true"></span>
-            <h3>Auto-lock</h3>
-            <p>The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-send" aria-hidden="true"></span>
-            <h3>Your own servers</h3>
-            <p>Point each blockchain at your own node or server. Kyro checks it is on the right network first.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-shield" aria-hidden="true"></span>
-            <h3>Approvals overview</h3>
-            <p>The vault panel shows whether any unlimited token approval is active.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-swap" aria-hidden="true"></span>
-            <h3>${chains.length} blockchains</h3>
-            <p>Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See the list</a>.</p>
-          </article>
-          <article class="card card-mini spot">
-            <span class="mini-icon ic-stake" aria-hidden="true"></span>
-            <h3>Open source</h3>
-            <p>GPL-3.0-or-later. Read the code, build it yourself, or change it.</p>
-          </article>
+        <div class="glow-grid glow-grid-4" data-reveal-group>
+          ${mini('ic-accounts', 'g-ice', 'Many accounts', 'Several accounts per blockchain from the same phrase. Move funds between them in two clicks.')}
+          ${mini('ic-tor', 'g-violet', 'Tor built in', 'All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.')}
+          ${mini('ic-eye', 'g-green', 'No personal data', 'No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.')}
+          ${mini('ic-lock', 'g-orange', 'Auto-lock', 'The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.')}
+          ${mini('ic-send', 'g-green', 'Your own servers', 'Point each blockchain at your own node or server. Kyro checks it is on the right network first.')}
+          ${mini('ic-shield', 'g-orange', 'Approvals overview', 'The vault panel shows whether any unlimited token approval is active.')}
+          ${mini('ic-swap', 'g-ice', `${chains.length} blockchains`, 'Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See the list</a>.')}
+          ${mini('ic-stake', 'g-violet', 'Open source', 'GPL-3.0-or-later. Read the code, build it yourself, or change it.')}
         </div>
       </div>
     </section>
     ${ctaPanel()}`;
 
-  return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet features', description, trail) };
+  return { path, title, description, body, scripts: ['/download.js', '/scenes.js'], ld: webPage(path, 'Kyro Wallet features', description, trail) };
 }
 
 export function security() {
@@ -638,15 +469,15 @@ export function security() {
     ${pageHero({
       trail,
       eyebrow: 'Security',
-      h1: 'How Kyro protects your keys',
-      lead: 'Kyro keeps your keys encrypted on your computer and asks you to confirm every signature in a system window. Here is what that covers, and what it does not.'
+      h1: 'How Kyro protects <em>your keys</em>',
+      lead: 'Encrypted on your computer, confirmed in a system window. Here is what that covers, and what it does not.'
     })}
 
     <section class="section section-tight" aria-labelledby="s-layers">
       <div class="wrap split">
         <div class="split-text" data-reveal>
           <p class="eyebrow">Design</p>
-          <h2 id="s-layers">Three layers, one place for keys</h2>
+          <h2 id="s-layers">Three layers, <em>one place for keys</em></h2>
           <p>The interface you click is a sandboxed web view. It never sees a key. Keys live only in the Rust core, which encrypts them, signs and returns the signed transaction.</p>
           <ul class="checks">
             <li>Recovery phrase and keys encrypted with your password: Argon2id, then XChaCha20-Poly1305.</li>
@@ -658,12 +489,12 @@ export function security() {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="s-sign">
+    <section class="section" aria-labelledby="s-sign">
       <div class="wrap feature-row flip">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Before you sign</p>
-          <h2 id="s-sign">Nothing is signed without you</h2>
-          <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell rather than the web view.</p>
+          <h2 id="s-sign">Nothing is signed <em>without you</em></h2>
+          <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell, outside the web view.</p>
           <ul class="checks">
             <li>The window shows the decoded transaction: amount, recipient, fee, account.</li>
             <li>Unusual transactions ask for a second confirmation: contract calls, any token approval, value sent to a contract, an unknown chain ID, high fees.</li>
@@ -672,17 +503,16 @@ export function security() {
           </ul>
         </div>
         <div class="feature-visual" data-reveal>
-          ${shot({ ...IMG.approval, cls: 'frame-glow hide-sm' })}
-          <div class="card card-sign spot">${signMock()}</div>
+          ${confirmCard()}
         </div>
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="s-net">
+    <section class="section" aria-labelledby="s-net">
       <div class="wrap feature-row">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Network</p>
-          <h2 id="s-net">Private by default</h2>
+          <h2 id="s-net">Private <em>by default</em></h2>
           <p>Kyro talks to blockchains over Tor, which is built into the app. Your IP address is not linked to your addresses.</p>
           <ul class="checks">
             <li>A separate Tor circuit per blockchain.</li>
@@ -693,16 +523,16 @@ export function security() {
           </ul>
         </div>
         <div class="feature-visual" data-reveal>
-          ${shot({ ...IMG.vault, cls: 'frame-narrow frame-glow' })}
+          ${vaultCard()}
         </div>
       </div>
     </section>
 
-    <section class="section seam band" aria-labelledby="s-limits">
+    <section class="section" aria-labelledby="s-limits">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Limits</p>
-          <h2 id="s-limits">What Kyro cannot protect you from</h2>
+          <h2 id="s-limits">What Kyro <em>cannot</em> protect you from</h2>
           <p>No wallet can. Knowing these helps you avoid them.</p>
           <ul class="checks minus">
             <li>Malware with full control of your computer while the wallet is unlocked.</li>
@@ -736,8 +566,8 @@ export function fees() {
     ${pageHero({
       trail,
       eyebrow: 'Fees',
-      h1: 'Kyro is free. Swaps from 0.7%.',
-      lead: 'Downloading and using Kyro costs nothing. Sending, receiving and staking cost only the blockchain’s network fee. Swaps carry a Kyro fee that depends on the swap value, already included in the amount you receive.'
+      h1: 'Kyro is free. <em>Swaps from 0.7%.</em>',
+      lead: 'Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.'
     })}
 
     <section class="section section-tight" aria-label="Fee summary">
@@ -762,7 +592,7 @@ export function fees() {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="fee-schedule">
+    <section class="section" aria-labelledby="fee-schedule">
       <div class="wrap">
         <div class="prose" data-reveal>
           <h2 id="fee-schedule">Swap fee by swap value</h2>
@@ -790,11 +620,11 @@ export function fees() {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="fee-example">
+    <section class="section" aria-labelledby="fee-example">
       <div class="wrap">
         <div class="head-center" data-reveal>
           <p class="eyebrow">Example</p>
-          <h2 id="fee-example">A $200 swap</h2>
+          <h2 id="fee-example">A <em>$200</em> swap</h2>
           <p>$200 falls between the $100 and $1,000 rows, so the rate is between 1.2% and 0.9%: about 1.11%.</p>
         </div>
         <div class="prose" data-reveal>
@@ -810,7 +640,7 @@ export function fees() {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="fee-how">
+    <section class="section" aria-labelledby="fee-how">
       <div class="wrap">
         <div class="prose" data-reveal>
           <h2 id="fee-how">How the swap fee works</h2>
@@ -867,16 +697,16 @@ export function download(chains) {
     ${pageHero({
       trail,
       eyebrow: `Version ${VERSION}`,
-      h1: 'Download Kyro Wallet',
-      lead: 'Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.',
-      extra: `<div class="actions" data-reveal><a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div>${usage()}`
+      h1: 'Download <em>Kyro Wallet</em>',
+      lead: 'Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is published only on GitHub Releases.',
+      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl magnet" href="${REPO}/releases/latest">Release notes</a></div><div class="stats">${usage()}</div>`
     })}
 
     <section class="section section-tight" id="install" aria-labelledby="install-title">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Recommended</p>
-          <h2 id="install-title">Install with one command</h2>
+          <h2 id="install-title">Install with <em>one command</em></h2>
           <p>Paste the command for your system into PowerShell (Windows) or Terminal (macOS, Linux). It downloads the latest release from GitHub, checks its SHA-256 and installs it. A file fetched this way is not marked as downloaded from the internet, so Windows SmartScreen and macOS Gatekeeper do not block the first launch.</p>
           ${installBlock('dl')}
           <p class="small mute">On Windows the usual installer window opens. On macOS Kyro goes to Applications; on Linux to <code>~/.local/bin/kyro</code> with a menu entry. No administrator password is asked by the script.</p>
@@ -884,11 +714,11 @@ export function download(chains) {
       </div>
     </section>
 
-    <section class="section section-tight seam" aria-labelledby="dl-files">
+    <section class="section section-tight" aria-labelledby="dl-files">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Or</p>
-          <h2 id="dl-files">Download the file</h2>
+          <h2 id="dl-files">Download <em>the file</em></h2>
         </div>
         <div data-reveal>${osCards()}</div>
         <div class="prose dl-files" data-reveal>
@@ -934,11 +764,11 @@ sudo apt install ./${FILES.deb}</code></pre>
       </div>
     </section>
 
-    <section class="section seam" id="verify" aria-labelledby="verify-title">
+    <section class="section" id="verify" aria-labelledby="verify-title">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Checksum</p>
-          <h2 id="verify-title">Verify your download</h2>
+          <h2 id="verify-title">Verify <em>your download</em></h2>
           <p>The install commands do this for you. If you downloaded a file yourself, download <a href="${DL}${FILES.sums}">SHA256SUMS</a> next to it, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.</p>
           <h3>Windows (PowerShell)</h3>
           <pre><code>Get-FileHash .\\${FILES.exe} -Algorithm SHA256</code></pre>
@@ -950,11 +780,11 @@ sudo apt install ./${FILES.deb}</code></pre>
       </div>
     </section>
 
-    <section class="section seam band" id="source" aria-labelledby="source-title">
+    <section class="section" id="source" aria-labelledby="source-title">
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Source</p>
-          <h2 id="source-title">Build it yourself</h2>
+          <h2 id="source-title">Build it <em>yourself</em></h2>
           <p>You need Rust, Node.js 22+, pnpm 11 and the Tauri prerequisites. See the <a href="${REPO}#build-from-source">README</a>.</p>
           <pre><code>git clone https://github.com/shuntraa/kyro-wallet.git
 cd kyro-wallet
@@ -1041,7 +871,7 @@ export function faq(chains) {
     ${pageHero({
       trail,
       eyebrow: `${count} questions`,
-      h1: 'Frequently asked questions',
+      h1: 'Frequently asked <em>questions</em>',
       lead: `Can’t find yours? Ask on <a href="${REPO}/issues">GitHub</a>.`
     })}
 
@@ -1092,7 +922,7 @@ export function chainsIndex(chains) {
     ${pageHero({
       trail,
       eyebrow: 'Blockchains',
-      h1: `${chains.length} blockchains, one wallet`,
+      h1: `${chains.length} blockchains, <em>one wallet</em>`,
       lead: 'Every blockchain below works from the same recovery phrase. Pick one to see what you can do on it.'
     })}
 
@@ -1112,11 +942,11 @@ export function chainsIndex(chains) {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="matrix-title">
+    <section class="section" aria-labelledby="matrix-title">
       <div class="wrap wrap-narrow">
         <div class="head-center" data-reveal>
           <p class="eyebrow">Compare</p>
-          <h2 id="matrix-title">What works where</h2>
+          <h2 id="matrix-title">What works <em>where</em></h2>
           <p>Staking is available for SOL, ADA and TRX. Hardware wallets work on Bitcoin, Ethereum, the main EVM chains and Solana.</p>
         </div>
         ${matrix(chains)}
@@ -1165,23 +995,16 @@ export function chainPage(c, chains) {
     ['ic-hw', 'Hardware wallet', f.hardware, `Sign ${c.name} transactions with a ${hwDev}.${c.hwNote ? ' ' + c.hwNote : ''}`, `Not supported on ${c.name} yet. Use a software account.`]
   ];
 
-  const visual = f.staking
-    ? { solana: IMG.stakeSol, cardano: IMG.stakeAda, tron: IMG.stakeTrx }[c.slug] || IMG.assets
-    : c.kind === 'evm'
-      ? IMG.swap
-      : IMG.assets;
-
   const related = [...chains.filter((o) => o.kind === c.kind && o.slug !== c.slug), ...chains.filter((o) => o.kind !== c.kind)].slice(0, 8);
 
   const body = html`
     ${pageHero({
       trail,
-      before: `<div class="chain-mark" data-reveal>${coin(c, 'coin-lg')}</div>`,
-      aside: `<div class="stage stage-chain" data-stage data-reveal>${win(visual.src, visual.alt, { w: visual.w, h: visual.h, title: `Kyro · ${c.name}`, cls: 'win-main' })}</div>`,
+      aside: coinCard(c),
       eyebrow: `${esc(c.name)} · ${esc(c.ticker)}`,
-      h1: `${esc(c.name)} wallet for Windows, macOS and Linux`,
+      h1: `${esc(c.name)} wallet <em>for Windows, macOS and Linux</em>`,
       lead: `${capSentence} Kyro is free, open source and keeps your keys on your own computer.`,
-      extra: `<div class="actions" data-reveal>${dlButton()}<a class="btn btn-ghost btn-xl" href="/chains/">All blockchains</a></div>`
+      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>`
     })}
 
     <section class="section section-tight" aria-labelledby="caps-title">
@@ -1190,7 +1013,7 @@ export function chainPage(c, chains) {
         <ul class="caps" data-reveal-group>
           ${caps.map(
             ([icon, name, on, yes, no]) => html`
-          <li class="cap spot ${on ? 'cap-on' : 'cap-off'}">
+          <li class="cap spot c-${c.slug} ${on ? 'cap-on' : 'cap-off'}">
             <span class="mini-icon ${icon}" aria-hidden="true"></span>
             <h3>${name}</h3>
             <p>${on ? yes : no}</p>
@@ -1201,29 +1024,26 @@ export function chainPage(c, chains) {
       </div>
     </section>
 
-    <section class="section seam" aria-labelledby="on-chain">
-      <div class="wrap feature-row">
-        <div class="feature-text" data-reveal>
-          <p class="eyebrow">Details</p>
-          <h2 id="on-chain">${esc(c.name)} in Kyro</h2>
-          ${c.staking ? `<p>${esc(c.staking)}</p>` : ''}
-          <ul class="checks">
+    <section class="section" aria-labelledby="on-chain">
+      <div class="wrap">
+        <div class="prose">
+          <p class="eyebrow" data-reveal>Details</p>
+          <h2 id="on-chain" data-words>${esc(c.name)} <em>in Kyro</em></h2>
+          ${c.staking ? `<p data-reveal>${esc(c.staking)}</p>` : ''}
+          <ul class="checks" data-reveal>
             ${(c.notes || []).map((n) => `<li>${esc(n)}</li>`)}
             <li>Same recovery phrase as your other ${chains.length - 1} blockchains.</li>
             <li>Keys encrypted on your computer; every signature confirmed in a system window.</li>
           </ul>
         </div>
-        <div class="feature-visual" data-reveal>
-          ${shot({ ...(visual === IMG.assets ? IMG.vault : IMG.assets), cls: 'frame-glow' })}
-        </div>
       </div>
     </section>
 
-    <section class="section seam band" aria-labelledby="related-title">
+    <section class="section" aria-labelledby="related-title">
       <div class="wrap">
         <div class="head-center" data-reveal>
-          <h2 id="related-title">Also in Kyro</h2>
-          <p>Every blockchain lives in the same app, under the same recovery phrase.</p>
+          <h2 id="related-title">Also <em>in Kyro</em></h2>
+          <p>Same app, same recovery phrase.</p>
         </div>
         <ul class="chain-grid" data-reveal-group>
           ${chainLinks(related)}
@@ -1231,7 +1051,7 @@ export function chainPage(c, chains) {
         <p class="center"><a class="more" href="/chains/">All ${chains.length} blockchains</a></p>
       </div>
     </section>
-    ${ctaPanel(`Get Kyro for ${esc(c.name)}`)}`;
+    ${ctaPanel(`Get Kyro <em>for ${esc(c.name)}</em>`)}`;
 
   const ld = [
     ...webPage(path, `${c.name} wallet: Kyro`, description, trail)
@@ -1243,14 +1063,14 @@ export function chainPage(c, chains) {
 export function notFound() {
   const body = html`
     <section class="notfound" aria-labelledby="page-title">
-      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
       <div class="wrap">
-        <p class="eyebrow">404</p>
-        <h1 id="page-title">Page not found</h1>
+        <p class="notfound-n" aria-hidden="true">404</p>
+        <h1 id="page-title">Page <em>not found</em></h1>
         <p>Kyro is only downloaded from the GitHub Releases page.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="/">Home</a>
-          <a class="btn btn-ghost" href="/download/">Download</a>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-xl magnet" href="/">Home</a>
+          <a class="btn btn-ghost btn-xl magnet" href="/download/">Download</a>
         </div>
       </div>
     </section>`;
@@ -1270,7 +1090,7 @@ export function privacy() {
     ${pageHero({
       trail,
       eyebrow: 'Privacy',
-      h1: 'Privacy policy',
+      h1: 'Privacy <em>policy</em>',
       lead: 'Kyro Wallet collects no personal data. There is no account and no analytics. Once a week, an anonymous download over Tor helps estimate how many wallets are active.'
     })}
 
@@ -1313,7 +1133,7 @@ export function codeSigningPolicy() {
     ${pageHero({
       trail,
       eyebrow: 'Code signing',
-      h1: 'Code signing policy',
+      h1: 'Code signing <em>policy</em>',
       lead: 'Free code signing provided by SignPath.io, certificate by SignPath Foundation.'
     })}
 

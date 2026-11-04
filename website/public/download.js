@@ -50,7 +50,7 @@
       if (icon) icon.classList.add(info.icon);
     });
     each('[data-dl-other]', function (el) {
-      el.textContent = 'Other systems and checksums';
+      el.textContent = 'Other platforms';
     });
     each('.os-row[data-os="' + os + '"]', function (row) {
       row.setAttribute('data-current', 'true');

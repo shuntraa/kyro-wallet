@@ -7,10 +7,12 @@
   <meta name="description" content="How Kyro Wallet release builds are code signed: free code signing by SignPath.io with a certificate by SignPath Foundation (pending approval), only for builds from the public GitHub Actions workflow.">
   <link rel="canonical" href="https://kyrowallet.com/code-signing-policy/">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#07080a">
+  <meta name="theme-color" content="#000000">
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display-italic.woff2" as="font" type="font/woff2" crossorigin>
   
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chains.css">
@@ -29,7 +31,9 @@
   <meta name="twitter:description" content="How Kyro Wallet release builds are code signed: free code signing by SignPath.io with a certificate by SignPath Foundation (pending approval), only for builds from the public GitHub Actions workflow.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/code-signing-policy/#page","url":"https://kyrowallet.com/code-signing-policy/","name":"Kyro Wallet code signing policy","description":"How Kyro Wallet release builds are code signed: free code signing by SignPath.io with a certificate by SignPath Foundation (pending approval), only for builds from the public GitHub Actions workflow.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Code signing policy","item":"https://kyrowallet.com/code-signing-policy/"}]}]}</script>
-  <script src="/motion.js"></script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   
 </head>
 <body>
@@ -38,16 +42,15 @@
   <header class="site-header">
     <div class="nav-pill">
       <a class="brand" href="/" aria-label="Kyro Wallet, home">
-        <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-        <span class="brand-name" aria-hidden="true">kyro</span>
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
-          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
-          <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -62,19 +65,20 @@
     </div>
   </header>
 
+  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 
     
     <section class="page-hero" aria-labelledby="page-title">
-      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Code signing policy</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
-            <p class="eyebrow" data-reveal>Code signing</p>
-            <h1 id="page-title" data-reveal>Code signing policy</h1>
-            <p class="lead" data-reveal>Free code signing provided by SignPath.io, certificate by SignPath Foundation.</p>
+            <p class="eyebrow">Code signing</p>
+            <h1 id="page-title">Code signing <em>policy</em></h1>
+            <p class="lead">Free code signing provided by SignPath.io, certificate by SignPath Foundation.</p>
             
           </div>
           
@@ -108,13 +112,13 @@
     </section>
   </main>
 
-  <footer class="site-footer seam">
+  <footer class="site-footer">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
           <a class="brand" href="/" aria-label="Kyro Wallet, home">
-            <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-            <span class="brand-name" aria-hidden="true">kyro</span>
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
           </a>
           <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
         </div>
@@ -156,10 +160,9 @@
           </ul>
         </div>
       </div>
-      <p class="footer-word" aria-hidden="true">kyro</p>
       <div class="footer-bottom">
         <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
-        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>)</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
   </footer>

@@ -1,126 +1,259 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: scroll reveals, header state, reading progress, the tilted app screenshot, the
-// floating app cut-outs, the pointer spotlight on cards and the small-screen menu.
+// Kyro Wallet site: inertial wheel scrolling, scroll reveals, word by word titles, magnetic buttons,
+// the cursor light on cards, and the small-screen menu. All of it off for reduced motion.
 (function () {
   'use strict';
 
   var root = document.documentElement;
-  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!reduced && 'IntersectionObserver' in window) root.classList.add('js');
+  var motion = root.classList.contains('js');
+  var fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  var header = document.querySelector('.site-header');
 
-  function init() {
-    var header = document.querySelector('.site-header');
-    var pill = document.querySelector('.nav-pill');
-    var frame = document.getElementById('showcase');
-    var chips = document.querySelectorAll('.chip, .win-float');
-    var stages = document.querySelectorAll('[data-stage]');
-    var ticking = false;
-
-    function onScroll() {
-      ticking = false;
-      var y = window.scrollY || 0;
-      var vh = window.innerHeight || 800;
-      if (header) header.classList.toggle('scrolled', y > 8);
-      if (pill) {
-        var max = document.documentElement.scrollHeight - vh;
-        pill.style.setProperty('--progress', max > 0 ? Math.min(y / max, 1).toFixed(4) : '0');
-      }
-      if (reduced) return;
-      if (frame) {
-        var r = frame.getBoundingClientRect();
-        var p = Math.min(Math.max((vh - r.top) / (vh * 0.75), 0), 1);
-        frame.style.setProperty('--tilt', (18 * (1 - p)).toFixed(2) + 'deg');
-        frame.style.setProperty('--zoom', (0.94 + 0.06 * p).toFixed(3));
-      }
-      for (var s = 0; s < stages.length; s++) {
-        var sr = stages[s].getBoundingClientRect();
-        if (sr.bottom < -200 || sr.top > vh + 200) continue;
-        var sp = Math.max(-1, Math.min(1, (vh / 2 - (sr.top + sr.height / 2)) / (vh * 0.7)));
-        stages[s].style.setProperty('--p', sp.toFixed(3));
-      }
-      for (var i = 0; i < chips.length; i++) {
-        var rect = chips[i].parentNode.getBoundingClientRect();
-        var speed = i % 2 ? -0.08 : 0.06;
-        chips[i].style.setProperty('--float', ((rect.top + rect.height / 2 - vh / 2) * speed).toFixed(1) + 'px');
-      }
+  // One frame loop for the whole site. scenes.js adds its work with Kyro.frame(fn).
+  var jobs = [];
+  var K = (window.Kyro = {
+    motion: motion,
+    fine: fine,
+    velocity: 0,
+    frame: function (fn) {
+      jobs.push(fn);
+    },
+    scrollTo: function (y) {
+      if (smooth) smooth.to(y);
+      else window.scrollTo(0, y);
     }
-    window.addEventListener(
-      'scroll',
-      function () {
-        if (!ticking) {
-          ticking = true;
-          window.requestAnimationFrame(onScroll);
-        }
-      },
-      { passive: true }
-    );
-    window.addEventListener('resize', onScroll);
-    onScroll();
+  });
 
-    var menu = document.querySelector('.menu');
-    if (menu) {
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && menu.open) {
-          menu.open = false;
-          menu.querySelector('summary').focus();
+  // Wheel input eases towards its target. Keyboard, scrollbar, touch and anchors stay native:
+  // the target simply follows the real position whenever the wheel is idle.
+  var smooth = null;
+  if (motion && fine) {
+    smooth = (function () {
+      var target = window.scrollY, pos = target, active = false;
+      function max() {
+        return root.scrollHeight - window.innerHeight;
+      }
+      function scrollable(el, dy) {
+        for (; el && el !== document.body && el.nodeType === 1; el = el.parentNode) {
+          if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) {
+            if ((dy > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) || (dy < 0 && el.scrollTop > 0)) return true;
+          }
         }
-      });
-      document.addEventListener('click', function (e) {
-        if (menu.open && (!menu.contains(e.target) || e.target.closest('a'))) menu.open = false;
-      });
-    }
-
-    if (!reduced && window.matchMedia('(hover: hover)').matches) {
-      document.addEventListener(
-        'pointermove',
+        return false;
+      }
+      window.addEventListener(
+        'wheel',
         function (e) {
-          var el = e.target.closest && e.target.closest('.spot');
-          if (!el) return;
-          var b = el.getBoundingClientRect();
-          el.style.setProperty('--mx', (e.clientX - b.left).toFixed(0) + 'px');
-          el.style.setProperty('--my', (e.clientY - b.top).toFixed(0) + 'px');
+          if (e.ctrlKey || e.metaKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || scrollable(e.target, e.deltaY)) return;
+          e.preventDefault();
+          if (!active) target = pos = window.scrollY;
+          var unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? window.innerHeight : 1;
+          target = Math.max(0, Math.min(max(), target + e.deltaY * unit));
+          active = true;
         },
-        { passive: true }
+        { passive: false }
       );
-    }
+      return {
+        tick: function () {
+          if (!active) return;
+          pos += (target - pos) * 0.11;
+          if (Math.abs(target - pos) < 0.4) {
+            pos = target;
+            active = false;
+          }
+          window.scrollTo(0, pos);
+        },
+        to: function (y) {
+          if (!active) pos = window.scrollY;
+          target = Math.max(0, Math.min(max(), y));
+          active = true;
+        }
+      };
+    })();
+  }
 
-    if (!root.classList.contains('js')) return;
+  var lastY = window.scrollY, marquees = [];
+  function loop(now) {
+    requestAnimationFrame(loop);
+    if (smooth) smooth.tick();
+    var y = window.scrollY;
+    K.velocity += (y - lastY - K.velocity) * 0.2;
+    lastY = y;
+    if (header) header.classList.toggle('scrolled', y > 8);
+    for (var i = 0; i < jobs.length; i++) jobs[i](y, now);
+    // The coin rows run faster while the page moves.
+    if (marquees.length) {
+      var rate = 1 + Math.min(Math.abs(K.velocity) * 0.09, 5);
+      for (var m = 0; m < marquees.length; m++) marquees[m].updatePlaybackRate(rate);
+    }
+  }
+
+  function words(el) {
+    var n = 0;
+    (function walk(node) {
+      var kids = Array.prototype.slice.call(node.childNodes);
+      kids.forEach(function (kid) {
+        if (kid.nodeType === 1) return walk(kid);
+        if (kid.nodeType !== 3 || !kid.nodeValue.trim()) return;
+        var frag = document.createDocumentFragment();
+        kid.nodeValue.split(/(\s+)/).forEach(function (part) {
+          if (!part) return;
+          if (/^\s+$/.test(part)) return frag.appendChild(document.createTextNode(' '));
+          var outer = document.createElement('span');
+          var inner = document.createElement('span');
+          outer.className = 'wd';
+          inner.textContent = part;
+          inner.style.setProperty('--i', n++);
+          outer.appendChild(inner);
+          frag.appendChild(outer);
+        });
+        node.replaceChild(frag, kid);
+      });
+    })(el);
+  }
+
+  function reveals() {
+    var titles = document.querySelectorAll('[data-words]');
+    for (var t = 0; t < titles.length; t++) words(titles[t]);
 
     var groups = document.querySelectorAll('[data-reveal-group]');
     for (var g = 0; g < groups.length; g++) {
-      var kids = groups[g].children;
-      for (var k = 0; k < kids.length; k++) {
-        kids[k].setAttribute('data-reveal', '');
-        kids[k].style.transitionDelay = Math.min(k * 45, 600) + 'ms';
+      for (var k = 0; k < groups[g].children.length; k++) {
+        var kid = groups[g].children[k];
+        kid.setAttribute('data-reveal', '');
+        kid.style.transitionDelay = Math.min(k * 70, 500) + 'ms';
       }
     }
-    var cards = document.querySelectorAll('.bento > .card');
-    for (var c = 0; c < cards.length; c++) cards[c].style.transitionDelay = (c % 4) * 70 + 'ms';
-
-    function clearDelay(el) {
-      el.style.transitionDelay = '';
-    }
+    var rows = document.querySelectorAll('[data-rows] .kw-earn');
+    for (var r = 0; r < rows.length; r++) rows[r].style.setProperty('--i', r);
 
     var io = new IntersectionObserver(
       function (entries) {
-        for (var i = 0; i < entries.length; i++) {
-          if (!entries[i].isIntersecting) continue;
-          var el = entries[i].target;
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          var el = e.target;
           el.classList.add('in');
-          if (el.style.transitionDelay) window.setTimeout(clearDelay.bind(null, el), 1600);
           io.unobserve(el);
-        }
+          // Hover transitions must not wait for the entrance delay.
+          if (el.style.transitionDelay) {
+            window.setTimeout(function () {
+              el.style.transitionDelay = '';
+            }, 1500);
+          }
+        });
       },
-      { rootMargin: '0px 0px -6% 0px', threshold: 0.06 }
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }
     );
-    var items = document.querySelectorAll('[data-reveal]');
+    var items = document.querySelectorAll('[data-reveal], [data-words], [data-device]');
     for (var j = 0; j < items.length; j++) io.observe(items[j]);
-
     window.addEventListener('beforeprint', function () {
       for (var p = 0; p < items.length; p++) items[p].classList.add('in');
     });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  function magnets() {
+    var list = document.querySelectorAll('.magnet');
+    Array.prototype.forEach.call(list, function (el) {
+      var raf = 0, dx = 0, dy = 0;
+      function paint() {
+        raf = 0;
+        el.style.transform = 'translate3d(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px,0)';
+      }
+      el.addEventListener('pointermove', function (e) {
+        var b = el.getBoundingClientRect();
+        dx = (e.clientX - b.left - b.width / 2) * 0.22;
+        dy = (e.clientY - b.top - b.height / 2) * 0.32;
+        el.style.transition = 'transform .12s linear, background .25s, color .25s, border-color .25s, box-shadow .35s';
+        if (!raf) raf = requestAnimationFrame(paint);
+      });
+      el.addEventListener('pointerleave', function () {
+        el.style.transition = 'transform .7s cubic-bezier(.2,1.6,.35,1), background .25s, color .25s, border-color .25s, box-shadow .35s';
+        el.style.transform = '';
+      });
+    });
+  }
+
+  function cursor() {
+    var light = document.querySelector('.cursor-light');
+    var x = 0, y = 0, cx = 0, cy = 0, seen = false, card = null, ex = 0, ey = 0;
+    document.addEventListener(
+      'pointermove',
+      function (e) {
+        x = e.clientX;
+        y = e.clientY;
+        if (!seen) {
+          seen = true;
+          cx = x;
+          cy = y;
+          if (light) light.classList.add('on');
+        }
+        ex = x;
+        ey = y;
+        card = e.target.closest ? e.target.closest('.spot') : null;
+      },
+      { passive: true }
+    );
+    K.frame(function () {
+      if (!seen) return;
+      cx += (x - cx) * 0.14;
+      cy += (y - cy) * 0.14;
+      if (light) light.style.transform = 'translate3d(' + cx.toFixed(1) + 'px,' + cy.toFixed(1) + 'px,0)';
+      if (card) {
+        var b = card.getBoundingClientRect();
+        card.style.setProperty('--mx', (ex - b.left).toFixed(0) + 'px');
+        card.style.setProperty('--my', (ey - b.top).toFixed(0) + 'px');
+        if (card.classList.contains('tilt')) {
+          var rx = ((ey - b.top) / b.height - 0.5) * -7;
+          var ry = ((ex - b.left) / b.width - 0.5) * 7;
+          card.style.transform = 'perspective(900px) rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg) translateY(-4px)';
+        }
+      }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.tilt'), function (el) {
+      el.addEventListener('pointerleave', function () {
+        el.style.transform = '';
+      });
+    });
+  }
+
+  function menu() {
+    var m = document.querySelector('.menu');
+    if (!m) return;
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && m.open) {
+        m.open = false;
+        m.querySelector('summary').focus();
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (m.open && (!m.contains(e.target) || e.target.closest('a'))) m.open = false;
+    });
+  }
+
+  // /#support is a closed answer in the FAQ: open it when the link points at it.
+  function hashOpen() {
+    var id = window.location.hash.slice(1);
+    var el = id && document.getElementById(id);
+    if (el && el.tagName === 'DETAILS') {
+      el.open = true;
+      el.scrollIntoView();
+    }
+  }
+
+  menu();
+  hashOpen();
+  window.addEventListener('hashchange', hashOpen);
+
+  if (motion) {
+    reveals();
+    if (fine) {
+      magnets();
+      cursor();
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.mq-row'), function (row) {
+      var a = row.getAnimations && row.getAnimations()[0];
+      if (a && a.updatePlaybackRate) marquees.push(a);
+    });
+  }
+  requestAnimationFrame(loop);
 })();

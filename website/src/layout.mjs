@@ -34,12 +34,14 @@ export const coin = (c, extra = '') => {
 const ldJson = (data) => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
 
 export const NAV = [
-  ['/features/', 'Features'],
-  ['/chains/', 'Blockchains'],
-  ['/security/', 'Security'],
-  ['/fees/', 'Fees'],
-  ['/faq/', 'FAQ']
+  ['/features/', 'Features', 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'],
+  ['/chains/', 'Blockchains', 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5'],
+  ['/security/', 'Security', 'M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z'],
+  ['/fees/', 'Fees', 'M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z'],
+  ['/faq/', 'FAQ', 'M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z']
 ];
+
+const navIcon = (d) => `<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
 
 export function breadcrumbs(trail) {
   const items = trail
@@ -58,28 +60,28 @@ export function breadcrumbLd(trail) {
 }
 
 function header(path) {
-  const link = ([href, label]) =>
-    `<li><a href="${href}"${path === href || (href !== '/' && path.startsWith(href)) ? ' aria-current="page"' : ''}>${label}</a></li>`;
+  const current = (href) => (path === href || (href !== '/' && path.startsWith(href)) ? ' aria-current="page"' : '');
+  const link = ([href, label, icon]) => `<li><a href="${href}"${current(href)}>${navIcon(icon)}<span>${label}</span></a></li>`;
+  const plain = ([href, label]) => `<li><a href="${href}"${current(href)}>${label}</a></li>`;
   return html`
   <header class="site-header">
     <div class="nav-pill">
       <a class="brand" href="/" aria-label="Kyro Wallet, home">
-        <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-        <span class="brand-name" aria-hidden="true">kyro</span>
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
       </a>
       <nav class="nav" aria-label="Main navigation">
         <ul>
           ${NAV.map(link)}
-          <li><a href="${REPO}">GitHub</a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
           <ul>
             <li><a href="/"${path === '/' ? ' aria-current="page"' : ''}>Home</a></li>
-            ${NAV.map(link)}
+            ${NAV.map(plain)}
             <li><a href="/download/"${path === '/download/' ? ' aria-current="page"' : ''}>Download</a></li>
             <li><a href="${REPO}">GitHub</a></li>
           </ul>
@@ -92,13 +94,13 @@ function header(path) {
 function footer(chains) {
   const top = chains.slice(0, 7);
   return html`
-  <footer class="site-footer seam">
+  <footer class="site-footer">
     <div class="wrap">
       <div class="footer-cols">
         <div class="footer-brand">
           <a class="brand" href="/" aria-label="Kyro Wallet, home">
-            <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
-            <span class="brand-name" aria-hidden="true">kyro</span>
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
           </a>
           <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
         </div>
@@ -140,10 +142,9 @@ function footer(chains) {
           </ul>
         </div>
       </div>
-      <p class="footer-word" aria-hidden="true">kyro</p>
       <div class="footer-bottom">
         <span>Kyro ${VERSION} · GPL-3.0-or-later</span>
-        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>)</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
   </footer>`;
@@ -167,10 +168,12 @@ export function page(opts) {
   <meta name="description" content="${esc(description)}">
   ${noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${url}">`}
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#07080a">
+  <meta name="theme-color" content="#000000">
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display-italic.woff2" as="font" type="font/woff2" crossorigin>
   ${preload || ''}
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chains.css">
@@ -189,13 +192,16 @@ export function page(opts) {
   <meta name="twitter:description" content="${esc(description)}">
   <meta name="twitter:image" content="${og}">
   ${graph}
-  <script src="/motion.js"></script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n  ')}
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
 ${header(path)}
 
+  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 ${body}
   </main>
@@ -205,19 +211,19 @@ ${footer(chains)}
 `;
 }
 
-/** Hero for inner pages: breadcrumbs, eyebrow, the page's single h1 and a lead paragraph. */
+/** Hero for inner pages: silk background, breadcrumbs, label, the page's single h1 and a lead paragraph. */
 export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', aside = '' }) {
   return html`
     <section class="page-hero${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
-      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
       <div class="wrap">
         ${breadcrumbs(trail)}
         <div class="ph-grid">
           <div class="ph-text">
             ${before}
-            ${eyebrow ? `<p class="eyebrow" data-reveal>${eyebrow}</p>` : ''}
-            <h1 id="page-title" data-reveal>${h1}</h1>
-            ${lead ? `<p class="lead" data-reveal>${lead}</p>` : ''}
+            ${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ''}
+            <h1 id="page-title">${h1}</h1>
+            ${lead ? `<p class="lead">${lead}</p>` : ''}
             ${extra}
           </div>
           ${aside}
@@ -228,7 +234,7 @@ export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', as
 
 /** Primary download button. Without JavaScript it opens the download page. */
 export const dlButton = (size = 'btn-xl') => html`
-          <a class="btn btn-primary ${size}" href="/download/" data-dl-hero>
+          <a class="btn btn-primary ${size} magnet" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
             <span data-dl-label>Download Kyro</span>
           </a>`;
@@ -278,42 +284,14 @@ export const installBlock = (id = 'install') => html`
           </div>`;
 
 /** Closing call to action used at the bottom of inner pages. */
-export const ctaPanel = (title = 'Get Kyro', text = `Version ${VERSION} · Free · Windows, macOS and Linux`) => html`
+export const ctaPanel = (title = 'Get <em>Kyro</em>', text = `Version ${VERSION} · Free · Windows, macOS and Linux`) => html`
     <section class="section" aria-labelledby="cta-title">
       <div class="wrap">
-        <div class="download-panel" data-reveal>
-          <div class="aurora aurora-sm" aria-hidden="true"></div>
-          <h2 id="cta-title">${title}</h2>
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title" data-words>${title}</h2>
           <p class="dl-sub">${text}</p>
           ${osCards()}
           <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
         </div>
       </div>
     </section>`;
-
-/**
- * A desktop app window around a real screenshot. src: /img/… (WebP); alt describes the screenshot
- * ('' when decorative). opts: w, h (intrinsic size, required), chrome: 'mac' | 'win' | 'none' (full
- * app screenshots already carry Kyro's own title bar), title (window title), cls (extra classes),
- * eager (above the fold), small: { src, w } a lighter file for narrow screens, sizes.
- */
-export function window(src, alt, opts = {}) {
-  const { w, h, chrome = 'mac', title = 'Kyro', cls = '', eager = false, small, sizes = '(max-width: 760px) 100vw, 1100px' } = opts;
-  const bar =
-    chrome === 'none'
-      ? ''
-      : `<div class="win-bar" aria-hidden="true">${chrome === 'mac' ? '<i class="tl"></i><i class="tl"></i><i class="tl"></i>' : ''}<span>${esc(title)}</span>${chrome === 'win' ? '<i class="wc wc-min"></i><i class="wc wc-max"></i><i class="wc wc-x"></i>' : ''}</div>`;
-  const srcset = small ? ` srcset="${small.src} ${small.w}w, ${src} ${w}w" sizes="${sizes}"` : '';
-  const load = eager ? ' fetchpriority="high"' : ' loading="lazy"';
-  return `<figure class="win win-${chrome}${cls ? ' ' + cls : ''}">${bar}<img src="${src}"${srcset} width="${w}" height="${h}" alt="${esc(alt)}"${load} decoding="async"><span class="win-glare" aria-hidden="true"></span></figure>`;
-}
-
-/** A small native-looking dialog drawn in HTML (no screenshot), e.g. the system confirmation window. */
-export const dialog = ({ title, rows, actions = ['Cancel', 'Confirm'], cls = '', note = '' }) =>
-  `<div class="win win-win win-dialog${cls ? ' ' + cls : ''}" aria-hidden="true"><div class="win-bar"><span>${esc(title)}</span><i class="wc wc-x"></i></div><div class="dlg">${rows
-    .map(([k, v, c = '']) => `<div class="dlg-row"><span>${esc(k)}</span><b class="${c}">${esc(v)}</b></div>`)
-    .join('')}${note ? `<p class="dlg-note">${esc(note)}</p>` : ''}<div class="dlg-actions">${actions.map((a, i) => `<i${i === actions.length - 1 ? ' class="on"' : ''}>${esc(a)}</i>`).join('')}</div></div></div>`;
-
-/** A framed real-app crop. src: /img/…; alt is required and describes what the screenshot shows. */
-export const shot = ({ src, w, h, alt, cls = '', caption = '', title = 'Kyro' }) =>
-  window(src, alt, { w, h, title, cls: `win-shot ${cls}`.trim() }) + (caption ? `<p class="small mute center">${caption}</p>` : '');
