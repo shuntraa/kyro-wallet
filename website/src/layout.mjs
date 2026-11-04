@@ -210,10 +210,12 @@ export function page(opts) {
   ${graph}
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n  ')}
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 ${header(path)}
 
   <main id="content">
@@ -225,14 +227,10 @@ ${footer(chains)}
 `;
 }
 
-// Each page gets one still tone for its head, always the same one, so neighbours rarely match.
-const TONES = ['tone-glow', 'tone-grid', 'tone-band', 'tone-dots'];
-const toneOf = (path) => TONES[[...path].reduce((n, ch) => n + ch.charCodeAt(0), 0) % TONES.length];
-
-/** Hero for inner pages: a still tone, breadcrumbs, label, the page's single h1 and a lead paragraph. */
+/** Hero for inner pages: breadcrumbs, label, the page's single h1 and a lead paragraph. */
 export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', aside = '' }) {
   return html`
-    <section class="page-hero ${toneOf(trail[trail.length - 1][0])}${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
+    <section class="page-hero${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
       <div class="wrap">
         ${breadcrumbs(trail)}
         <div class="ph-grid">

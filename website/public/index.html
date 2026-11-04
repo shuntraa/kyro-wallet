@@ -34,12 +34,14 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://kyrowallet.com/#org","name":"Kyro Wallet","url":"https://kyrowallet.com/","logo":"https://kyrowallet.com/favicon.svg","sameAs":["https://github.com/shuntraa/kyro-wallet"]},{"@type":"WebSite","@id":"https://kyrowallet.com/#website","url":"https://kyrowallet.com/","name":"Kyro Wallet","publisher":{"@id":"https://kyrowallet.com/#org"},"inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://kyrowallet.com/#app","name":"Kyro Wallet","alternateName":"Kyro","description":"Free, open-source, non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on your device.","applicationCategory":"FinanceApplication","applicationSubCategory":"Cryptocurrency wallet","operatingSystem":"Windows, macOS, Linux","softwareVersion":"1.0.7","license":"https://spdx.org/licenses/GPL-3.0-or-later.html","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/shuntraa/kyro-wallet/releases/latest","installUrl":"https://kyrowallet.com/download/","screenshot":"https://kyrowallet.com/img/win-portfolio.webp","url":"https://kyrowallet.com/","publisher":{"@id":"https://kyrowallet.com/#org"},"featureList":["Send and receive on 36 blockchains","Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs","Earn: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, Lido and Aave","Ledger and Trezor hardware wallets","Several wallets on one device, and watch addresses with no key","Local price and funds-received alerts","Simulation before signing, fee speeds, speed up and cancel","Built-in Tor, no personal data collected","Transactions decoded and confirmed in a system window"]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
   <script src="/scenes.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -79,7 +81,6 @@
   <main id="content">
 
     <section class="hero" id="showcase" aria-labelledby="hero-title">
-      <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-copy">
         <a class="badge" href="https://github.com/shuntraa/kyro-wallet">
           <span class="badge-tag">1.0.7</span>
@@ -133,7 +134,7 @@
       </div>
     </section>
 
-    <section class="section bg-dots" id="how" aria-labelledby="how-title">
+    <section class="section" id="how" aria-labelledby="how-title">
       <div class="wrap">
         
         <div class="head-center">
@@ -180,7 +181,7 @@
       </div>
     </section>
 
-    <section class="section bg-glow" id="tor" data-tor aria-labelledby="tor-title">
+    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
@@ -250,7 +251,7 @@
       </div>
     </section>
 
-    <section class="section bg-band head-split" id="fees" aria-labelledby="swap-title">
+    <section class="section head-split" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -311,7 +312,7 @@
       </div>
     </section>
 
-    <section class="section bg-grid" id="features" aria-labelledby="earn-title">
+    <section class="section" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
@@ -367,7 +368,7 @@
       </div>
     </section>
 
-    <section class="section hw-scene bg-glow-l" data-ledger-track aria-labelledby="hw-title">
+    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
@@ -434,7 +435,7 @@
       </div>
     </section>
 
-    <section class="section bg-band head-split" id="security" aria-labelledby="security-title">
+    <section class="section head-split" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
@@ -519,7 +520,7 @@
       </div>
     </section>
 
-    <section class="section bg-dots head-split" id="roadmap" aria-labelledby="road-title">
+    <section class="section head-split" id="roadmap" aria-labelledby="road-title">
       <div class="wrap">
         
         <div class="head-center">

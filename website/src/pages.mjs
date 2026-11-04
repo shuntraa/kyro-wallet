@@ -189,7 +189,6 @@ export function home(chains) {
 
   const body = html`
     <section class="hero" id="showcase" aria-labelledby="hero-title">
-      <div class="hero-light" aria-hidden="true"></div>
       <div class="wrap hero-copy">
         <a class="badge" href="${REPO}">
           <span class="badge-tag">${VERSION}</span>
@@ -231,7 +230,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section bg-dots" id="how" aria-labelledby="how-title">
+    <section class="section" id="how" aria-labelledby="how-title">
       <div class="wrap">
         ${head('How it works', 'how-title', 'Private in <em>three steps</em>', 'No account to open and nothing to configure. Tor is on before your first balance loads.')}
         <div class="steps3" data-reveal-group>
@@ -255,7 +254,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section bg-glow" id="tor" data-tor aria-labelledby="tor-title">
+    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
@@ -292,7 +291,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section bg-band head-split" id="fees" aria-labelledby="swap-title">
+    <section class="section head-split" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -321,7 +320,7 @@ export function home(chains) {
           ${ul(['Your addresses and keys are never sent to the node.', 'Tor hides your IP from it. Your own node or a .onion works too.', 'A 25-word seed restores the wallet in Monero GUI, Feather or Cake Wallet.'])}
           <a class="more" href="/monero/">The private Monero wallet</a>`, moneroCard())}
 
-    <section class="section bg-grid" id="features" aria-labelledby="earn-title">
+    <section class="section" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
@@ -334,7 +333,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section hw-scene bg-glow-l" data-ledger-track aria-labelledby="hw-title">
+    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
@@ -356,7 +355,7 @@ export function home(chains) {
           ${ul(['Amount, recipient, network and fee, as Rust read them.', 'Your password, then your click, for every signature.', 'Unusual transactions need a second, reinforced confirmation.', 'Address-poisoning alerts and clipboard checks before you send.'])}
           <a class="more" href="/security/">Nothing is signed without you</a>`, confirmCard())}
 
-    <section class="section bg-band head-split" id="security" aria-labelledby="security-title">
+    <section class="section head-split" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
@@ -409,7 +408,7 @@ export function home(chains) {
           <p class="small mute">Bit-for-bit reproducible builds are a goal, not a guarantee yet. The installers are not code-signed yet, so your system warns on first launch.</p>
           ${a('/open-source/', '<span class="more">Read, build and verify</span>')}`, term('Terminal', [`$ git clone ${REPO}.git`, '$ cd kyro-wallet', '$ pnpm install --frozen-lockfile', '$ pnpm build']))}
 
-    <section class="section bg-dots head-split" id="roadmap" aria-labelledby="road-title">
+    <section class="section head-split" id="roadmap" aria-labelledby="road-title">
       <div class="wrap">
         ${head('Roadmap', 'road-title', 'Shipped, <em>and next</em>', `Version ${VERSION} today. No dates we cannot keep.`)}
         <div class="road-cols">
@@ -498,7 +497,7 @@ export function features(chains) {
       h1: 'What Kyro <em>does</em>',
       lead: `A private crypto wallet: send, receive, swap and stake on ${chains.length} blockchains from one recovery phrase, over Tor, and read every transaction before it is signed.`
     })}
-    <section class="section section-tight bg-none feature-tabs" aria-label="Features">
+    <section class="section section-tight feature-tabs" aria-label="Features">
       <div class="wrap">
         ${tabBar}
     ${row('f-portfolio', 'Portfolio', 'All your coins <em>in one list</em>', false, html`

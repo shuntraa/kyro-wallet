@@ -34,11 +34,13 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/fees/#page","url":"https://kyrowallet.com/fees/","name":"Kyro Wallet fees","description":"Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee from 0.7% to 5% depending on the swap value, plus the provider’s own costs, all already included in the quote.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Fees","item":"https://kyrowallet.com/fees/"}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/feecalc.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -78,7 +80,7 @@
   <main id="content">
 
     
-    <section class="page-hero tone-grid" aria-labelledby="page-title">
+    <section class="page-hero" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Fees</span></li></ol></nav>
         <div class="ph-grid">

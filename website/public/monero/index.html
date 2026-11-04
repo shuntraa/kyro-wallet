@@ -34,10 +34,12 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/monero/#page","url":"https://kyrowallet.com/monero/","name":"Private Monero desktop wallet","description":"A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Monero","item":"https://kyrowallet.com/monero/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/monero/#faq","url":"https://kyrowallet.com/monero/","mainEntity":[{"@type":"Question","name":"Is Kyro a full Monero wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Send, receive and swap XMR from the same app as your other coins. Kyro talks to a monerod node and scans blocks itself. No light-wallet server is used."}},{"@type":"Question","name":"Does the Monero node see my addresses?","acceptedAnswer":{"@type":"Answer","text":"No. Neither your addresses nor your view key are sent. The node sees the block ranges you download, the decoy outputs requested for a send, and the transactions you publish, from a Tor exit relay."}},{"@type":"Question","name":"Can I import my 25-word Monero seed?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro derives Monero from your BIP39 recovery phrase, and a 25-word phrase created elsewhere cannot be imported. The other way works: Kyro shows a 25-word seed that restores your wallet in Monero GUI, Feather or Cake Wallet."}},{"@type":"Question","name":"Can I use my own Monero node?","acceptedAnswer":{"@type":"Answer","text":"Yes. Set your own monerod in Settings, or a .onion address. Kyro checks it is on the right network and refuses to fall back to the default node if yours goes down."}},{"@type":"Question","name":"Does Monero work on a Ledger or Trezor in Kyro?","acceptedAnswer":{"@type":"Answer","text":"No. Monero on a hardware wallet is not supported."}},{"@type":"Question","name":"Why do I not see an old XMR payment?","acceptedAnswer":{"@type":"Answer","text":"Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings › Security and it scans again from there."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -76,7 +78,7 @@
 
   <main id="content">
 
-    <section class="page-hero tone-band page-hero-split" aria-labelledby="page-title">
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Monero</span></li></ol></nav>
         <div class="ph-grid">

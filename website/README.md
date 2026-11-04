@@ -13,7 +13,7 @@ Static site for Kyro Wallet. No framework and no dependencies: Node 22+ only.
 | `src/preview.mjs` | Full-page previews of the built site (headless Edge) |
 | `src/screenshots/` | App screenshots (WebP; the PNGs from `capture.mjs` are not committed) |
 | `icons/` | Coin icons copied into `public/` by the build |
-| `public/` | The built site, ready to deploy. Hand-written there: `style.css`, `boot.js`, `motion.js` (reveals, header popovers, tabs), `scenes.js` (small time-based scenes), `feecalc.js` (fee slider), `stats.js`, `download.js`, `copy.js` |
+| `public/` | The built site, ready to deploy. Hand-written there: `style.css`, `boot.js`, `motion.js` (reveals, header popovers, tabs), `silk.js` (WebGL background, one fixed canvas), `scenes.js` (small time-based scenes), `feecalc.js` (fee slider), `stats.js`, `download.js`, `copy.js` |
 
 ## Build
 

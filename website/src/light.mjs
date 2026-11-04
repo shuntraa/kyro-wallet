@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Bakes the two still images of the Kyro blue light, so no page runs a shader: the soft hero light and
-// the strip that lights the footer wordmark. Run by hand when the look changes (needs ffmpeg):
+// Bakes the two still images of the Kyro blue light: the soft one that stands in for the live silk
+// (no WebGL, reduced motion, Data Saver, weak GPUs) and the strip that lights the footer wordmark. Run by hand when the look changes (needs ffmpeg):
 //   node website/src/light.mjs
 import { writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

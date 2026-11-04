@@ -15,13 +15,12 @@
   }
 
   // One frame loop for the whole site, started by the first scene that asks for it: a page of plain
-  // reading runs none. K.y is a heavily eased scroll value.
+  // reading runs none. It never reads the scroll position or the layout.
   var jobs = [];
   var K = (window.Kyro = {
     motion: motion,
     fine: fine,
     damp: damp,
-    y: window.scrollY,
     frame: function (fn) {
       jobs.push(fn);
       if (jobs.length === 1) requestAnimationFrame(loop);
@@ -58,8 +57,7 @@
     var raw = now - last;
     last = now;
     var dt = raw > 0 ? Math.min(raw / 1000, 0.05) : 1 / 60;
-    K.y = damp(K.y, window.scrollY, 0.7, dt);
-    for (var i = 0; i < jobs.length; i++) jobs[i](K.y, now, dt);
+    for (var i = 0; i < jobs.length; i++) jobs[i](now, dt);
   }
 
   /** Rolls the number inside el up from zero, keeping its prefix, suffix and decimals. */
@@ -126,12 +124,26 @@
     });
   }
 
-  /** The soft light that follows the pointer inside a card. */
+  /**
+   * The soft light that follows the pointer inside a card. It answers real pointer moves, not :hover: a
+   * card passing under a resting pointer during a scroll must not light up, its fade costs a raster.
+   */
   function spotlight() {
+    var lit = null;
+    function light(card) {
+      if (card === lit) return;
+      if (lit) lit.classList.remove('lit');
+      if (card) card.classList.add('lit');
+      lit = card;
+    }
+    root.addEventListener('pointerleave', function () {
+      light(null);
+    });
     document.addEventListener(
       'pointermove',
       function (e) {
         var card = e.target.closest ? e.target.closest('.spot') : null;
+        light(card);
         if (!card) return;
         var b = card.getBoundingClientRect();
         card.style.setProperty('--mx', (e.clientX - b.left).toFixed(0) + 'px');

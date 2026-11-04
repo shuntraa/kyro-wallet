@@ -34,10 +34,12 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/open-source/#page","url":"https://kyrowallet.com/open-source/","name":"Kyro is open source","description":"Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Open source","item":"https://kyrowallet.com/open-source/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/open-source/#faq","url":"https://kyrowallet.com/open-source/","mainEntity":[{"@type":"Question","name":"What licence is Kyro under?","acceptedAnswer":{"@type":"Answer","text":"GPL-3.0-or-later. You can read, run, change and share it. If you distribute a changed version, it stays under the same licence, with its source."}},{"@type":"Question","name":"Are Kyro builds reproducible?","acceptedAnswer":{"@type":"Answer","text":"Not bit for bit yet. It is a goal, not a guarantee. Today you can verify the SHA-256 of a release and build from the same source yourself."}},{"@type":"Question","name":"Can I remove the swap fee?","acceptedAnswer":{"@type":"Answer","text":"Yes, in your own build. The rates live in packages/swap/src/fees.ts, and anyone can change them or set the fee to 0."}},{"@type":"Question","name":"Has Kyro been audited?","acceptedAnswer":{"@type":"Answer","text":"An internal security review has been done. No independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -76,7 +78,7 @@
 
   <main id="content">
 
-    <section class="page-hero tone-band" aria-labelledby="page-title">
+    <section class="page-hero" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Open source</span></li></ol></nav>
         <div class="ph-grid">

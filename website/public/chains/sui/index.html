@@ -34,10 +34,12 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/chains/sui/#page","url":"https://kyrowallet.com/chains/sui/","name":"Sui wallet: Kyro","description":"Kyro is a free, open-source Sui (SUI) wallet for desktop. Send, receive, swap and stake SUI and USDC tokens, and sign with a Ledger. Your keys stay on your computer.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":[{"@id":"https://kyrowallet.com/#app"},{"@type":"Thing","name":"Sui","alternateName":"SUI"}],"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Blockchains","item":"https://kyrowallet.com/chains/"},{"@type":"ListItem","position":3,"name":"Sui","item":"https://kyrowallet.com/chains/sui/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/chains/sui/#faq","url":"https://kyrowallet.com/chains/sui/","mainEntity":[{"@type":"Question","name":"Is Kyro a free Sui wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send SUI, and your keys stay on your own computer."}},{"@type":"Question","name":"Can I swap SUI in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, in both directions. Providers: 1Click. Routes and limits."}},{"@type":"Question","name":"Can I stake SUI in Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, from a recovery-phrase account. Delegate SUI to a validator, at least 1 SUI. It earns from the next epoch, and you can withdraw at any time. A validator cannot take your SUI. Rates are estimates, never guaranteed."}},{"@type":"Question","name":"Does Kyro work with a hardware wallet on Sui?","acceptedAnswer":{"@type":"Answer","text":"Yes, with a Ledger. Device table."}},{"@type":"Question","name":"What can a server see when I use Sui in Kyro?","acceptedAnswer":{"@type":"Answer","text":"The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. Sui has its own circuit family, except that all EVM networks share one. Who sees what."}},{"@type":"Question","name":"Can I use my existing recovery phrase for Sui?","acceptedAnswer":{"@type":"Answer","text":"Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all 36 blockchains. More questions."}}]}]}</script>
   <script src="/boot.js"></script>
   <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -77,7 +79,7 @@
   <main id="content">
 
     
-    <section class="page-hero tone-glow page-hero-split" aria-labelledby="page-title">
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Sui</span></li></ol></nav>
         <div class="ph-grid">

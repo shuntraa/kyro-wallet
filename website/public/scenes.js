@@ -108,13 +108,19 @@
         { passive: true }
       );
     }
-    K.frame(function (y, now, dt) {
+    // Only where the CSS tilts it. One transform on one element: a custom property here would restyle
+    // the whole window under it on every frame.
+    var tilted = window.matchMedia('(min-width: 1100px) and (min-height: 640px)');
+    K.frame(function (now, dt) {
+      if (!tilted.matches) {
+        if (tilt.style.transform) tilt.style.transform = '';
+        return;
+      }
       if (!seen()) return;
       lx = K.damp(lx, tx, 0.5, dt);
       ly = K.damp(ly, ty, 0.5, dt);
       var t = now / 1000;
-      tilt.style.setProperty('--dx', (Math.sin(t * 0.5) * 0.5 - ly * 3).toFixed(3) + 'deg');
-      tilt.style.setProperty('--dy', (Math.cos(t * 0.37) * 0.8 + lx * 4).toFixed(3) + 'deg');
+      tilt.style.transform = 'translate3d(0, -50%, 0) rotateY(' + (-15 + Math.cos(t * 0.37) * 0.8 + lx * 4).toFixed(3) + 'deg) rotateX(' + (5 + Math.sin(t * 0.5) * 0.5 - ly * 3).toFixed(3) + 'deg) rotateZ(.9deg)';
     });
   }
 
@@ -185,7 +191,7 @@
     reach(0);
     place(0, 0);
 
-    K.frame(function (y, now) {
+    K.frame(function (now) {
       if (!seen()) return;
       if (!t0) t0 = now;
       var e = now - t0;
@@ -331,7 +337,7 @@
       }
 
       set(PAIRS[0]);
-      K.frame(function (y, now) {
+      K.frame(function (now) {
         if (!seen()) {
           t0 = 0;
           return;
