@@ -229,7 +229,7 @@ Issues and pull requests are welcome. Before opening a PR, run `pnpm lint`, `pnp
 
 ## Reporting a vulnerability
 
-Please do **not** open a public issue. Report privately through [GitHub security advisories](https://github.com/shuntraa/kyro-wallet/security/advisories/new) (*Security → Report a vulnerability*), with a proof of concept if possible. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most. See [SECURITY.md](SECURITY.md).
+Please do **not** open a public issue. Report privately to security@kyrowallet.com or through [GitHub security advisories](https://github.com/shuntraa/kyro-wallet/security/advisories/new) (*Security → Report a vulnerability*), with a proof of concept if possible. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most. See [SECURITY.md](SECURITY.md).
 
 ## Support the project
 
