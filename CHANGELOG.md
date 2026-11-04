@@ -5,6 +5,18 @@
 - Dust protection: tiny coins from strangers on an address already in use stay out of your sends, on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash. Send shows them as Set aside, with a box to include them. Your balance does not change.
 - History marks tiny EVM transfers worth under 1 as a possible scam, next to zero transfers.
 - Recovery phrase passphrase, the 25th word: optional when you create or import a wallet (Advanced). It follows BIP39, on every chain. Unlocking still takes only your password. If you forget it, these funds are lost. Nobody can recover it.
+- Lightning: pay an invoice from a Bitcoin account. Paste it in Send or tick Lightning. Kyro checks the swap on your device and shows every fee first. The provider can only take your bitcoin by paying the invoice. If it fails, your coins stay locked about 7 days, then you take them back yourself. Not for hardware accounts, and an invoice needs at least an hour left.
+- Tor bridges: if your country blocks Tor, paste plain bridge lines in Settings › Privacy. Kyro
+  then connects only through them and stays offline if none answers. obfs4 and other disguised
+  bridges don't work yet.
+- Tokens you received on Sui, Cosmos Hub and Bitcoin Cash now show on the SUI, ATOM and BCH pages,
+  read only: they can't be sent from Kyro yet. Tokens Kyro can't name stay folded, since many are
+  spam.
+- Lock before sleep: on Windows, Kyro now locks as the computer goes to sleep, not only when it
+  wakes up. On by default, in Settings › Security. macOS and Linux still lock on wake.
+- Send: type a name.eth as the recipient on EVM chains. Kyro shows the address under the field,
+  and the review and the signing window show that real address. Names stored off-chain aren't
+  read.
 - Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
   settings to one encrypted file, with a password you choose. Import shows what would change
   first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.

@@ -3,6 +3,12 @@
 
 export const portfolio = {
   // Periods (codes 1J / 1S / 1M / 1A / Tout)
+  'portfolio.otherTokens': 'Autres tokens sur cette adresse',
+  'portfolio.cantSendYet': 'Pas encore envoyables depuis Kyro',
+  'portfolio.unknownTokens': 'Tokens inconnus ({n})',
+  'portfolio.unknownTokensNote': 'N’importe qui peut envoyer des tokens à une adresse, et beaucoup de ceux-ci sont du spam. Ne va pas sur un site cité par un token.',
+  'portfolio.rawUnits': 'unités brutes',
+  'portfolio.nft': 'NFT',
   'portfolio.period1J': '1J',
   'portfolio.period1S': '1S',
   'portfolio.period1M': '1M',

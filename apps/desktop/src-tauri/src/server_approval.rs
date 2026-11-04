@@ -218,6 +218,51 @@ pub fn tor_off_text(lang: Lang) -> &'static str {
     )
 }
 
+/// Text of the confirmation before the Tor bridges change. A bridge sees your IP address, so a
+/// compromised interface must not be able to swap in its own; removing them must be asked too,
+/// since Kyro then connects to Tor openly.
+pub fn tor_bridges_text(lang: Lang, bridges: &[String]) -> String {
+    if bridges.is_empty() {
+        return lang
+            .pick(
+                "Kyro se connectera à Tor sans pont : ton fournisseur d'accès verra que tu \
+                 utilises Tor, et il peut le bloquer.\n\nSi tu n'as pas toi-même retiré tes \
+                 ponts, REFUSE.\n\nRetirer les ponts ?",
+                "Kyro will connect to Tor without a bridge: your internet provider will see that \
+                 you use Tor, and may block it.\n\nIf you did not remove your bridges yourself, \
+                 REFUSE.\n\nRemove the bridges?",
+            )
+            .into();
+    }
+    let list: Vec<String> = bridges
+        .iter()
+        .take(12)
+        .map(|b| {
+            let addr = b.split(' ').next().unwrap_or_default();
+            format!("• {}", crate::dialog_text::sanitize(addr, 64))
+        })
+        .collect();
+    let more = bridges.len().saturating_sub(12);
+    let mut out = lang
+        .pick(
+            "Kyro passera uniquement par ces ponts. Un pont voit ton adresse IP :\n\n",
+            "Kyro will connect only through these bridges. A bridge sees your IP address:\n\n",
+        )
+        .to_owned();
+    out.push_str(&list.join("\n"));
+    if more > 0 {
+        out.push_str(&lang.pick(
+            format!("\n… et {more} de plus"),
+            format!("\n… and {more} more"),
+        ));
+    }
+    out.push_str(lang.pick(
+        "\n\nSi tu n'as pas toi-même ajouté ces ponts, REFUSE.\n\nUtiliser ces ponts ?",
+        "\n\nIf you did not add these bridges yourself, REFUSE.\n\nUse these bridges?",
+    ));
+    out
+}
+
 /// Asks natively for every endpoint of `new` that the user has not approved yet (not in the saved
 /// settings `saved`, not approved earlier this session).
 pub async fn confirm_endpoints(
@@ -256,10 +301,37 @@ pub async fn confirm_tor_off(app: &AppHandle) -> AppResult<()> {
     .await
 }
 
+/// Native confirmation before the bridges change.
+pub async fn confirm_tor_bridges(app: &AppHandle, bridges: &[String]) -> AppResult<()> {
+    let lang = crate::i18n::current();
+    crate::commands::confirm_native_with(
+        app,
+        lang.pick("Ponts Tor", "Tor bridges"),
+        tor_bridges_text(lang, bridges),
+        lang.pick("Confirmer", "Confirm"),
+        lang.pick("Refuser", "Refuse"),
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::servers::{ElectrumTls, RpcServer};
+
+    #[test]
+    fn bridges_text_lists_addresses_not_fingerprints() {
+        let line = "192.0.2.10:443 4352E58420E68F5E40BF7C74FADDCCD9D1349413".to_owned();
+        for lang in [Lang::En, Lang::Fr] {
+            let t = tor_bridges_text(lang, std::slice::from_ref(&line));
+            assert!(
+                t.contains("• 192.0.2.10:443") && t.contains("REFUSE"),
+                "{t}"
+            );
+            assert!(!t.contains("4352E584"), "{t}");
+            assert!(tor_bridges_text(lang, &[]).contains("REFUSE"));
+        }
+    }
 
     #[test]
     fn endpoints_and_approval() {

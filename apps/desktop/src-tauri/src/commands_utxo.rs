@@ -500,6 +500,15 @@ pub async fn bch_address_utxos(state: State<'_, AppState>, address: String) -> A
     utxo_backend::address_utxos(&ctx(&state, BCH), &address).await
 }
 
+/// CashTokens of the address: read only, Kyro can't send them.
+#[tauri::command]
+pub async fn bch_received_tokens(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<crate::received_tokens::ReceivedToken>> {
+    utxo_backend::received_tokens(&ctx(&state, BCH), &address).await
+}
+
 #[tauri::command]
 pub async fn bch_address_txs(state: State<'_, AppState>, address: String) -> AppResult<Value> {
     utxo_backend::address_txs(&ctx(&state, BCH), &address).await

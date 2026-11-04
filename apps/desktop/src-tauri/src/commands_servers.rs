@@ -12,7 +12,9 @@ use wallet_core::{BtcKind, Network, UtxoCoin};
 use crate::btc_backend::{self, Ctx, Detected};
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
-use crate::server_approval::{confirm_endpoints, confirm_tor_off, endpoints, host_port_endpoint};
+use crate::server_approval::{
+    confirm_endpoints, confirm_tor_bridges, confirm_tor_off, endpoints, host_port_endpoint,
+};
 use crate::servers::{
     btc_network_key, validate_http_url, BtcServer, CardanoServer, CoreAuth, MoneroServer,
     RpcServer, Servers, TronServer, UtxoServer, XrpServer, SOLANA_GENESIS,
@@ -303,6 +305,9 @@ pub async fn settings_set(
     if old.tor.enabled && !new.tor.enabled {
         confirm_tor_off(&app).await?;
     }
+    if old.tor.bridges != new.tor.bridges {
+        confirm_tor_bridges(&app, &new.tor.bridges).await?;
+    }
     confirm_endpoints(&app, &endpoints(&new.servers), &old.servers).await?;
     probe_changes(&state.net, &new.servers, &old.servers, new.tor.enabled).await?;
     if old.start_minimized != new.start_minimized {
@@ -310,9 +315,11 @@ pub async fn settings_set(
     }
     let saved = state.save_settings(new)?;
     crate::tray::on_settings_saved(&app, &old, &saved);
+    state.net.tor.set_bridges(saved.tor.bridges.clone());
     match (old.tor.enabled, saved.tor.enabled) {
         (false, true) => state.net.tor.start(),
         (true, false) => state.net.tor.stop(),
+        (true, true) if old.tor.bridges != saved.tor.bridges => state.net.tor.reconnect(),
         _ => {}
     }
     Ok(saved.for_ui())

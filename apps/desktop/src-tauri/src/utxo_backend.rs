@@ -552,6 +552,31 @@ pub async fn address_utxos(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value>
     }
 }
 
+/// CashTokens held by `address`, from the Fulcrum servers (`tokens_only`). Not checked against the
+/// previous transactions: nothing is spent from these coins, a server can only lie about a line
+/// on the screen. An Esplora server has no token index: nothing to show.
+pub async fn received_tokens(
+    ctx: &UtxoCtx<'_>,
+    address: &str,
+) -> AppResult<Vec<crate::received_tokens::ReceivedToken>> {
+    let a = check_address(ctx, address)?;
+    let Backend::Electrum(targets) = backend(ctx)? else {
+        return Ok(Vec::new());
+    };
+    let (sh, _) = scripthash(ctx, &a)?;
+    let mut conn = electrum_session(ctx, &targets).await?;
+    let list = conn
+        .call(
+            "blockchain.scripthash.listunspent",
+            json!([sh, "tokens_only"]),
+        )
+        .await?;
+    let list = list
+        .as_array()
+        .ok_or_else(|| bad(format!("{}: invalid listunspent", ctx.coin.name())))?;
+    Ok(crate::received_tokens::cashtoken_rows(list))
+}
+
 /// `GET /address/{a}/txs`, paginated like Bitcoin: unconfirmed first, then newest confirmed,
 /// 50 at most.
 pub async fn address_txs(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value> {

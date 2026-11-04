@@ -130,20 +130,26 @@ export function TorDialogs() {
   const { settings, saveSettings } = useApp();
   const detail = torDetail(tor.episode?.reason ?? tor.status?.message);
   const { t } = useT();
+  // Someone who needs bridges must not be offered the direct route when they fail.
+  const bridges = (settings.tor.bridges?.length ?? 0) > 0;
 
   return (
     <>
       <Dialog open={tor.dialog === 'failure'} onOpenChange={(v) => (v ? undefined : torStore.cancel())} title={t('shell.torFailTitle')} className="w-[560px]">
-        <p className="m-0 text-[14px] leading-[1.55] text-text2">{t('shell.torFailBody')}</p>
+        <p className="m-0 text-[14px] leading-[1.55] text-text2">{t(bridges ? 'shell.torFailBridges' : 'shell.torFailBody')}</p>
         <Notice icon={<IconShield size={16} className="mt-0.5 shrink-0 text-ice" />}>
           {rt('shell.torRefusesClear', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
         </Notice>
         {detail && <p className="m-0 text-[12px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
         {tor.actionError && <Notice tone="error">{tor.actionError}</Notice>}
         <div className="flex items-center justify-between gap-2 pt-1">
-          <Button variant="ghost" onClick={() => torStore.requestDisable('failure')} disabled={tor.busy}>
-            {t('shell.continueWithoutTor')}
-          </Button>
+          {bridges ? (
+            <span />
+          ) : (
+            <Button variant="ghost" onClick={() => torStore.requestDisable('failure')} disabled={tor.busy}>
+              {t('shell.continueWithoutTor')}
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button onClick={() => torStore.cancel()} disabled={tor.busy}>
               {t('common.cancel')}
@@ -169,7 +175,7 @@ export function TorDialogs() {
           <Button variant="primary" onClick={() => torStore.cancelDisable()} disabled={tor.busy}>
             {t('shell.keepTor')}
           </Button>
-          <Button variant="dangerOutline" disabled={tor.busy} onClick={() => void torStore.confirmDisable(() => saveSettings({ ...settings, tor: { enabled: false } }))}>
+          <Button variant="dangerOutline" disabled={tor.busy} onClick={() => void torStore.confirmDisable(() => saveSettings({ ...settings, tor: { ...settings.tor, enabled: false } }))}>
             {tor.busy && <Spinner />} {t('shell.yesWithoutTor')}
           </Button>
         </div>

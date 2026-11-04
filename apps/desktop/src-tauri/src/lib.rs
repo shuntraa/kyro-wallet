@@ -65,6 +65,8 @@ mod near_backend;
 mod net;
 mod network;
 mod phrase_window;
+mod power;
+mod received_tokens;
 mod server_approval;
 mod servers;
 mod settings;
@@ -142,12 +144,15 @@ pub fn run() {
             st.net.tor.set_emitter(move |s| {
                 let _ = handle.emit("tor-status", s);
             });
-            if st.settings().tor.enabled {
+            let tor_settings = st.settings().tor.clone();
+            st.net.tor.set_bridges(tor_settings.bridges);
+            if tor_settings.enabled {
                 st.net.tor.start();
             }
             updater::on_start(app.handle());
             let tray = tray::setup(app);
             spawn_auto_lock(app.handle().clone());
+            power::listen(app.handle());
             // The main window is created here, after the state exists (`"create": false` in
             // tauri.conf.json), so that `window.open` can be refused: a new window would load
             // any URL, outside the navigation guard and outside Tor.
@@ -251,6 +256,7 @@ pub fn run() {
             commands_utxo::bch_address_info,
             commands_utxo::bch_address_utxos,
             commands_utxo::bch_address_txs,
+            commands_utxo::bch_received_tokens,
             commands_utxo::bch_tx_hex,
             commands_utxo::bch_fee_rates,
             commands_utxo::bch_tip_height,
@@ -317,6 +323,7 @@ pub fn run() {
             commands_sui::sui_balance,
             commands_sui::sui_txs,
             commands_sui::sui_token_balances,
+            commands_sui::sui_received_tokens,
             commands_sui::sui_build_token_tx,
             commands_sui::sui_build_tx,
             commands_sui::sui_sign_tx,
@@ -372,6 +379,7 @@ pub fn run() {
             commands_cosmos::cosmos_address,
             commands_cosmos::cosmos_account,
             commands_cosmos::cosmos_txs,
+            commands_cosmos::cosmos_received_tokens,
             commands_cosmos::cosmos_build_tx,
             commands_cosmos::cosmos_sign_tx,
             commands_cosmos::cosmos_broadcast,

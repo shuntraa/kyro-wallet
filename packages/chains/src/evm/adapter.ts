@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // One EVM adapter, parametrised by the chain registry. JSON-RPC goes through a viem *custom transport* that calls `net_fetch` — viem never touches fetch.
 
+import { resolveEns, type EnsResult } from './ens';
 import { accountArg } from '../types';
 import {
   createPublicClient,
@@ -175,6 +176,11 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
 
   getAddress(): string {
     return this.address;
+  }
+
+  /** `name.eth` for a send on `targetChainId`. Call it on the Ethereum adapter: ENS lives there. */
+  resolveEns(name: string, targetChainId: number): Promise<EnsResult> {
+    return resolveEns((method, params) => jsonRpc(this.fetcher, this.rpcUrl, method, params), name, this.chain.chainId, targetChainId);
   }
 
   isValidAddress(address: string): boolean {

@@ -98,6 +98,7 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.directWarnApis': 'CoinGecko (prices) and swap aggregators (quotes);',
   'shell.directWarnIsp': 'your internet provider, which will see which servers you contact.',
   'shell.torFailTitle': 'Tor is not connecting',
+  'shell.torFailBridges': 'None of your bridges answered. Kyro stays offline. Try other bridges in Settings › Privacy.',
   'shell.torFailBody': 'Kyro routes all its connections through Tor to hide your IP address. Tor cannot connect right now.',
   'shell.torRefusesClear': '<b>Kyro refuses to send anything in the clear.</b> No request has left without Tor: balances, prices and history stay on hold until you choose.',
   'shell.detail': 'Detail: {detail}',

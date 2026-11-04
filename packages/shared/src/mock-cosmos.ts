@@ -218,6 +218,8 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
       d.requireUnlocked();
       return demoCosmosAddress(d.seed, accountArg(a));
     },
+    cosmos_received_tokens: () =>
+      Promise.resolve([{ id: 'ibc/F663521BF1836B00F5F177680F74BFB9A8B5654A694D0D2BC249E03CF2509013', symbol: 'USDC', decimals: 6, amount: '2500000', known: true, nfts: 0 }]),
     cosmos_account: async (a) => {
       const addr = checkCosmosAddress(a.address);
       await backend();

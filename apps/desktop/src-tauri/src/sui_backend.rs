@@ -7,6 +7,7 @@ use wallet_core::{Network, SuiObjectRef};
 
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
+use crate::received_tokens::{self, ReceivedToken};
 
 /// Base58 digest of the genesis checkpoint (`chainIdentifier`), mainnet.
 pub const MAINNET_CHAIN_ID: &str = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S";
@@ -21,6 +22,8 @@ const MAX_TXS: u32 = 20;
 /// Budget of the draft transaction that is simulated to estimate the real one (0.05 SUI).
 pub const DRAFT_BUDGET: u64 = 50_000_000;
 const GAS_SAFE_OVERHEAD: u64 = 1000;
+const RECEIVED_PAGES: usize = 4;
+const RECEIVED_METADATA: usize = 30;
 
 pub fn default_url(net: Network) -> &'static str {
     match net {
@@ -328,6 +331,59 @@ pub async fn token_balances(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<Su
         });
     }
     Ok(out)
+}
+
+/// Coin types of `address` Kyro does not show or send, with what their metadata says about the
+/// unknown ones. At most [`RECEIVED_PAGES`] pages, and metadata for [`RECEIVED_METADATA`] lines.
+pub async fn received_tokens(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<ReceivedToken>> {
+    let a = check_address(address)?;
+    let testnet = ctx.network == Network::Testnet;
+    let mut skip: Vec<&str> = wallet_core::sui_known_coins(testnet)
+        .iter()
+        .map(|k| k.coin_type)
+        .collect();
+    skip.push(SUI_REPR);
+    let mut nodes = Vec::new();
+    let mut after = Value::Null;
+    for _ in 0..RECEIVED_PAGES {
+        let d = gql(
+            ctx,
+            "query($a: SuiAddress!, $after: String) { chainIdentifier address(address: $a) { balances(first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { coinType { repr } totalBalance } } } }",
+            json!({ "a": a, "after": after }),
+        )
+        .await?;
+        check_chain(ctx, &d["chainIdentifier"])?;
+        let page = &d["address"]["balances"];
+        nodes.extend(page["nodes"].as_array().cloned().unwrap_or_default());
+        if page["pageInfo"]["hasNextPage"] != true {
+            break;
+        }
+        after = page["pageInfo"]["endCursor"].clone();
+    }
+    let mut rows = received_tokens::sui_rows(&nodes, &skip, testnet);
+    let unknown: Vec<usize> = (0..rows.len())
+        .filter(|i| !rows[*i].known)
+        .take(RECEIVED_METADATA)
+        .collect();
+    if unknown.is_empty() {
+        return Ok(rows);
+    }
+    let (mut vars, mut args, mut fields) = (serde_json::Map::new(), Vec::new(), Vec::new());
+    for (n, i) in unknown.iter().enumerate() {
+        vars.insert(format!("t{n}"), json!(rows[*i].id));
+        args.push(format!("$t{n}: String!"));
+        fields.push(format!(
+            "m{n}: coinMetadata(coinType: $t{n}) {{ symbol decimals }}"
+        ));
+    }
+    let query = format!("query({}) {{ {} }}", args.join(", "), fields.join(" "));
+    // Without metadata the lines still count: they show as raw units.
+    if let Ok(d) = gql(ctx, &query, Value::Object(vars)).await {
+        for (n, i) in unknown.iter().enumerate() {
+            received_tokens::sui_apply_metadata(&mut rows[*i], &d[format!("m{n}")]);
+        }
+    }
+    Ok(rows)
 }
 
 /// Gas coins for a transfer: largest first until `need` MIST is covered (at most 256 coins).

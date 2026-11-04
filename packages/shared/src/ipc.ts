@@ -146,7 +146,7 @@ export interface Settings {
   servers: Servers;
   apiKeysSet: Partial<Record<ApiKeyName, boolean>>;
   /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
-  tor: { enabled: boolean };
+  tor: { enabled: boolean; /** Plain bridge lines; not empty = Tor connects only through them. */ bridges?: string[] };
   /** Display language of the interface AND of the native dialogs (signing, warnings, phrase). */
   language: LanguagePref;
   /** Automatic updates from Kyro's signed GitHub releases (default `true`, docs/IPC.md `update_status`). */
@@ -157,6 +157,8 @@ export interface Settings {
   closeToTray: boolean;
   /** Going to the tray locks the wallet. */
   lockOnHide: boolean;
+  /** Lock as the machine goes to sleep (Windows; elsewhere the lock happens on wake). Default `true`. */
+  lockBeforeSleep?: boolean;
   /** Start with Windows, hidden in the tray. */
   startMinimized: boolean;
 }
@@ -916,6 +918,20 @@ export interface SuiTokenSummary {
   name: string;
   decimals: number;
   coins: Array<{ objectId: string; version: string; digest: string }>;
+}
+
+/** A token held by an address that Kyro cannot send (`sui_received_tokens`, `cosmos_received_tokens`, `bch_received_tokens`). */
+export interface ReceivedToken {
+  /** Coin type, denom or category. */
+  id: string;
+  symbol: string | null;
+  /** `null`: `amount` is in raw units. */
+  decimals: number | null;
+  amount: string;
+  /** In Rust's fixed table. Not known = possibly spam: shown folded. */
+  known: boolean;
+  /** CashTokens NFTs of this category. */
+  nfts: number;
 }
 
 /** `sui_token_balances` line (one per known token), token units. */
@@ -2544,6 +2560,7 @@ export interface Commands {
    */
   sui_build_tx: { args: { to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
   sui_token_balances: { args: { address: string }; ret: SuiTokenBalance[] };
+  sui_received_tokens: { args: { address: string }; ret: ReceivedToken[] };
   /** Token transfer of a known `coinType`: `amount` in token units or `all`; gas paid in SUI. */
   sui_build_token_tx: { args: { coinType: string; to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
   /** `coinType`: required for a token transfer (Rust re-checks every token coin live). */
@@ -2632,6 +2649,8 @@ export interface Commands {
   cosmos_address: { args: WithAccount; ret: string };
   cosmos_account: { args: { address: string }; ret: CosmosAccountInfo };
   cosmos_txs: { args: { address: string }; ret: CosmosHistoryEntry[] };
+  cosmos_received_tokens: { args: { address: string }; ret: ReceivedToken[] };
+  bch_received_tokens: { args: { address: string }; ret: ReceivedToken[] };
   /**
    * `amount`: uatom. `memo`: at most 512 characters, public. Refused before building: self-send,
    * our account unknown to the chain, amount + fee > spendable, failed simulation.

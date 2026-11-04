@@ -36,7 +36,7 @@ zeroize = "1"
 base64 = "0.22"
 dotenvy = "0.15"
 # Embedded Tor (B2a). rustls + ring only (no native-tls, no aws-lc-rs), SQLite compiled in.
-arti-client = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls", "static-sqlite", "compression", "onion-service-client"] }
+arti-client = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls", "static-sqlite", "compression", "onion-service-client", "bridge-client"] }
 tor-rtcompat = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls"] }
 # HTTP/1.1 over Tor streams: tokio-rustls (webpki roots) + hyper 1.
 hyper = { version = "=1.12.0", default-features = false, features = ["client", "http1"] }
@@ -102,7 +102,7 @@ monero-daemon-rpc = { version = "=0.2.0" }
 [target.'cfg(windows)'.dependencies]
 # Microsoft Store (MSIX) detection: GetCurrentPackageFullName (updater.rs). Already in the tree.
 # Tray (tray.rs): the user's Run entry and the event a second start signals. Same version.
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_Packaging_Appx", "Win32_System_Registry", "Win32_System_Threading"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_Packaging_Appx", "Win32_System_Power", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 # Tray icon (tray.rs), Windows only: on Linux this feature would need libappindicator at run time.
 tauri = { version = "=2.12.4", features = ["tray-icon"] }
 

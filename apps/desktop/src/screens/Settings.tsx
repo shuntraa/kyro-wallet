@@ -28,6 +28,7 @@ import { XmrWalletSection } from '../components/Monero';
 import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
 import { BackupSection } from './settings/Backup';
+import { TorBridges } from './settings/TorBridges';
 
 export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -183,6 +184,11 @@ function Security({ save }: { save: Save }) {
         <SettingRow title={t('settings.clipboardGuard')} desc={t('settings.clipboardGuardDesc')}>
           <Switch label={t('settings.clipboardGuard')} checked={settings.clipboardGuard} onCheckedChange={(v) => void save({ clipboardGuard: v })} />
         </SettingRow>
+        {config?.tray && (
+          <SettingRow title={t('settings.lockBeforeSleep')} desc={t('settings.lockBeforeSleepDesc')}>
+            <Switch label={t('settings.lockBeforeSleep')} checked={settings.lockBeforeSleep !== false} onCheckedChange={(v) => void save({ lockBeforeSleep: v })} />
+          </SettingRow>
+        )}
         <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesSecurityDesc')} last>
           <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
         </SettingRow>
@@ -233,7 +239,7 @@ function Privacy() {
             checked={enabled}
             disabled={tor.busy}
             onCheckedChange={(v) => {
-              if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { enabled: true } }));
+              if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { ...settings.tor, enabled: true } }));
               else torStore.requestDisable('settings');
             }}
           />
@@ -273,6 +279,7 @@ function Privacy() {
         )}
         {tor.actionError && tor.dialog === 'none' && <Notice tone="error">{tor.actionError}</Notice>}
       </section>
+      {enabled && <TorBridges />}
     </>
   );
 }

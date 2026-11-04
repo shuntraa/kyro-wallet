@@ -112,6 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weeklyCount: true,
   closeToTray: false,
   lockOnHide: true,
+  lockBeforeSleep: true,
   startMinimized: false,
 };
 
@@ -997,7 +998,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { ...settings.tor, ...(structuredClone(rest.tor) as Settings['tor']), enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();
@@ -1025,6 +1026,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     },
     btc_backend_info: () => servers.btc.info(),
     btc_address_info: (a) => servers.btc.addressInfo(a.address),
+    bch_received_tokens: () => Promise.resolve([{ id: 'ab'.repeat(32), symbol: null, decimals: null, amount: '42', known: false, nfts: 1 }]),
     btc_address_utxos: (a) => servers.btc.addressUtxos(a.address),
     btc_address_txs: (a) => servers.btc.addressTxs(a.address),
     btc_fee_rates: () => servers.btc.feeRates(),
