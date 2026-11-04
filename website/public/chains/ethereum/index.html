@@ -38,7 +38,6 @@
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
-  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -51,7 +50,7 @@
           <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/" aria-current="page"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -66,27 +65,26 @@
     </div>
   </header>
 
-  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 
     
-    <section class="page-hero page-hero-split" aria-labelledby="page-title" data-tone="1" data-hue="1">
+    <section class="page-hero page-hero-split" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/chains/">Blockchains</a></li><li><span aria-current="page">Ethereum</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
             <p class="eyebrow">Ethereum desktop wallet · ETH</p>
-            <h1 id="page-title">Ethereum wallet <span class="rd"><span class="wd"><span>for</span><i class="bar"></i></span> <span class="wd"><span>Windows,</span><i class="bar"></i></span> <span class="wd"><span>macOS</span><i class="bar"></i></span> <span class="wd"><span>and</span><i class="bar"></i></span> <span class="wd"><span>Linux</span><i class="bar"></i></span></span></h1>
+            <h1 id="page-title">Ethereum wallet <em>for Windows, macOS and Linux</em></h1>
             <p class="lead">Send, receive and swap ETH and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.</p>
             <div class="hero-cta">
-          <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
             <span data-dl-label>Download Kyro</span>
-          </a><a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>
+          </a><a class="btn btn-ghost btn-xl" href="/chains/">All blockchains</a></div>
           </div>
           
-  <div class="coin-hero c-ethereum spot tilt">
+  <div class="coin-hero c-ethereum spot">
     <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
     <div class="coin-3d"><img class="c-back" src="/img/coins/eth.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/eth.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/eth.svg" width="240" height="240" alt="Ethereum (ETH) coin" fetchpriority="high"></div>
   </div>
@@ -131,7 +129,7 @@
       <div class="wrap feature-row">
         <div class="feature-text">
           <p class="eyebrow" data-reveal>Details</p>
-          <h2 id="on-chain">Ethereum <span class="rd"><span class="wd"><span>in</span><i class="bar"></i></span> <span class="wd"><span>Kyro</span><i class="bar"></i></span></span></h2>
+          <h2 id="on-chain">Ethereum <em>in Kyro</em></h2>
           
           <ul class="checks" data-reveal>
             <li>ETH and ERC-20 tokens in the same account.</li><li>Token approvals are set to the exact amount by default. Unlimited approvals are off unless you turn them on.</li><li>Contract calls, approvals and high fees ask for a second confirmation.</li><li>Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract.</li>
@@ -158,7 +156,7 @@
     <section class="section" aria-labelledby="related-title">
       <div class="wrap">
         <div class="head-center" data-reveal>
-          <h2 id="related-title">Also <span class="rd"><span class="wd"><span>in</span><i class="bar"></i></span> <span class="wd"><span>Kyro</span><i class="bar"></i></span></span></h2>
+          <h2 id="related-title">Also <em>in Kyro</em></h2>
           <p>Same app, same recovery phrase.</p>
         </div>
         <ul class="chain-grid" data-reveal-group>
@@ -175,24 +173,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
+    <section class="section" aria-labelledby="cta-title">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
-          <h2 id="cta-title" data-words>Get Kyro <span class="rd"><span class="wd"><span>for</span><i class="bar"></i></span> <span class="wd"><span>Ethereum</span><i class="bar"></i></span></span></h2>
+          <h2 id="cta-title">Get Kyro <em>for Ethereum</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -204,7 +202,7 @@
     </section>
   </main>
 
-  <footer class="site-footer" data-tone="1.15" data-hue="1">
+  <footer class="site-footer">
     <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">

@@ -17,9 +17,6 @@ export const FILES = {
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
-/** Words behind redaction bars: real text in the HTML, one bar per word so long phrases can wrap. */
-export const redact = (text) => text.split(' ').map((w) => `<span class="wd"><span>${w}</span><i class="bar"></i></span>`).join(' ');
-
 /** Tagged template that leaves interpolated strings untouched (they are already HTML). */
 export const html = (strings, ...values) =>
   strings.reduce((out, s, i) => out + s + (i < values.length ? (Array.isArray(values[i]) ? values[i].join('') : values[i] ?? '') : ''), '');
@@ -78,7 +75,7 @@ function header(path) {
           ${NAV.map(link)}
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -97,7 +94,7 @@ function header(path) {
 function footer(chains) {
   const top = chains.slice(0, 7);
   return html`
-  <footer class="site-footer" data-tone="1.15" data-hue="1">
+  <footer class="site-footer">
     <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">
@@ -205,12 +202,10 @@ export function page(opts) {
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
-  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 ${header(path)}
 
-  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
-${body.replace(/(<h[12]\b[^>]*>)([\s\S]*?)(<\/h[12]>)/g, (m, a, b, c) => a + b.replace(/<em>(.*?)<\/em>/g, (_, t) => `<span class="rd">${redact(t)}</span>`) + c)}
+${body}
   </main>
 ${footer(chains)}
 </body>
@@ -221,7 +216,7 @@ ${footer(chains)}
 /** Hero for inner pages: silk background, breadcrumbs, label, the page's single h1 and a lead paragraph. */
 export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', aside = '' }) {
   return html`
-    <section class="page-hero${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title" data-tone="1" data-hue="1">
+    <section class="page-hero${aside ? ' page-hero-split' : ''}" aria-labelledby="page-title">
       <div class="wrap">
         ${breadcrumbs(trail)}
         <div class="ph-grid">
@@ -240,24 +235,24 @@ export function pageHero({ trail, eyebrow, h1, lead, extra = '', before = '', as
 
 /** Primary download button. Without JavaScript it opens the download page. */
 export const dlButton = (size = 'btn-xl') => html`
-          <a class="btn btn-primary ${size} magnet" href="/download/" data-dl-hero>
+          <a class="btn btn-primary ${size}" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
             <span data-dl-label>Download Kyro</span>
           </a>`;
 
 export const osCards = () => html`
           <div class="os-cards">
-            <a class="os-card os-row spot tilt" data-os="windows" href="${DL}${FILES.exe}">
+            <a class="os-card os-row spot" data-os="windows" href="${DL}${FILES.exe}">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="macos" href="${DL}${FILES.dmg}">
+            <a class="os-card os-row spot" data-os="macos" href="${DL}${FILES.dmg}">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="linux" href="${DL}${FILES.appimage}">
+            <a class="os-card os-row spot" data-os="linux" href="${DL}${FILES.appimage}">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -291,10 +286,10 @@ export const installBlock = (id = 'install') => html`
 
 /** Closing call to action used at the bottom of inner pages. */
 export const ctaPanel = (title = 'Get <em>Kyro</em>', text = `Version ${VERSION} · Free · Windows, macOS and Linux`) => html`
-    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
+    <section class="section" aria-labelledby="cta-title">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
-          <h2 id="cta-title" data-words>${title}</h2>
+          <h2 id="cta-title">${title}</h2>
           <p class="dl-sub">${text}</p>
           ${osCards()}
           <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>

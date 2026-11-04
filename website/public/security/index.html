@@ -38,7 +38,6 @@
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
-  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -51,7 +50,7 @@
           <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/" aria-current="page"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -66,18 +65,17 @@
     </div>
   </header>
 
-  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 
     
-    <section class="page-hero" aria-labelledby="page-title" data-tone="1" data-hue="1">
+    <section class="page-hero" aria-labelledby="page-title">
       <div class="wrap">
         <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Security</span></li></ol></nav>
         <div class="ph-grid">
           <div class="ph-text">
             
             <p class="eyebrow">Security</p>
-            <h1 id="page-title">How Kyro protects <span class="rd"><span class="wd"><span>your</span><i class="bar"></i></span> <span class="wd"><span>keys</span><i class="bar"></i></span></span></h1>
+            <h1 id="page-title">How Kyro protects <em>your keys</em></h1>
             <p class="lead">Encrypted on your computer, confirmed in a system window. Here is what that covers, and what it does not.</p>
             
           </div>
@@ -90,7 +88,7 @@
       <div class="wrap split">
         <div class="split-text" data-reveal>
           <p class="eyebrow">Design</p>
-          <h2 id="s-layers">Three layers, <span class="rd"><span class="wd"><span>one</span><i class="bar"></i></span> <span class="wd"><span>place</span><i class="bar"></i></span> <span class="wd"><span>for</span><i class="bar"></i></span> <span class="wd"><span>keys</span><i class="bar"></i></span></span></h2>
+          <h2 id="s-layers">Three layers, <em>one place for keys</em></h2>
           <p>The interface you click is a sandboxed web view. It never sees a key. Keys live only in the Rust core, which encrypts them, signs and returns the signed transaction.</p>
           <ul class="checks">
             <li>Recovery phrase and keys encrypted with your password: Argon2id, then XChaCha20-Poly1305.</li>
@@ -120,7 +118,7 @@
       <div class="wrap feature-row flip">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Before you sign</p>
-          <h2 id="s-sign">Nothing is signed <span class="rd"><span class="wd"><span>without</span><i class="bar"></i></span> <span class="wd"><span>you</span><i class="bar"></i></span></span></h2>
+          <h2 id="s-sign">Nothing is signed <em>without you</em></h2>
           <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell, outside the web view.</p>
           <ul class="checks">
             <li>The window shows the decoded transaction: amount, recipient, fee, account.</li>
@@ -150,7 +148,7 @@
       <div class="wrap feature-row">
         <div class="feature-text" data-reveal>
           <p class="eyebrow">Network</p>
-          <h2 id="s-net">Private <span class="rd"><span class="wd"><span>by</span><i class="bar"></i></span> <span class="wd"><span>default</span><i class="bar"></i></span></span></h2>
+          <h2 id="s-net">Private <em>by default</em></h2>
           <p>Kyro talks to blockchains over Tor, which is built into the app. Your IP address is not linked to your addresses.</p>
           <ul class="checks">
             <li>A separate Tor circuit per blockchain.</li>
@@ -179,7 +177,7 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Limits</p>
-          <h2 id="s-limits">What Kyro <span class="rd"><span class="wd"><span>cannot</span><i class="bar"></i></span></span> protect you from</h2>
+          <h2 id="s-limits">What Kyro <em>cannot</em> protect you from</h2>
           <p>No wallet can. Knowing these helps you avoid them.</p>
           <ul class="checks minus">
             <li>Malware with full control of your computer while the wallet is unlocked.</li>
@@ -203,24 +201,24 @@
       </div>
     </section>
     
-    <section class="section" aria-labelledby="cta-title" data-tone=".85" data-hue="1">
+    <section class="section" aria-labelledby="cta-title">
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
-          <h2 id="cta-title" data-words>Get <span class="rd"><span class="wd"><span>Kyro</span><i class="bar"></i></span></span></h2>
+          <h2 id="cta-title">Get <em>Kyro</em></h2>
           <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
-            <a class="os-card os-row spot tilt" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
               <span class="os-name">Windows</span>
               <span class="os-file">.exe installer</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
               <span class="os-icon os-apple" aria-hidden="true"></span>
               <span class="os-name">macOS</span>
               <span class="os-file">Apple Silicon &amp; Intel</span>
             </a>
-            <a class="os-card os-row spot tilt" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
               <span class="os-icon os-linux" aria-hidden="true"></span>
               <span class="os-name">Linux</span>
               <span class="os-file">AppImage</span>
@@ -232,7 +230,7 @@
     </section>
   </main>
 
-  <footer class="site-footer" data-tone="1.15" data-hue="1">
+  <footer class="site-footer">
     <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">

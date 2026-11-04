@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Content of every page on kyrowallet.com.
 
-import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, redact, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
+import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
 import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon } from './components.mjs';
 
 const layers = () => html`
@@ -154,43 +154,31 @@ export function home(chains) {
   const hop = (mark, name, note) => `<li data-hop><span class="rt-dot">${mark}</span><b>${name}</b><small>${note}</small></li>`;
 
   const body = html`
-    <section class="story" id="showcase" aria-labelledby="hero-title" data-story data-nonav data-tone="1.1" data-hue="1">
-      <div class="story-pin">
-        <div class="portal" data-portal aria-hidden="true">
-          <span class="portal-glow" data-pglow></span>
-          <svg class="portal-ring" data-ring viewBox="0 0 64 64"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/></svg>
-          <span class="portal-sq" data-sq></span>
+    <section class="hero" id="showcase" aria-labelledby="hero-title">
+      <div class="wrap hero-copy">
+        <a class="chip" href="${REPO}/releases">Kyro ${VERSION} · Open source</a>
+        <h1 id="hero-title">Keep it <em>to yourself.</em></h1>
+        <p class="lead hero-lead">A private crypto wallet for your desktop: ${n} blockchains, Tor on from the first launch, your keys on your own machine.</p>
+        <div class="hero-cta">
+          ${dlButton()}
+          <a class="btn btn-ghost btn-xl" href="/download/" data-dl-other>Other platforms</a>
         </div>
-        <div class="wrap hero-grid">
-          <div class="hero-copy" data-copy>
-            <h1 id="hero-title">${redact('Keep it')} <span class="rd">${redact('to yourself.')}</span></h1>
-            <p class="lead hero-lead">A private crypto wallet for your desktop: ${n} blockchains, Tor on from the first launch, your keys on your own machine.</p>
-            <div class="hero-cta">
-              ${dlButton()}
-              <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
-            </div>
-            <div class="stats">
-              <p><strong data-roll>${n}</strong> blockchains</p>
-              ${usage()}
-              <p><a class="stats-v" href="${REPO}">Open source · ${VERSION}</a></p>
-            </div>
-          </div>
+        <div class="stats">
+          <p><strong data-roll>${n}</strong> blockchains</p>
+          ${usage()}
         </div>
-        <div class="hero-stage">
-          <div class="kw-wrap" data-kw>${appWindow()}</div>
-        </div>
-        <div class="story-ui" data-ui>
-          <p class="story-cap" data-caption aria-hidden="true"><span>Balances fetched over Tor</span><span>Hidden with one click, from anyone behind you</span><span>Swaps without an account</span><span>Rates, with no sign-up</span></p>
-          <div class="story-dots">
-            <button type="button" class="on" data-go="0" aria-label="Show the Portfolio screen"><span>Portfolio</span></button>
-            <button type="button" data-go="1" aria-label="Show the Swap screen"><span>Swap</span></button>
-            <button type="button" data-go="2" aria-label="Show the Earn screen"><span>Earn</span></button>
-          </div>
+      </div>
+      <div class="hero-stage" data-story>
+        <div class="kw-tilt"><div class="kw-wrap">${appWindow()}</div></div>
+        <div class="kw-pick">
+          <button type="button" class="on" data-go="0" aria-pressed="true">Portfolio</button>
+          <button type="button" data-go="1" aria-pressed="false">Swap</button>
+          <button type="button" data-go="2" aria-pressed="false">Earn</button>
         </div>
       </div>
     </section>
 
-    <section class="section coins" id="chains" aria-labelledby="chains-title" data-tone=".8" data-hue=".3" data-nav="/chains/">
+    <section class="section coins" id="chains" aria-labelledby="chains-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Blockchains</p>
@@ -202,15 +190,14 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="tor" id="tor" data-tor aria-labelledby="tor-title" data-tone=".42" data-hue="0" data-nav="/features/">
-      <div class="tor-pin">
+    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
             <h2 id="tor-title">Everything goes <em>through Tor</em></h2>
             <p data-reveal>Kyro is a Tor wallet from the first launch. Balances, prices, swaps and broadcasts leave through the built-in client, each blockchain gets its own circuit, and if Tor fails, Kyro stops.</p>
           </div>
-          <div class="route spot">
+          <div class="route spot" data-reveal>
             <div class="ip" aria-hidden="true">
               <span class="ip-label">The server sees</span>
               <code class="ip-val" data-ip>•••.•••.•••.•••</code>
@@ -225,15 +212,13 @@ export function home(chains) {
                 ${hop('3', 'Relay 3', 'Sees the request, never you')}
                 ${hop(icon('assets'), 'Network', 'Sees a Tor exit')}
               </ol>
-              <canvas class="fx" aria-hidden="true"></canvas>
               <div class="rt-packet" data-packet aria-hidden="true"><i></i><i></i><i></i><b></b></div>
             </div>
           </div>
         </div>
-      </div>
     </section>
 
-    <section class="section" id="fees" aria-labelledby="swap-title" data-tone=".95" data-hue="1" data-nav="/fees/">
+    <section class="section" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
@@ -256,7 +241,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" id="features" aria-labelledby="earn-title" data-tone=".6" data-hue=".2" data-nav="/features/">
+    <section class="section" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
@@ -268,8 +253,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="hw-scene" data-ledger-track aria-labelledby="hw-title" data-tone="1" data-hue=".7" data-nav="/features/">
-      <div class="hw-pin">
+    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
@@ -284,10 +268,9 @@ export function home(chains) {
           </div>
           ${ledgerScene()}
         </div>
-      </div>
     </section>
 
-    <section class="section" id="security" aria-labelledby="security-title" data-tone=".7" data-hue=".4" data-nav="/security/">
+    <section class="section" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
@@ -315,7 +298,7 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="section" aria-labelledby="faq-title" data-tone=".42" data-hue="0" data-nav="/faq/">
+    <section class="section" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Questions</p>
@@ -329,22 +312,13 @@ export function home(chains) {
       </div>
     </section>
 
-    <section class="gather" data-gather data-nonav aria-labelledby="download-title" data-tone="1.05" data-hue="1">
-      <span class="gather-anchor" id="download"></span>
-      <div class="gather-pin">
-        <div class="field" data-field aria-hidden="true">
-          ${chains.map((c) => `<img class="fc" src="/img/coins/${iconOf(c)}.svg" width="64" height="64" alt="" loading="lazy" decoding="async">`)}
-        </div>
-        <canvas class="fx" aria-hidden="true"></canvas>
-        <span class="gather-glowpos" data-glowpos aria-hidden="true"><span class="gather-glow" data-glow></span></span>
-        <svg class="gather-mark" data-mark viewBox="0 0 64 64" aria-hidden="true"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/><rect x="26" y="26" width="12" height="12" fill="#7CC4FF"/></svg>
-        <div class="gather-cta" data-cta>
-          <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
-          <p class="dl-sub">Version ${VERSION} · Free · Windows, macOS and Linux</p>
-          <div class="hero-cta">
-            ${dlButton()}
-            <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
-          </div>
+    <section class="final" id="download" aria-labelledby="download-title">
+      <div class="wrap">
+        <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
+        <p class="dl-sub" data-reveal>Version ${VERSION} · Free · Windows, macOS and Linux</p>
+        <div class="hero-cta" data-reveal>
+          ${dlButton()}
+          <a class="btn btn-ghost btn-xl" href="/download/" data-dl-other>Other platforms</a>
         </div>
       </div>
     </section>`;
@@ -388,7 +362,7 @@ export function features(chains) {
         <div class="feature-visual" data-reveal>${visual}</div>
       </div>
     </section>`;
-  const mini = (ic, g, h, p) => `<article class="glow-card spot tilt ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
+  const mini = (ic, g, h, p) => `<article class="glow-card spot ${g}"><span class="mini-icon ${ic}" aria-hidden="true"></span><h3>${h}</h3><p>${p}</p></article>`;
 
   const body = html`
     ${pageHero({
@@ -569,7 +543,7 @@ export function fees(curve) {
       lead: 'Sending, receiving and staking cost only the network fee. Swaps carry a Kyro fee based on the swap value, already out of the amount you receive.'
     })}
 
-    <section class="section section-tight" aria-label="Swap fee calculator" data-tone=".9" data-hue="1">
+    <section class="section section-tight" aria-label="Swap fee calculator">
       <div class="wrap wrap-mid">
         ${feeCalc(curve)}
       </div>
@@ -704,7 +678,7 @@ export function download(chains) {
       eyebrow: `Version ${VERSION}`,
       h1: 'Download <em>Kyro Wallet</em>',
       lead: 'Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is published only on GitHub Releases.',
-      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl magnet" href="${REPO}/releases/latest">Release notes</a></div><div class="stats">${usage()}</div>`
+      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div><div class="stats">${usage()}</div>`
     })}
 
     <section class="section section-tight" id="install" aria-labelledby="install-title">
@@ -1009,7 +983,7 @@ export function chainPage(c, chains) {
       eyebrow: `${esc(c.name)} desktop wallet · ${esc(c.ticker)}`,
       h1: `${esc(c.name)} wallet <em>for Windows, macOS and Linux</em>`,
       lead: `${capSentence} Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.`,
-      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl magnet" href="/chains/">All blockchains</a></div>`
+      extra: `<div class="hero-cta">${dlButton()}<a class="btn btn-ghost btn-xl" href="/chains/">All blockchains</a></div>`
     })}
 
     <section class="section section-tight" aria-labelledby="caps-title">
@@ -1073,14 +1047,14 @@ export function chainPage(c, chains) {
 
 export function notFound() {
   const body = html`
-    <section class="notfound" aria-labelledby="page-title" data-tone="1.1" data-hue="1">
+    <section class="notfound" aria-labelledby="page-title">
       <div class="wrap">
         <p class="notfound-n" aria-hidden="true">404</p>
         <h1 id="page-title">Page <em>not found</em></h1>
         <p>Kyro is only downloaded from the GitHub Releases page.</p>
         <div class="hero-cta">
-          <a class="btn btn-primary btn-xl magnet" href="/">Home</a>
-          <a class="btn btn-ghost btn-xl magnet" href="/download/">Download</a>
+          <a class="btn btn-primary btn-xl" href="/">Home</a>
+          <a class="btn btn-ghost btn-xl" href="/download/">Download</a>
         </div>
       </div>
     </section>`;

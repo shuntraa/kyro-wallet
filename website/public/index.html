@@ -41,7 +41,6 @@
 <body>
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
-  <div class="progress" aria-hidden="true"><i data-progress></i></div>
 
   <header class="site-header">
     <div class="nav-pill">
@@ -54,7 +53,7 @@
           <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
         </ul>
       </nav>
-      <a class="btn btn-primary btn-sm header-cta magnet" href="/download/">Download</a>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
       <details class="menu">
         <summary aria-label="Menu"><span class="menu-bars"></span></summary>
         <nav class="menu-panel" aria-label="Menu">
@@ -69,40 +68,31 @@
     </div>
   </header>
 
-  <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
 
-    <section class="story" id="showcase" aria-labelledby="hero-title" data-story data-nonav data-tone="1.1" data-hue="1">
-      <div class="story-pin">
-        <div class="portal" data-portal aria-hidden="true">
-          <span class="portal-glow" data-pglow></span>
-          <svg class="portal-ring" data-ring viewBox="0 0 64 64"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/></svg>
-          <span class="portal-sq" data-sq></span>
-        </div>
-        <div class="wrap hero-grid">
-          <div class="hero-copy" data-copy>
-            <h1 id="hero-title"><span class="wd"><span>Keep</span><i class="bar"></i></span> <span class="wd"><span>it</span><i class="bar"></i></span> <span class="rd"><span class="wd"><span>to</span><i class="bar"></i></span> <span class="wd"><span>yourself.</span><i class="bar"></i></span></span></h1>
-            <p class="lead hero-lead">A private crypto wallet for your desktop: 36 blockchains, Tor on from the first launch, your keys on your own machine.</p>
-            <div class="hero-cta">
-              
-          <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
+    <section class="hero" id="showcase" aria-labelledby="hero-title">
+      <div class="wrap hero-copy">
+        <a class="chip" href="https://github.com/shuntraa/kyro-wallet/releases">Kyro 1.0.6 · Open source</a>
+        <h1 id="hero-title">Keep it <em>to yourself.</em></h1>
+        <p class="lead hero-lead">A private crypto wallet for your desktop: 36 blockchains, Tor on from the first launch, your keys on your own machine.</p>
+        <div class="hero-cta">
+          
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
             <span data-dl-label>Download Kyro</span>
           </a>
-              <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
-            </div>
-            <div class="stats">
-              <p><strong data-roll>36</strong> blockchains</p>
-              <p class="usage" data-usage hidden>
+          <a class="btn btn-ghost btn-xl" href="/download/" data-dl-other>Other platforms</a>
+        </div>
+        <div class="stats">
+          <p><strong data-roll>36</strong> blockchains</p>
+          <p class="usage" data-usage hidden>
           <span data-usage-item="weekly_active" hidden><strong data-usage-n></strong> active wallets this week</span>
           <span class="usage-total" data-usage-item="downloads_total" hidden><strong data-usage-n></strong> downloads in total</span>
         </p>
-              <p><a class="stats-v" href="https://github.com/shuntraa/kyro-wallet">Open source · 1.0.6</a></p>
-            </div>
-          </div>
         </div>
-        <div class="hero-stage">
-          <div class="kw-wrap" data-kw>
+      </div>
+      <div class="hero-stage" data-story>
+        <div class="kw-tilt"><div class="kw-wrap">
   <div class="kw" role="img" aria-label="The Kyro app with demo numbers, moving through the Portfolio, Swap and Earn screens.">
     <div class="kw-in" aria-hidden="true">
       <div class="kw-titlebar">
@@ -264,24 +254,20 @@
       </div></div>
       </div>
     </div>
-  </div></div>
-        </div>
-        <div class="story-ui" data-ui>
-          <p class="story-cap" data-caption aria-hidden="true"><span>Balances fetched over Tor</span><span>Hidden with one click, from anyone behind you</span><span>Swaps without an account</span><span>Rates, with no sign-up</span></p>
-          <div class="story-dots">
-            <button type="button" class="on" data-go="0" aria-label="Show the Portfolio screen"><span>Portfolio</span></button>
-            <button type="button" data-go="1" aria-label="Show the Swap screen"><span>Swap</span></button>
-            <button type="button" data-go="2" aria-label="Show the Earn screen"><span>Earn</span></button>
-          </div>
+  </div></div></div>
+        <div class="kw-pick">
+          <button type="button" class="on" data-go="0" aria-pressed="true">Portfolio</button>
+          <button type="button" data-go="1" aria-pressed="false">Swap</button>
+          <button type="button" data-go="2" aria-pressed="false">Earn</button>
         </div>
       </div>
     </section>
 
-    <section class="section coins" id="chains" aria-labelledby="chains-title" data-tone=".8" data-hue=".3" data-nav="/chains/">
+    <section class="section coins" id="chains" aria-labelledby="chains-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Blockchains</p>
-          <h2 id="chains-title">36 blockchains. <span class="rd"><span class="wd"><span>One</span><i class="bar"></i></span> <span class="wd"><span>phrase.</span><i class="bar"></i></span></span></h2>
+          <h2 id="chains-title">36 blockchains. <em>One phrase.</em></h2>
           <p data-reveal>Bitcoin to Zcash, plus 220+ tokens, from the same recovery phrase. No account, no email, nothing to sign up for.</p>
         </div>
         <nav class="wall-wrap" aria-label="All supported blockchains"><ul class="wall" data-wall><li><a class="wall-t c-bitcoin" href="/chains/bitcoin/"><i class="wall-l"></i><img class="coin c-bitcoin" src="/img/coins/btc.svg" width="34" height="34" alt=""><span class="chain-name">Bitcoin<small>BTC</small></span></a></li><li><a class="wall-t c-ethereum" href="/chains/ethereum/"><i class="wall-l"></i><img class="coin c-ethereum" src="/img/coins/eth.svg" width="34" height="34" alt=""><span class="chain-name">Ethereum<small>ETH</small></span></a></li><li><a class="wall-t c-bnb-chain" href="/chains/bnb-chain/"><i class="wall-l"></i><img class="coin c-bnb-chain" src="/img/coins/bnb.svg" width="34" height="34" alt=""><span class="chain-name">BNB Chain<small>BNB</small></span></a></li><li><a class="wall-t c-polygon" href="/chains/polygon/"><i class="wall-l"></i><img class="coin c-polygon" src="/img/coins/pol.svg" width="34" height="34" alt=""><span class="chain-name">Polygon<small>POL</small></span></a></li><li><a class="wall-t c-arbitrum" href="/chains/arbitrum/"><i class="wall-l"></i><img class="coin c-arbitrum" src="/img/coins/arb.svg" width="34" height="34" alt=""><span class="chain-name">Arbitrum<small>ETH</small></span></a></li><li><a class="wall-t c-optimism" href="/chains/optimism/"><i class="wall-l"></i><img class="coin c-optimism" src="/img/coins/op.svg" width="34" height="34" alt=""><span class="chain-name">Optimism<small>ETH</small></span></a></li><li><a class="wall-t c-base" href="/chains/base/"><i class="wall-l"></i><img class="coin c-base" src="/img/coins/base.svg" width="34" height="34" alt=""><span class="chain-name">Base<small>ETH</small></span></a></li><li><a class="wall-t c-avalanche" href="/chains/avalanche/"><i class="wall-l"></i><img class="coin c-avalanche" src="/img/coins/avax.svg" width="34" height="34" alt=""><span class="chain-name">Avalanche<small>AVAX</small></span></a></li><li><a class="wall-t c-cronos" href="/chains/cronos/"><i class="wall-l"></i><img class="coin c-cronos" src="/img/coins/cro.svg" width="34" height="34" alt=""><span class="chain-name">Cronos<small>CRO</small></span></a></li><li><a class="wall-t c-mantle" href="/chains/mantle/"><i class="wall-l"></i><img class="coin c-mantle" src="/img/coins/mnt.svg" width="34" height="34" alt=""><span class="chain-name">Mantle<small>MNT</small></span></a></li><li><a class="wall-t c-sonic" href="/chains/sonic/"><i class="wall-l"></i><img class="coin c-sonic" src="/img/coins/s.svg" width="34" height="34" alt=""><span class="chain-name">Sonic<small>S</small></span></a></li><li><a class="wall-t c-flare" href="/chains/flare/"><i class="wall-l"></i><img class="coin c-flare" src="/img/coins/flr.svg" width="34" height="34" alt=""><span class="chain-name">Flare<small>FLR</small></span></a></li><li><a class="wall-t c-kaia" href="/chains/kaia/"><i class="wall-l"></i><img class="coin c-kaia" src="/img/coins/kaia.svg" width="34" height="34" alt=""><span class="chain-name">Kaia<small>KAIA</small></span></a></li><li><a class="wall-t c-gnosis" href="/chains/gnosis/"><i class="wall-l"></i><img class="coin c-gnosis" src="/img/coins/gno.svg" width="34" height="34" alt=""><span class="chain-name">Gnosis<small>xDAI</small></span></a></li><li><a class="wall-t c-hyperevm" href="/chains/hyperevm/"><i class="wall-l"></i><img class="coin c-hyperevm" src="/img/coins/hype.svg" width="34" height="34" alt=""><span class="chain-name">HyperEVM<small>HYPE</small></span></a></li><li><a class="wall-t c-sei" href="/chains/sei/"><i class="wall-l"></i><img class="coin c-sei" src="/img/coins/sei.svg" width="34" height="34" alt=""><span class="chain-name">Sei<small>SEI</small></span></a></li><li><a class="wall-t c-conflux" href="/chains/conflux/"><i class="wall-l"></i><img class="coin c-conflux" src="/img/coins/cfx.svg" width="34" height="34" alt=""><span class="chain-name">Conflux<small>CFX</small></span></a></li><li><a class="wall-t c-solana" href="/chains/solana/"><i class="wall-l"></i><img class="coin c-solana" src="/img/coins/sol.svg" width="34" height="34" alt=""><span class="chain-name">Solana<small>SOL</small></span></a></li><li><a class="wall-t c-tron" href="/chains/tron/"><i class="wall-l"></i><img class="coin c-tron" src="/img/coins/trx.svg" width="34" height="34" alt=""><span class="chain-name">TRON<small>TRX</small></span></a></li><li><a class="wall-t c-cardano" href="/chains/cardano/"><i class="wall-l"></i><img class="coin c-cardano" src="/img/coins/ada.svg" width="34" height="34" alt=""><span class="chain-name">Cardano<small>ADA</small></span></a></li><li><a class="wall-t c-xrp" href="/chains/xrp/"><i class="wall-l"></i><img class="coin c-xrp" src="/img/coins/xrp.svg" width="34" height="34" alt=""><span class="chain-name">XRP Ledger<small>XRP</small></span></a></li><li><a class="wall-t c-litecoin" href="/chains/litecoin/"><i class="wall-l"></i><img class="coin c-litecoin" src="/img/coins/ltc.svg" width="34" height="34" alt=""><span class="chain-name">Litecoin<small>LTC</small></span></a></li><li><a class="wall-t c-dogecoin" href="/chains/dogecoin/"><i class="wall-l"></i><img class="coin c-dogecoin" src="/img/coins/doge.svg" width="34" height="34" alt=""><span class="chain-name">Dogecoin<small>DOGE</small></span></a></li><li><a class="wall-t c-bitcoin-cash" href="/chains/bitcoin-cash/"><i class="wall-l"></i><img class="coin c-bitcoin-cash" src="/img/coins/bch.svg" width="34" height="34" alt=""><span class="chain-name">Bitcoin Cash<small>BCH</small></span></a></li><li><a class="wall-t c-dash" href="/chains/dash/"><i class="wall-l"></i><img class="coin c-dash" src="/img/coins/dash.svg" width="34" height="34" alt=""><span class="chain-name">Dash<small>DASH</small></span></a></li><li><a class="wall-t c-stellar" href="/chains/stellar/"><i class="wall-l"></i><img class="coin c-stellar" src="/img/coins/xlm.svg" width="34" height="34" alt=""><span class="chain-name">Stellar<small>XLM</small></span></a></li><li><a class="wall-t c-near" href="/chains/near/"><i class="wall-l"></i><img class="coin c-near" src="/img/coins/near.svg" width="34" height="34" alt=""><span class="chain-name">NEAR<small>NEAR</small></span></a></li><li><a class="wall-t c-sui" href="/chains/sui/"><i class="wall-l"></i><img class="coin c-sui" src="/img/coins/sui.svg" width="34" height="34" alt=""><span class="chain-name">Sui<small>SUI</small></span></a></li><li><a class="wall-t c-monero" href="/chains/monero/"><i class="wall-l"></i><img class="coin c-monero" src="/img/coins/xmr.svg" width="34" height="34" alt=""><span class="chain-name">Monero<small>XMR</small></span></a></li><li><a class="wall-t c-ton" href="/chains/ton/"><i class="wall-l"></i><img class="coin c-ton" src="/img/coins/gram.svg" width="34" height="34" alt=""><span class="chain-name">TON<small>GRAM</small></span></a></li><li><a class="wall-t c-cosmos" href="/chains/cosmos/"><i class="wall-l"></i><img class="coin c-cosmos" src="/img/coins/atom.svg" width="34" height="34" alt=""><span class="chain-name">Cosmos Hub<small>ATOM</small></span></a></li><li><a class="wall-t c-polkadot" href="/chains/polkadot/"><i class="wall-l"></i><img class="coin c-polkadot" src="/img/coins/dot.svg" width="34" height="34" alt=""><span class="chain-name">Polkadot<small>DOT</small></span></a></li><li><a class="wall-t c-aptos" href="/chains/aptos/"><i class="wall-l"></i><img class="coin c-aptos" src="/img/coins/apt.svg" width="34" height="34" alt=""><span class="chain-name">Aptos<small>APT</small></span></a></li><li><a class="wall-t c-algorand" href="/chains/algorand/"><i class="wall-l"></i><img class="coin c-algorand" src="/img/coins/algo.svg" width="34" height="34" alt=""><span class="chain-name">Algorand<small>ALGO</small></span></a></li><li><a class="wall-t c-kaspa" href="/chains/kaspa/"><i class="wall-l"></i><img class="coin c-kaspa" src="/img/coins/kas.svg" width="34" height="34" alt=""><span class="chain-name">Kaspa<small>KAS</small></span></a></li><li><a class="wall-t c-zcash" href="/chains/zcash/"><i class="wall-l"></i><img class="coin c-zcash" src="/img/coins/zec.svg" width="34" height="34" alt=""><span class="chain-name">Zcash<small>ZEC</small></span></a></li></ul></nav>
@@ -289,15 +275,14 @@
       </div>
     </section>
 
-    <section class="tor" id="tor" data-tor aria-labelledby="tor-title" data-tone=".42" data-hue="0" data-nav="/features/">
-      <div class="tor-pin">
+    <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
             <p class="eyebrow" data-reveal>Privacy</p>
-            <h2 id="tor-title">Everything goes <span class="rd"><span class="wd"><span>through</span><i class="bar"></i></span> <span class="wd"><span>Tor</span><i class="bar"></i></span></span></h2>
+            <h2 id="tor-title">Everything goes <em>through Tor</em></h2>
             <p data-reveal>Kyro is a Tor wallet from the first launch. Balances, prices, swaps and broadcasts leave through the built-in client, each blockchain gets its own circuit, and if Tor fails, Kyro stops.</p>
           </div>
-          <div class="route spot">
+          <div class="route spot" data-reveal>
             <div class="ip" aria-hidden="true">
               <span class="ip-label">The server sees</span>
               <code class="ip-val" data-ip>•••.•••.•••.•••</code>
@@ -312,24 +297,22 @@
                 <li data-hop><span class="rt-dot">3</span><b>Relay 3</b><small>Sees the request, never you</small></li>
                 <li data-hop><span class="rt-dot"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg></span><b>Network</b><small>Sees a Tor exit</small></li>
               </ol>
-              <canvas class="fx" aria-hidden="true"></canvas>
               <div class="rt-packet" data-packet aria-hidden="true"><i></i><i></i><i></i><b></b></div>
             </div>
           </div>
         </div>
-      </div>
     </section>
 
-    <section class="section" id="fees" aria-labelledby="swap-title" data-tone=".95" data-hue="1" data-nav="/fees/">
+    <section class="section" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Swap</p>
-          <h2 id="swap-title">Any coin <span class="rd"><span class="wd"><span>to</span><i class="bar"></i></span> <span class="wd"><span>any</span><i class="bar"></i></span> <span class="wd"><span>coin</span><i class="bar"></i></span></span></h2>
+          <h2 id="swap-title">Any coin <em>to any coin</em></h2>
           <p data-reveal>Kyro asks several providers and shows what actually lands in your account, across 30 blockchains.</p>
         </div>
         <div class="swap-grid">
           <div class="glow-card swap-main spot g-ice" data-reveal>
-  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><canvas class="fx" aria-hidden="true"></canvas><div class="sw-in" aria-hidden="true">
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
     <div class="sw-side">
       <p class="kw-label">You send</p>
       <strong data-a>1.0000</strong><small data-at>BTC</small>
@@ -355,11 +338,11 @@
       </div>
     </section>
 
-    <section class="section" id="features" aria-labelledby="earn-title" data-tone=".6" data-hue=".2" data-nav="/features/">
+    <section class="section" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
-          <h2 id="earn-title">Earn <span class="rd"><span class="wd"><span>without</span><i class="bar"></i></span> <span class="wd"><span>an</span><i class="bar"></i></span> <span class="wd"><span>account</span><i class="bar"></i></span></span></h2>
+          <h2 id="earn-title">Earn <em>without an account</em></h2>
           <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list. No sign-up, and your keys stay with you.</p>
         </div>
         <div class="earn-wrap" data-reveal data-rows>
@@ -410,12 +393,11 @@
       </div>
     </section>
 
-    <section class="hw-scene" data-ledger-track aria-labelledby="hw-title" data-tone="1" data-hue=".7" data-nav="/features/">
-      <div class="hw-pin">
+    <section class="section hw-scene" data-ledger-track aria-labelledby="hw-title">
         <div class="wrap hw-grid">
           <div class="hw-text">
             <p class="eyebrow" data-reveal>Hardware wallets</p>
-            <h2 id="hw-title">Ledger <span class="rd"><span class="wd"><span>and</span><i class="bar"></i></span></span> Trezor</h2>
+            <h2 id="hw-title">Ledger <em>and</em> Trezor</h2>
             <ol class="hw-steps" data-reveal>
               <li class="on"><span>1</span>Plug it in</li>
               <li class="on"><span>2</span>Click connect</li>
@@ -448,17 +430,15 @@
         <circle class="lg-led" cx="320" cy="376" r="3.5" fill="#7cc4ff"/>
       </g>
     </svg>
-    <canvas class="fx"></canvas>
   </div></div>
         </div>
-      </div>
     </section>
 
-    <section class="section" id="security" aria-labelledby="security-title" data-tone=".7" data-hue=".4" data-nav="/security/">
+    <section class="section" id="security" aria-labelledby="security-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Security</p>
-          <h2 id="security-title">Yours, <span class="rd"><span class="wd"><span>start</span><i class="bar"></i></span> <span class="wd"><span>to</span><i class="bar"></i></span> <span class="wd"><span>finish</span><i class="bar"></i></span></span></h2>
+          <h2 id="security-title">Yours, <em>start to finish</em></h2>
           <p data-reveal>A non-custodial, open-source wallet. No account and no analytics. Only an anonymous weekly count over Tor, which you can turn off.</p>
         </div>
         <div class="glow-grid" data-reveal-group>
@@ -482,11 +462,11 @@
       </div>
     </section>
 
-    <section class="section" aria-labelledby="faq-title" data-tone=".42" data-hue="0" data-nav="/faq/">
+    <section class="section" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Questions</p>
-          <h2 id="faq-title">Short <span class="rd"><span class="wd"><span>answers</span><i class="bar"></i></span></span></h2>
+          <h2 id="faq-title">Short <em>answers</em></h2>
         </div>
         <div class="faq" data-reveal>
           <details><summary>Is Kyro Wallet free?</summary><div class="answer"><p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. <a href="/fees/">Fee details</a>.</p></div></details>
@@ -544,32 +524,23 @@
       </div>
     </section>
 
-    <section class="gather" data-gather data-nonav aria-labelledby="download-title" data-tone="1.05" data-hue="1">
-      <span class="gather-anchor" id="download"></span>
-      <div class="gather-pin">
-        <div class="field" data-field aria-hidden="true">
-          <img class="fc" src="/img/coins/btc.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/eth.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/bnb.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/pol.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/arb.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/op.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/base.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/avax.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/cro.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/mnt.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/s.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/flr.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/kaia.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/gno.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/hype.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/sei.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/cfx.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/sol.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/trx.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/ada.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/xrp.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/ltc.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/doge.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/bch.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/dash.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/xlm.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/near.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/sui.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/xmr.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/gram.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/atom.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/dot.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/apt.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/algo.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/kas.svg" width="64" height="64" alt="" loading="lazy" decoding="async"><img class="fc" src="/img/coins/zec.svg" width="64" height="64" alt="" loading="lazy" decoding="async">
-        </div>
-        <canvas class="fx" aria-hidden="true"></canvas>
-        <span class="gather-glowpos" data-glowpos aria-hidden="true"><span class="gather-glow" data-glow></span></span>
-        <svg class="gather-mark" data-mark viewBox="0 0 64 64" aria-hidden="true"><path d="M47.32 44.86A20 20 0 1 1 47.32 19.14" fill="none" stroke="#F5F7FA" stroke-width="10"/><rect x="26" y="26" width="12" height="12" fill="#7CC4FF"/></svg>
-        <div class="gather-cta" data-cta>
-          <h2 id="download-title">Your wallet, <span class="rd"><span class="wd"><span>your</span><i class="bar"></i></span> <span class="wd"><span>machine.</span><i class="bar"></i></span></span></h2>
-          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
-          <div class="hero-cta">
-            
-          <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
+    <section class="final" id="download" aria-labelledby="download-title">
+      <div class="wrap">
+        <h2 id="download-title">Your wallet, <em>your machine.</em></h2>
+        <p class="dl-sub" data-reveal>Version 1.0.6 · Free · Windows, macOS and Linux</p>
+        <div class="hero-cta" data-reveal>
+          
+          <a class="btn btn-primary btn-xl" href="/download/" data-dl-hero>
             <span class="os-icon" data-dl-icon aria-hidden="true"></span>
             <span data-dl-label>Download Kyro</span>
           </a>
-            <a class="btn btn-ghost btn-xl magnet" href="/download/" data-dl-other>Other platforms</a>
-          </div>
+          <a class="btn btn-ghost btn-xl" href="/download/" data-dl-other>Other platforms</a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer" data-tone="1.15" data-hue="1">
+  <footer class="site-footer">
     <div class="foot-main">
     <div class="wrap">
       <div class="footer-cols">

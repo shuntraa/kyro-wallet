@@ -273,13 +273,12 @@ export function ledgerScene() {
         <circle class="lg-led" cx="320" cy="376" r="3.5" fill="#7cc4ff"/>
       </g>
     </svg>
-    <canvas class="fx"></canvas>
   </div></div>`;
 }
 
 /** Swap widget with the coin that flips from one token to the other (scenes.js drives it). */
 export const swapWidget = () => `
-  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><canvas class="fx" aria-hidden="true"></canvas><div class="sw-in" aria-hidden="true">
+  <div class="sw" data-swap role="img" aria-label="Swapping 1 BTC for about 100 XMR in Kyro, with demo numbers and the service fee included."><div class="sw-in" aria-hidden="true">
     <div class="sw-side">
       <p class="kw-label">You send</p>
       <strong data-a>1.0000</strong><small data-at>BTC</small>
@@ -308,7 +307,7 @@ export function coinCard(c) {
 
 /** The big coin in a chain page's head: two layers turning slowly, so it has an edge. */
 export const coinHero = (c) => `
-  <div class="coin-hero c-${c.slug} spot tilt">
+  <div class="coin-hero c-${c.slug} spot">
     <span class="coin-orbit"></span><span class="coin-orbit o2"></span>
     <div class="coin-3d"><img class="c-back" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt=""><img class="c-mid" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt=""><img class="c-front" src="/img/coins/${iconOf(c)}.svg" width="240" height="240" alt="${esc(c.name)} (${esc(c.ticker)}) coin" fetchpriority="high"></div>
   </div>`;
