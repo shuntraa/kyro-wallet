@@ -7,12 +7,13 @@ Key facts:
 - Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Providers charge their own costs too: NEAR Intents takes an amount equal to the Kyro fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote shown already includes everything. Full table: https://kyrowallet.com/fees/
 - Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
 - Blockchains (36): Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa and Zcash. 220+ tokens.
-- Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON) and NEAR; ETH liquid staking with Lido; lending on Aave v3. 14 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.
-- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash. From a hardware account, Earn covers Lido and Aave only.
+- Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON), NEAR, SUI (Sui) and APT (Aptos); ETH liquid staking with Lido; lending on Aave v3. 16 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.
+- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash. From a hardware account, Earn covers Lido, Aave, and staking on Solana and Cardano (Ledger and Trezor) and NEAR (Ledger).
+- Also: several wallets on one device, watch addresses with no key, local price and funds-received alerts, simulation before signing, fee speeds, speed up and cancel.
 - Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
 - Security status: internal security review done; no external audit published yet. Installers are not code-signed yet, so Windows and macOS warn on first launch.
 - Downloads: only from GitHub Releases (https://github.com/shuntraa/kyro-wallet/releases). No mobile app.
-- Vulnerability reports: privately via GitHub security advisories (https://github.com/shuntraa/kyro-wallet/security).
+- Vulnerability reports: privately to security@kyrowallet.com or via GitHub security advisories (https://github.com/shuntraa/kyro-wallet/security).
 
 ## Pages
 
@@ -25,13 +26,13 @@ Key facts:
 - [Tor wallet](https://kyrowallet.com/tor/): Kyro is a crypto wallet with Tor built in and on by default: separate circuits per blockchain, no fallback to a direct connection, and a plain list of what each party sees.
 - [Monero desktop wallet](https://kyrowallet.com/monero/): A free, open-source Monero desktop wallet for Windows, macOS and Linux. Blocks are scanned on your machine, your view key stays there, and traffic goes over Tor.
 - [Swaps](https://kyrowallet.com/swap/): Swap across 33 blockchains with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.
-- [Earn: staking and lending](https://kyrowallet.com/earn/): Stake SOL, ADA, TRX and NEAR, stake ETH with Lido or lend on Aave from a non-custodial wallet. 14 options, estimated rates and the risks stated plainly.
+- [Earn: staking and lending](https://kyrowallet.com/earn/): Stake SOL, ADA, TRX, NEAR, SUI and APT, stake ETH with Lido or lend on Aave from a non-custodial wallet. 16 options, estimated rates and the risks stated plainly.
 - [Ledger and Trezor](https://kyrowallet.com/hardware-wallets/): Use a Ledger or Trezor with Kyro on 33 blockchains: one-click connect, Rust decoding, a signature check after signing, and an honest list of limits per chain.
 - [Kyro for Windows](https://kyrowallet.com/wallets/windows/): Install Kyro on Windows: one PowerShell command or the 64-bit installer. Free, open source and non-custodial, with built-in Tor. What SmartScreen means, and how updates work.
 - [Kyro for macOS](https://kyrowallet.com/wallets/macos/): Install Kyro on your Mac with one Terminal command or the universal .dmg, for Apple Silicon and Intel. Free, open source and non-custodial, with built-in Tor.
 - [Kyro for Linux](https://kyrowallet.com/wallets/linux/): Install Kyro on Linux x86_64: one command, an AppImage that updates itself or a .deb. Free, open source and non-custodial, with built-in Tor. FUSE and udev notes.
 - [About Kyro](https://kyrowallet.com/about/): Why Kyro exists: a desktop crypto wallet with no account and no analytics, keys on your machine, Tor by default, code anyone can read and a fee anyone can check.
-- [Roadmap](https://kyrowallet.com/roadmap/): What Kyro has shipped and what comes next: staking on Polkadot, Sui and Aptos, token sends on more chains, winget and code signing. No dates we cannot keep.
+- [Roadmap](https://kyrowallet.com/roadmap/): What Kyro has shipped and what comes next: Polkadot staking next, then winget and code signing. No dates we cannot keep.
 - [Changelog](https://kyrowallet.com/changelog/): What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.7. Generated from the CHANGELOG.md file in the repository.
 - [Open source](https://kyrowallet.com/open-source/): Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.
 - [Brand kit](https://kyrowallet.com/brand/): Download Kyro Wallet logos, marks and app icons, with the colours, typefaces, a short description and simple usage rules for writing about the project.
@@ -81,12 +82,12 @@ Key facts:
 - [Dash (DASH)](https://kyrowallet.com/chains/dash/): send and receive, swap, hardware wallet
 - [Stellar (XLM)](https://kyrowallet.com/chains/stellar/): send and receive, swap, hardware wallet
 - [NEAR (NEAR)](https://kyrowallet.com/chains/near/): send and receive, swap, staking, hardware wallet
-- [Sui (SUI)](https://kyrowallet.com/chains/sui/): send and receive, swap, hardware wallet
+- [Sui (SUI)](https://kyrowallet.com/chains/sui/): send and receive, swap, staking, hardware wallet
 - [Monero (XMR)](https://kyrowallet.com/chains/monero/): send and receive, swap
 - [TON (GRAM)](https://kyrowallet.com/chains/ton/): send and receive, swap, hardware wallet
 - [Cosmos Hub (ATOM)](https://kyrowallet.com/chains/cosmos/): send and receive, hardware wallet
 - [Polkadot (DOT)](https://kyrowallet.com/chains/polkadot/): send and receive
-- [Aptos (APT)](https://kyrowallet.com/chains/aptos/): send and receive, swap, hardware wallet
+- [Aptos (APT)](https://kyrowallet.com/chains/aptos/): send and receive, swap, staking, hardware wallet
 - [Algorand (ALGO)](https://kyrowallet.com/chains/algorand/): send and receive, swap, hardware wallet
 - [Kaspa (KAS)](https://kyrowallet.com/chains/kaspa/): send and receive, swap
 - [Zcash (ZEC)](https://kyrowallet.com/chains/zcash/): send and receive, swap, hardware wallet

@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week101:  downloads in total
+8:  active wallets this week102:  downloads in total
 
 Blockchains
 
@@ -125,11 +125,11 @@ Earn
 
 ## Earn without an account
 
-Lido, Aave, Solana, Cardano, TRON and NEAR in one list. No sign-up, and your keys stay with you.
+Lido, Aave, Solana, Cardano, TRON, NEAR, Sui and Aptos in one list. No sign-up, and your keys stay with you.
 
-Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.
+Demo numbers. Real rates are estimates, never guaranteed. From a hardware wallet: Lido, Aave, and staking on Solana, Cardano and NEAR.
 
-All 14 options and their risks
+All 16 options and their risks
 
 Hardware wallets
 
@@ -166,6 +166,12 @@ Total value, a price chart from one day to all time, and every asset with its ba
 - Search assets and addresses with Ctrl K.
 
 - Allocation by asset, and a vault panel with your security status.
+
+- Several wallets on one device, each with its own phrase, password and history.
+
+- Watch addresses: follow any public address or xpub with no key.
+
+- Alerts for price levels and funds received, computed on your device.
 
 ================================================================
 Security: how Kyro Wallet protects your keys
@@ -466,7 +472,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week101:  downloads in total
+8:  active wallets this week102:  downloads in total
 
 Recommended
 
@@ -641,13 +647,13 @@ Q: Can I swap Monero in Kyro?
 A: Yes, both ways, through Exolix. Kyro's fee is a second ordinary transfer of the coin you sell. Swap to Monero.
 
 Q: Can I earn from a hardware wallet?
-A: Lido and Aave work from Ledger and Trezor accounts. Staking on Solana, Cardano, TRON and NEAR needs a recovery-phrase account. Options and risks.
+A: Lido and Aave work from Ledger and Trezor accounts. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account. Options and risks.
 
 Q: How much does a swap cost?
 A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers charge their own costs as well: NEAR Intents takes an amount equal to Kyro's fee on the routes it serves directly, so those swaps cost about double the Kyro rate. The quote you see already includes everything. Full fee table.
 
 Q: Can I stake with Kyro?
-A: Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. Options and risks.
+A: Yes. Earn lists 16 options: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. Options and risks.
 
 ## Security
 
@@ -670,7 +676,7 @@ Q: Is Kyro open source? Has it been audited?
 A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
 
 Q: How do I report a vulnerability?
-A: Privately, through GitHub security advisories. Please do not open a public issue. See the security policy.
+A: Privately, to security@kyrowallet.com or through GitHub security advisories. Please do not open a public issue. See the security policy.
 
 ## Download and install
 
@@ -793,7 +799,7 @@ Compare
 
 ## What works where
 
-Staking is available for SOL, ADA, TRX and NEAR. See swap routes, Earn and hardware wallets for the details.
+Staking is available for SOL, ADA, TRX, NEAR, SUI and APT. See swap routes, Earn and hardware wallets for the details.
 
 What Kyro supports on each blockchain
 
@@ -949,7 +955,7 @@ Kyro collects no personal data and transfers no information to other networked s
 
 ## Report a problem
 
-If you find a signed file that does not come from this project's release workflow, report it through GitHub security advisories.
+If you find a signed file that does not come from this project's release workflow, report it to security@kyrowallet.com or through GitHub security advisories.
 
 ================================================================
 Bitcoin wallet for Windows, macOS and Linux | Kyro
@@ -3132,7 +3138,7 @@ Q: Can I swap SOL in Kyro?
 A: Yes, in both directions. Providers: Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC. Routes and limits.
 
 Q: Can I stake SOL in Kyro?
-A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account or a hardware wallet. Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Solana?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -3257,7 +3263,7 @@ Q: Can I swap TRX in Kyro?
 A: Yes, in both directions. Providers: 1Click. Exolix. Routes and limits.
 
 Q: Can I stake TRX in Kyro?
-A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account. Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on TRON?
 A: Yes, with a Ledger. Device table.
@@ -3382,7 +3388,7 @@ Q: Can I swap ADA in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
 Q: Can I stake ADA in Kyro?
-A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account or a hardware wallet. Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Cardano?
 A: Yes, with a Ledger or Trezor. Not on the Trezor One. A Ledger gives different Cardano addresses than the software wallet for the same phrase. Device table.
@@ -4249,7 +4255,7 @@ Q: Can I swap NEAR in Kyro?
 A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
 
 Q: Can I stake NEAR in Kyro?
-A: Yes, from a recovery-phrase account. It is refused from a hardware wallet. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account or a hardware wallet. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on NEAR?
 A: Yes, with a Ledger. The Ledger account is a different account than the software wallet. Device table.
@@ -4299,7 +4305,7 @@ Sui desktop wallet · SUI
 
 # Sui wallet for Windows, macOS and Linux
 
-Send, receive and swap SUI and USDC tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
+Send, receive, swap and stake SUI and USDC tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
 
 Download Kyro All blockchains
 
@@ -4315,8 +4321,8 @@ Yes
 
 ### Earn
 
-Kyro offers no staking or lending on Sui.
-No
+Stake SUI from your own account. Kyro takes no fee on staking. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -4326,6 +4332,8 @@ Yes
 Details
 
 ## Sui in Kyro
+
+Delegate SUI to a validator, at least 1 SUI. It earns from the next epoch, and you can withdraw at any time. A validator cannot take your SUI.
 
 - Sui mainnet. Network fees are paid in SUI.
 
@@ -4353,13 +4361,13 @@ What Kyro supports on Sui
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Not offered.
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
 | Trezor |  | Not supported.
 
-Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
 
 Questions
 
@@ -4371,8 +4379,8 @@ A: Yes. Kyro is free, open source and non-custodial. You pay the network fee whe
 Q: Can I swap SUI in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
-Q: Can I earn on Sui in Kyro?
-A: Kyro offers no staking or lending on Sui.
+Q: Can I stake SUI in Kyro?
+A: Yes, from a recovery-phrase account. Delegate SUI to a validator, at least 1 SUI. It earns from the next epoch, and you can withdraw at any time. A validator cannot take your SUI. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Sui?
 A: Yes, with a Ledger. Device table.
@@ -4924,7 +4932,7 @@ Aptos desktop wallet · APT
 
 # Aptos wallet for Windows, macOS and Linux
 
-Send, receive and swap APT and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
+Send, receive, swap and stake APT and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and non-custodial: your keys stay on your own computer and traffic goes over Tor by default.
 
 Download Kyro All blockchains
 
@@ -4940,8 +4948,8 @@ Yes
 
 ### Earn
 
-Kyro offers no staking or lending on Aptos.
-No
+Stake APT from your own account. Kyro takes no fee on staking. Rates are estimates.
+Yes
 
 ### Hardware wallet
 
@@ -4951,6 +4959,8 @@ Yes
 Details
 
 ## Aptos in Kyro
+
+Delegate APT to a pool, at least 11 APT. To get it back, unlock and wait for the end of the pool's lockup (up to 14 days). The operator cannot take your APT.
 
 - Aptos mainnet. Network fees are paid in APT.
 
@@ -4978,13 +4988,13 @@ What Kyro supports on Aptos
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Not offered.
+| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
 | Trezor |  | Not supported.
 
-Swap routes and limits Ledger and Trezor in Kyro How Kyro uses Tor
+Swap routes and limits Earn options and risks Ledger and Trezor in Kyro How Kyro uses Tor
 
 Questions
 
@@ -4996,8 +5006,8 @@ A: Yes. Kyro is free, open source and non-custodial. You pay the network fee whe
 Q: Can I swap APT in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
-Q: Can I earn on Aptos in Kyro?
-A: Kyro offers no staking or lending on Aptos.
+Q: Can I stake APT in Kyro?
+A: Yes, from a recovery-phrase account. Delegate APT to a pool, at least 11 APT. To get it back, unlock and wait for the end of the pool's lockup (up to 14 days). The operator cannot take your APT. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Aptos?
 A: Yes, with a Ledger. Device table.
@@ -5855,7 +5865,7 @@ Earn
 
 # Earn, with the risks in plain sight
 
-14 options in one list: staking, liquid staking and lending. No sign-up. Rates are estimates, never guaranteed.
+16 options in one list: staking, liquid staking and lending. No sign-up. Rates are estimates, never guaranteed.
 
 Download Kyro
 
@@ -5863,7 +5873,7 @@ Demo numbers. Real rates are estimates, never guaranteed.
 
 Options
 
-## All 14 options
+## All 16 options
 
 What you can put to work, how long it stays locked, and what works from a hardware wallet.
 
@@ -5881,13 +5891,17 @@ Earn options in Kyro
 
 | Aave · Base | Lending | USDC | None | Yes
 
-| Solana | Staking | SOL | About 2 to 3 days | No
+| Solana | Staking | SOL | About 2 to 3 days | Ledger, Trezor
 
-| Cardano | Staking | ADA (2 ADA deposit, returned) | None | No
+| Cardano | Staking | ADA (2 ADA deposit, returned) | None | Ledger, Trezor (rewards withdrawal: Trezor only)
 
 | TRON | Staking | TRX (minimum 1 TRX) | 14 days | No
 
-| NEAR | Staking | NEAR | 4 epochs, about 2 to 3 days | No
+| NEAR | Staking | NEAR | 4 epochs, about 2 to 3 days | Ledger
+
+| Sui | Staking | SUI (minimum 1 SUI) | None | No
+
+| Aptos | Staking | APT (minimum 11 APT) | Up to 14 days | No
 
 Three kinds
 
@@ -5897,7 +5911,7 @@ They look alike in a list. They are different underneath.
 
 ### Staking
 
-SOL, ADA, TRX and NEAR. You delegate from your own account to a validator, pool or Super Representative. They cannot spend your coins. On Cardano your ADA stays spendable.
+SOL, ADA, TRX, NEAR, SUI and APT. You delegate from your own account to a validator, pool or Super Representative. They cannot spend your coins. On Cardano your ADA stays spendable.
 
 ### Liquid staking
 
@@ -5927,7 +5941,7 @@ Rates move. A validator's commission, downtime or a retiring pool can cut your r
 
 ### Waiting periods
 
-TRON unstaking takes 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.
+TRON unstaking takes 14 days. Aptos takes up to 14 days. Solana and NEAR take a few days, and Solana can take longer. You earn nothing in the meantime, and prices keep moving.
 
 ### Votes shrink
 
@@ -5968,10 +5982,10 @@ Q: Does Kyro take a fee on Earn?
 A: Kyro takes no fee on staking. You pay the network fee, and validators, pools and protocols keep their own share of the rewards.
 
 Q: Can I use Earn with a Ledger or Trezor?
-A: Yes for Lido and Aave. Staking on Solana, Cardano, TRON and NEAR still needs a recovery-phrase account, and Kyro refuses it from a hardware account.
+A: Yes for Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.
 
 Q: Can a validator take my coins?
-A: On Solana, Cardano, TRON and NEAR a validator, pool or Super Representative cannot spend your coins, and there is no slashing for delegators. A poor choice costs rewards.
+A: On Solana, Cardano, TRON, NEAR, Sui and Aptos a validator, pool or Super Representative cannot spend your coins, and there is no slashing for delegators. A poor choice costs rewards.
 
 Q: Is lending on Aave the same risk as staking?
 A: No. Your tokens go into a smart contract. A contract bug or a stablecoin losing its peg can cost you money. Kyro cannot remove those risks.
@@ -6361,11 +6375,35 @@ Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways thro
 
 ### Earn
 
-14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.
+16 options: Lido, Aave v3, and staking on Solana, Cardano, TRON, NEAR, Sui and Aptos.
 
 ### Hardware wallets
 
-Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.
+Ledger and Trezor, one-step Ledger connect, token sends on Solana, TRON, TON, Stellar, Sui, Aptos, Algorand and NEAR.
+
+### Staking from hardware wallets
+
+Solana and Cardano on Ledger and Trezor, NEAR on Ledger.
+
+### Several wallets
+
+More than one recovery phrase on a device, each with its own password, accounts and history.
+
+### Watch addresses
+
+Follow any public address or xpub with no key.
+
+### Alerts
+
+Price levels and funds received, as system notifications computed on your device.
+
+### Simulation before signing
+
+On swaps and Earn calls: what you send and receive, what you approve, and calls that would fail.
+
+### Fee choice, speed up and cancel
+
+Slow, Normal or Fast on Send, and pending Bitcoin, Litecoin or EVM sends can be sped up or cancelled.
 
 ### One-click Windows installer
 
@@ -6373,13 +6411,9 @@ A single branded window since 1.0.1, and one-line install on every system.
 
 ### Next, in no fixed order
 
-### More staking
+### Polkadot staking
 
-Polkadot, Sui and Aptos.
-
-### Token sends on more chains
-
-From hardware accounts, beyond EVM, Solana and TRON.
+The next Earn option.
 
 ### Code signing
 
@@ -6462,9 +6496,17 @@ Every release of Kyro, newest first. This page is generated from CHANGELOG.md at
 
 - Asset pages: Swap is open for every coin Swap supports, not only EVM and Solana.
 
+- Search: also finds your contacts, your history and the settings sections.
+
 - Price charts: "All" really goes back years (Bitcoin: 2013), opens at once, with the % from the first point and the year in the date.
 
 - Swap: the Best price panel now shows the provider, route, minimum received, Kyro fee, provider fee and estimated time, with other quotes listed below.
+
+- Staking from hardware wallets: Solana on Ledger and Trezor (create, delegate, deactivate, withdraw), decoded on the device.
+
+- Staking from hardware wallets: Cardano delegation on Ledger and Trezor. Rewards can be withdrawn on a Trezor (firmware 2.8.5 or later), not on a Ledger: its app does not show them.
+
+- Staking from hardware wallets: NEAR pools on Ledger, from the Ledger's own NEAR account.
 
 - Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the device shows the token, the amount and the recipient. No comment on these transfers: the app cannot show it.
 
@@ -6483,6 +6525,8 @@ Every release of Kyro, newest first. This page is generated from CHANGELOG.md at
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 
 - Change password: Settings > Security, for the wallet in use. The new vault is checked before it replaces the old one, then Kyro locks and asks for the new password.
+
+- Earn: stake APT in a delegation pool (add, unlock, withdraw after the pool's lockup).
 
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and receive, which approvals you grant, and warns about a call that would fail, an unlimited approval, or an unknown or brand-new contract. It runs on your own RPC node and only warns: the review stays the reference.
 
@@ -7653,9 +7697,9 @@ With blind signing, the device protects your keys but cannot show you what you a
 
 - On NEAR, TON and Cardano the Ledger account differs from the software account for the same phrase.
 
-- Token sends work on EVM chains, Solana and TRON. Elsewhere, native coins only.
+- Token sends work on EVM chains, Solana, TRON, TON, Stellar, Sui, Aptos, Algorand and NEAR. Elsewhere, native coins only.
 
-- Earn covers Lido and Aave. Staking is refused from a hardware account.
+- Earn covers Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.
 
 - Not available on Ledger: Monero, Polkadot, Kaspa and Zcash.
 
@@ -7742,15 +7786,15 @@ Read the decoded transaction in Kyro's system window, then check it on the Trezo
 
 - Zcash transparent addresses, on Trezor only.
 
-- Token sends on EVM chains and Solana.
+- Token sends on EVM chains, Solana and Stellar (USDC).
 
-- Earn with Lido and Aave.
+- Earn with Lido and Aave, and staking on Solana and Cardano.
 
 - XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON and NEAR: Ledger only.
 
 - Monero, Polkadot and Kaspa: no hardware wallet support.
 
-- Staking on Solana, Cardano, TRON and NEAR is refused from a hardware account.
+- Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.
 
 Safe 7 support has been tested against Trezor's device-side code, not yet on a real Safe 7. Other hardware paths are young too. Start with a small amount.
 
@@ -7789,7 +7833,7 @@ Glossary
 
 What a recovery phrase is, why gas costs money, what a Tor circuit does. The terms you meet in a crypto wallet, kept short.
 
-AddressThe public string you share to receive coins. Safe to give out, though it can link your activity on a public blockchain.Address poisoningA scam that plants a lookalike address in your history so you copy it by mistake. How to spot it.ApprovalPermission you give a contract to move a token from your account. Kyro approves the exact amount by default. An unlimited approval needs an explicit action and shows a warning.APYAnnual percentage yield: a yearly rate of return, with compounding. In Kyro every APY is an estimate, never a promise.BIP39The standard that turns a random number into 12 or 24 English words. It is why a phrase can move between wallets.Blind signingApproving a transaction your hardware wallet cannot decode. The device shows raw data, so it protects your keys but not your consent.BlockchainA shared public record of transactions, kept by many computers.Clear modeKyro with Tor turned off. Servers see your IP address. You can only reach it by confirming in a system window.Custodial walletA wallet where a company holds the keys for you. You trust it to give your coins back. Kyro is not one.DecoyIn Monero, other outputs mixed with your real one when you send, so an observer cannot tell which was spent.DepegWhen a token meant to track another asset, such as a stablecoin or stETH, drifts from its target price.Derivation pathThe recipe that turns a phrase into a specific key. Two wallets using different paths show different addresses for the same phrase.EpochA fixed period on a proof-of-stake network. Staking changes often take effect at an epoch boundary.Exit relayThe last Tor relay, which connects to the server. The server sees its IP address instead of yours.Fail closedStopping when a protection is missing, rather than carrying on without it. If Tor is down, Kyro sends nothing.GasThe fee for running a transaction on Ethereum and similar networks. It goes to the network, not to Kyro.Hardware walletA small device that keeps your keys and signs on its own screen. Ledger and Trezor in Kyro.LendingDepositing tokens in a protocol such as Aave so borrowers can use them, for a variable rate. Contract risk applies.Liquid stakingStaking through a protocol such as Lido that gives you a token, stETH, standing for your stake.Network feeWhat you pay the blockchain to process a transaction. It is separate from any Kyro fee.NodeA computer that keeps a copy of a blockchain and answers questions about it. Running your own means no third party sees your lookups.Non-custodial walletA wallet where you alone hold the keys. Nobody can freeze your funds or recover them for you.Onion serviceA server reachable only inside Tor, so no exit relay is involved. Kyro uses one for Bitcoin lookups.Private keyThe secret that signs transactions. Kyro derives it for each signature in the Rust core, then wipes it from memory.Recovery phrase12 or 24 words that restore your whole wallet. Also called a seed phrase. How to back it up.RPC serverA server a wallet talks to in order to read a blockchain and broadcast transactions.SeedThe secret value your keys come from. In everyday use, the same thing as your recovery phrase.SlashingA penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON and NEAR are not slashed today.SlippageThe gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.StablecoinA token designed to track a currency, such as USDC or USDT.StakingSupporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.Stake poolA group stake run by an operator, as on Cardano and NEAR.SwapExchanging one coin for another from your wallet, through a provider. Kyro's fee and the provider's costs are included in the rate.TokenAn asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain's native coin.TorA network that hides your IP address by routing traffic through volunteer relays. How Kyro uses it.Tor circuitThe path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.ValidatorA computer that helps run a proof-of-stake network and earns rewards. It cannot spend what you delegate.View keyA Monero key that reads incoming payments but cannot spend. In Kyro it stays on your machine.xpubAn extended public key. It can show all addresses of an account, but cannot spend. Kyro stores xpubs for hardware accounts.
+AddressThe public string you share to receive coins. Safe to give out, though it can link your activity on a public blockchain.Address poisoningA scam that plants a lookalike address in your history so you copy it by mistake. How to spot it.ApprovalPermission you give a contract to move a token from your account. Kyro approves the exact amount by default. An unlimited approval needs an explicit action and shows a warning.APYAnnual percentage yield: a yearly rate of return, with compounding. In Kyro every APY is an estimate, never a promise.BIP39The standard that turns a random number into 12 or 24 English words. It is why a phrase can move between wallets.Blind signingApproving a transaction your hardware wallet cannot decode. The device shows raw data, so it protects your keys but not your consent.BlockchainA shared public record of transactions, kept by many computers.Clear modeKyro with Tor turned off. Servers see your IP address. You can only reach it by confirming in a system window.Custodial walletA wallet where a company holds the keys for you. You trust it to give your coins back. Kyro is not one.DecoyIn Monero, other outputs mixed with your real one when you send, so an observer cannot tell which was spent.DepegWhen a token meant to track another asset, such as a stablecoin or stETH, drifts from its target price.Derivation pathThe recipe that turns a phrase into a specific key. Two wallets using different paths show different addresses for the same phrase.EpochA fixed period on a proof-of-stake network. Staking changes often take effect at an epoch boundary.Exit relayThe last Tor relay, which connects to the server. The server sees its IP address instead of yours.Fail closedStopping when a protection is missing, rather than carrying on without it. If Tor is down, Kyro sends nothing.GasThe fee for running a transaction on Ethereum and similar networks. It goes to the network, not to Kyro.Hardware walletA small device that keeps your keys and signs on its own screen. Ledger and Trezor in Kyro.LendingDepositing tokens in a protocol such as Aave so borrowers can use them, for a variable rate. Contract risk applies.Liquid stakingStaking through a protocol such as Lido that gives you a token, stETH, standing for your stake.Network feeWhat you pay the blockchain to process a transaction. It is separate from any Kyro fee.NodeA computer that keeps a copy of a blockchain and answers questions about it. Running your own means no third party sees your lookups.Non-custodial walletA wallet where you alone hold the keys. Nobody can freeze your funds or recover them for you.Onion serviceA server reachable only inside Tor, so no exit relay is involved. Kyro uses one for Bitcoin lookups.Private keyThe secret that signs transactions. Kyro derives it for each signature in the Rust core, then wipes it from memory.Recovery phrase12 or 24 words that restore your whole wallet. Also called a seed phrase. How to back it up.RPC serverA server a wallet talks to in order to read a blockchain and broadcast transactions.SeedThe secret value your keys come from. In everyday use, the same thing as your recovery phrase.SlashingA penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON, NEAR, Sui and Aptos are not slashed today.SlippageThe gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.StablecoinA token designed to track a currency, such as USDC or USDT.StakingSupporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.Stake poolA group stake run by an operator, as on Cardano and NEAR.SwapExchanging one coin for another from your wallet, through a provider. Kyro's fee and the provider's costs are included in the rate.TokenAn asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain's native coin.TorA network that hides your IP address by routing traffic through volunteer relays. How Kyro uses it.Tor circuitThe path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.ValidatorA computer that helps run a proof-of-stake network and earns rewards. It cannot spend what you delegate.View keyA Monero key that reads incoming payments but cannot spend. In Kyro it stays on your machine.xpubAn extended public key. It can show all addresses of an account, but cannot spend. Kyro stores xpubs for hardware accounts.
 
 ## Keep reading
 
