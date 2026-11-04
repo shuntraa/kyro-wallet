@@ -309,6 +309,7 @@ const COMMANDS: &[&str] = &[
     "hw_sign_algo_tx",
     "hw_algo_broadcast",
     "hw_near_build_tx",
+    "hw_near_build_token_tx",
     "hw_sign_near_tx",
     "hw_near_broadcast",
     "hw_near_tx_status",

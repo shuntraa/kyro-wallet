@@ -454,6 +454,7 @@ pub fn run() {
             commands_hw_algo::hw_sign_algo_tx,
             commands_hw_algo::hw_algo_broadcast,
             commands_hw_near::hw_near_build_tx,
+            commands_hw_near::hw_near_build_token_tx,
             commands_hw_near::hw_sign_near_tx,
             commands_hw_near::hw_near_broadcast,
             commands_hw_near::hw_near_tx_status,

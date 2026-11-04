@@ -24,6 +24,8 @@
 - Hardware wallets: Aptos USDC and USDt can be sent from Ledger accounts (Aptos app 0.10.1 or
   later), shown by name and amount on the device.
 - Hardware wallets: Algorand USDC and USDt can be enabled and sent from Ledger accounts.
+- Hardware wallets: NEAR USDC and USDt can be sent from Ledger accounts; the device shows the
+  contract and the recipient, and the amount in raw units (Kyro's window names the token).
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited

@@ -100,6 +100,55 @@ mod tests {
         assert!(get_pubkey(&[1, 2, 3], false).is_err());
     }
 
+    /// USDC `ft_transfer`, with and without the recipient's `storage_deposit`: the app hashes the
+    /// Borsh and shows contract, method, deposit and arguments; the signature must verify.
+    #[test]
+    fn token_transfer_with_storage_deposit() {
+        use ed25519_dalek::Signer;
+        let k = ed25519_dalek::SigningKey::from_bytes(&[7; 32]);
+        let pk = k.verifying_key().to_bytes();
+        let contract = wallet_core::near_known_tokens(false)[0].contract;
+        for storage_deposit in [None, Some(1_250_000_000_000_000_000_000)] {
+            let t = wallet_core::NearTransfer {
+                signer_id: hex::encode(pk),
+                public_key: pk,
+                nonce: 12,
+                receiver_id: contract.into(),
+                block_hash: [1; 32],
+                deposit: 0,
+                ft: Some(wallet_core::NearFtTransfer {
+                    recipient: "bob.near".into(),
+                    amount: 1_500_000,
+                    storage_deposit,
+                }),
+            };
+            let raw = hex::encode(t.encode());
+            let msg = wallet_core::near_hw_message(&raw).unwrap();
+            let args = br#"{"receiver_id":"bob.near","amount":"1500000"}"#;
+            assert!(msg.windows(args.len()).any(|w| w == args));
+            let sig = k.sign(&t.hash()).to_bytes();
+            let path = HwKeyChain::Near.path(0);
+            let mut lines = app("NEAR", "2.4.1").to_vec();
+            lines.push("=> 8006000000".into());
+            lines.push("<= 0204019000".into());
+            let apdus = sign_apdus(&path, &msg).unwrap();
+            for (i, a) in apdus.iter().enumerate() {
+                lines.push(format!("=> {}", hex::encode(a)));
+                lines.push(if i + 1 == apdus.len() {
+                    format!("<= {}9000", hex::encode(sig))
+                } else {
+                    "<= 9000".into()
+                });
+            }
+            let r = Replay::new(&lines);
+            let c = ctl();
+            let a = App::open(&r, &c, HwKeyChain::Near).unwrap();
+            let got = sign(&a, &path, &msg).unwrap();
+            assert!(r.done());
+            wallet_core::near_hw_signed(&raw, &got).unwrap();
+        }
+    }
+
     #[test]
     fn sign_chunks_path_then_borsh() {
         let path = HwKeyChain::Near.path(0);

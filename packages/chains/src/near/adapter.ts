@@ -52,14 +52,13 @@ export function rustNearBackend(account = 0): NearBackend {
 
 /** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustNearHwBackend(accountId: string): NearBackend {
-  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
-  const { buildToken: _buildTokenVaultOnly, ...base } = rustNearBackend();
   return {
-    ...base,
+    ...rustNearBackend(),
     build: (to, amount) => call('hw_near_build_tx', { accountId, to, amount }),
     sign: (tx, id) => call('hw_sign_near_tx', { id, accountId, tx }),
     broadcast: (signed) => call('hw_near_broadcast', { accountId, signed }),
     txStatus: (hash) => call('hw_near_tx_status', { accountId, hash }),
+    buildToken: (contract, to, amount) => call('hw_near_build_token_tx', { accountId, contract, to, amount }),
   };
 }
 
@@ -155,7 +154,6 @@ export class NearAdapter implements ChainAdapter<'near'> {
 
   /** NEP-141 transfer: Rust adds `storage_deposit` for an unregistered recipient (paid in NEAR); `max` = the whole token balance. */
   private async buildToken(params: BuildParams): Promise<NearUnsigned> {
-    if (this.hw) throw new Error(l10n('Jetons NEAR : pas encore pris en charge sur hardware wallet', 'NEAR tokens: not yet supported on hardware wallets'));
     const k = NEAR_TOKENS[this.chain.network].find((x) => x.contract === params.asset.contract);
     if (!k || k.decimals !== params.asset.decimals || !this.backend.buildToken) throw new Error(l10n('Jeton NEAR inconnu', 'Unknown NEAR token'));
     const to = params.to.trim();

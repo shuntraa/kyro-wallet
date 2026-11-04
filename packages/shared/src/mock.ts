@@ -1143,6 +1143,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_sign_algo_tx: hwKeyDemo,
     hw_algo_broadcast: hwKeyDemo,
     hw_near_build_tx: hwKeyDemo,
+    hw_near_build_token_tx: hwKeyDemo,
     hw_sign_near_tx: hwKeyDemo,
     hw_near_broadcast: hwKeyDemo,
     hw_near_tx_status: hwKeyDemo,

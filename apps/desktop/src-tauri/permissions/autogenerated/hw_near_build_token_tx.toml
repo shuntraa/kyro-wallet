@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-near-build-token-tx"
+description = "Enables the hw_near_build_token_tx command without any pre-configured scope."
+commands.allow = ["hw_near_build_token_tx"]
+
+[[permission]]
+identifier = "deny-hw-near-build-token-tx"
+description = "Denies the hw_near_build_token_tx command without any pre-configured scope."
+commands.deny = ["hw_near_build_token_tx"]

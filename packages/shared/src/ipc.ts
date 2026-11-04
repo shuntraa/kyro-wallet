@@ -2651,6 +2651,7 @@ export interface Commands {
   hw_algo_build_tx: { args: { accountId: string; to: string; amount: string; note?: string }; ret: AlgoBuilt };
   hw_sign_algo_tx: { args: { id: string; accountId: string; blob: string }; ret: { blob: string; txid: string; summary: AlgoTxSummary; context: AlgoContext } };
   hw_algo_broadcast: { args: { accountId: string; blob: string }; ret: string };
+  hw_near_build_token_tx: { args: { accountId: string; contract: string; to: string; amount: string }; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   hw_near_build_tx: { args: { accountId: string; to: string; amount: string }; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   hw_sign_near_tx: { args: { id: string; accountId: string; tx: string }; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
   hw_near_broadcast: { args: { accountId: string; signed: string }; ret: NearTxOutcome };

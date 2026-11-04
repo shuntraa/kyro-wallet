@@ -307,6 +307,7 @@
     "allow-hw-sign-algo-tx",
     "allow-hw-algo-broadcast",
     "allow-hw-near-build-tx",
+    "allow-hw-near-build-token-tx",
     "allow-hw-sign-near-tx",
     "allow-hw-near-broadcast",
     "allow-hw-near-tx-status",

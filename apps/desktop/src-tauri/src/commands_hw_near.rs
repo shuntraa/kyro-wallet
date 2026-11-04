@@ -9,8 +9,8 @@ use crate::commands::confirm_native;
 use crate::commands_hw::device_line;
 use crate::commands_hw_keys::{check_device, device_sign, key_array, stored_key};
 use crate::commands_near::{
-    broadcast_checked, build, ctx, describe_near, describe_near_extra, prepare_sign, NearBuilt,
-    NearSigned,
+    broadcast_checked, build, build_token, ctx, describe_near, describe_near_extra, prepare_sign,
+    NearBuilt, NearSigned,
 };
 use crate::error::AppResult;
 use crate::near_backend::{self, NearTxOutcome};
@@ -29,6 +29,20 @@ pub async fn hw_near_build_tx(
     build(&ctx(&state), &key.address, &key_array(&key)?, &to, &amount).await
 }
 
+/// NEP-141 transfer of a known token: `contract`, `to`, `amount` in token units.
+#[tauri::command]
+pub async fn hw_near_build_token_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    contract: String,
+    to: String,
+    amount: String,
+) -> AppResult<NearBuilt> {
+    let (_, key) = stored_key(&state, &account_id, CHAIN)?;
+    let pk = key_array(&key)?;
+    build_token(&ctx(&state), &key.address, &pk, &contract, &to, &amount).await
+}
+
 #[tauri::command]
 pub async fn hw_sign_near_tx(
     app: AppHandle,
@@ -43,12 +57,20 @@ pub async fn hw_sign_near_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &key.address, &pk, &tx).await?;
     let lang = crate::i18n::current();
-    confirm_native(
-        &app,
+    let title = if summary.token.is_some() {
+        lang.pick(
+            "Confirmer l'envoi de jetons (hardware wallet)",
+            "Confirm the token send (hardware wallet)",
+        )
+    } else {
         lang.pick(
             "Confirmer l'envoi NEAR (hardware wallet)",
             "Confirm the NEAR send (hardware wallet)",
-        ),
+        )
+    };
+    confirm_native(
+        &app,
+        title,
         describe_near(lang, &summary, &context, state.network) + &device_line(lang, &info),
     )
     .await?;
