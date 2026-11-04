@@ -6,7 +6,7 @@ Kyro is a **non-custodial** wallet: nobody but you has your keys, not even the d
 
 ## Reporting a vulnerability
 
-Do not publish the vulnerability in a public issue. Write to the address given in the project's GitHub profile (section *Security → Report a vulnerability*), with a proof of concept if possible. Acknowledgement within 72 h; fix and coordinated disclosure within 90 days at most.
+Do not publish the vulnerability in a public issue. Write to security@kyrowallet.com, or use GitHub's private reporting (section *Security → Report a vulnerability*), with a proof of concept if possible. Acknowledgement within 72 h; fix and coordinated disclosure within 90 days at most.
 
 ## Security architecture
 
