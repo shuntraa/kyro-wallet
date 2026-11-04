@@ -157,6 +157,8 @@ export interface Settings {
   closeToTray: boolean;
   /** Going to the tray locks the wallet. */
   lockOnHide: boolean;
+  /** Lock as the machine goes to sleep (Windows; elsewhere the lock happens on wake). Default `true`. */
+  lockBeforeSleep?: boolean;
   /** Start with Windows, hidden in the tray. */
   startMinimized: boolean;
 }

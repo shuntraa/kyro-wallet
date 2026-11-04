@@ -100,7 +100,7 @@ monero-daemon-rpc = { version = "=0.2.0" }
 [target.'cfg(windows)'.dependencies]
 # Microsoft Store (MSIX) detection: GetCurrentPackageFullName (updater.rs). Already in the tree.
 # Tray (tray.rs): the user's Run entry and the event a second start signals. Same version.
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_Packaging_Appx", "Win32_System_Registry", "Win32_System_Threading"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_Packaging_Appx", "Win32_System_Power", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 # Tray icon (tray.rs), Windows only: on Linux this feature would need libappindicator at run time.
 tauri = { version = "=2.12.4", features = ["tray-icon"] }
 

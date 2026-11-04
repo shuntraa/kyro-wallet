@@ -64,6 +64,7 @@ mod near_backend;
 mod net;
 mod network;
 mod phrase_window;
+mod power;
 mod received_tokens;
 mod server_approval;
 mod servers;
@@ -147,6 +148,7 @@ pub fn run() {
             updater::on_start(app.handle());
             let tray = tray::setup(app);
             spawn_auto_lock(app.handle().clone());
+            power::listen(app.handle());
             // The main window is created here, after the state exists (`"create": false` in
             // tauri.conf.json), so that `window.open` can be refused: a new window would load
             // any URL, outside the navigation guard and outside Tor.

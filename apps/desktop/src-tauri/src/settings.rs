@@ -146,6 +146,8 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// Going to the tray ends the session. On by default: a close has always locked.
     pub lock_on_hide: bool,
+    /// Lock as the machine goes to sleep (`power.rs`, Windows). On by default.
+    pub lock_before_sleep: bool,
     /// Start with Windows, hidden in the tray (the user's `Run` entry). Off by default.
     pub start_minimized: bool,
     /// The vault's account lists (see `accounts.rs`).
@@ -199,6 +201,7 @@ impl Default for Settings {
             weekly_count: true,
             close_to_tray: false,
             lock_on_hide: true,
+            lock_before_sleep: true,
             start_minimized: false,
             accounts: VaultAccounts::default(),
             wallet_accounts: BTreeMap::new(),

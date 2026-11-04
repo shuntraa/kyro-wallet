@@ -75,6 +75,8 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.useTor': 'Use Tor',
   'settings.closeToTray': 'Keep Kyro in the tray',
   'settings.closeToTrayDesc': 'Closing the window keeps Kyro running near the clock. Quit from its icon.',
+  'settings.lockBeforeSleep': 'Lock before sleep',
+  'settings.lockBeforeSleepDesc': 'Kyro locks as your computer goes to sleep.',
   'settings.lockOnHide': 'Lock when hidden',
   'settings.lockOnHideDesc': 'Kyro locks when its window goes to the tray.',
   'settings.startMinimized': 'Start with Windows, minimized',

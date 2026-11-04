@@ -79,6 +79,8 @@ export const settings = {
   'settings.useTor': 'Passer par Tor',
   'settings.closeToTray': 'Garder Kyro dans la zone de notification',
   'settings.closeToTrayDesc': 'Fermer la fenêtre garde Kyro ouvert près de l’horloge. Quitter se fait depuis son icône.',
+  'settings.lockBeforeSleep': 'Verrouiller avant la veille',
+  'settings.lockBeforeSleepDesc': 'Kyro se verrouille quand ton ordinateur se met en veille.',
   'settings.lockOnHide': 'Verrouiller en masquant',
   'settings.lockOnHideDesc': 'Kyro se verrouille quand sa fenêtre passe dans la zone de notification.',
   'settings.startMinimized': 'Démarrer avec Windows, réduit',

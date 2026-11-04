@@ -793,6 +793,7 @@ type Settings = { currency: Currency /* FIAT_CURRENCIES (26 CoinGecko currencies
                   autoUpdate: boolean;     // default: true; false = no check, a pending update is removed
                   closeToTray: boolean;    // default: false; Windows: closing the window keeps Kyro in the tray (`tray.rs`)
                   lockOnHide: boolean;     // default: true; going to the tray locks the wallet
+                  lockBeforeSleep?: boolean;     // default: true; Windows only, lock on the system's suspend event
                   startMinimized: boolean; // default: false; Windows: Rust writes or removes the user's `Run` entry in `settings_set`
                   weeklyCount: boolean };  // default: true; false = the anonymous weekly count (weekly_count.rs, docs/NETWORK.md) is never sent
 // `language`: language of the interface AND of the native windows (signature, warnings, phrase,

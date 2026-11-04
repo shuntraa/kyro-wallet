@@ -69,6 +69,7 @@ const DEFAULT_SETTINGS: Settings = {
   weeklyCount: true,
   closeToTray: false,
   lockOnHide: true,
+  lockBeforeSleep: true,
   startMinimized: false,
 };
 

@@ -184,6 +184,11 @@ function Security({ save }: { save: Save }) {
         <SettingRow title={t('settings.clipboardGuard')} desc={t('settings.clipboardGuardDesc')}>
           <Switch label={t('settings.clipboardGuard')} checked={settings.clipboardGuard} onCheckedChange={(v) => void save({ clipboardGuard: v })} />
         </SettingRow>
+        {config?.tray && (
+          <SettingRow title={t('settings.lockBeforeSleep')} desc={t('settings.lockBeforeSleepDesc')}>
+            <Switch label={t('settings.lockBeforeSleep')} checked={settings.lockBeforeSleep !== false} onCheckedChange={(v) => void save({ lockBeforeSleep: v })} />
+          </SettingRow>
+        )}
         <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesSecurityDesc')} last>
           <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
         </SettingRow>
