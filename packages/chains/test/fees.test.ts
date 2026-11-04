@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setLang } from '@kyro/shared';
 import {
+  EVM_CUSTOM_MAX_FEE,
+  evmCustomFeeCeiling,
   evmFeeOptionsFromHistory,
   feeCost,
+  feeRateBounds,
   formatUnits,
   gweiToWei,
   medianBig,
   parseUnits,
+  SOL_CUSTOM_MAX_MICRO,
   tryParseUnits,
+  typicalSize,
   validateBtcFeeRate,
   validateEvmCustomFee,
   validateSolPriorityFee,
@@ -81,10 +86,33 @@ describe('validateEvmCustomFee', () => {
     expect(validateEvmCustomFee({ maxFeeGwei: '0', priorityGwei: '0' }).ok).toBe(false);
     expect(validateEvmCustomFee({ maxFeeGwei: 'x', priorityGwei: '1' }).ok).toBe(false);
   });
-  it('warns below the network base fee', () => {
+  it('refuses a max fee below the network base fee', () => {
     const v = validateEvmCustomFee({ maxFeeGwei: '3', priorityGwei: '1' }, est);
-    expect(v.ok).toBe(true);
-    expect(v.warnings.join()).toMatch(/minimum du réseau/i);
+    expect(v.ok).toBe(false);
+    expect(v.errors.join()).toMatch(/minimum du réseau/i);
+    expect(validateEvmCustomFee({ maxFeeGwei: '4.2', priorityGwei: '1' }, est).ok).toBe(true);
+  });
+  it('refuses a max fee far above the live Fast level', () => {
+    const ceiling = evmCustomFeeCeiling(est);
+    expect(ceiling).toBe((est.options.fast.params as { maxFeePerGas: bigint }).maxFeePerGas * 20n);
+    expect(validateEvmCustomFee({ maxFeeGwei: weiToGwei(ceiling), priorityGwei: '1' }, est).ok).toBe(true);
+    expect(validateEvmCustomFee({ maxFeeGwei: weiToGwei(ceiling + 1n), priorityGwei: '1' }, est).ok).toBe(false);
+  });
+  it('keeps a usable range on a nearly free chain and an absolute limit everywhere', () => {
+    const l2 = evmFeeOptionsFromHistory(10_000_000n, [[1n, 1n, 1n]], 2);
+    expect(evmCustomFeeCeiling(l2)).toBe(100n * GWEI);
+    const wild = evmFeeOptionsFromHistory(1_000_000n * GWEI, [[GWEI, GWEI, GWEI]], 12);
+    expect(evmCustomFeeCeiling(wild)).toBe(EVM_CUSTOM_MAX_FEE);
+    expect(evmCustomFeeCeiling()).toBe(EVM_CUSTOM_MAX_FEE);
+    expect(validateEvmCustomFee({ maxFeeGwei: '10001', priorityGwei: '1' }).ok).toBe(false);
+  });
+});
+
+describe('typicalSize', () => {
+  it('prices the levels of chains with a fee market, and only those', () => {
+    expect(feeCost({ family: 'btc', satPerVb: 10 }, typicalSize('btc', false)!)).toBe(1410n);
+    expect(typicalSize('evm', true)).toEqual({ family: 'evm', gasLimit: 65_000n });
+    for (const fixed of ['xrp', 'ada', 'zec', 'xmr', 'kas']) expect(typicalSize(fixed, false)).toBeNull();
   });
 });
 
@@ -98,10 +126,20 @@ describe('validateBtcFeeRate', () => {
     expect(validateBtcFeeRate('5000').ok).toBe(false);
     expect(validateBtcFeeRate('abc').ok).toBe(false);
   });
-  it('warns under the mempool minimum', () => {
+  it('refuses a rate under the mempool minimum', () => {
     const v = validateBtcFeeRate('1', est);
-    expect(v.ok).toBe(true);
-    expect(v.warnings.length).toBe(1);
+    expect(v.ok).toBe(false);
+    expect(v.errors.length).toBe(1);
+    expect(validateBtcFeeRate('2', est).ok).toBe(true);
+  });
+  it('applies the bounds of each coin', () => {
+    const doge = feeRateBounds('doge');
+    expect(validateBtcFeeRate('999', undefined, doge).ok).toBe(false);
+    expect(validateBtcFeeRate('100000', undefined, doge).ok).toBe(true);
+    expect(validateBtcFeeRate('100001', undefined, doge).ok).toBe(false);
+    expect(validateBtcFeeRate('2000').ok).toBe(true);
+    expect(validateBtcFeeRate('2001').ok).toBe(false);
+    expect(validateBtcFeeRate('101', undefined, feeRateBounds('dash')).ok).toBe(false);
   });
 });
 
@@ -109,6 +147,8 @@ describe('validateSolPriorityFee', () => {
   it('requires an integer', () => {
     expect(validateSolPriorityFee('12.5').ok).toBe(false);
     expect(validateSolPriorityFee('5000').params).toEqual({ family: 'sol', microLamports: 5000n });
+    expect(validateSolPriorityFee(SOL_CUSTOM_MAX_MICRO.toString()).ok).toBe(true);
+    expect(validateSolPriorityFee((SOL_CUSTOM_MAX_MICRO + 1n).toString()).ok).toBe(false);
   });
 });
 

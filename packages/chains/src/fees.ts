@@ -38,6 +38,42 @@ export interface FeeValidation {
   warnings: string[];
 }
 
+/** Absolute limit of a custom EVM max fee per gas; below it, {@link evmCustomFeeCeiling} is the real one. */
+export const EVM_CUSTOM_MAX_FEE = 10_000n * GWEI;
+/** A custom max fee may reach this many times the live « Fast » level… */
+const EVM_CUSTOM_FAST_MULTIPLE = 20n;
+/** …and this much at least, so a nearly free L2 keeps a usable range. */
+const EVM_CUSTOM_FLOOR_OF_CEILING = 100n * GWEI;
+/** Solana priority fee: above this, a custom value is a typing mistake (0,2 SOL at 200 000 CU). */
+export const SOL_CUSTOM_MAX_MICRO = 1_000_000_000n;
+
+/** Highest custom max fee per gas accepted right now. */
+export function evmCustomFeeCeiling(estimates?: Pick<FeeEstimates, 'options'>): bigint {
+  const fast = estimates?.options.fast.params;
+  if (fast?.family !== 'evm') return EVM_CUSTOM_MAX_FEE;
+  const scaled = fast.maxFeePerGas * EVM_CUSTOM_FAST_MULTIPLE;
+  const ceiling = scaled > EVM_CUSTOM_FLOOR_OF_CEILING ? scaled : EVM_CUSTOM_FLOOR_OF_CEILING;
+  return ceiling < EVM_CUSTOM_MAX_FEE ? ceiling : EVM_CUSTOM_MAX_FEE;
+}
+
+/** Limits of a custom rate per coin (smallest unit per vbyte or byte; Rust's own bounds for Dogecoin). */
+export function feeRateBounds(family: string | undefined): { floor?: number; ceiling?: number; high?: number; unit?: string } {
+  if (family === 'ltc') return { unit: 'litoshi/vB' };
+  if (family === 'doge') return { unit: 'koinus/octet', floor: 1_000, ceiling: 100_000, high: 10_000 };
+  if (family === 'bch') return { unit: 'sat/octet', floor: 1, ceiling: 100, high: 10 };
+  if (family === 'dash') return { unit: 'duff/octet', floor: 1, ceiling: 100, high: 10 };
+  return {};
+}
+
+/** Usual size of a simple send, to price the fee levels before a transaction is built. */
+export function typicalSize(family: string, token: boolean): SizeHint | null {
+  if (family === 'evm') return { family: 'evm', gasLimit: token ? 65_000n : 21_000n };
+  if (family === 'btc' || family === 'ltc') return { family: 'btc', vsize: 141 };
+  if (family === 'doge' || family === 'bch' || family === 'dash') return { family: 'btc', vsize: 226 };
+  if (family === 'sol') return { family: 'sol', computeUnits: token ? 40_000 : 600, signatures: 1 };
+  return null;
+}
+
 const result = (errors: string[], warnings: string[]): FeeValidation => ({ ok: errors.length === 0, errors, warnings });
 
 export interface EvmCustomFeeInput {
@@ -63,10 +99,11 @@ export function validateEvmCustomFee(input: EvmCustomFeeInput, estimates?: Pick<
   }
   if (maxFee !== null && maxFee <= 0n) errors.push(l10n('Les frais max. doivent être supérieurs à 0.', 'The max fee must be greater than 0.'));
   if (maxFee !== null && tip !== null && tip > maxFee) errors.push(l10n('Le pourboire ne peut pas dépasser les frais max.', 'The tip cannot exceed the max fee.'));
-  if (maxFee !== null && maxFee > 10_000n * GWEI) warnings.push(l10n('Frais très élevés : vérifie le montant en gwei.', 'Very high fees: check the amount in gwei.'));
+  const ceiling = evmCustomFeeCeiling(estimates);
+  if (maxFee !== null && maxFee > ceiling) errors.push(l10n(`Trop élevé : ${trimGwei(ceiling)} gwei au maximum.`, `Too high: ${trimGwei(ceiling)} gwei at most.`));
   if (estimates && maxFee !== null && estimates.minimum.family === 'evm') {
     const baseFee = estimates.minimum.maxFeePerGas;
-    if (maxFee < baseFee) warnings.push(l10n(`Sous le minimum du réseau (${trimGwei(baseFee)} gwei) : la transaction risque de rester bloquée.`, `Below the network minimum (${trimGwei(baseFee)} gwei): the transaction may get stuck.`));
+    if (maxFee < baseFee) errors.push(l10n(`Sous le minimum du réseau (${trimGwei(baseFee)} gwei) : la transaction resterait bloquée.`, `Below the network minimum (${trimGwei(baseFee)} gwei): the transaction would get stuck.`));
   }
   if (tip !== null && tip === 0n) warnings.push(l10n('Sans pourboire, les validateurs peuvent ignorer ta transaction.', 'Without a tip, validators may ignore your transaction.'));
   const out = result(errors, warnings);
@@ -96,7 +133,7 @@ export function validateBtcFeeRate(
   if (rate > ceiling) errors.push(l10n(`Taux absurde (> ${ceiling.toLocaleString(intlLocale())} ${unit}).`, `Absurd rate (> ${ceiling.toLocaleString(intlLocale())} ${unit}).`));
   else if (rate > (opts.high ?? 500)) warnings.push(l10n('Taux très élevé : vérifie avant de signer.', 'Very high rate: check before signing.'));
   if (estimates?.minimum.family === 'btc' && rate < estimates.minimum.satPerVb) {
-    warnings.push(l10n(`Sous le minimum actuel (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}) : la transaction risque de ne jamais confirmer.`, `Below the current minimum (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}): the transaction may never confirm.`));
+    errors.push(l10n(`Sous le minimum actuel (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}) : la transaction ne partirait pas.`, `Below the current minimum (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}): the transaction would not go through.`));
   }
   const out = result(errors, warnings);
   return out.ok ? { ...out, params: { family: 'btc', satPerVb: rate } } : out;
@@ -107,13 +144,14 @@ export function validateSolPriorityFee(input: string): FeeValidation & { params?
   const s = input.trim();
   if (!/^\d+$/.test(s)) return result([l10n('Valeur invalide : entier en micro-lamports.', 'Invalid value: integer in micro-lamports.')], []);
   const v = BigInt(s);
+  if (v > SOL_CUSTOM_MAX_MICRO) return result([l10n(`Trop élevé : ${SOL_CUSTOM_MAX_MICRO.toLocaleString(intlLocale())} µL/CU au maximum.`, `Too high: ${SOL_CUSTOM_MAX_MICRO.toLocaleString(intlLocale())} µL/CU at most.`)], []);
   const warnings: string[] = [];
   if (v > 50_000_000n) warnings.push(l10n('Priority fee très élevée.', 'Very high priority fee.'));
   if (v === 0n) warnings.push(l10n('Sans priority fee, la transaction peut être plus lente en période chargée.', 'Without a priority fee, the transaction may be slower when the network is busy.'));
   return { ...result([], warnings), params: { family: 'sol', microLamports: v } };
 }
 
-function trimGwei(wei: bigint): string {
+export function trimGwei(wei: bigint): string {
   const g = Number(weiToGwei(wei));
   return g >= 10 ? g.toFixed(0) : g >= 1 ? g.toFixed(1) : g.toPrecision(2);
 }

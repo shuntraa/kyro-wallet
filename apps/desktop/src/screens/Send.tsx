@@ -3,7 +3,7 @@
 // recap decoded by the Rust core, password.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, kaspaAddressProblem, sameTonAccount, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
+import { call, intlLocale, kaspaAddressProblem, sameTonAccount, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
 import {
   assetsFor,
   checkSolSummary,
@@ -36,6 +36,11 @@ import {
   type AnyAdapter,
   type AnyUnsigned,
   type AssetDef,
+  evmCustomFeeCeiling,
+  feeRateBounds,
+  SOL_CUSTOM_MAX_MICRO,
+  trimGwei,
+  typicalSize,
   type EvmAdapter,
   type FeeChoice,
   type FeeEstimates,
@@ -274,6 +279,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
   const decimals = asset?.decimals ?? 18;
+  const rateBounds = useMemo(() => feeRateBounds(asset?.family), [asset?.family]);
   const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge' || asset?.family === 'bch' || asset?.family === 'dash';
   const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : asset?.family === 'bch' ? 'sat/octet' : asset?.family === 'dash' ? 'duff/octet' : 'sat/vB';
   const isTron = asset?.family === 'tron';
@@ -442,12 +448,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const custom = useMemo(() => {
     if (choice !== 'custom' || !asset) return null;
     if (asset.family === 'evm') return validateEvmCustomFee(customEvm, fees.data);
-    if (asset.family === 'btc') return validateBtcFeeRate(customBtc, fees.data);
-    if (asset.family === 'ltc') return validateBtcFeeRate(customBtc, fees.data, { unit: 'litoshi/vB' });
-    if (asset.family === 'doge') return validateBtcFeeRate(customBtc, fees.data, { unit: 'koinus/octet', floor: 1_000, ceiling: 100_000, high: 10_000 });
-    if (asset.family === 'bch' || asset.family === 'dash') return validateBtcFeeRate(customBtc, fees.data, { unit: rateUnit, floor: 1, ceiling: 100, high: 10 });
+    if (utxoLike) return validateBtcFeeRate(customBtc, fees.data, rateBounds);
     return validateSolPriorityFee(customSol);
-  }, [choice, asset, customEvm, customBtc, customSol, fees.data, rateUnit]);
+  }, [choice, asset, customEvm, customBtc, customSol, fees.data, rateBounds, utxoLike]);
+  /** The accepted range of the custom value, written next to the fields. */
+  const customRange = useMemo(() => {
+    const n = (v: number) => v.toLocaleString(intlLocale());
+    if (asset?.family === 'evm') {
+      const min = fees.data?.minimum.family === 'evm' ? fees.data.minimum.maxFeePerGas : 0n;
+      return t('send.feeRange', { min: trimGwei(min), max: trimGwei(evmCustomFeeCeiling(fees.data)), unit: 'gwei' });
+    }
+    if (utxoLike) {
+      const min = fees.data?.minimum.family === 'btc' ? fees.data.minimum.satPerVb : 0;
+      return t('send.feeRange', { min: n(Math.max(min, rateBounds.floor ?? 1)), max: n(rateBounds.ceiling ?? 2000), unit: rateUnit });
+    }
+    return t('send.feeRange', { min: '0', max: SOL_CUSTOM_MAX_MICRO.toLocaleString(intlLocale()), unit: 'µL/CU' });
+  }, [asset, fees.data, rateBounds, rateUnit, utxoLike, t]);
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
   const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null, isCosmos ? [memo.trim(), cosmosBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
@@ -511,7 +527,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (max && built) setAmountStr(fiatMode && price ? sanitizeDecimalInput(String(unitsToNumber(built.unsigned.amount, decimals) * price), 2) : toInputDecimal(built.unsigned.amount, decimals));
   }, [max, built]);
 
-  const size = built?.unsigned.size;
+  // Before a transaction exists the levels are priced for a usual send (shown with ≈).
+  const size = built?.unsigned.size ?? (asset ? typicalSize(asset.family, asset.kind !== 'native') : null);
+  const sizeApprox = !built;
   const optionCost = (p: FeeParams | null | undefined): bigint | null => (p && size ? safeCost(p, size) : null);
   const maxFee = built?.unsigned.maxFee ?? null;
   const sendAmount = built?.unsigned.amount ?? amountBase;
@@ -1075,11 +1093,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 const c = optionCost(opt?.params);
                 const fiat = c !== null && nativeAsset && nativePrice !== null ? fmtFiat(unitsToNumber(c, nativeAsset.decimals) * nativePrice, cur) : c !== null && nativeAsset ? fmtCrypto(c, nativeAsset.decimals, nativeAsset.symbol) : null;
                 return (
-                  <FeeOption key={level} active={choice === level} onClick={() => setChoice(level)} title={`${t(label)}${fiat ? ` · ${fiat}` : ''}`} sub={opt ? fmtEta(opt.etaSecs) : '…'} disabled={!opt} />
+                  <FeeOption key={level} active={choice === level} onClick={() => setChoice(level)} title={`${t(label)}${fiat ? ` · ${sizeApprox ? '≈ ' : ''}${fiat}` : ''}`} sub={opt ? fmtEta(opt.etaSecs) : '…'} disabled={!opt} />
                 );
               })}
-              <FeeOption active={choice === 'custom'} onClick={() => setChoice('custom')} title={t('send.feeCustom')} sub={blockAverage ? t('send.feeSuggested') : t('send.feeYouChoose')} ice disabled={!fees.data} />
             </div>
+            <button type="button" aria-expanded={choice === 'custom'} disabled={!fees.data} onClick={() => setChoice((c) => (c === 'custom' ? 'normal' : 'custom'))} className="flex items-center gap-1 self-start text-[12px] text-mute transition-colors hover:text-text2 disabled:opacity-50">
+              <IconChevronDown size={12} className={cn('transition-transform duration-150', choice === 'custom' && 'rotate-180')} />
+              {t('send.feeAdvanced')}
+            </button>
             {blockAverage && (
               <span className="flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
                 <IconWarn size={13} className="mt-0.5 shrink-0 text-warn" />
@@ -1104,6 +1125,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </span>
               </div>
             )}
+            {choice === 'custom' && <span className="text-[12px] text-faint">{customRange}</span>}
             {custom && custom.errors.map((e) => <span key={e} className="text-[12px] text-down">{e}</span>)}
             {custom && custom.warnings.map((w) => <span key={w} className="text-[12px] text-warn">{w}</span>)}
           </div>
@@ -1460,7 +1482,7 @@ function Step({ n, done, current, label }: { n: number; done: boolean; current: 
   );
 }
 
-function FeeOption({ active, onClick, title, sub, ice, disabled }: { active: boolean; onClick: () => void; title: string; sub: string; ice?: boolean; disabled?: boolean }) {
+function FeeOption({ active, onClick, title, sub, disabled }: { active: boolean; onClick: () => void; title: string; sub: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -1471,7 +1493,7 @@ function FeeOption({ active, onClick, title, sub, ice, disabled }: { active: boo
       className={cn('press flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box border px-3.5 text-left disabled:opacity-50', active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line-2 bg-bg hover:border-line-3 hover:bg-raised/50')}
     >
       <span className="truncate text-[13px] font-medium">{title}</span>
-      <span className={cn('text-[12px]', active && ice ? 'text-ice-text2' : 'text-mute')}>{sub}</span>
+      <span className="text-[12px] text-mute">{sub}</span>
     </button>
   );
 }
