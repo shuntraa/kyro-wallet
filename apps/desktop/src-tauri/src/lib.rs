@@ -77,6 +77,7 @@ mod stellar_backend;
 mod sui_backend;
 mod ton_backend;
 mod tor;
+mod tray;
 mod tron_backend;
 mod updater;
 mod utxo_backend;
@@ -95,6 +96,11 @@ pub fn run() {
     #[cfg(debug_assertions)]
     {
         let _ = dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../.env"));
+    }
+
+    let minimized = tray::started_minimized(std::env::args());
+    if tray::already_running(minimized) {
+        return;
     }
 
     let context = tauri::generate_context!();
@@ -118,7 +124,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
-        .setup(|app| {
+        .setup(move |app| {
             app.manage(phrase_window::PhraseState::default());
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -133,6 +139,7 @@ pub fn run() {
                 st.net.tor.start();
             }
             updater::on_start(app.handle());
+            let tray = tray::setup(app);
             spawn_auto_lock(app.handle().clone());
             // The main window is created here, after the state exists (`"create": false` in
             // tauri.conf.json), so that `window.open` can be refused: a new window would load
@@ -147,19 +154,29 @@ pub fn run() {
                 .ok_or("main window missing from the configuration")?;
             tauri::WebviewWindowBuilder::from_config(app.handle(), &main)?
                 .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Deny)
+                .visible(!minimized || !tray)
                 .build()?;
             Ok(())
         })
         .on_window_event(|window, event| {
             // Only the main window: closing the phrase window must not lock the session.
             if updater::is_quit(window.label(), event) {
-                if let Some(phrase) = window.app_handle().get_webview_window(phrase_window::LABEL) {
-                    let _ = phrase.destroy();
+                let app = window.app_handle();
+                let closing = match event {
+                    tauri::WindowEvent::CloseRequested { .. } => tray::Closing::Requested,
+                    _ => tray::Closing::Destroyed,
+                };
+                match tray::on_close(app, closing) {
+                    tray::CloseAction::Hide { lock } => {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                        }
+                        tray::hide(app, lock);
+                    }
+                    // Closing the main window quits Kyro: apply a staged update now, not at
+                    // `RunEvent::Exit`, which may never come (see `updater::QuitOnce`).
+                    tray::CloseAction::Quit => tray::shutdown(app),
                 }
-                commands::lock_on_exit(window.app_handle());
-                // Closing the main window quits Kyro: apply a staged update now, not at
-                // `RunEvent::Exit`, which may never come (see `updater::QuitOnce`).
-                updater::on_exit(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![

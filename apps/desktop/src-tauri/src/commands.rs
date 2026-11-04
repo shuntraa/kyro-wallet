@@ -1392,6 +1392,10 @@ pub struct ConfigOut {
     has_coingecko_key: bool,
     has_trongrid_key: bool,
     system_language: crate::i18n::Lang,
+    /// Tray and start-with-Windows options are offered (`tray.rs`).
+    tray: bool,
+    /// A Store install cannot use the `Run` entry.
+    autostart: bool,
 }
 
 #[tauri::command]
@@ -1404,6 +1408,8 @@ pub fn config_get(state: State<'_, AppState>) -> ConfigOut {
         has_coingecko_key: env.coingecko.is_some() || s.api_keys.coingecko.is_some(),
         has_trongrid_key: env.trongrid.is_some() || s.api_keys.trongrid.is_some(),
         system_language: crate::i18n::system(),
+        tray: crate::tray::available(),
+        autostart: crate::tray::available() && !crate::updater::is_store_package(),
     }
 }
 

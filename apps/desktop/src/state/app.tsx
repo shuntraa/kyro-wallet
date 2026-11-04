@@ -67,6 +67,9 @@ const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   autoUpdate: true,
   weeklyCount: true,
+  closeToTray: false,
+  lockOnHide: true,
+  startMinimized: false,
 };
 
 interface AppContextValue {

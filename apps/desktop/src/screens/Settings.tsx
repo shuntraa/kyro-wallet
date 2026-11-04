@@ -140,7 +140,7 @@ function SettingRow({ title, desc, children, last }: { title: string; desc: stri
 }
 
 function Security({ save }: { save: Save }) {
-  const { settings } = useApp();
+  const { settings, config } = useApp();
   const { t } = useT();
   // Microsoft Store (MSIX) install: the Store updates Kyro, its own updater is off.
   const [store, setStore] = useState(false);
@@ -184,6 +184,21 @@ function Security({ save }: { save: Save }) {
           <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
         </SettingRow>
       </Panel>
+      {config?.tray && (
+        <Panel>
+          <SettingRow title={t('settings.closeToTray')} desc={t('settings.closeToTrayDesc')}>
+            <Switch label={t('settings.closeToTray')} checked={settings.closeToTray} onCheckedChange={(v) => void save({ closeToTray: v })} />
+          </SettingRow>
+          <SettingRow title={t('settings.lockOnHide')} desc={t('settings.lockOnHideDesc')} last={!config.autostart}>
+            <Switch label={t('settings.lockOnHide')} checked={settings.lockOnHide} onCheckedChange={(v) => void save({ lockOnHide: v })} />
+          </SettingRow>
+          {config.autostart && (
+            <SettingRow title={t('settings.startMinimized')} desc={t('settings.startMinimizedDesc')} last>
+              <Switch label={t('settings.startMinimized')} checked={settings.startMinimized} onCheckedChange={(v) => void save({ startMinimized: v })} />
+            </SettingRow>
+          )}
+        </Panel>
+      )}
       <Panel>
         {store ? (
           <SettingRow title={t('update.title')} desc={t('update.store', { version: __APP_VERSION__ })} last>

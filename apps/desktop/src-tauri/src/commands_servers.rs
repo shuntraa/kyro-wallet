@@ -305,7 +305,11 @@ pub async fn settings_set(
     }
     confirm_endpoints(&app, &endpoints(&new.servers), &old.servers).await?;
     probe_changes(&state.net, &new.servers, &old.servers, new.tor.enabled).await?;
+    if old.start_minimized != new.start_minimized {
+        crate::tray::sync_autostart(&new)?;
+    }
     let saved = state.save_settings(new)?;
+    crate::tray::on_settings_saved(&app, &old, &saved);
     match (old.tor.enabled, saved.tor.enabled) {
         (false, true) => state.net.tor.start(),
         (true, false) => state.net.tor.stop(),

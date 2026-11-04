@@ -48,6 +48,12 @@ export const settings = {
 
   // Privacy
   'settings.useTor': 'Passer par Tor',
+  'settings.closeToTray': 'Garder Kyro dans la zone de notification',
+  'settings.closeToTrayDesc': 'Fermer la fenêtre garde Kyro ouvert près de l’horloge. Quitter se fait depuis son icône.',
+  'settings.lockOnHide': 'Verrouiller en masquant',
+  'settings.lockOnHideDesc': 'Kyro se verrouille quand sa fenêtre passe dans la zone de notification.',
+  'settings.startMinimized': 'Démarrer avec Windows, réduit',
+  'settings.startMinimizedDesc': 'Kyro démarre verrouillé, sans fenêtre, dans la zone de notification.',
   'settings.weeklyCount': 'Compteur anonyme hebdomadaire',
   'settings.weeklyCountDesc': 'Une fois par semaine, Kyro télécharge un petit fichier via Tor pour que le compteur de GitHub estime les portefeuilles actifs. Aucune donnée personnelle.',
   'settings.useTorDesc': 'Activé par défaut. Tout le trafic de Kyro passe par Tor.',

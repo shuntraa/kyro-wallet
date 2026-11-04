@@ -864,6 +864,11 @@ Section Uninstall
 
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
 
+  ; Settings › Start with Windows: the entry must not outlive the app.
+  ${If} $UpdateMode <> 1
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Kyro"
+  ${EndIf}
+
   ; Delete the app directory and its content from disk
   ; Copy main executable
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"

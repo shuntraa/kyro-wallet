@@ -153,6 +153,12 @@ export interface Settings {
   autoUpdate: boolean;
   /** Anonymous weekly count (default `true`): once per ISO week, over Tor only, downloads `ping.txt` of the latest release. */
   weeklyCount: boolean;
+  /** Closing the window keeps Kyro in the tray (Windows). */
+  closeToTray: boolean;
+  /** Going to the tray locks the wallet. */
+  lockOnHide: boolean;
+  /** Start with Windows, hidden in the tray. */
+  startMinimized: boolean;
 }
 
 /** Which fixed notification text Rust shows (`alerts.rs`); `symbol` and the figures are checked there. */
@@ -2075,6 +2081,10 @@ export interface AppConfig {
   hasTrongridKey: boolean;
   /** The computer's language as Rust detects it (`fr` if French, else `en`): what `language: 'auto'` uses. */
   systemLanguage: Lang;
+  /** Windows: the tray options are offered. */
+  tray: boolean;
+  /** Windows outside the Store: Start with Windows is offered. */
+  autostart: boolean;
 }
 
 /** Where the running network comes from (docs/IPC.md §2.10). */

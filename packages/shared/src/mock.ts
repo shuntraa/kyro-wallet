@@ -110,6 +110,9 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   autoUpdate: true,
   weeklyCount: true,
+  closeToTray: false,
+  lockOnHide: true,
+  startMinimized: false,
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -1168,7 +1171,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_cosmos_build_tx: hwKeyDemo,
     hw_sign_cosmos_tx: hwKeyDemo,
     hw_cosmos_broadcast: hwKeyDemo,
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage() }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage(), tray: false, autostart: false }),
     ...networkChoice.handlers,
   };
 

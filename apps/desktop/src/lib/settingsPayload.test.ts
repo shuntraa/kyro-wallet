@@ -9,7 +9,7 @@ const SECRET = 'zx-SECRET-abcdef';
 
 describe('settings_set payload', () => {
   it('drops apiKeysSet and any stray apiKeys; adds only the explicit update', () => {
-    const s = { currency: 'EUR', autoLockSecs: 900, hideBalancesOnStart: false, captureProtection: true, clipboardGuard: true, servers: { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, bitcoincash: {}, dash: {}, tron: {}, xrp: {}, cardano: {} }, apiKeysSet: { zerox: true }, tor: { enabled: true }, language: 'auto', autoUpdate: true, weeklyCount: true } satisfies Settings;
+    const s = { currency: 'EUR', autoLockSecs: 900, hideBalancesOnStart: false, captureProtection: true, clipboardGuard: true, servers: { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, bitcoincash: {}, dash: {}, tron: {}, xrp: {}, cardano: {} }, apiKeysSet: { zerox: true }, tor: { enabled: true }, language: 'auto', autoUpdate: true, weeklyCount: true, closeToTray: false, lockOnHide: true, startMinimized: false } satisfies Settings;
     // An object that (wrongly) carries a key value, e.g. from an older shell: never re-sent.
     const leaky = { ...s, apiKeys: { zerox: SECRET } } as Settings;
     expect(settingsPayload(leaky)).not.toHaveProperty('apiKeys');

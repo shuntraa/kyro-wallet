@@ -2,6 +2,10 @@
 
 ## 1.0.7
 
+- Windows tray icon: Open, Lock and Quit. Settings › Security can keep Kyro in the tray when you
+  close the window, and start it with Windows, minimized. Both are off by default. Going to the
+  tray locks the wallet unless you change it, and quitting from the tray still applies a staged
+  update.
 - Gains and losses: average cost and unrealized gain per coin and in total, on the Portfolio and
   on each asset page, computed on your device. Where a price or an origin is unknown Kyro shows
   « — » or says the figure is partial.

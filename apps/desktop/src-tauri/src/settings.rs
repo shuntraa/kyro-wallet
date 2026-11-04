@@ -136,6 +136,12 @@ pub struct Settings {
     /// Anonymous weekly count (`weekly_count.rs`): ON by default; once per ISO week, over Tor,
     /// downloads `ping.txt` from the latest release. Off = never.
     pub weekly_count: bool,
+    /// Closing the window keeps Kyro in the tray (`tray.rs`, Windows). Off by default.
+    pub close_to_tray: bool,
+    /// Going to the tray ends the session. On by default: a close has always locked.
+    pub lock_on_hide: bool,
+    /// Start with Windows, hidden in the tray (the user's `Run` entry). Off by default.
+    pub start_minimized: bool,
     /// The vault's account lists (see `accounts.rs`).
     pub accounts: VaultAccounts,
     /// Account lists of the added wallets (`wallets.rs`), by wallet id.
@@ -185,6 +191,9 @@ impl Default for Settings {
             language: crate::i18n::LanguagePref::Auto,
             auto_update: true,
             weekly_count: true,
+            close_to_tray: false,
+            lock_on_hide: true,
+            start_minimized: false,
             accounts: VaultAccounts::default(),
             wallet_accounts: BTreeMap::new(),
         }

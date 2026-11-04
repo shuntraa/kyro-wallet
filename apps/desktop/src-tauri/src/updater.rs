@@ -669,8 +669,21 @@ pub fn on_exit(app: &tauri::AppHandle) {
     let Some(how) = detect_install() else {
         return;
     };
-    if let Step::Apply { staged, .. } = pending(&store, &current, enabled, &key) {
-        if let Err(e) = install(&how, &store.package_path(&staged.file), true) {
+    apply_staged(&store, &current, enabled, &key, |path| {
+        install(&how, path, true)
+    });
+}
+
+/// The quit's part of the update: a verified staged package goes to `install`.
+fn apply_staged(
+    store: &dyn Store,
+    current: &Version,
+    enabled: bool,
+    key: &str,
+    install: impl FnOnce(&Path) -> Result<(), String>,
+) {
+    if let Step::Apply { staged, .. } = pending(store, current, enabled, key) {
+        if let Err(e) = install(&store.package_path(&staged.file)) {
             log(format!("installing {}: {e}", staged.version));
         }
     }
@@ -1023,6 +1036,42 @@ mod tests {
         assert_eq!(store.floor(), 1_793_000_000);
         assert_eq!(pending(&store, &v("0.2.0"), true, &pk), Step::Idle);
         assert!(stage(&store, &candidate(&key, data), data, &pk).is_err());
+    }
+
+    #[test]
+    fn a_quit_installs_the_staged_package_and_only_if_updates_are_on() {
+        let key = TestKey::new();
+        let pk = key.pubkey();
+        let data = b"installer";
+        let store = MemStore::default();
+        let installed = RefCell::new(Vec::new());
+        let quit = |enabled: bool| {
+            apply_staged(&store, &v("0.1.0"), enabled, &pk, |p| {
+                installed.borrow_mut().push(p.to_path_buf());
+                Ok(())
+            });
+        };
+        quit(true);
+        assert!(installed.borrow().is_empty(), "nothing staged");
+        stage(&store, &candidate(&key, data), data, &pk).unwrap();
+        quit(true);
+        assert_eq!(
+            *installed.borrow(),
+            [PathBuf::from("Kyro_0.2.0_x64-setup.exe")]
+        );
+
+        let off = MemStore::default();
+        stage(&off, &candidate(&key, data), data, &pk).unwrap();
+        apply_staged(&off, &v("0.1.0"), false, &pk, |_| {
+            panic!("updates are off");
+        });
+    }
+
+    #[test]
+    fn only_the_first_quit_signal_counts() {
+        let once = QuitOnce::default();
+        assert!(once.first());
+        assert!(!once.first());
     }
 
     #[test]
