@@ -86,12 +86,17 @@ export const DONE = [
   ['Signed automatic updates', 'Downloaded over Tor, verified against a pinned public key, applied at the next start.'],
   ['Swaps across chains', 'Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.'],
   ['Earn', '16 options: Lido, Aave v3, and staking on Solana, Cardano, TRON, NEAR, Sui and Aptos.'],
-  ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.'],
+  ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, token sends on Solana, TRON, TON, Stellar, Sui, Aptos, Algorand and NEAR.'],
+  ['Staking from hardware wallets', 'Solana and Cardano on Ledger and Trezor, NEAR on Ledger.'],
+  ['Several wallets', 'More than one recovery phrase on a device, each with its own password, accounts and history.'],
+  ['Watch addresses', 'Follow any public address or xpub with no key.'],
+  ['Alerts', 'Price levels and funds received, as system notifications computed on your device.'],
+  ['Simulation before signing', 'On swaps and Earn calls: what you send and receive, what you approve, and calls that would fail.'],
+  ['Fee choice, speed up and cancel', 'Slow, Normal or Fast on Send, and pending Bitcoin, Litecoin or EVM sends can be sped up or cancelled.'],
   ['One-click Windows installer', 'A single branded window since 1.0.1, and one-line install on every system.']
 ];
 export const NEXT = [
-  ['More staking', 'Polkadot, Sui and Aptos.'],
-  ['Token sends on more chains', 'From hardware accounts, beyond EVM, Solana and TRON.'],
+  ['Polkadot staking', 'The next Earn option.'],
   ['Code signing', 'So Windows and macOS stop warning on first launch. See the <a href="/code-signing-policy/">code signing policy</a>.'],
   ['winget', 'Install and update with the Windows package manager.'],
   ['More Ledger chains', 'Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.'],

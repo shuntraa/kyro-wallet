@@ -2,8 +2,8 @@
 // Guides and glossary of kyrowallet.com. Same rule as the rest of the site: only what the repo backs.
 
 import { SITE, REPO, DL, FILES, html, a, pageHero, ctaPanel, installBlock } from './layout.mjs';
-import { confirmCard, moneroCard, phraseCard, privateCard, seesCards, term, vaultCard } from './components.mjs';
-import { head, sec, ul, nextLinks, strip } from './kit.mjs';
+import { confirmCard, moneroCard, phraseCard, seesCards, term, vaultCard } from './components.mjs';
+import { sec, ul, nextLinks, strip } from './kit.mjs';
 import { webPage, APP_ID } from './pages.mjs';
 
 const PUBLISHED = '2026-11-04';
@@ -410,7 +410,7 @@ const GUIDES = () => [
       <h2>Limits</h2>
       ${ul([
         'On NEAR, TON and Cardano the Ledger account differs from the software account for the same phrase.',
-        'Token sends work on EVM chains, Solana and TRON. Elsewhere, native coins only.',
+        'Token sends work on EVM chains, Solana, TRON, TON, Stellar, Sui, Aptos, Algorand and NEAR. Elsewhere, native coins only.',
         'Earn covers Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.',
         'Not available on Ledger: Monero, Polkadot, Kaspa and Zcash.'
       ], 'checks minus')}
@@ -457,8 +457,8 @@ const GUIDES = () => [
       ${ul([
         'Bitcoin, all EVM networks, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar and Cardano.',
         'Zcash transparent addresses, on Trezor only.',
-        'Token sends on EVM chains and Solana.',
-        'Earn with Lido and Aave.'
+        'Token sends on EVM chains, Solana and Stellar (USDC).',
+        'Earn with Lido and Aave, and staking on Solana and Cardano.'
       ])}
       ${ul([
         'XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON and NEAR: Ledger only.',

@@ -15,7 +15,7 @@ function assemble({ path, name, crumb, parent, title, description, hero, body, f
   return { path, title, description, body: pageHero({ trail, ...hero }) + body, scripts, ld };
 }
 
-function tor(chains) {
+function tor() {
   const faqs = [
     ['Do I need to install Tor or Tor Browser?', 'No. Kyro embeds its own Tor client, Arti, from The Tor Project. It starts in the background when the app opens.'],
     ['Can I turn Tor off?', 'Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address.'],
@@ -344,7 +344,7 @@ function hardware(chains) {
     ['Which Ledger and Trezor models work with Kyro?', 'Ledger devices with the current apps, and Trezor including the Trezor Safe 7. Cardano does not work on the Trezor One.'],
     ['Can I use Kyro with a hardware wallet only, without a recovery phrase in the app?', 'Yes. On the welcome screen choose “Use a Ledger / Trezor”. Kyro stores only public keys, and there is no vault or password to set.'],
     ['Can I stake from a Ledger or Trezor?', 'Earn works with Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.'],
-    ['Can I send tokens from a hardware wallet?', 'Yes on EVM chains and Solana (SPL), and on TRON (TRC-20) with a Ledger. On other chains, hardware accounts send the native coin for now.'],
+    ['Can I send tokens from a hardware wallet?', 'Yes on EVM chains and Solana (SPL). On a Ledger also TRON (TRC-20), TON (USD₮), Sui (USDC), Aptos, Algorand and NEAR (USDC, USDt). Stellar USDC works on Ledger and Trezor. On other chains, hardware accounts send the native coin.'],
     ['Why is my Ledger NEAR or TON address different?', 'The Ledger uses a different derivation path, so the same phrase gives a different account on NEAR, TON and Cardano. Kyro labels hardware accounts as such.'],
     ['Does Kyro check that my device is genuine?', 'No. Run the Genuine check in Ledger’s app or the authenticity check in Trezor Suite. Kyro cannot detect a malicious device that signs what it displays.']
   ];
@@ -400,7 +400,7 @@ function hardware(chains) {
         ${cards([
           ['Testing status', 'Kyro has run on real Ledger and Trezor devices. On a Ledger Nano X, addresses were checked on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, with test signatures on Bitcoin, Ethereum and Solana. Chains without their app installed were not checked on a device. Start with a small amount.', 'ic-eye'],
           ['Blind signing', 'When the device cannot decode a transaction, its screen shows only raw data and it protects your keys, not your consent. Kyro flags this with a hardened confirmation. Keep blind signing off until you need it.', 'ic-shield'],
-          ['Earn', 'Lido and Aave only. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.', 'ic-stake'],
+          ['Earn', 'Lido and Aave. Staking works from Ledger and Trezor on Solana and Cardano, and from Ledger on NEAR; TRON, Sui and Aptos need a recovery-phrase account.', 'ic-stake'],
           ['Token sends', 'EVM chains, Solana SPL, and TRC-20 on Ledger. Native coins elsewhere.', 'ic-send'],
           ['Different accounts', 'On NEAR, TON and Cardano, a Ledger gives a different account than the software wallet for the same phrase.', 'ic-accounts'],
           ['Public keys on disk', 'Hardware account files hold xpubs unencrypted: a privacy matter, not a funds one. Always verify a receive address on the device.', 'ic-lock']
@@ -606,7 +606,7 @@ function roadmap() {
     name: 'Kyro roadmap',
     crumb: 'Roadmap',
     title: 'Roadmap: what is done and what comes next | Kyro Wallet',
-    description: 'What Kyro has shipped and what comes next: staking on Polkadot, Sui and Aptos, token sends on more chains, winget and code signing. No dates we cannot keep.',
+    description: 'What Kyro has shipped and what comes next: Polkadot staking next, then winget and code signing. No dates we cannot keep.',
     hero: {
       eyebrow: 'Roadmap',
       h1: 'Where Kyro <em>is going</em>',
@@ -819,7 +819,7 @@ export const LLMS_NAMES = {
 };
 
 export const morePages = (chains, changelogMd) => [
-  tor(chains),
+  tor(),
   monero(chains),
   swap(chains),
   earn(),

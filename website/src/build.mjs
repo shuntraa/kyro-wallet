@@ -185,11 +185,12 @@ Key facts:
 - Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
 - Blockchains (${chains.length}): ${P.listNames(chains.map((c) => c.name))}. 220+ tokens.
 - Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON), NEAR, SUI (Sui) and APT (Aptos); ETH liquid staking with Lido; lending on Aave v3. 16 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.
-- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}. From a hardware account, Earn covers Lido and Aave only.
+- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}. From a hardware account, Earn covers Lido, Aave, and staking on Solana and Cardano (Ledger and Trezor) and NEAR (Ledger).
+- Also: several wallets on one device, watch addresses with no key, local price and funds-received alerts, simulation before signing, fee speeds, speed up and cancel.
 - Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
 - Security status: internal security review done; no external audit published yet. Installers are not code-signed yet, so Windows and macOS warn on first launch.
 - Downloads: only from GitHub Releases (${REPO}/releases). No mobile app.
-- Vulnerability reports: privately via GitHub security advisories (${REPO}/security).
+- Vulnerability reports: privately to security@kyrowallet.com or via GitHub security advisories (${REPO}/security).
 
 ## Pages
 

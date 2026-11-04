@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Content of every page on kyrowallet.com.
 
-import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
+import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
 import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT, routeOf, NO_SWAP, EARN_ON } from './kit.mjs';
 import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon, term, circuits, phraseCard, privateCard, seesCards, moneroCard, roadList } from './components.mjs';
 
@@ -91,6 +91,9 @@ function appLd(chains) {
       'Token swaps with a Kyro fee from 0.7%, included in the amount you receive with the provider’s own costs',
       'Earn: staking on Solana, Cardano, TRON, NEAR, Sui and Aptos, Lido and Aave',
       'Ledger and Trezor hardware wallets',
+      'Several wallets on one device, and watch addresses with no key',
+      'Local price and funds-received alerts',
+      'Simulation before signing, fee speeds, speed up and cancel',
       'Built-in Tor, no personal data collected',
       'Transactions decoded and confirmed in a system window'
     ]
@@ -492,6 +495,9 @@ export function features(chains) {
             <li>Market tab with the top 200 coins, and favourites.</li>
             <li>Search assets and addresses with Ctrl K.</li>
             <li>Allocation by asset, and a vault panel with your security status.</li>
+            <li>Several wallets on one device, each with its own phrase, password and history.</li>
+            <li>Watch addresses: follow any public address or xpub with no key.</li>
+            <li>Alerts for price levels and funds received, computed on your device.</li>
           </ul>`, assetsCard())}
     ${row('f-swap', 'Swap', 'The fee <em>in plain sight</em>', true, html`
           <p>Kyro asks several providers for a quote, including NEAR Intents across chains and Exolix for Monero, then picks the best price after fees. The Kyro fee, from 0.7%, and the provider’s own costs are already out of the amount you receive. <a href="/fees/">How it is calculated</a>.</p>
@@ -522,6 +528,9 @@ export function features(chains) {
             <li>Contract calls, token approvals and high fees ask for a second confirmation.</li>
             <li>On Bitcoin: unknown scripts, OP_RETURN data and fees above 100 sat/vB too.</li>
             <li>Address-poisoning alerts and clipboard checks before you send.</li>
+            <li>Simulation on swaps and Earn calls: what you send, receive and approve, and calls that would fail.</li>
+            <li>Slow, Normal or Fast fees priced before you fill in the amount.</li>
+            <li>Speed up or cancel a pending Bitcoin, Litecoin or EVM send.</li>
           </ul>`, confirmCard())}
     ${row('f-hw', 'Hardware wallets', 'Ledger <em>and</em> Trezor', false, html`
           <p>Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.</p>
@@ -977,7 +986,7 @@ const FAQ = [
       { home: true, q: 'Does Kyro use Tor?', a: () => `<p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p>` },
       { home: true, q: 'Does Kyro collect any data?', a: () => `<p>No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub’s download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies; it only reads the public usage counters from GitHub.</p>` },
       { home: true, q: 'Is Kyro open source? Has it been audited?', a: () => `<p>The full source is on <a href="${REPO}">GitHub</a> under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.</p>` },
-      { q: 'How do I report a vulnerability?', a: () => `<p>Privately, through <a href="${REPO}/security">GitHub security advisories</a>. Please do not open a public issue. See the <a href="${REPO}/blob/main/SECURITY.md">security policy</a>.</p>` }
+      { q: 'How do I report a vulnerability?', a: () => `<p>Privately, to <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a> or through <a href="${REPO}/security">GitHub security advisories</a>. Please do not open a public issue. See the <a href="${REPO}/blob/main/SECURITY.md">security policy</a>.</p>` }
     ]
   },
   {
@@ -1336,7 +1345,7 @@ export function codeSigningPolicy() {
           <p>Kyro collects no personal data and transfers no information to other networked systems unless you ask for it: the blockchain, price and swap requests you trigger go to the providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, over Tor by default. See the <a href="/privacy/">privacy policy</a>.</p>
 
           <h2 id="report">Report a problem</h2>
-          <p>If you find a signed file that does not come from this project's release workflow, report it through <a href="${REPO}/security">GitHub security advisories</a>.</p>
+          <p>If you find a signed file that does not come from this project's release workflow, report it to <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a> or through <a href="${REPO}/security">GitHub security advisories</a>.</p>
         </div>
       </div>
     </section>`;
