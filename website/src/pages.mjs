@@ -96,10 +96,20 @@ function appLd(chains) {
   };
 }
 
-/** All the blockchains on one dark sheet; a beam of light finds them as you pass. */
-function wall(chains) {
-  const tile = (c) => `<li><a class="wall-t c-${c.slug}" href="/chains/${c.slug}/"><i class="wall-l"></i>${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`;
-  return `<nav class="wall-wrap" aria-label="All supported blockchains"><ul class="wall" data-wall>${chains.map(tile).join('')}</ul></nav>`;
+/** Every blockchain on two slow rows of cards; the second copy of each row is what makes the loop seamless. */
+function marquee(chains) {
+  const half = Math.ceil(chains.length / 2);
+  const row = (list, cls) => {
+    const items = (hidden) =>
+      list
+        .map(
+          (c) =>
+            `<li${hidden ? ' aria-hidden="true"' : ''}><a class="coin-tile spot c-${c.slug}" href="/chains/${c.slug}/"${hidden ? ' tabindex="-1"' : ''}>${coin(c)}<span class="chain-name">${esc(c.name)}<small>${esc(c.ticker)}</small></span></a></li>`
+        )
+        .join('');
+    return `<ul class="mq-row ${cls}">${items(false)}${items(true)}</ul>`;
+  };
+  return `<nav class="mq" aria-label="All supported blockchains">${row(chains.slice(0, half), 'mq-a')}${row(chains.slice(half), 'mq-b')}</nav>`;
 }
 
 const donateRows = [
@@ -156,8 +166,12 @@ export function home(chains) {
   const body = html`
     <section class="hero" id="showcase" aria-labelledby="hero-title">
       <div class="wrap hero-copy">
-        <a class="chip" href="${REPO}/releases">Kyro ${VERSION} · Open source</a>
-        <h1 id="hero-title">Keep it <em>to yourself.</em></h1>
+        <a class="badge" href="${REPO}">
+          <span class="badge-tag">${VERSION}</span>
+          Free and open source
+          <span class="badge-arrow" aria-hidden="true">→</span>
+        </a>
+        <h1 id="hero-title"><span class="ln"><span>Keep it</span></span> <span class="ln"><em>to yourself.</em></span></h1>
         <p class="lead hero-lead">A private crypto wallet for your desktop: ${n} blockchains, Tor on from the first launch, your keys on your own machine.</p>
         <div class="hero-cta">
           ${dlButton()}
@@ -185,7 +199,9 @@ export function home(chains) {
           <h2 id="chains-title">${n} blockchains. <em>One phrase.</em></h2>
           <p data-reveal>Bitcoin to Zcash, plus 220+ tokens, from the same recovery phrase. No account, no email, nothing to sign up for.</p>
         </div>
-        ${wall(chains)}
+      </div>
+      ${marquee(chains)}
+      <div class="wrap">
         <p><a class="more" href="/chains/">What works on each blockchain</a></p>
       </div>
     </section>

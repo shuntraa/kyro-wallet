@@ -94,6 +94,28 @@
     }).observe(el);
     el.addEventListener('pointerenter', stop);
     el.addEventListener('pointerleave', start);
+
+    // The window breathes on its own and leans a little towards the pointer.
+    var tilt = el.querySelector('.kw-tilt');
+    var seen = watch(el), lx = 0, ly = 0, tx = 0, ty = 0;
+    if (K.fine) {
+      window.addEventListener(
+        'pointermove',
+        function (e) {
+          tx = e.clientX / window.innerWidth - 0.5;
+          ty = e.clientY / window.innerHeight - 0.5;
+        },
+        { passive: true }
+      );
+    }
+    K.frame(function (y, now, dt) {
+      if (!seen()) return;
+      lx = K.damp(lx, tx, 0.5, dt);
+      ly = K.damp(ly, ty, 0.5, dt);
+      var t = now / 1000;
+      tilt.style.setProperty('--dx', (Math.sin(t * 0.5) * 0.5 - ly * 3).toFixed(3) + 'deg');
+      tilt.style.setProperty('--dy', (Math.cos(t * 0.37) * 0.8 + lx * 4).toFixed(3) + 'deg');
+    });
   }
 
   // ---------- Tor: the packet crosses three relays, the address goes, then it starts again calmly
