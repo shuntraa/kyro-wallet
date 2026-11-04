@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week99:  downloads in total
+8:  active wallets this week101:  downloads in total
 
 Blockchains
 
@@ -254,7 +254,7 @@ Threat model Servers contacted Architecture
 
 ## Report a vulnerability
 
-Please report security issues privately through GitHub security advisories, not in a public issue. The security policy explains what is in scope and how reports are handled.
+Please report security issues privately to security@kyrowallet.com or through GitHub security advisories, not in a public issue. The security policy explains what is in scope and how reports are handled.
 
 Scams
 
@@ -466,7 +466,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week99:  downloads in total
+8:  active wallets this week101:  downloads in total
 
 Recommended
 
@@ -912,7 +912,7 @@ The website kyrowallet.com sets no cookies, uses no trackers or analytics and ma
 
 ## Contact
 
-Questions about privacy: open an issue on GitHub. Security issues: report them privately through GitHub security advisories.
+Questions about privacy: contact@kyrowallet.com. Help with the app: support@kyrowallet.com. Security issues: security@kyrowallet.com.
 
 Last updated: 4 November 2026.
 
@@ -6298,6 +6298,16 @@ Kyro is free. The swap fee, from 0.7%, funds the project, and it is public: the 
 
 - It is not on your phone. Kyro is desktop only. A mobile app using the name is not ours.
 
+## Contact
+
+- Help with the app: support@kyrowallet.com
+
+- Everything else: contact@kyrowallet.com
+
+- Security reports: security@kyrowallet.com
+
+Nobody from Kyro will ever ask for your recovery phrase. Never send it to anyone.
+
 ## Keep reading
 
 ### Read the code
@@ -6444,7 +6454,41 @@ Every release of Kyro, newest first. This page is generated from CHANGELOG.md at
 
 ## 1.0.7Latest
 
+- Alerts: price alerts per coin (above or below a level) and "funds received", as system notifications. Set them in Settings > Alerts. They work while Kyro is open and unlocked, from data it already loads; nothing leaves your device.
+
+- Send: the fee speeds show their cost before you fill in the amount, and a custom fee moved under Advanced, with its allowed range. Values outside that range are refused.
+
+- History: speed up or cancel a pending Bitcoin, Litecoin or EVM send, with hardware wallets too. You see the extra cost first. Bitcoin and Litecoin sends are now marked replaceable, so this works for sends made from this version on.
+
+- Asset pages: Swap is open for every coin Swap supports, not only EVM and Solana.
+
 - Price charts: "All" really goes back years (Bitcoin: 2013), opens at once, with the % from the first point and the year in the date.
+
+- Swap: the Best price panel now shows the provider, route, minimum received, Kyro fee, provider fee and estimated time, with other quotes listed below.
+
+- Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the device shows the token, the amount and the recipient. No comment on these transfers: the app cannot show it.
+
+- Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline enabled or removed there (Receive), each shown in full on the device.
+
+- Hardware wallets: Sui USDC can be sent from Ledger accounts, the device reading the token and the amount from the coins themselves (8 coins per transfer at most).
+
+- Hardware wallets: Aptos USDC and USDt can be sent from Ledger accounts (Aptos app 0.10.1 or later), shown by name and amount on the device.
+
+- Hardware wallets: Algorand USDC and USDt can be enabled and sent from Ledger accounts.
+
+- Hardware wallets: NEAR USDC and USDt can be sent from Ledger accounts; the device shows the contract and the recipient, and the amount in raw units (Kyro's window names the token).
+
+- Ledger device check: real signatures, never broadcast, on TON, NEAR, XRP and Litecoin.
+
+- Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
+
+- Change password: Settings > Security, for the wallet in use. The new vault is checked before it replaces the old one, then Kyro locks and asks for the new password.
+
+- Simulation before signing: on swaps and Earn calls, the review now says what you send and receive, which approvals you grant, and warns about a call that would fail, an unlimited approval, or an unknown or brand-new contract. It runs on your own RPC node and only warns: the review stays the reference.
+
+- Several wallets: keep more than one recovery phrase on this device, each with its own password, accounts and history. Switch from the title bar; add, rename and remove in Settings > Accounts. Your existing wallet and its file do not change.
+
+- Watch addresses: follow any public address or xpub with no key (balance, tokens, history). The network is detected from what you paste. Send, Swap and Earn are off for them, and a Watch tag shows it. Add one in Settings > Accounts, from the title bar, or on the welcome screen.
 
 ## 1.0.6
 
@@ -6639,7 +6683,7 @@ Issues and pull requests are welcome.
 
 ## Report a vulnerability
 
-Please do not open a public issue. Report privately through GitHub security advisories, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.
+Please do not open a public issue. Report privately to security@kyrowallet.com or through GitHub security advisories, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.
 
 Questions
 

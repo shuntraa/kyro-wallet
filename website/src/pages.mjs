@@ -647,7 +647,7 @@ export function security() {
           ${docLinks()}
 
           <h2 id="report">Report a vulnerability</h2>
-          <p>Please report security issues privately through <a href="${REPO}/security">GitHub security advisories</a>, not in a public issue. The <a href="${REPO}/blob/main/SECURITY.md">security policy</a> explains what is in scope and how reports are handled.</p>
+          <p>Please report security issues privately to <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a> or through <a href="${REPO}/security">GitHub security advisories</a>, not in a public issue. The <a href="${REPO}/blob/main/SECURITY.md">security policy</a> explains what is in scope and how reports are handled.</p>
         </div>
       </div>
     </section>
@@ -1290,7 +1290,7 @@ export function privacy() {
           <p>The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, and its usage counters are written into the pages when the site is built.</p>
 
           <h2 id="contact">Contact</h2>
-          <p>Questions about privacy: open an issue on <a href="${REPO}/issues">GitHub</a>. Security issues: report them privately through <a href="${REPO}/security">GitHub security advisories</a>.</p>
+          <p>Questions about privacy: <a href="mailto:contact@kyrowallet.com">contact@kyrowallet.com</a>. Help with the app: <a href="mailto:support@kyrowallet.com">support@kyrowallet.com</a>. Security issues: <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a>.</p>
           <p>Last updated: 4 November 2026.</p>
         </div>
       </div>

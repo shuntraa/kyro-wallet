@@ -128,7 +128,7 @@ const FOOT = (chains) => [
   ['Product', [['/features/', 'Features'], ['/tor/', 'Tor wallet'], ['/monero/', 'Monero wallet'], ['/swap/', 'Swaps'], ['/earn/', 'Earn'], ['/hardware-wallets/', 'Hardware wallets'], ['/security/', 'Security'], ['/fees/', 'Fees'], ['/download/', 'Download']]],
   ['Platforms', [['/wallets/windows/', 'Windows'], ['/wallets/macos/', 'macOS'], ['/wallets/linux/', 'Linux'], ...chains.slice(0, 4).map((c) => [`/chains/${c.slug}/`, esc(c.name)]), ['/chains/', `All ${chains.length} blockchains`]]],
   ['Learn', [['/guides/', 'Guides'], ['/glossary/', 'Glossary'], ['/faq/', 'FAQ'], ['/guides/verify-your-download/', 'Verify a download'], ['/guides/first-steps-with-kyro/', 'First steps'], ['/changelog/', 'Changelog'], ['/roadmap/', 'Roadmap']]],
-  ['Project', [['/about/', 'About'], ['/open-source/', 'Open source'], ['/brand/', 'Brand'], [REPO, 'Source code'], [`${REPO}/releases`, 'Releases'], [`${REPO}/security`, 'Report a vulnerability'], ['/privacy/', 'Privacy'], ['/code-signing-policy/', 'Code signing policy'], ['/#support', 'Donate']]]
+  ['Project', [['/about/', 'About'], ['/about/#contact', 'Contact'], ['mailto:support@kyrowallet.com', 'Support'], ['/open-source/', 'Open source'], ['/brand/', 'Brand'], [REPO, 'Source code'], [`${REPO}/releases`, 'Releases'], [`${REPO}/security`, 'Report a vulnerability'], ['/privacy/', 'Privacy'], ['/code-signing-policy/', 'Code signing policy'], ['/#support', 'Donate']]]
 ];
 
 function footer(chains) {

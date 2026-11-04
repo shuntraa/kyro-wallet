@@ -581,6 +581,13 @@ function about() {
             'It is not externally audited yet. An internal security review has been done; no independent audit has been published.',
             'It is not on your phone. Kyro is desktop only. A mobile app using the name is not ours.'
           ], 'checks minus')}
+          <h2 id="contact">Contact</h2>
+          ${ul([
+            '<b>Help with the app:</b> <a href="mailto:support@kyrowallet.com">support@kyrowallet.com</a>',
+            '<b>Everything else:</b> <a href="mailto:contact@kyrowallet.com">contact@kyrowallet.com</a>',
+            '<b>Security reports:</b> <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a>'
+          ])}
+          <p>Nobody from Kyro will ever ask for your recovery phrase. Never send it to anyone.</p>
         </div>`)}
     ${nextLinks('a-next', [
       ['/open-source/', 'Read the code', 'Licence, build instructions and how to contribute.'],
@@ -729,7 +736,7 @@ function openSource() {
             '<b>Never post a recovery phrase, private key or password</b> in an issue, pull request or log.'
           ])}
           <h2 id="o-report">Report a vulnerability</h2>
-          <p>Please do not open a public issue. Report privately through <a href="${REPO}/security/advisories/new">GitHub security advisories</a>, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.</p>
+          <p>Please do not open a public issue. Report privately to <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a> or through <a href="${REPO}/security/advisories/new">GitHub security advisories</a>, with a proof of concept if you can. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most.</p>
         </div>`)}
     ${faqBlock('o-faq', faqs)}
     ${nextLinks('o-next', [
