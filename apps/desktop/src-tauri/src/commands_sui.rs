@@ -18,17 +18,17 @@ use crate::servers::{host_of, utxo_network_key};
 use crate::state::AppState;
 use crate::sui_backend::{self, SuiCtx, DRAFT_BUDGET};
 
-const MAX_PRICE_FACTOR: u64 = 10;
+pub(crate) const MAX_PRICE_FACTOR: u64 = 10;
 
 pub(crate) fn ctx(state: &AppState) -> SuiCtx<'_> {
     SuiCtx::new(&state.net, state.network, state.settings().tor.enabled)
 }
 
-fn ours(state: &AppState, account: u32) -> AppResult<String> {
+pub(crate) fn ours(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::sui_address(seed, account)?))
 }
 
-fn sui(lang: Lang, mist: &str) -> String {
+pub(crate) fn sui(lang: Lang, mist: &str) -> String {
     format!("{} SUI", format_units_in(lang, mist, 9))
 }
 
@@ -241,7 +241,7 @@ fn describe_sui_head(lang: Lang, s: &SuiTxSummary, c: &SuiContext, testnet: &str
     out
 }
 
-fn describe_gas(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
+pub(crate) fn describe_gas(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
     let su = |v: &str| sui(lang, v);
     let mut out = String::new();
     out += &match lang {
@@ -443,7 +443,7 @@ fn insufficient(have: u64, need: u64) -> AppError {
     ))
 }
 
-fn b64(bytes: &[u8]) -> String {
+pub(crate) fn b64(bytes: &[u8]) -> String {
     use base64::Engine as _;
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }

@@ -20,6 +20,11 @@ import {
   type NearStakeRequest,
   type NearStakeSummary,
   type NearValidator,
+  type SuiStakeContext,
+  type SuiStakePosition,
+  type SuiStakeRequest,
+  type SuiStakeSummary,
+  type SuiValidator,
   type Commands,
   type Network,
   type SolEpoch,
@@ -701,8 +706,65 @@ pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool
     },
   };
 
+  // Sui: StakedSui objects (no balance moves in the demo, only the positions).
+  const MIST = 10n ** 9n;
+  const suiVals: SuiValidator[] = ['Mysten-1', 'Figment', 'Blockdaemon', 'Sleepy Node'].map((name, i) => ({
+    address: `0x${h(`sui-val:${name}`)}`,
+    name,
+    poolId: `0x${h(`sui-pool:${name}`)}`,
+    commissionPct: i === 3 ? 15 : 2 + i * 2,
+    stake: ((400_000_000n - BigInt(i) * 60_000_000n) * MIST).toString(),
+    atRisk: i === 3,
+    apy: 1.3 + i / 10,
+  }));
+  const suiPos: SuiStakePosition[] = [{ objectId: `0x${h('sui-staked-0')}`, poolId: suiVals[0]!.poolId, validator: suiVals[0]!.address, validatorName: suiVals[0]!.name, principal: (120n * MIST).toString(), activationEpoch: 1270, active: true, rewards: (1n * MIST).toString() }];
+  const suiSpendable = 500n * MIST;
+  const suiBuild = (act: SuiStakeRequest): { bcs: string; summary: SuiStakeSummary; context: SuiStakeContext } => {
+    const pos = act.kind === 'withdraw' ? suiPos.find((p) => p.objectId === act.objectId) : undefined;
+    const v = act.kind === 'stake' ? suiVals.find((x) => x.address === act.validator) : suiVals.find((x) => x.poolId === pos?.poolId);
+    if (act.kind === 'stake') {
+      if (!v) throw invalid(l10n('ce validateur n’est pas dans l’ensemble actif : refusé', 'this validator is not in the active set: refused'));
+      const a = BigInt(act.amount || '0');
+      if (a < MIST) throw invalid(l10n('le minimum du réseau est 1 SUI', 'the network’s minimum stake is 1 SUI'));
+      if (a + MIST / 100n > suiSpendable) throw invalid(l10n('solde insuffisant pour ce montant plus les frais', 'balance too low for this amount plus the network fee'));
+    } else if (!pos) throw invalid(l10n('ce stake n’est pas sur ce compte', 'this stake is not on this account'));
+    const bcs = encode({ sui: true, act, at: d.now() });
+    const warnings: SuiStakeContext['warnings'] = [];
+    if (act.kind === 'stake' && v && v.commissionPct > 10) warnings.push({ kind: 'highCommission', pct: v.commissionPct });
+    if (act.kind === 'stake' && v?.atRisk) warnings.push({ kind: 'atRisk' });
+    const action: SuiStakeSummary['action'] = act.kind === 'stake' ? { type: 'add', amount: act.amount, validator: act.validator } : { type: 'withdraw', staked: { objectId: act.objectId, version: '77', digest: b58(act.objectId) } };
+    const summary: SuiStakeSummary = { sender: `0x${h('sui-demo')}`, action, gasBudget: '3000000', gasPrice: '1000', gasCoins: [{ objectId: `0x${h('sui-gas')}`, version: '9', digest: b58('sui-gas') }], expirationEpoch: 1302, digest: b58(`tx:${bcs}`) };
+    const gas = { balance: suiSpendable.toString(), gasCoinsTotal: suiSpendable.toString(), gasCoinBalances: [suiSpendable.toString()], referenceGasPrice: '1000', epoch: 1301, computationCost: '1000000', storageCost: '1976000', storageRebate: '978120', fee: '1997880', receives: pos ? (BigInt(pos.principal) + BigInt(pos.rewards ?? '0')).toString() : null };
+    return { bcs, summary, context: { gas, validator: v ?? null, position: pos ?? null, warnings, requiresExtraConfirmation: warnings.length > 0 } };
+  };
+  const suiHandlers: Record<Extract<keyof Commands, `sui_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
+    sui_stake_overview: () => ({ address: `0x${h('sui-demo')}`, spendable: suiSpendable.toString(), positions: suiPos.map((p) => ({ ...p })), epoch: 1301, minStake: MIST.toString() }),
+    sui_stake_validators: () => ({ validators: suiVals.map((v) => ({ ...v })), networkApy: 1.4 }),
+    sui_stake_build: (a) => {
+      d.requireUnlocked();
+      return suiBuild(a.action as SuiStakeRequest);
+    },
+    sui_stake_sign: (a) => {
+      d.requireUnlocked();
+      const o = decode<{ sui?: boolean; act?: SuiStakeRequest }>(a.bcs);
+      if (!o.sui || !o.act) throw invalid(l10n('ce n’est pas une transaction de staking Sui de Kyro', 'this is not a Kyro Sui staking transaction'));
+      const built = suiBuild(o.act);
+      d.checkPassword(a.password);
+      confirmTwice(l10n('Confirmer le staking Sui', 'Confirm the Sui staking'), built.context.requiresExtraConfirmation, l10n('• validateur à vérifier', '• validator to check'));
+      return { bcs: String(a.bcs), signature: b58(`sig:${String(a.bcs)}`), digest: built.summary.digest, summary: built.summary, context: built.context };
+    },
+    sui_stake_broadcast: (a) => {
+      const { act } = decode<{ act: SuiStakeRequest }>(a.bcs);
+      if (act.kind === 'stake') {
+        const v = suiVals.find((x) => x.address === act.validator)!;
+        suiPos.push({ objectId: `0x${h(`sui-staked-${suiPos.length}-${d.now()}`)}`, poolId: v.poolId, validator: v.address, validatorName: v.name, principal: act.amount, activationEpoch: 1302, active: false, rewards: null });
+      } else suiPos.splice(suiPos.findIndex((p) => p.objectId === act.objectId), 1);
+      return b58(`tx:${String(a.bcs)}`);
+    },
+  };
+
   return {
-    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers },
+    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers, ...suiHandlers },
     tronStakeBroadcast,
     advanceSolEpochs(n: number) {
       solEpochShift += n;

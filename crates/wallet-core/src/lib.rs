@@ -37,6 +37,7 @@ mod sol_decode;
 mod sol_stake;
 mod stellar;
 mod sui;
+mod sui_stake;
 mod sui_tx;
 mod ton;
 mod tron;
@@ -212,6 +213,10 @@ pub use stellar::{
 pub use sui::{
     sui_address, sui_address_bytes_of_pubkey, sui_address_of_pubkey, sui_address_string,
     sui_object_digest, sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
+};
+pub use sui_stake::{
+    sui_stake_decode, sui_stake_sign, sui_stake_verify_signed, SuiStakeAction, SuiStakeCall,
+    SuiStakeSummary, SuiStakeTx, SUI_MIN_STAKE,
 };
 pub use sui_tx::{
     sui_decode_coin_tx, sui_decode_tx, sui_hw_message, sui_hw_signature, sui_known_coin,

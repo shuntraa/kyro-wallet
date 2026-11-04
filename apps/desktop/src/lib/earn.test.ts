@@ -62,7 +62,7 @@ describe('earn routing', () => {
       expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
       expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: false }), id).toBe('mainnetOnly');
     }
-    for (const id of ['sol', 'ada', 'trx', 'near']) {
+    for (const id of ['sol', 'ada', 'trx', 'near', 'sui']) {
       expect(earnBlock(by(id), { hw: true, hasAccount: all, hasEvm: true }), id).toBe('hw');
       expect(earnBlock(by(id), { hw: false, hasAccount: all, hasEvm: true }), id).toBeNull();
       expect(earnBlock(by(id), { hw: false, hasAccount: () => false, hasEvm: true }), id).toBe('noAccount');

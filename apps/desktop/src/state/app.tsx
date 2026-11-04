@@ -4,6 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WalletsInfo, type WatchAddress, type WatchOnlyAccount } from '@kyro/shared';
 import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, watchToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
+import type { StakeChain } from '../lib/staking';
 import { readJson, scoped, setWalletScope, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
@@ -35,7 +36,7 @@ export type Route =
   | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
-  | { name: 'staking'; chain?: 'sol' | 'ada' | 'tron' | 'near' }
+  | { name: 'staking'; chain?: StakeChain }
   | { name: 'settings'; section?: SettingsSection; family?: AccountChain };
 
 /**

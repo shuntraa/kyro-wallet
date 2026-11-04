@@ -56,7 +56,7 @@ impl<'a> SuiCtx<'a> {
     }
 }
 
-fn bad(msg: impl Into<String>) -> AppError {
+pub(crate) fn bad(msg: impl Into<String>) -> AppError {
     AppError::ServerUnreachable(msg.into())
 }
 
@@ -64,7 +64,7 @@ fn short(s: &str) -> String {
     crate::dialog_text::sanitize(s, 200)
 }
 
-async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
+pub(crate) async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
     let u = url::Url::parse(&ctx.url)
         .map_err(|_| AppError::ServerInvalid("invalid Sui GraphQL URL".into()))?;
     let body = json!({ "query": query, "variables": variables }).to_string();
@@ -92,7 +92,7 @@ async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value
     Ok(v["data"].clone())
 }
 
-fn num(v: &Value) -> Option<u64> {
+pub(crate) fn num(v: &Value) -> Option<u64> {
     match v {
         Value::String(s) => s.parse().ok(),
         Value::Number(n) => n.as_u64(),
@@ -108,7 +108,7 @@ fn signed(v: &Value) -> Option<i128> {
     }
 }
 
-fn check_address(a: &str) -> AppResult<String> {
+pub(crate) fn check_address(a: &str) -> AppResult<String> {
     Ok(wallet_core::sui_address_string(
         &wallet_core::sui_parse_address(a)?,
     ))
@@ -122,7 +122,7 @@ pub struct SuiEpoch {
     pub reference_gas_price: u64,
 }
 
-fn check_chain(ctx: &SuiCtx<'_>, got: &Value) -> AppResult<()> {
+pub(crate) fn check_chain(ctx: &SuiCtx<'_>, got: &Value) -> AppResult<()> {
     let got = got.as_str().unwrap_or("");
     if got != ctx.chain_id {
         let name = match got {

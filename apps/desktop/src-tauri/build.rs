@@ -268,6 +268,11 @@ const COMMANDS: &[&str] = &[
     "near_stake_build",
     "near_stake_sign",
     "near_stake_broadcast",
+    "sui_stake_overview",
+    "sui_stake_validators",
+    "sui_stake_build",
+    "sui_stake_sign",
+    "sui_stake_broadcast",
     // Earn on Ethereum (Lido, Aave v3): Rust builds the calldata.
     "earn_evm_build",
     // Earn: estimated SOL / ADA / TRX staking rates (read only, existing hosts).

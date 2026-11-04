@@ -112,7 +112,7 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
     case 'history':
       return [t('common.history')];
     case 'staking':
-      return r.chain ? [t('shell.earn'), { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR' }[r.chain]] : [t('shell.earn')];
+      return r.chain ? [t('shell.earn'), { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR', sui: 'Sui' }[r.chain]] : [t('shell.earn')];
     case 'settings':
       return [t('common.settings')];
   }

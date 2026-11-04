@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote delegation), TRON
-// (Stake 2.0 + SR votes), NEAR (staking pools).
+// (Stake 2.0 + SR votes), NEAR (staking pools), Sui (native staking).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CHAIN_COLORS, tryParseUnits } from '@kyro/chains';
@@ -15,6 +15,8 @@ import {
   type SolStakeOverview,
   type SolStakePosition,
   type SolValidator,
+  type SuiStakeOverview,
+  type SuiValidator,
   type TronResource,
   type TronStakeAccount,
   type TronWitness,
@@ -41,7 +43,10 @@ import {
   solWarningText,
   sortPools,
   sortValidators,
+  sortSuiValidators,
   sortWitnesses,
+  suiValidatorBadges,
+  suiWarningText,
   tronVotes,
   tronWarningText,
   tronWitnessBadges,
@@ -82,6 +87,7 @@ const SOL = { decimals: 9, symbol: 'SOL' };
 const ADA = { decimals: 6, symbol: 'ADA' };
 const TRX = { decimals: 6, symbol: 'TRX' };
 const NEAR = { decimals: 24, symbol: 'NEAR' };
+const SUI = { decimals: 9, symbol: 'SUI' };
 const amt = (v: string | bigint | null | undefined, u: { decimals: number; symbol: string }) => (v === null || v === undefined ? '—' : fmtCrypto(BigInt(v), u.decimals, u.symbol, u.decimals));
 
 const pc = (n: number, maxFrac = 0) => (getLanguage() === 'fr' ? `${fmtNumber(n, maxFrac)} %` : `${fmtNumber(n, maxFrac)}%`);
@@ -93,7 +99,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const { accounts } = useVault();
   const { t } = useT();
   const tab: 'home' | StakeChain = chain ?? 'home';
-  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near };
+  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
       <header className="flex items-end justify-between gap-4">
@@ -109,6 +115,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
             { value: 'ada', label: 'Cardano', disabled: !!activeHw || !has.ada },
             { value: 'tron', label: 'TRON', disabled: !!activeHw || !has.tron },
             { value: 'near', label: 'NEAR', disabled: !!activeHw || !has.near },
+            { value: 'sui', label: 'Sui', disabled: !!activeHw || !has.sui },
           ]}
         />
       </header>
@@ -117,7 +124,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
           <strong className="font-semibold text-text">{t('staking.hwTitle')}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
         </Notice>
       )}
-      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : <NearStaking />}
+      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : tab === 'near' ? <NearStaking /> : <SuiStaking />}
     </div>
   );
 }
@@ -130,20 +137,23 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   // at once, then refresh in the background.
   const stakeKey = useStakeKey();
   const { accounts } = useVault();
-  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '' };
+  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '', sui: accounts.sui?.address ?? '' };
   const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
   const p = { persist: true };
   const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account], p);
   const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account], p);
   const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account], p);
   const near = useCachedAsync(sk('near_stake_overview', 'near'), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account], p);
+  const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !disabled && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [disabled, has.sui, acct('sui').account], p);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
     tron.reload();
     near.reload();
+    sui.reload();
   });
   const nearStaked = near.data?.positions.reduce((s, p) => s + BigInt(p.staked), 0n);
+  const suiStaked = sui.data?.positions.reduce((s, p) => s + BigInt(p.principal), 0n);
   const solStaked = sol.data?.accounts.reduce((s, a) => s + BigInt(a.lamports), 0n);
   const tronStaked = tron.data ? BigInt(tron.data.stakedBandwidth) + BigInt(tron.data.stakedEnergy) : undefined;
   const hide = (s: string) => (hideBalances ? HIDDEN : s);
@@ -184,12 +194,21 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       line: near.data ? (near.data.positions.length ? tp('staking.homeNearLine', near.data.positions.length, { amount: hide(amt(nearStaked, NEAR)) }) : t('staking.homeNearNone')) : null,
       error: near.error,
     },
+    {
+      chain: 'sui',
+      name: 'Sui',
+      glyph: 'S',
+      color: '#4DA2FF',
+      what: t('staking.homeSuiWhat'),
+      line: sui.data ? (sui.data.positions.length ? tp('staking.homeSuiLine', sui.data.positions.length, { amount: hide(amt(suiStaked, SUI)) }) : t('staking.homeNearNone')) : null,
+      error: sui.error,
+    },
   ];
   return (
     <>
-      <div className="grid shrink-0 grid-cols-4 divide-x divide-line overflow-hidden rounded-panel border border-line bg-card">
+      <div className="grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-panel border border-line bg-line">
         {cards.map((c, i) => (
-          <div key={c.chain} className="rise group flex flex-col gap-3 px-5 pt-4 pb-5" style={idx(i)}>
+          <div key={c.chain} className="rise group flex flex-col gap-3 bg-card px-5 pt-4 pb-5" style={idx(i)}>
             <div className="flex items-center gap-2.5">
               <CoinIcon glyph={c.glyph} color={c.color} id={c.chain} size={26} />
               <span className="text-[20px] font-semibold tracking-[-0.02em]">{c.name}</span>
@@ -1435,6 +1454,153 @@ function NearOpDialog({ op, pool: initialPool, o, validators, apy, onClose, onDo
     sign: (b, password) => call('near_stake_sign', { tx: b.tx, password, ...acct('near') }),
     broadcast: async (s) => (await call('near_stake_broadcast', { signed: s.signed, ...acct('near') })).hash,
     doneText: t('staking.doneNear'),
+  };
+  return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
+}
+
+function SuiStaking() {
+  const { hideBalances } = useApp();
+  const acct = useStakeAccount();
+  const ov = useCachedAsync(useStakeKey()('sui_stake_overview', acct('sui')), () => call('sui_stake_overview', acct('sui')), [acct('sui').account], { intervalMs: 60_000 });
+  const vs = useCachedAsync(useStakeKey()('sui_stake_validators'), () => call('sui_stake_validators'), [], { persist: true });
+  useOnTorReady(ov.reload);
+  const { t } = useT();
+  const [op, setOp] = useState<{ kind: 'stake' } | { kind: 'withdraw'; objectId: string } | null>(null);
+  const o = ov.data;
+  const h = (s: string) => (hideBalances ? HIDDEN : s);
+  if (ov.error && !o) return <ErrorLine error={ov.error} onRetry={ov.reload}>{ov.error.message}</ErrorLine>;
+  if (!o) return <Skeleton className="h-64 w-full" />;
+  const staked = o.positions.reduce((s, p) => s + BigInt(p.principal), 0n);
+  const rewards = o.positions.reduce((s, p) => s + BigInt(p.rewards ?? '0'), 0n);
+  const apy = vs.data?.networkApy ?? null;
+  return (
+    <>
+      <Card className="flex flex-col gap-4 px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid flex-1 grid-cols-3 gap-6">
+            <Stat k={t('staking.available')} v={h(amt(o.spendable, SUI))} />
+            <Stat k={t('staking.nearStaked')} v={h(amt(staked, SUI))} sub={t('staking.suiRewards', { amount: h(amt(rewards, SUI)) })} />
+            <Stat k={t('staking.suiApy')} v={apy !== null ? `≈ ${pc(apy, 2)}` : '—'} sub={t('staking.suiApySub')} />
+          </div>
+          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake' })}>
+            {t('staking.stakeSui')}
+          </Button>
+        </div>
+        <Hint>{t('staking.suiHint')}</Hint>
+      </Card>
+      <Card className="flex flex-col">
+        <div className="flex h-[50px] items-center border-b border-line px-5">
+          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.suiPositions')}</span>
+        </div>
+        {o.positions.length === 0 ? (
+          <EmptyState title={t('staking.nearNoPool')}>{t('staking.suiNoStakeBody')}</EmptyState>
+        ) : (
+          o.positions.map((p) => (
+            <div key={p.objectId} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-semibold">{p.validatorName ?? shortAddress(p.poolId)}</span>
+                <span className="text-[12px] text-faint">
+                  {t('staking.nearStakedIn', { amount: h(amt(p.principal, SUI)) })}
+                  {p.rewards !== null && ` · ${t('staking.suiRewards', { amount: h(amt(p.rewards, SUI)) })}`}
+                </span>
+                {!p.active && <span className="text-[12px] text-mute">{t('staking.suiActivating', { epoch: p.activationEpoch })}</span>}
+              </span>
+              <Button size="sm" variant="ice" onClick={() => setOp({ kind: 'withdraw', objectId: p.objectId })}>
+                {t('staking.withdraw')}
+              </Button>
+            </div>
+          ))
+        )}
+      </Card>
+      {op && <SuiOpDialog key={op.kind} op={op} o={o} validators={vs.data?.validators ?? []} onClose={() => setOp(null)} onDone={ov.reload} />}
+    </>
+  );
+}
+
+type SuiBuilt = Ret<'sui_stake_build'>;
+type SuiSigned = Ret<'sui_stake_sign'>;
+
+function SuiValidatorPicker({ value, onChange, validators }: { value: string; onChange: (v: string) => void; validators: SuiValidator[] }) {
+  const { t } = useT();
+  const [q, setQ] = useState('');
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return sortSuiValidators(validators).filter((v) => v.name.toLowerCase().includes(needle) || v.address.startsWith(needle));
+  }, [validators, q]);
+  return (
+    <div className="flex flex-col gap-2">
+      <Input aria-label={t('staking.suiSearch')} placeholder={t('staking.suiSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+        {validators.length === 0 ? (
+          <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
+            <Spinner /> {t('staking.suiLoading')}
+          </div>
+        ) : (
+          list.map((v) => (
+            <button key={v.address} type="button" onClick={() => onChange(v.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.address && 'bg-bg')}>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-medium">{v.name || shortAddress(v.address)}</span>
+                {suiValidatorBadges(v).map((b) => (
+                  <Badge key={b.text} tone={b.tone}>
+                    {b.text}
+                  </Badge>
+                ))}
+              </span>
+              <span className="shrink-0 text-[12px] text-faint">
+                {v.apy !== null ? `${pc(v.apy, 2)} · ` : ''}
+                {t('staking.suiCommission', { pct: pc(v.commissionPct, 1) })}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SuiOpDialog({ op, o, validators, onClose, onDone }: { op: { kind: 'stake' } | { kind: 'withdraw'; objectId: string }; o: SuiStakeOverview; validators: SuiValidator[]; onClose: () => void; onDone: () => void }) {
+  const acct = useStakeAccount();
+  const [validator, setValidator] = useState('');
+  const [amount, setAmount] = useState('');
+  const { t } = useT();
+  const mist = tryParseUnits(amount, 9);
+  const min = BigInt(o.minStake);
+  const stake = op.kind === 'stake';
+  const spec: FlowSpec<SuiBuilt, SuiSigned> = {
+    title: stake ? t('staking.stakeSui') : t('staking.suiWithdrawTitle'),
+    ...(stake
+      ? {
+          form: (
+            <>
+              <SuiValidatorPicker value={validator} onChange={setValidator} validators={validators} />
+              <AmountField id="sui-stake" label={t('staking.amountToStake')} value={amount} onChange={setAmount} unit={SUI} hint={t('staking.suiStakeHint', { available: amt(o.spendable, SUI), min: amt(min, SUI) })} />
+            </>
+          ),
+        }
+      : {}),
+    canBuild: !stake || (!!validator && !!mist && mist >= min && mist <= BigInt(o.spendable)),
+    build: () => call('sui_stake_build', { action: op.kind === 'stake' ? { kind: 'stake', validator, amount: (mist ?? 0n).toString() } : { kind: 'withdraw', objectId: op.objectId }, ...acct('sui') }),
+    enClair: (b) => {
+      const x = b.summary.action;
+      const name = b.context.validator?.name ?? shortAddress(b.context.position?.poolId ?? '');
+      return x.type === 'add' ? t('staking.plainSuiStake', { amount: amt(x.amount, SUI), validator: name }) : t('staking.plainSuiWithdraw', { amount: amt(b.context.gas.receives, SUI), validator: name });
+    },
+    review: (b) => {
+      const c = b.context;
+      return (
+        <>
+          <Row k={t('staking.suiValidator')} v={c.validator?.name ?? '—'} {...(c.warnings.some((w) => w.kind === 'atRisk') ? { tone: 'warn' as const } : {})} />
+          {c.validator && <Row k={t('staking.suiAddress')} v={<span className="font-mono text-[12px]">{c.validator.address}</span>} />}
+          {c.validator && <Row k={t('staking.suiValidatorFee')} v={pc(c.validator.commissionPct, 2)} {...(c.warnings.some((w) => w.kind === 'highCommission') ? { tone: 'warn' as const } : {})} />}
+          <Row k={t('staking.nearNetworkFee')} v={t('staking.nearFeeRow', { estimate: amt(BigInt(c.gas.fee) < 0n ? 0n : c.gas.fee, SUI), bound: amt(b.summary.gasBudget, SUI) })} />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskSui')} />
+        </>
+      );
+    },
+    warnings: (b) => b.context.warnings.map(suiWarningText),
+    sign: (b, password) => call('sui_stake_sign', { bcs: b.bcs, password, ...acct('sui') }),
+    broadcast: (s) => call('sui_stake_broadcast', { bcs: s.bcs, signature: s.signature, ...acct('sui') }),
+    doneText: t('staking.doneSui'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }

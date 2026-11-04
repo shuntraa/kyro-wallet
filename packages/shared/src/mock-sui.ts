@@ -235,7 +235,7 @@ export function createDemoSui(d: DemoSuiDeps) {
     return n;
   };
 
-  const handlers: Record<Extract<keyof Commands, `sui_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const handlers: Record<Exclude<Extract<keyof Commands, `sui_${string}`>, `sui_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     sui_backend_info: (): SuiBackendInfo => ({ kind: 'default', network: netKey, label: d.network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', tor: torOn() }),
     sui_address: (a) => {
       d.requireUnlocked();

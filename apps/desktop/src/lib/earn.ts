@@ -15,7 +15,7 @@ export interface EarnOption {
   type: EarnType;
   stable: boolean;
   /** Where "Start" leads: an existing staking tab, or the EVM flow. */
-  target: { kind: 'tab'; chain: 'sol' | 'ada' | 'tron' | 'near' } | { kind: 'lido' } | { kind: 'aave'; market: string };
+  target: { kind: 'tab'; chain: 'sol' | 'ada' | 'tron' | 'near' | 'sui' } | { kind: 'lido' } | { kind: 'aave'; market: string };
   decimals: number;
   /** i18n key of the lock / unbond time. */
   lockKey: 'earn.lockNone' | 'earn.lockLido' | 'earn.lockSol' | 'earn.lockTron' | 'earn.lockNear';
@@ -66,6 +66,7 @@ export const EARN_OPTIONS: EarnOption[] = [
   { id: 'ada', symbol: 'ADA', name: 'Cardano', type: 'staking', stable: false, target: { kind: 'tab', chain: 'ada' }, decimals: 6, lockKey: 'earn.lockNone', min: '2 ADA' },
   { id: 'trx', symbol: 'TRX', name: 'TRON', type: 'staking', stable: false, target: { kind: 'tab', chain: 'tron' }, decimals: 6, lockKey: 'earn.lockTron', min: '1 TRX' },
   { id: 'near', symbol: 'NEAR', name: 'NEAR', type: 'staking', stable: false, target: { kind: 'tab', chain: 'near' }, decimals: 24, lockKey: 'earn.lockNear', min: null },
+  { id: 'sui', symbol: 'SUI', name: 'Sui', type: 'staking', stable: false, target: { kind: 'tab', chain: 'sui' }, decimals: 9, lockKey: 'earn.lockNone', min: '1 SUI' },
 ];
 
 export function filterOptions(opts: EarnOption[], f: EarnFilter): EarnOption[] {

@@ -56,8 +56,8 @@ pub const MIST_PER_SUI: u64 = 1_000_000_000;
 pub const SUI_MAX_GAS_OBJECTS: usize = 256;
 /// Gas budget above this (0.1 SUI) is flagged: a plain transfer costs a few thousandths of SUI.
 pub const SUI_HIGH_GAS_BUDGET: u64 = 100_000_000;
-const INTENT: [u8; 3] = [0, 0, 0];
-const MAX_BCS: usize = 128 * 1024;
+pub(crate) const INTENT: [u8; 3] = [0, 0, 0];
+pub(crate) const MAX_BCS: usize = 128 * 1024;
 /// At most this many coin objects of a token in one transfer (merged into the first one).
 pub const SUI_MAX_TOKEN_COINS: usize = 32;
 /// Token coins the Ledger Sui app parses in one transfer (`MERGE_COIN_ARRAY_LENGTH`, plus margin).
@@ -106,7 +106,7 @@ pub fn sui_known_coin(coin_type: &str, testnet: bool) -> Option<&'static SuiKnow
         .find(|c| c.coin_type == coin_type)
 }
 
-fn bad(msg: impl Into<String>) -> Error {
+pub(crate) fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("Sui transaction refused: {}", msg.into()))
 }
 
@@ -167,7 +167,7 @@ pub struct SuiTransfer {
     pub coins: Vec<SuiObjectRef>,
 }
 
-fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
+pub(crate) fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     loop {
         let b = (v & 0x7f) as u8;
         v >>= 7;
@@ -179,15 +179,15 @@ fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     }
 }
 
-fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
+pub(crate) fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
     put_uleb(out, b.len() as u64);
     out.extend_from_slice(b);
 }
 
-struct Reader<'a>(&'a [u8]);
+pub(crate) struct Reader<'a>(pub(crate) &'a [u8]);
 
 impl<'a> Reader<'a> {
-    fn take(&mut self, n: usize) -> Result<&'a [u8]> {
+    pub(crate) fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         if self.0.len() < n {
             return Err(bad("truncated data"));
         }
@@ -196,28 +196,28 @@ impl<'a> Reader<'a> {
         Ok(h)
     }
 
-    fn u8(&mut self) -> Result<u8> {
+    pub(crate) fn u8(&mut self) -> Result<u8> {
         Ok(self.take(1)?[0])
     }
 
-    fn u16(&mut self) -> Result<u16> {
+    pub(crate) fn u16(&mut self) -> Result<u16> {
         let b = self.take(2)?;
         Ok(u16::from_le_bytes([b[0], b[1]]))
     }
 
-    fn u64(&mut self) -> Result<u64> {
+    pub(crate) fn u64(&mut self) -> Result<u64> {
         let mut a = [0u8; 8];
         a.copy_from_slice(self.take(8)?);
         Ok(u64::from_le_bytes(a))
     }
 
-    fn arr32(&mut self) -> Result<[u8; 32]> {
+    pub(crate) fn arr32(&mut self) -> Result<[u8; 32]> {
         let mut a = [0u8; 32];
         a.copy_from_slice(self.take(32)?);
         Ok(a)
     }
 
-    fn uleb(&mut self) -> Result<u32> {
+    pub(crate) fn uleb(&mut self) -> Result<u32> {
         let mut v: u64 = 0;
         for i in 0..5 {
             let b = self.u8()?;
@@ -232,7 +232,7 @@ impl<'a> Reader<'a> {
         Err(bad("ULEB128 too long"))
     }
 
-    fn len(&mut self, max: usize) -> Result<usize> {
+    pub(crate) fn len(&mut self, max: usize) -> Result<usize> {
         let n = self.uleb()? as usize;
         if n > max {
             return Err(bad("vector too long"));
@@ -256,13 +256,13 @@ enum Cmd {
     MergeCoins(Arg, Vec<Arg>),
 }
 
-fn put_ref(out: &mut Vec<u8>, g: &SuiObjectRef) {
+pub(crate) fn put_ref(out: &mut Vec<u8>, g: &SuiObjectRef) {
     out.extend_from_slice(&g.object_id);
     out.extend_from_slice(&g.version.to_le_bytes());
     put_bytes(out, &g.digest);
 }
 
-fn read_ref(r: &mut Reader<'_>) -> Result<SuiObjectRef> {
+pub(crate) fn read_ref(r: &mut Reader<'_>) -> Result<SuiObjectRef> {
     let object_id = r.arr32()?;
     let version = r.u64()?;
     if r.uleb()? != 32 {
@@ -611,11 +611,11 @@ pub fn sui_tx_digest(bcs: &[u8]) -> String {
     bs58::encode(blake2b256(&[b"TransactionData::", bcs])).into_string()
 }
 
-fn signing_digest(bcs: &[u8]) -> [u8; 32] {
+pub(crate) fn signing_digest(bcs: &[u8]) -> [u8; 32] {
     blake2b256(&[&INTENT, bcs])
 }
 
-fn b64(s: &str, what: &str) -> Result<Vec<u8>> {
+pub(crate) fn b64(s: &str, what: &str) -> Result<Vec<u8>> {
     base64::engine::general_purpose::STANDARD
         .decode(s.trim())
         .map_err(|_| Error::input(format!("{what}: base64 expected")))
@@ -693,7 +693,7 @@ pub struct SuiTokenSummary {
     pub coins: Vec<SuiGasCoinView>,
 }
 
-fn view(g: &SuiObjectRef) -> SuiGasCoinView {
+pub(crate) fn view(g: &SuiObjectRef) -> SuiGasCoinView {
     SuiGasCoinView {
         object_id: sui_address_string(&g.object_id),
         version: g.version.to_string(),
@@ -826,6 +826,16 @@ fn sign_inner(
 pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     let bcs = b64(bcs_b64, "transaction")?;
     let t = SuiTransfer::decode(&bcs)?;
+    verify_sender_signature(&bcs, &t.sender, signature_b64)?;
+    Ok(sui_tx_digest(&bcs))
+}
+
+/// `signature_b64` is a strict ed25519 signature of `bcs` by `sender`'s key.
+pub(crate) fn verify_sender_signature(
+    bcs: &[u8],
+    sender: &[u8; 32],
+    signature_b64: &str,
+) -> Result<()> {
     let s = b64(signature_b64, "signature")?;
     if s.len() != 97 || s[0] != SUI_ED25519_FLAG {
         return Err(bad(
@@ -836,17 +846,16 @@ pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     sig.copy_from_slice(&s[1..65]);
     let mut pk = [0u8; 32];
     pk.copy_from_slice(&s[65..97]);
-    if sui_address_bytes_of_pubkey(&pk) != t.sender {
+    if &sui_address_bytes_of_pubkey(&pk) != sender {
         return Err(bad("the signature's key is not the sender's"));
     }
     ed25519_dalek::VerifyingKey::from_bytes(&pk)
         .map_err(|_| bad("invalid public key"))?
         .verify_strict(
-            &signing_digest(&bcs),
+            &signing_digest(bcs),
             &ed25519_dalek::Signature::from_bytes(&sig),
         )
-        .map_err(|_| bad("the signature does not verify"))?;
-    Ok(sui_tx_digest(&bcs))
+        .map_err(|_| bad("the signature does not verify"))
 }
 
 /// Ledger Sui app: intent message `[0, 0, 0] || bcs` to sign, after strict decoding.

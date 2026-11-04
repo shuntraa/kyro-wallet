@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Earn (docs/IPC.md §2.8): one list of options (staking, liquid staking, lending). Solana, Cardano,
-// TRON and NEAR open their staking tab; Lido and Aave v3 (Ethereum) run a short flow here:
+// TRON, NEAR and Sui open their staking tab; Lido and Aave v3 (Ethereum) run a short flow here:
 // amount → review → confirm. Rust builds the call (`earn_evm_build`) and names it in the native window.
 
 import { useMemo, useState } from 'react';
@@ -44,6 +44,10 @@ async function readRates(evm: EvmGet): Promise<Rates> {
     call('near_stake_validators').then(
       (v) => void (out.near = v.grossApy),
       () => void (out.near = null),
+    ),
+    call('sui_stake_validators').then(
+      (v) => void (out.sui = v.networkApy),
+      () => void (out.sui = null),
     ),
     call('earn_staking_rates').then(
       (v) => void Object.assign(out, { sol: v.sol, ada: v.ada, trx: v.trx }),
@@ -115,7 +119,7 @@ export function Earn() {
     pos.reload();
     lidoReq.reload();
   });
-  const has: Record<string, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near };
+  const has: Record<string, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui };
   const typeLabel = { staking: t('earn.typeStaking'), liquid: t('earn.typeLiquid'), lending: t('earn.typeLending') } as const;
   const list = filterOptions(EARN_OPTIONS, filter);
 

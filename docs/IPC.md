@@ -1295,6 +1295,24 @@ type TronStakeContext = { account: TronStakeAccount /*before*/; estimate: TronEs
 ```
 Refused by wallet-core before any signature: `DelegateResource` / `UnDelegateResource` (lending your energy or bandwidth to **another account**), the `TRON_POWER` resource, the obsolete `support` field of a vote, any other contract. There is no dedicated TRON tracking command: refresh `tron_stake_overview` after the broadcast.
 
+#### Sui (`sui_stake_*`) — native staking, `m/44'/784'/a'/0'/0'`
+
+| Command | Arguments | Return | Notes |
+|---|---|---|---|
+| `sui_stake_overview` | — | `SuiStakeOverview` | `epoch.validatorSet.contents` (active set, at-risk list), SUI coin balance, the account's `0x3::staking_pool::StakedSui` objects (type, owner and id checked, at most 50); rewards ≈ principal × (rate now / rate at activation − 1), rates from each pool's `exchange_rates` table |
+| `sui_stake_validators` | — | `SuiValidators` | active set, `apy` per validator from the exchange rates 30 epochs apart (compounded, **after commission**, a past figure), `networkApy` stake-weighted; the UI keeps it on disk (`persist`) |
+| `sui_stake_build` | `{ action: SuiStakeRequest }` | `{ bcs, summary: SuiStakeSummary, context: SuiStakeContext }` | Rust builds and simulates; refused: below 1 SUI, validator outside the active set, stake not on this account, balance below amount + budget |
+| `sui_stake_sign` | `{ bcs, password }` | `{ bcs, signature, digest, summary, context }` | wallet-core decoding (`sui_stake_decode`: closed list of two system calls, sender = ours, expiration required), then **re-reads live** epoch, gas coins, validator set, stake object and simulation; native dialog, then the reinforced one if `requiresExtraConfirmation` |
+| `sui_stake_broadcast` | `{ bcs, signature }` | digest | strict decode + strict ed25519, sender = our account, then `executeTransaction` (digest compared) |
+
+```ts
+type SuiStakeRequest = { kind: 'stake'; validator: string; amount: string /*MIST*/ } | { kind: 'withdraw'; objectId: string };
+type SuiStakeAction = { type: 'add'; amount: string; validator: string } | { type: 'withdraw'; staked: { objectId: string; version: string; digest: string } };
+type SuiStakeWarning = { kind: 'highCommission'; pct: number } | { kind: 'atRisk' } | { kind: 'highGasBudget' };
+type SuiStakeContext = { gas: SuiContext /*§2.5; receives: SUI back from a withdrawal*/; validator: SuiValidator | null; position: SuiStakePosition | null;
+                         warnings: SuiStakeWarning[]; requiresExtraConfirmation: boolean };
+```
+
 #### NEAR (`near_stake_*`) — staking pools, implicit account `m/44'/397'/a'`
 
 | Command | Arguments | Return | Notes |

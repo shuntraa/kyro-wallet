@@ -68,6 +68,7 @@ mod solana;
 mod stake_ada;
 mod stake_near;
 mod stake_sol;
+mod stake_sui;
 mod stake_tron;
 mod state;
 mod stellar_backend;
@@ -419,6 +420,11 @@ pub fn run() {
             earn_rates::earn_staking_rates,
             stake_near::near_stake_sign,
             stake_near::near_stake_broadcast,
+            stake_sui::sui_stake_overview,
+            stake_sui::sui_stake_validators,
+            stake_sui::sui_stake_build,
+            stake_sui::sui_stake_sign,
+            stake_sui::sui_stake_broadcast,
             commands::set_capture_protection,
             commands::open_fees_page,
             commands::config_get,

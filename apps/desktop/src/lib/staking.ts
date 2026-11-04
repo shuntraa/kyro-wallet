@@ -2,21 +2,22 @@
 // Staking (docs/IPC.md §2.8): pure helpers for the screens — labels, warning texts that match
 // Rust's reinforced-dialog triggers, picker sorting and badges.
 
-import type { AdaPool, AdaStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
+import type { AdaPool, AdaStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, SuiStakeWarning, SuiValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
 import { fmtCrypto, fmtNumber, shortAddress } from './format';
 import { t } from '../i18n';
 
-export type StakeChain = 'sol' | 'ada' | 'tron' | 'near';
+export type StakeChain = 'sol' | 'ada' | 'tron' | 'near' | 'sui';
 
 /** Rust thresholds (reinforced 2nd dialog). */
 export const SOL_HIGH_COMMISSION = 10;
 export const ADA_HIGH_MARGIN = 0.1;
 export const ADA_SATURATED = 100;
 export const TRON_PAID_RANKS = 127;
+export const SUI_HIGH_COMMISSION = 10;
 
 export function networkLabel(chain: StakeChain, network: Network): string {
   if (network === 'mainnet') return 'mainnet';
-  return { sol: 'devnet', ada: 'preprod', tron: 'Nile', near: 'testnet' }[chain];
+  return { sol: 'devnet', ada: 'preprod', tron: 'Nile', near: 'testnet', sui: 'testnet' }[chain];
 }
 
 export function solStateLabel(s: SolStakeState): string {
@@ -102,6 +103,27 @@ export function tronWarningText(w: TronStakeWarning, witnesses: TronWitness[] = 
 
 export function nearWarningText(w: NearStakeWarning): string {
   return w.kind === 'highFee' ? t('staking.warnNearFee', { pct: fmtNumber(w.pct, 0) }) : t('staking.warnNearNotValidating');
+}
+
+export function suiWarningText(w: SuiStakeWarning): string {
+  switch (w.kind) {
+    case 'highCommission':
+      return t('staking.warnSuiCommission', { pct: fmtNumber(w.pct, 0) });
+    case 'atRisk':
+      return t('staking.warnSuiAtRisk');
+    case 'highGasBudget':
+      return t('staking.warnSuiGas');
+  }
+}
+export function suiValidatorBadges(v: SuiValidator): { tone: 'down' | 'warn'; text: string }[] {
+  const out: { tone: 'down' | 'warn'; text: string }[] = [];
+  if (v.atRisk) out.push({ tone: 'down', text: t('staking.badgeAtRisk') });
+  if (v.commissionPct > SUI_HIGH_COMMISSION) out.push({ tone: 'warn', text: t('staking.badgeCommission', { pct: fmtNumber(v.commissionPct, 0) }) });
+  return out;
+}
+/** Sound validators first, then the best yield; a missing yield goes last. */
+export function sortSuiValidators(list: SuiValidator[]): SuiValidator[] {
+  return [...list].sort((a, b) => Number(a.atRisk) - Number(b.atRisk) || (b.apy ?? -1) - (a.apy ?? -1) || cmpBig(b.stake, a.stake));
 }
 
 /** Unlock estimate: what is left of this epoch plus the remaining full epochs. */

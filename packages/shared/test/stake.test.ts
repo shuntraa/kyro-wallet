@@ -222,6 +222,21 @@ describe('demo staking — TRON', () => {
 describe('demo staking — NEAR', () => {
   it('stake, unstake all, refusals, reinforced dialog for a high pool fee', async () => {
     const { texts } = setup();
+    const sv = (await call('sui_stake_validators')).validators;
+    const sb = await call('sui_stake_build', { action: { kind: 'stake', validator: sv[0]!.address, amount: '2000000000' } });
+    expect(sb.summary.action).toMatchObject({ type: 'add', amount: '2000000000' });
+    const n = (await call('sui_stake_overview')).positions.length;
+    const ss = await call('sui_stake_sign', { bcs: sb.bcs, password: PW });
+    await call('sui_stake_broadcast', { bcs: ss.bcs, signature: ss.signature });
+    const pos = (await call('sui_stake_overview')).positions;
+    expect(pos.length).toBe(n + 1);
+    expect((await code(call('sui_stake_build', { action: { kind: 'stake', validator: sv[0]!.address, amount: '1' } }))).message).toMatch(/1 SUI/);
+    expect((await code(call('sui_stake_build', { action: { kind: 'stake', validator: '0xnope', amount: '2000000000' } }))).message).toMatch(/valid/i);
+    const sw = await call('sui_stake_build', { action: { kind: 'withdraw', objectId: pos[0]!.objectId } });
+    const ws = await call('sui_stake_sign', { bcs: sw.bcs, password: PW });
+    await call('sui_stake_broadcast', { bcs: ws.bcs, signature: ws.signature });
+    expect((await call('sui_stake_overview')).positions.length).toBe(n);
+
     const vs = await call('near_stake_validators');
     expect(vs.validators[0]!.poolId).toBe('kiln.pool.f863973.m0');
     const before = await call('near_stake_overview');

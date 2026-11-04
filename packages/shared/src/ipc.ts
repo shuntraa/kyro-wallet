@@ -1904,6 +1904,17 @@ export interface TronStakeSummary {
   rawSize: number;
 }
 export type TronStakeWarning = { kind: 'srNotPaid'; address: string; rank: number } | { kind: 'brokerageAll'; address: string } | { kind: 'votesReduced' };
+/** Sui native staking (`sui_stake_*`, docs/IPC.md §2.8). Amounts: MIST, decimal strings. */
+export interface SuiValidator { address: string; name: string; poolId: string; commissionPct: number; stake: string; atRisk: boolean; apy: number | null }
+export interface SuiValidators { validators: SuiValidator[]; networkApy: number | null }
+export interface SuiStakePosition { objectId: string; poolId: string; validator: string | null; validatorName: string | null; principal: string; activationEpoch: number; active: boolean; rewards: string | null }
+export interface SuiStakeOverview { address: string; spendable: string; positions: SuiStakePosition[]; epoch: number; minStake: string }
+export type SuiStakeRequest = { kind: 'stake'; validator: string; amount: string } | { kind: 'withdraw'; objectId: string };
+export type SuiStakeAction = { type: 'add'; amount: string; validator: string } | { type: 'withdraw'; staked: { objectId: string; version: string; digest: string } };
+export interface SuiStakeSummary { sender: string; action: SuiStakeAction; gasBudget: string; gasPrice: string; gasCoins: { objectId: string; version: string; digest: string }[]; expirationEpoch: number; digest: string }
+export type SuiStakeWarning = { kind: 'highCommission'; pct: number } | { kind: 'atRisk' } | { kind: 'highGasBudget' };
+export interface SuiStakeContext { gas: SuiContext; validator: SuiValidator | null; position: SuiStakePosition | null; warnings: SuiStakeWarning[]; requiresExtraConfirmation: boolean }
+
 /** NEAR staking pools (`near_stake_*`, docs/IPC.md §2.8). Amounts: yoctoNEAR, decimal strings. */
 export interface NearPoolPosition { poolId: string; staked: string; unstaked: string; canWithdraw: boolean; feePct: number | null }
 export interface NearEpoch { height: number; startHeight: number; length: number; blockSecs: number; secondsLeft: number }
@@ -2576,6 +2587,11 @@ export interface Commands {
   near_stake_build: { args: { action: NearStakeRequest } & WithAccount; ret: { tx: string; summary: NearStakeSummary; context: NearStakeContext } };
   near_stake_sign: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearStakeSummary; context: NearStakeContext } };
   near_stake_broadcast: { args: { signed: string } & WithAccount; ret: NearTxOutcome };
+  sui_stake_overview: { args: WithAccount | undefined; ret: SuiStakeOverview };
+  sui_stake_validators: { args: undefined; ret: SuiValidators };
+  sui_stake_build: { args: { action: SuiStakeRequest } & WithAccount; ret: { bcs: string; summary: SuiStakeSummary; context: SuiStakeContext } };
+  sui_stake_sign: { args: { bcs: string; password: string } & WithAccount; ret: { bcs: string; signature: string; digest: string; summary: SuiStakeSummary; context: SuiStakeContext } };
+  sui_stake_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
   /** Earn on Ethereum mainnet (Lido, Aave v3): Rust builds the call to a pinned contract (docs/IPC.md). */
   earn_evm_build: { args: { action: EarnEvmAction } & WithAccount; ret: { to: string; data: string; valueWei: string } };
   /** Estimated staking rates in percent a year, before commission; null = not readable. */
