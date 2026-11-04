@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Kyro Wallet site: the blue satin, our own small WebGL shader on one fixed canvas: a folded height
-// field, lit. It only ever knows the time: the scrim that dims it behind the content is plain page
-// background, so scrolling stays with the compositor and nothing here reads the scroll position or the
-// layout. It draws every frame the display shows, at 60 or 240 Hz alike, into a small buffer that CSS
-// scales up, and stops with the tab. Frames that miss vsync shrink the buffer, never the frame rate.
+// field, lit. The scrim that dims it behind the content is plain page background, so scrolling stays with
+// the compositor. The cloth leans towards the pointer and drifts with the page, from eased copies of both
+// that only ever reach it as uniforms: scrollY is read once per frame, never in a scroll handler. It
+// draws every frame the display shows, at 60 or 240 Hz alike, into a small buffer that CSS scales up,
+// and stops with the tab. Frames that miss vsync shrink the buffer, never the frame rate.
 // Without WebGL, with reduced motion or with Data Saver on, the still image stays.
 (function () {
   'use strict';
@@ -22,7 +23,7 @@
     'precision mediump float;',
     '#endif',
     '#define PASSES ' + (K.coarse ? 2 : 3),
-    'uniform vec2 R;uniform float T;uniform vec2 L;uniform float W;',
+    'uniform vec2 R;uniform float T;uniform vec2 L;uniform float W;uniform vec3 M;uniform float S;',
     // The height of the cloth: a sine domain warp folds one large wave over itself.
     'float cloth(vec2 q){',
     '  for(int i=1;i<=PASSES;i++){',
@@ -34,13 +35,17 @@
     '}',
     'void main(){',
     '  vec2 uv=gl_FragCoord.xy/R;',
-    '  vec2 q=(uv-.5)*vec2(R.x/R.y,1.)*mix(4.4,3.8,W)+vec2(.4,.2);',
+    '  vec2 a=vec2(R.x/R.y,1.);',
+    // Around the pointer (M.xy, faded in by M.z) the folds are drawn in, and lit from where it is.
+    '  vec2 o=(uv-M.xy)*a;',
+    '  float near=M.z*exp(-dot(o,o)*5.5);',
+    '  vec2 q=((uv-.5)*a+o*near*.2)*mix(4.4,3.8,W)+vec2(.4,.2-S);',
     // Forward differences: three heights give the slope, and the slope gives the normal.
     '  float h=cloth(q);',
     '  vec2 g=(vec2(cloth(q+vec2(.012,0.)),cloth(q+vec2(0.,.012)))-h)/.012;',
     '  vec3 n=normalize(vec3(-g*.2,1.));',
     // A key light from the top left, a soft fill from the other side, a satin lobe around the tight one.
-    '  vec3 l=normalize(vec3(L,.6));',
+    '  vec3 l=normalize(vec3(L-o*near*1.1,.6));',
     '  vec3 m=normalize(l+vec3(0.,0.,1.));',
     '  float d=max(dot(n,l),0.);',
     '  float fill=max(dot(n,vec3(.56,-.34,.76)),0.);',
@@ -51,6 +56,7 @@
     '  float v=(.03+.46*d*d+.05*fill)*(.84+.16*h)+.08*pow(nm,16.)+.03*sheen+.13*pow(nm,60.);',
     '  vec2 e=(uv-vec2(.56,.56))*vec2(1.,1.1);',
     '  v*=mix(1.,.5,smoothstep(.3,.95,length(e)));',
+    '  v+=near*(.05+.03*h);',
     // Behind the text the peaks flatten out into blue: left of the hero on a wide screen, all of a phone.
     '  float open=W*smoothstep(.24,.8,uv.x);',
     '  float knee=mix(.34,.66,open);',
@@ -91,13 +97,14 @@
   var loc = gl.getAttribLocation(prog, 'p');
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  var uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uL = gl.getUniformLocation(prog, 'L'), uW = gl.getUniformLocation(prog, 'W');
+  var uR = gl.getUniformLocation(prog, 'R'), uT = gl.getUniformLocation(prog, 'T'), uL = gl.getUniformLocation(prog, 'L'), uW = gl.getUniformLocation(prog, 'W'), uM = gl.getUniformLocation(prog, 'M'), uS = gl.getUniformLocation(prog, 'S');
 
   // Sized in CSS pixels, so the device pixel ratio never adds work. A huge screen stays under the cap.
   var scale = K.coarse ? 0.35 : 0.5;
   var MAX_PIXELS = 600000;
+  var cw = 1, ch = 1;
   function resize() {
-    var w = canvas.clientWidth, h = canvas.clientHeight;
+    var w = (cw = canvas.clientWidth), h = (ch = canvas.clientHeight);
     var s = Math.min(scale, Math.sqrt(MAX_PIXELS / Math.max(1, w * h)));
     canvas.width = Math.max(2, Math.round(w * s));
     canvas.height = Math.max(2, Math.round(h * s));
@@ -108,17 +115,22 @@
   K.resize(resize);
   resize();
 
-  // The pointer only leans the light a few degrees, over seconds.
-  var mx = 0, my = 0, tx = 0, ty = 0;
+  // The handlers only store. A finger never leans the cloth: it scrolls, and that is what the silk follows.
+  var tx = 0, ty = 0, inside = 0;
   if (K.fine) {
     window.addEventListener(
       'pointermove',
       function (e) {
-        tx = e.clientX / window.innerWidth - 0.5;
-        ty = 0.5 - e.clientY / window.innerHeight;
+        if (e.pointerType === 'touch') return;
+        tx = e.clientX;
+        ty = e.clientY;
+        inside = 1;
       },
       { passive: true }
     );
+    document.documentElement.addEventListener('pointerleave', function () {
+      inside = 0;
+    });
   }
 
   var live = false;
@@ -153,20 +165,39 @@
 
   // Seconds of cloth, on real time. Added up from clamped steps, so a stall slows it and never jumps.
   var T = 18;
+  // The pointer: one exponential, in canvas units. It starts where the pointer is, faded in by `lean`.
+  var POINTER = 0.25, mx = 0.5, my = 0.5, lean = 0;
+  // The scroll: two exponentials in a row, about 0.25 s together. With one, each wheel notch would start
+  // at full speed and show as a step; with two, even the speed is continuous.
+  var SCROLL = 0.12, s1 = 0, s2 = 0, flow = 0;
   K.frame(function (now, dt) {
     if (!live) return;
     if (last) quality(now, now - last);
     last = now;
-    T += dt * 0.1;
-    mx = K.damp(mx, tx, 3, dt);
-    my = K.damp(my, ty, 3, dt);
-    gl.uniform1f(uT, T);
-    gl.uniform2f(uL, -0.62 + mx * 0.1, 0.72 + my * 0.1);
+    s1 = K.damp(s1, window.scrollY, SCROLL, dt);
+    s2 = K.damp(s2, s1, SCROLL, dt);
+    // The gap between the stages is the speed, in screens per second: a fast scroll adds a little flow.
+    var speed = Math.abs(s1 - s2) / SCROLL / K.vh;
+    flow = K.damp(flow, speed / (1 + speed), 0.4, dt);
+    T += dt * (0.1 + 0.2 * flow);
+    if (lean < 0.01) {
+      mx = tx / cw;
+      my = 1 - ty / ch;
+    }
+    lean = K.damp(lean, inside, POINTER, dt);
+    mx = K.damp(mx, tx / cw, POINTER, dt);
+    my = K.damp(my, 1 - ty / ch, POINTER, dt);
+    var page = s2 / K.vh;
+    gl.uniform1f(uT, T + page * 0.3);
+    gl.uniform1f(uS, page * 0.9);
+    gl.uniform3f(uM, mx, my, lean);
+    gl.uniform2f(uL, -0.62 + (mx - 0.5) * lean * 0.24, 0.72 + (my - 0.5) * lean * 0.24);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   });
 
   // After the page is on screen: the hero never waits for the shader.
   function begin() {
+    s1 = s2 = window.scrollY;
     live = true;
     wait = performance.now() + 3000;
     requestAnimationFrame(function () {

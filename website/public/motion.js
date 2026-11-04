@@ -15,7 +15,7 @@
   }
 
   // One frame loop for the whole site, started by the first scene that asks for it: a page of plain
-  // reading runs none. It never reads the scroll position or the layout.
+  // reading runs none. The loop itself never reads the scroll position or the layout.
   var jobs = [];
   var K = (window.Kyro = {
     motion: motion,
