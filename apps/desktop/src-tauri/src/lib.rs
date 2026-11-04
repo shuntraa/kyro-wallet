@@ -441,6 +441,7 @@ pub fn run() {
             commands_hw_keys::hw_key_add,
             commands_hw_keys::hw_key_verify,
             commands_hw_sui::hw_sui_build_tx,
+            commands_hw_sui::hw_sui_build_token_tx,
             commands_hw_sui::hw_sign_sui_tx,
             commands_hw_sui::hw_sui_broadcast,
             commands_hw_aptos::hw_aptos_build_tx,

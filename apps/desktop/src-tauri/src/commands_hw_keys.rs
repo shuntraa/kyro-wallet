@@ -74,6 +74,24 @@ pub(crate) async fn device_sign(
         .await?)
 }
 
+/// [`device_sign`] for a Sui token transfer, with the objects the app reads it from.
+pub(crate) async fn device_sign_sui_token(
+    app: &AppHandle,
+    state: &AppState,
+    id: &str,
+    acc: &WatchOnlyAccount,
+    message: Vec<u8>,
+    objects: Vec<Vec<u8>>,
+) -> AppResult<Vec<u8>> {
+    let account = acc.account;
+    Ok(state
+        .hw
+        .run(id, T_CONFIRM, prompt_fn(app, id), move |dev, ctl| {
+            ledger_apps::sign_sui_token(dev, ctl, account, &message, &objects)
+        })
+        .await?)
+}
+
 /// Reads the public key of `chain` from device `id` and stores it in a watch-only account,
 /// new or `accountId` (same brand and account number; a different key already stored for this
 /// chain means another device: `HW_WRONG_DEVICE`).

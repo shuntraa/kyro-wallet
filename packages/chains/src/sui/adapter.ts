@@ -40,13 +40,12 @@ export function rustSuiBackend(account = 0): SuiBackend {
 
 /** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustSuiHwBackend(accountId: string): SuiBackend {
-  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
-  const { buildToken: _buildTokenVaultOnly, ...base } = rustSuiBackend();
   return {
-    ...base,
+    ...rustSuiBackend(),
     build: (to, amount) => call('hw_sui_build_tx', amount === null ? { accountId, to, all: true } : { accountId, to, amount: amount.toString() }),
-    sign: (bcs, id) => call('hw_sign_sui_tx', { id, accountId, bcs }),
+    sign: (bcs, id, coinType) => call('hw_sign_sui_tx', { id, accountId, bcs, ...(coinType ? { coinType } : {}) }),
     broadcast: (bcs, signature) => call('hw_sui_broadcast', { accountId, bcs, signature }),
+    buildToken: (coinType, to, amount) => call('hw_sui_build_token_tx', amount === null ? { accountId, coinType, to, all: true } : { accountId, coinType, to, amount: amount.toString() }),
   };
 }
 
@@ -151,7 +150,6 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
 
   /** Token transfer: Rust picks and merges the token coins, pays the gas in SUI, simulates. */
   private async buildToken(params: BuildParams, to: string): Promise<SuiUnsigned> {
-    if (this.hw) throw new Error(l10n('Jetons Sui : pas encore pris en charge sur hardware wallet', 'Sui tokens: not yet supported on hardware wallets'));
     const k = SUI_COINS[this.chain.network].find((x) => x.contract === params.asset.contract);
     if (!k || k.decimals !== params.asset.decimals || !this.backend.buildToken) throw new Error(l10n('Jeton Sui inconnu', 'Unknown Sui token'));
     const all = !!params.max;

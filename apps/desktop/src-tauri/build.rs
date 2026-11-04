@@ -296,6 +296,7 @@ const COMMANDS: &[&str] = &[
     "hw_key_add",
     "hw_key_verify",
     "hw_sui_build_tx",
+    "hw_sui_build_token_tx",
     "hw_sign_sui_tx",
     "hw_sui_broadcast",
     "hw_aptos_build_tx",

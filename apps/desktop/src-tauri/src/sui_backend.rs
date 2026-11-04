@@ -398,6 +398,43 @@ fn parse_effects(e: &Value) -> AppResult<SuiSimulation> {
     })
 }
 
+/// BCS of these exact objects, each checked against the digest of its reference: the server
+/// cannot pass off another coin, and the Ledger Sui app checks the same digests.
+pub async fn object_bcs(ctx: &SuiCtx<'_>, refs: &[SuiObjectRef]) -> AppResult<Vec<Vec<u8>>> {
+    use base64::Engine;
+    let keys: Vec<Value> = refs
+        .iter()
+        .map(|r| {
+            json!({ "address": wallet_core::sui_address_string(&r.object_id), "version": r.version })
+        })
+        .collect();
+    let d = gql(
+        ctx,
+        "query($k: [ObjectKey!]!) { chainIdentifier multiGetObjects(keys: $k) { objectBcs } }",
+        json!({ "k": keys }),
+    )
+    .await?;
+    check_chain(ctx, &d["chainIdentifier"])?;
+    let nodes = d["multiGetObjects"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice);
+    if nodes.len() != refs.len() {
+        return Err(bad("Sui: objects missing from the answer"));
+    }
+    refs.iter()
+        .zip(nodes)
+        .map(|(r, n)| {
+            let bcs = base64::engine::general_purpose::STANDARD
+                .decode(n["objectBcs"].as_str().unwrap_or(""))
+                .map_err(|_| bad("Sui: invalid object bytes"))?;
+            if wallet_core::sui_object_digest(&bcs) != r.digest {
+                return Err(bad("Sui: object bytes do not match its digest"));
+            }
+            Ok(bcs)
+        })
+        .collect()
+}
+
 /// Dry run of the exact BCS Kyro built (no signature needed). The digest must be ours.
 pub async fn simulate(ctx: &SuiCtx<'_>, bcs_b64: &str, digest: &str) -> AppResult<SuiSimulation> {
     let q = format!(

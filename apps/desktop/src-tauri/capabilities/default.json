@@ -294,6 +294,7 @@
     "allow-hw-key-add",
     "allow-hw-key-verify",
     "allow-hw-sui-build-tx",
+    "allow-hw-sui-build-token-tx",
     "allow-hw-sign-sui-tx",
     "allow-hw-sui-broadcast",
     "allow-hw-aptos-build-tx",

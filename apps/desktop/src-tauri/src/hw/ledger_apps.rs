@@ -223,7 +223,7 @@ pub fn sign(
     ctl.prompt(Prompt::ConfirmOnDevice);
     let path = chain.path(account);
     match chain {
-        HwKeyChain::Sui => super::ledger_sui::sign(&app, &path, message),
+        HwKeyChain::Sui => super::ledger_sui::sign(&app, &path, message, &[]),
         HwKeyChain::Aptos => super::ledger_aptos::sign(&app, &path, message),
         HwKeyChain::Algo => super::ledger_algo::sign(&app, account, message),
         HwKeyChain::Near => super::ledger_near::sign(&app, &path, message),
@@ -231,6 +231,20 @@ pub fn sign(
         HwKeyChain::Ton => super::ledger_ton::sign(&app, &path, message),
         HwKeyChain::Hbar => super::ledger_hbar::sign(&app, &path, message),
     }
+}
+
+/// Sui token transfer: as [`sign`], with the coin objects the app reads the token and amount from.
+pub fn sign_sui_token(
+    dev: &mut dyn HardwareWallet,
+    ctl: &Ctl,
+    account: u32,
+    message: &[u8],
+    objects: &[Vec<u8>],
+) -> HwResult<Vec<u8>> {
+    let chain = HwKeyChain::Sui;
+    let app = App::open(link(dev, chain)?, ctl, chain)?;
+    ctl.prompt(Prompt::ConfirmOnDevice);
+    super::ledger_sui::sign(&app, &chain.path(account), message, objects)
 }
 
 /// Plays back a recorded `=> apdu` / `<= response` script (no device attached).

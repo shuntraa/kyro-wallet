@@ -156,6 +156,8 @@ pub enum SwContext {
     EthSigning,
     /// Tron SIGN: `6A8B` / `6A8D` mean "Allow data" / "Custom contracts" is off.
     TronSigning,
+    /// Sui SIGN_TX: `6808` means the app could not decode the transaction and blind signing is off.
+    SuiSigning,
 }
 
 /// Whether this status word means "the open app does not understand this command".
@@ -177,6 +179,10 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
             "this Ledger cannot show the details of this transaction: turn on \
              “Blind signing” in the Ethereum app settings (Kyro showed its \
              own summary), or reject",
+        ),
+        0x6808 if ctx == SwContext::SuiSigning => HwError::unsupported(
+            "the Sui app could not decode this transfer: update it in Ledger Live (Kyro does not \
+             ask for blind signing here), or reject",
         ),
         0x6808 => HwError::unsupported(
             "Enable Blind signing in the Solana app settings: this Ledger cannot \

@@ -21,6 +21,11 @@ pub(crate) fn blake2b256(parts: &[&[u8]]) -> [u8; 32] {
     h.finalize().into()
 }
 
+/// Digest of an object: BLAKE2b-256 of `Object::` and its BCS, as in its object reference.
+pub fn sui_object_digest(object_bcs: &[u8]) -> [u8; 32] {
+    blake2b256(&[b"Object::", object_bcs])
+}
+
 fn hardened(index: u32) -> Result<ChildIndex> {
     ChildIndex::hardened(index).map_err(|_| Error::input("derivation index must be < 2^31"))
 }

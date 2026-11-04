@@ -60,6 +60,8 @@ const INTENT: [u8; 3] = [0, 0, 0];
 const MAX_BCS: usize = 128 * 1024;
 /// At most this many coin objects of a token in one transfer (merged into the first one).
 pub const SUI_MAX_TOKEN_COINS: usize = 32;
+/// Token coins the Ledger Sui app parses in one transfer (`MERGE_COIN_ARRAY_LENGTH`, plus margin).
+pub const SUI_HW_MAX_TOKEN_COINS: usize = 8;
 
 /// A non-SUI coin type Kyro knows (issuer's list, cross-checked, decimals from `CoinMetadata`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

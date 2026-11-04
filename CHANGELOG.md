@@ -19,8 +19,8 @@
   app cannot show it.
 - Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
   enabled or removed there (Receive), each shown in full on the device.
-- Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
-  enabled or removed there (Receive), each shown in full on the device.
+- Hardware wallets: Sui USDC can be sent from Ledger accounts, the device reading the token and
+  the amount from the coins themselves (8 coins per transfer at most).
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited

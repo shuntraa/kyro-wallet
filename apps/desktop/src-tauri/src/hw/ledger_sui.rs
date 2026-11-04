@@ -117,18 +117,35 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: bool) -> HwResult<Vec<u8>> {
     parse_pubkey(&run(app, ins, &[path_payload(path)], ctx)?)
 }
 
-pub fn sign_params(path: &[u32], intent_message: &[u8]) -> Vec<Vec<u8>> {
+/// Transaction, path and, for a token transfer, the objects the app reads the coin type and
+/// amounts from (it only trusts an object whose digest is the one in the transaction): count,
+/// then each length-prefixed, all little-endian (`SuiLedgerClient`, `WithObjectData` in the app).
+pub fn sign_params(path: &[u32], intent_message: &[u8], objects: &[Vec<u8>]) -> Vec<Vec<u8>> {
     let mut tx = (intent_message.len() as u32).to_le_bytes().to_vec();
     tx.extend_from_slice(intent_message);
-    vec![tx, path_payload(path)]
+    let mut params = vec![tx, path_payload(path)];
+    if !objects.is_empty() {
+        let mut list = (objects.len() as u32).to_le_bytes().to_vec();
+        for o in objects {
+            list.extend_from_slice(&(o.len() as u32).to_le_bytes());
+            list.extend_from_slice(o);
+        }
+        params.push(list);
+    }
+    params
 }
 
-pub fn sign(app: &App<'_>, path: &[u32], intent_message: &[u8]) -> HwResult<Vec<u8>> {
+pub fn sign(
+    app: &App<'_>,
+    path: &[u32],
+    intent_message: &[u8],
+    objects: &[Vec<u8>],
+) -> HwResult<Vec<u8>> {
     let sig = run(
         app,
         INS_SIGN_TX,
-        &sign_params(path, intent_message),
-        SwContext::Signing,
+        &sign_params(path, intent_message, objects),
+        SwContext::SuiSigning,
     )?;
     if sig.len() != 64 {
         return Err(HwError::bad("Sui signature of unexpected length"));
@@ -214,7 +231,8 @@ mod tests {
     fn sign_streams_result_and_handles_put_chunk_and_unknown_blocks() {
         let msg = [&[0u8, 0, 0][..], &[7u8; 300]].concat();
         let path = HwKeyChain::Sui.path(1);
-        let params = sign_params(&path, &msg);
+        let params = sign_params(&path, &msg, &[]);
+        assert_eq!(params.len(), 2);
         assert_eq!(&params[0][..4], &(303u32).to_le_bytes());
         let (start, store) = blocks(&params);
         let first: [u8; 32] = start[1..33].try_into().unwrap();
@@ -248,20 +266,124 @@ mod tests {
         let r = Replay::new(&lines);
         let c = ctl();
         let a = App::open(&r, &c, HwKeyChain::Sui).unwrap();
-        assert_eq!(sign(&a, &path, &msg).unwrap(), sig.to_vec());
+        assert_eq!(sign(&a, &path, &msg, &[]).unwrap(), sig.to_vec());
         assert!(r.done());
+    }
+
+    /// A real USDC coin from mainnet: `objectBcs` hashes to the digest of its object reference.
+    const USDC_COIN: &str = "AAMH26NGcuMMsGWx+T46tVMYdo/W/vZsFZQsn3y4RuL5AOcEdXNkYwRVU0RDAAEPYWIjAAAAACgAAAA1AXooCjBNp5CZPcjcAWFxFJYN0OKxESEPaw06flkAAAAAAAAAAELNdnXHuBa/YqIU+k8DevneB3OQeB9eCqMMUy/M/DLoIFN39BxuZWvzBYT7quGT+pxubFnlL6I4k9oQNbLUD0sQoC0UAAAAAAA=";
+
+    fn usdc_coin() -> (Vec<u8>, wallet_core::SuiObjectRef) {
+        use base64::Engine;
+        let bcs = base64::engine::general_purpose::STANDARD
+            .decode(USDC_COIN)
+            .unwrap();
+        let r = wallet_core::SuiObjectRef::parse(
+            "0x00000035017a280a304da790993dc8dc01617114960dd0e2b111210f6b0d3a7e",
+            593_649_935,
+            "Be9RLkGfSh9j1LwXrj9zgZLhZQqBYyJG7kQyGWpqKHUi",
+        )
+        .unwrap();
+        (bcs, r)
+    }
+
+    #[test]
+    fn real_coin_object_matches_its_digest() {
+        let (bcs, r) = usdc_coin();
+        assert_eq!(wallet_core::sui_object_digest(&bcs), r.digest);
+    }
+
+    /// USDC transfer signed through the third parameter, then checked as a Sui signature.
+    #[test]
+    fn token_transfer_sends_the_objects_as_third_parameter() {
+        use ed25519_dalek::Signer;
+        let (object, coin) = usdc_coin();
+        let k = ed25519_dalek::SigningKey::from_bytes(&[5; 32]);
+        let pk = k.verifying_key().to_bytes();
+        let t = wallet_core::SuiTransfer {
+            sender: wallet_core::sui_address_bytes_of_pubkey(&pk),
+            recipient: [2; 32],
+            amount: wallet_core::SuiTransferAmount::Mist(1_500_000),
+            gas_payment: vec![wallet_core::SuiObjectRef {
+                object_id: [3; 32],
+                version: 9,
+                digest: [4; 32],
+            }],
+            gas_price: 1000,
+            gas_budget: 5_000_000,
+            expiration_epoch: Some(900),
+            coins: vec![coin],
+        };
+        use base64::Engine;
+        let bcs = base64::engine::general_purpose::STANDARD.encode(t.encode().unwrap());
+        let msg = wallet_core::sui_hw_message(&bcs).unwrap();
+        let path = HwKeyChain::Sui.path(0);
+        let objects = vec![object.clone()];
+        let params = sign_params(&path, &msg, &objects);
+        assert_eq!(params.len(), 3);
+        let list = [
+            &1u32.to_le_bytes()[..],
+            &(object.len() as u32).to_le_bytes(),
+            &object,
+        ]
+        .concat();
+        assert_eq!(params[2], list);
+        let (start, store) = blocks(&params);
+        assert_eq!(start.len(), 1 + 96);
+        let mut lines = app("Sui", "1.6.0").to_vec();
+        let mut payload = start.clone();
+        for i in 0..3 {
+            let mut key: [u8; 32] = start[1 + 32 * i..33 + 32 * i].try_into().unwrap();
+            loop {
+                let block = store[&key].clone();
+                exchange(
+                    &mut lines,
+                    &cmd(INS_SIGN_TX, &payload),
+                    &[&[GET_CHUNK][..], &key].concat(),
+                );
+                payload = [&[GET_CHUNK_OK][..], &block].concat();
+                key = block[..32].try_into().unwrap();
+                if key == [0; 32] {
+                    break;
+                }
+            }
+        }
+        let sig = k.sign(&blake2_of(&msg)).to_bytes();
+        exchange(
+            &mut lines,
+            &cmd(INS_SIGN_TX, &payload),
+            &[&[RESULT_FINAL][..], &sig].concat(),
+        );
+        let r = Replay::new(&lines);
+        let c = ctl();
+        let a = App::open(&r, &c, HwKeyChain::Sui).unwrap();
+        assert_eq!(sign(&a, &path, &msg, &objects).unwrap(), sig.to_vec());
+        assert!(r.done());
+        wallet_core::sui_hw_signature(&bcs, &pk, &sig).unwrap();
+    }
+
+    /// What Sui signs: BLAKE2b-256 of the intent message.
+    fn blake2_of(msg: &[u8]) -> Vec<u8> {
+        use blake2::digest::{consts::U32, Digest};
+        blake2::Blake2b::<U32>::digest(msg).to_vec()
+    }
+
+    #[test]
+    fn undecodable_transfer_names_the_sui_app() {
+        let e = apdu::sw_error(0x6808, SwContext::SuiSigning);
+        assert!(format!("{e:?}").contains("Sui app"));
     }
 
     #[test]
     fn refusal_on_device() {
         let path = HwKeyChain::Sui.path(0);
-        let (start, _) = blocks(&sign_params(&path, &[0, 0, 0, 1]));
+        let (start, _) = blocks(&sign_params(&path, &[0, 0, 0, 1], &[]));
         let mut lines = app("Sui", "1.6.0").to_vec();
         lines.push(format!("=> {}", hex::encode(cmd(INS_SIGN_TX, &start))));
         lines.push("<= 6985".into());
         let r = Replay::new(&lines);
         let c = ctl();
         let a = App::open(&r, &c, HwKeyChain::Sui).unwrap();
-        assert_eq!(sign(&a, &path, &[0, 0, 0, 1]), Err(HwError::Rejected));
+        assert_eq!(sign(&a, &path, &[0, 0, 0, 1], &[]), Err(HwError::Rejected));
     }
 }
