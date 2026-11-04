@@ -263,6 +263,32 @@ pub struct UtxoSigned {
     summary: UtxoTxSummary,
 }
 
+/// Checks a Litecoin replacement against its original; empty when this is an ordinary send. Only
+/// Litecoin has replaceable transactions among these coins.
+pub(crate) fn replacement_head(
+    lang: Lang,
+    coin: UtxoCoin,
+    psbt: &str,
+    replaces: Option<&wallet_core::UtxoReplaceRequest>,
+    summary: &UtxoTxSummary,
+) -> AppResult<String> {
+    let Some(r) = replaces else {
+        return Ok(String::new());
+    };
+    if coin != UtxoCoin::Litecoin {
+        return Err(AppError::InvalidInput(
+            "this coin has no replaceable transactions".into(),
+        ));
+    }
+    let change: Vec<bool> = summary.outputs.iter().map(|o| o.is_change).collect();
+    let checked = wallet_core::utxo_check_replacement(psbt, r, &change)?;
+    Ok(crate::commands::describe_utxo_replacement(
+        lang,
+        coin.symbol(),
+        &checked,
+    ))
+}
+
 async fn sign(
     app: &AppHandle,
     state: &AppState,
@@ -270,6 +296,7 @@ async fn sign(
     psbt: String,
     password: String,
     account: Option<u32>,
+    replaces: Option<wallet_core::UtxoReplaceRequest>,
 ) -> AppResult<UtxoSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
@@ -295,10 +322,11 @@ async fn sign(
         (UtxoCoin::Dash, Lang::Fr) => "Confirmer la transaction Dash",
         (UtxoCoin::Dash, Lang::En) => "Confirm the Dash transaction",
     };
+    let head = replacement_head(lang, coin, &psbt, replaces.as_ref(), &summary)?;
     confirm_native(
         app,
         title,
-        signer.body(lang, &describe_utxo(lang, &summary, net)),
+        signer.body(lang, &(head + &describe_utxo(lang, &summary, net))),
     )
     .await?;
     confirm_signer(app, &signer).await?;
@@ -381,8 +409,9 @@ pub async fn ltc_sign_psbt(
     psbt: String,
     password: String,
     account: Option<u32>,
+    replaces: Option<wallet_core::UtxoReplaceRequest>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, LTC, psbt, password, account).await
+    sign(&app, &state, LTC, psbt, password, account, replaces).await
 }
 
 #[tauri::command]
@@ -443,7 +472,7 @@ pub async fn doge_sign_psbt(
     password: String,
     account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, DOGE, psbt, password, account).await
+    sign(&app, &state, DOGE, psbt, password, account, None).await
 }
 
 #[tauri::command]
@@ -506,7 +535,7 @@ pub async fn bch_sign_psbt(
     password: String,
     account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, BCH, psbt, password, account).await
+    sign(&app, &state, BCH, psbt, password, account, None).await
 }
 
 #[tauri::command]
@@ -567,7 +596,7 @@ pub async fn dash_sign_psbt(
     password: String,
     account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, DASH, psbt, password, account).await
+    sign(&app, &state, DASH, psbt, password, account, None).await
 }
 
 pub(crate) async fn probe(

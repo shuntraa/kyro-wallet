@@ -5,12 +5,13 @@ import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoPrefix, type UtxoTxSummary, l10n } from '@kyro/shared';
+import { BTC_TXS_CAP, call, type ReplaceMode, type UtxoReplaceRequest, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoPrefix, type UtxoTxSummary, l10n } from '@kyro/shared';
 import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
 import type { HwSigner } from '../hw';
 import { esploraUsage, scanWatchSource, watchScriptOutput, type WatchSource } from '../watchScan';
+import { isRbfSignaled, planCancel, planSpeedUp, RBF_SEQUENCE, RBF_VSIZE_MARGIN, ReplaceRefused, type UtxoReplacementPlan } from '../replace';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
 
 bitcoin.initEccLib(ecc);
@@ -29,7 +30,7 @@ export interface UtxoBackend {
   feeRates(): Promise<UtxoFeeRates>;
   tipHeight(): Promise<number>;
   broadcast(hex: string): Promise<string>;
-  signPsbt(psbt: string, password: string): Promise<{ psbt: string; summary: UtxoTxSummary }>;
+  signPsbt(psbt: string, password: string, replaces?: UtxoReplaceRequest): Promise<{ psbt: string; summary: UtxoTxSummary }>;
 }
 
 /** The typed `{ltc,doge,bch,dash}_*` commands of `@kyro/shared` (docs/IPC.md §2.4), signing with vault account `account`. */
@@ -43,7 +44,7 @@ export function rustUtxoBackend(prefix: UtxoPrefix, account = 0): UtxoBackend {
     feeRates: () => call(`${prefix}_fee_rates`),
     tipHeight: async () => Number(await call(`${prefix}_tip_height`)),
     broadcast: (hex) => call(`${prefix}_broadcast`, { hex }),
-    signPsbt: (psbt, password) => call(`${prefix}_sign_psbt`, { psbt, password, ...acct }),
+    signPsbt: (psbt, password, replaces) => call(`${prefix}_sign_psbt`, { psbt, password, ...acct, ...(replaces ? { replaces } : {}) }),
   };
 }
 
@@ -158,6 +159,8 @@ export interface UtxoCoinSpec {
   minOutput: (t: UtxoScriptType) => bigint;
   /** Legacy inputs: the PSBT must carry the full previous transaction (`nonWitnessUtxo`). */
   needsPrevTx: boolean;
+  /** Sends are marked replaceable (BIP125) and can be sped up or cancelled. */
+  replaceable?: boolean;
   /** Smallest-unit name, for messages. */
   unit: string;
   /** Floor of the fee rate (smallest unit per vB) and its display. */
@@ -407,6 +410,8 @@ export class UtxoAdapter {
     const prevTx = new Map<string, Uint8Array>();
     // Hardware wallets check every spent amount against the full previous transaction.
     const withPrev = this.spec.needsPrevTx || this.hw !== null;
+    // Replaceable (BIP125) on the coins that have it: Kyro can then speed up or cancel the send.
+    const rbf = this.spec.replaceable ? { sequence: RBF_SEQUENCE } : {};
     if (withPrev) {
       for (const txid of new Set(sel.inputs.map((c) => c.txid))) {
         const tx = bitcoin.Transaction.fromHex(await this.backend.txHex(txid));
@@ -420,15 +425,15 @@ export class UtxoAdapter {
       if (this.spec.needsPrevTx) {
         const raw = prevTx.get(c.txid);
         if (!raw) throw new Error(l10n('Transaction précédente manquante', 'Previous transaction missing'));
-        psbt.addInput({ hash: c.txid, index: c.vout, nonWitnessUtxo: raw, bip32Derivation: derivation });
+        psbt.addInput({ hash: c.txid, index: c.vout, ...rbf, nonWitnessUtxo: raw, bip32Derivation: derivation });
       } else if (withPrev) {
         const raw = prevTx.get(c.txid);
         if (!raw) throw new Error(l10n('Transaction précédente manquante', 'Previous transaction missing'));
         const script = this.scriptOf(owner.address);
-        psbt.addInput({ hash: c.txid, index: c.vout, witnessUtxo: { script, value: c.value }, nonWitnessUtxo: raw, bip32Derivation: derivation });
+        psbt.addInput({ hash: c.txid, index: c.vout, ...rbf, witnessUtxo: { script, value: c.value }, nonWitnessUtxo: raw, bip32Derivation: derivation });
       } else {
         const script = this.scriptOf(owner.address);
-        psbt.addInput({ hash: c.txid, index: c.vout, witnessUtxo: { script, value: c.value }, bip32Derivation: derivation });
+        psbt.addInput({ hash: c.txid, index: c.vout, ...rbf, witnessUtxo: { script, value: c.value }, bip32Derivation: derivation });
       }
     }
     psbt.addOutput({ script: recipientScript, value: sel.amount });
@@ -452,15 +457,104 @@ export class UtxoAdapter {
     };
   }
 
+  /** Replacement of a pending send (see `BitcoinAdapter.planReplacement`): Litecoin only. */
+  async planReplacement(txid: string, mode: ReplaceMode, rate: number): Promise<UtxoReplacementPlan> {
+    if (!this.spec.replaceable) throw new ReplaceRefused('unsupported');
+    if (this.watch) throw new ReplaceRefused('notOurs');
+    const rawHex = await this.backend.txHex(txid).catch(() => {
+      throw new ReplaceRefused('unknown');
+    });
+    const tx = bitcoin.Transaction.fromHex(rawHex);
+    if (tx.getId() !== txid) throw new ReplaceRefused('unknown');
+    const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    const own = new Map((await this.scan(true)).map((a) => [hex(this.scriptOf(a.address)), a]));
+    const spent = await Promise.all(
+      tx.ins.map(async (i) => {
+        const prevId = hex(Uint8Array.from(i.hash).reverse());
+        const prev = bitcoin.Transaction.fromHex(await this.backend.txHex(prevId));
+        const out = prev.outs[i.index];
+        const owner = out ? own.get(hex(out.script)) : undefined;
+        if (prev.getId() !== prevId || !out || !owner) throw new ReplaceRefused('notOurs');
+        return { txid: prevId, vout: i.index, value: out.value, owner, raw: prev.toBuffer(), script: out.script };
+      }),
+    );
+    if (!isRbfSignaled(tx.ins.map((i) => i.sequence))) throw new ReplaceRefused('notReplaceable');
+    const ownOuts = tx.outs.flatMap((o) => own.get(hex(o.script)) ?? []);
+    const seen = await Promise.all([...new Set([spent[0]?.owner.address, ...ownOuts.map((o) => o.address)])].flatMap((a) => (a ? [this.backend.addressTxs(a)] : [])));
+    const related = seen.flat();
+    if (related.some((t) => t.txid === txid && t.status.confirmed)) throw new ReplaceRefused('confirmed');
+    if (related.some((t) => t.txid !== txid && !t.status.confirmed && t.vin.some((v) => v.txid === txid))) throw new ReplaceRefused('hasChild');
+
+    const fp = fingerprintBytes(this.account.fingerprint);
+    const total = spent.reduce((s, i) => s + i.value, 0n);
+    const oldFee = total - tx.outs.reduce((s, o) => s + o.value, 0n);
+    const vsize = tx.virtualSize() + RBF_VSIZE_MARGIN;
+    const psbt = new bitcoin.Psbt({ network: this.net });
+    for (const c of spent) {
+      psbt.addInput({
+        hash: c.txid,
+        index: c.vout,
+        sequence: RBF_SEQUENCE,
+        witnessUtxo: { script: c.script, value: c.value },
+        ...(this.hw ? { nonWitnessUtxo: c.raw } : {}),
+        bip32Derivation: [{ masterFingerprint: fp, pubkey: c.owner.pubkey, path: c.owner.path }],
+      });
+    }
+    const addOwn = (o: DerivedUtxoAddress, value: bigint) => psbt.addOutput({ script: this.scriptOf(o.address), value, bip32Derivation: [{ masterFingerprint: fp, pubkey: o.pubkey, path: o.path }] });
+    const outputs: BtcUnsigned['summary']['outputs'] = [];
+    let fee: bigint;
+    let newVsize = vsize;
+    if (mode === 'speedUp') {
+      const plan = planSpeedUp(tx.outs.map((o) => ({ value: o.value, own: own.has(hex(o.script)), dust: this.spec.minOutput('p2wpkh') })), oldFee, vsize, rate);
+      fee = plan.fee;
+      tx.outs.forEach((o, i) => {
+        const owner = own.get(hex(o.script));
+        const value = i === plan.change ? plan.newChange : o.value;
+        if (owner) addOwn(owner, value);
+        else psbt.addOutput({ script: o.script, value });
+        outputs.push([bitcoin.address.fromOutputScript(o.script, this.net), Number(value), owner !== undefined]);
+      });
+    } else {
+      const change = await this.changeAddress();
+      newVsize = vsize - tx.outs.reduce((s, o) => s + 9 + o.script.length, 0) + 31;
+      const plan = planCancel(total, oldFee, newVsize, rate, this.spec.minOutput('p2wpkh'));
+      fee = plan.fee;
+      addOwn(change, plan.value);
+      outputs.push([change.address, Number(plan.value), true]);
+    }
+    const payments = outputs.filter((o) => !o[2]);
+    const amount = BigInt(payments.reduce((s, o) => s + o[1], 0));
+    const recipient = payments[0]?.[0] ?? outputs[0]?.[0] ?? '';
+    return {
+      family: 'utxo',
+      mode,
+      replaces: { txid, rawTx: rawHex, mode },
+      recipient,
+      amount,
+      oldFee,
+      newFee: fee,
+      unsigned: {
+        family: 'btc',
+        psbt: psbt.toBase64(),
+        amount,
+        recipient,
+        fee,
+        maxFee: fee,
+        summary: { outputs, feeSats: Number(fee), warnings: [], requiresExtraConfirmation: false },
+        size: { family: 'btc', vsize: newVsize },
+      },
+    };
+  }
+
   /** Rust: password, decoding, native dialog (+ reinforced one if needed), signature. */
-  async signTx(unsigned: UtxoUnsigned, password: string): Promise<UtxoSigned> {
-    return this.finish(unsigned, await this.backend.signPsbt(unsigned.psbt, password));
+  async signTx(unsigned: UtxoUnsigned, password: string, replaces?: UtxoReplaceRequest): Promise<UtxoSigned> {
+    return this.finish(unsigned, await this.backend.signPsbt(unsigned.psbt, password, replaces));
   }
 
   /** Hardware wallet: Rust's decoding and dialog, the device, then every signature verified in Rust. */
-  async signTxHw(unsigned: UtxoUnsigned, deviceId: string): Promise<UtxoSigned> {
+  async signTxHw(unsigned: UtxoUnsigned, deviceId: string, replaces?: UtxoReplaceRequest): Promise<UtxoSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
-    const res = await call('hw_sign_utxo_psbt', { id: deviceId, accountId: this.hw.accountId, chain: this.spec.prefix, psbt: unsigned.psbt });
+    const res = await call('hw_sign_utxo_psbt', { id: deviceId, accountId: this.hw.accountId, chain: this.spec.prefix, psbt: unsigned.psbt, ...(replaces ? { replaces } : {}) });
     return this.finish(unsigned, res);
   }
 

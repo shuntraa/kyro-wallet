@@ -5,7 +5,7 @@ import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx, l10n } from '@kyro/shared';
+import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx, l10n, type ReplaceMode, type UtxoReplaceRequest } from '@kyro/shared';
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
@@ -13,6 +13,7 @@ import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 import { scriptTypeOf } from '../utxo/utxo';
 import { gapScanBranch, limiter, SCAN_CONCURRENCY } from '../gapScan';
+import { isRbfSignaled, planCancel, planSpeedUp, RBF_SEQUENCE, RBF_VSIZE_MARGIN, ReplaceRefused, type UtxoReplacementPlan } from '../replace';
 import { esploraUsage, scanWatchSource, watchScriptOutput, type WatchSource } from '../watchScan';
 
 bitcoin.initEccLib(ecc);
@@ -42,6 +43,8 @@ export interface BitcoinAdapterOptions {
 }
 
 const SCAN_TTL_MS = 30_000;
+/** Bitcoin Core's dust limit of a P2TR output, the highest of Kyro's own output types. */
+const DUST = 330n;
 const MAX_SCAN = 40;
 
 export class BitcoinAdapter implements ChainAdapter<'btc'> {
@@ -232,33 +235,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       throw lastError instanceof Error ? lastError : new Error(l10n('Sélection des entrées impossible', 'Input selection failed'));
     }
     const psbt = new bitcoin.Psbt({ network: this.net });
-    for (const u of sel.inputs) {
-      const owner = (u as (typeof utxos)[number]).owner;
-      const fp = fingerprintBytes(this.accounts[owner.kind].fingerprint);
-      const script = bitcoin.address.toOutputScript(owner.address, this.net);
-      if (owner.kind === 'segwit') {
-        const input: Parameters<typeof psbt.addInput>[0] = { hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] };
-        if (this.hw) {
-          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT) and checks its txid; checked here too (txid and the spent output), never trusted blindly.
-          const prev = bitcoin.Transaction.fromHex(await this.hw.prevTx(u.txid));
-          const out = prev.outs[u.vout];
-          if (prev.getId() !== u.txid || !out || out.value !== u.value || !bytesEqual(out.script, script)) {
-            throw new Error(l10n(`Transaction précédente incohérente pour l’entrée ${u.txid.slice(0, 10)}… : signature refusée.`, `Previous transaction inconsistent for input ${u.txid.slice(0, 10)}…: signing refused.`));
-          }
-          input.nonWitnessUtxo = prev.toBuffer();
-        }
-        psbt.addInput(input);
-      } else {
-        const xonly = owner.pubkey.slice(1, 33);
-        psbt.addInput({
-          hash: u.txid,
-          index: u.vout,
-          witnessUtxo: { script, value: u.value },
-          tapInternalKey: xonly,
-          tapBip32Derivation: [{ masterFingerprint: fp, pubkey: xonly, path: owner.path, leafHashes: [] }],
-        });
-      }
-    }
+    for (const u of sel.inputs) await this.addOwnInput(psbt, u.txid, u.vout, u.value, (u as (typeof utxos)[number]).owner);
     psbt.addOutput({ address: to, value: sel.amount });
     const outputs: BtcTxSummary['outputs'] = [[to, Number(sel.amount), false]];
     if (sel.change > 0n) {
@@ -283,8 +260,132 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     };
   }
 
-  async signTx(unsigned: BtcUnsigned, password: string): Promise<BtcSigned> {
-    const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password, ...accountArg(this.account) });
+  /** One of our coins as a replaceable PSBT input (every Kyro send can be sped up or cancelled). */
+  private async addOwnInput(psbt: bitcoin.Psbt, txid: string, vout: number, value: bigint, owner: DerivedAddress): Promise<void> {
+    const fp = fingerprintBytes(this.accounts[owner.kind].fingerprint);
+    const script = bitcoin.address.toOutputScript(owner.address, this.net);
+    if (owner.kind === 'segwit') {
+      const input: Parameters<typeof psbt.addInput>[0] = { hash: txid, index: vout, sequence: RBF_SEQUENCE, witnessUtxo: { script, value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] };
+      if (this.hw) {
+        // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT) and checks its txid; checked here too (txid and the spent output), never trusted blindly.
+        const prev = bitcoin.Transaction.fromHex(await this.hw.prevTx(txid));
+        const out = prev.outs[vout];
+        if (prev.getId() !== txid || !out || out.value !== value || !bytesEqual(out.script, script)) {
+          throw new Error(l10n(`Transaction précédente incohérente pour l’entrée ${txid.slice(0, 10)}… : signature refusée.`, `Previous transaction inconsistent for input ${txid.slice(0, 10)}…: signing refused.`));
+        }
+        input.nonWitnessUtxo = prev.toBuffer();
+      }
+      psbt.addInput(input);
+    } else {
+      const xonly = owner.pubkey.slice(1, 33);
+      psbt.addInput({
+        hash: txid,
+        index: vout,
+        sequence: RBF_SEQUENCE,
+        witnessUtxo: { script, value },
+        tapInternalKey: xonly,
+        tapBip32Derivation: [{ masterFingerprint: fp, pubkey: xonly, path: owner.path, leafHashes: [] }],
+      });
+    }
+  }
+
+  /** One of our addresses as a PSBT output, with the key origin Rust needs to call it change. */
+  private addOwnOutput(psbt: bitcoin.Psbt, owner: DerivedAddress, value: bigint): void {
+    const fp = fingerprintBytes(this.accounts[owner.kind].fingerprint);
+    if (owner.kind === 'segwit') {
+      psbt.addOutput({ address: owner.address, value, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] });
+    } else {
+      const xonly = owner.pubkey.slice(1, 33);
+      psbt.addOutput({ address: owner.address, value, tapInternalKey: xonly, tapBip32Derivation: [{ masterFingerprint: fp, pubkey: xonly, path: owner.path, leafHashes: [] }] });
+    }
+  }
+
+  /**
+   * Builds the replacement of a pending send: same inputs, every payment untouched and the extra
+   * fee taken from our change (speed-up), or everything back to us (cancel). `rate` in sat/vB; the
+   * BIP125 minimum applies if it is higher. Refused if the server already shows it confirmed.
+   */
+  async planReplacement(txid: string, mode: ReplaceMode, rate: number): Promise<UtxoReplacementPlan> {
+    if (this.watch) throw new ReplaceRefused('notOurs');
+    const rawHex = await call('btc_tx_hex', { txid }).catch(() => {
+      throw new ReplaceRefused('unknown');
+    });
+    const tx = bitcoin.Transaction.fromHex(rawHex);
+    if (tx.getId() !== txid) throw new ReplaceRefused('unknown');
+    const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    const own = new Map((await this.scan(true)).map((a) => [hex(bitcoin.address.toOutputScript(a.address, this.net)), a]));
+    const spent = await Promise.all(
+      tx.ins.map(async (i) => {
+        const prevId = hex(Uint8Array.from(i.hash).reverse());
+        const prev = bitcoin.Transaction.fromHex(await call('btc_tx_hex', { txid: prevId }));
+        const out = prev.outs[i.index];
+        const owner = out ? own.get(hex(out.script)) : undefined;
+        if (prev.getId() !== prevId || !out || !owner) throw new ReplaceRefused('notOurs');
+        return { txid: prevId, vout: i.index, value: out.value, owner };
+      }),
+    );
+    if (!isRbfSignaled(tx.ins.map((i) => i.sequence))) throw new ReplaceRefused('notReplaceable');
+    const ownOuts = tx.outs.flatMap((o) => own.get(hex(o.script)) ?? []);
+    const seen = await Promise.all([...new Set([spent[0]?.owner.address, ...ownOuts.map((o) => o.address)])].flatMap((address) => (address ? [call('btc_address_txs', { address })] : [])));
+    const related = seen.flat();
+    if (related.some((t) => t.txid === txid && t.status.confirmed)) throw new ReplaceRefused('confirmed');
+    if (related.some((t) => t.txid !== txid && !t.status.confirmed && t.vin.some((v) => v.txid === txid))) throw new ReplaceRefused('hasChild');
+
+    const total = spent.reduce((s, i) => s + i.value, 0n);
+    const oldFee = total - tx.outs.reduce((s, o) => s + o.value, 0n);
+    const vsize = tx.virtualSize() + RBF_VSIZE_MARGIN;
+    const psbt = new bitcoin.Psbt({ network: this.net });
+    for (const i of spent) await this.addOwnInput(psbt, i.txid, i.vout, i.value, i.owner);
+    const outputs: BtcTxSummary['outputs'] = [];
+    const addressOf = (script: Uint8Array) => bitcoin.address.fromOutputScript(script, this.net);
+    let fee: bigint;
+    let unsignedVsize = vsize;
+    if (mode === 'speedUp') {
+      const plan = planSpeedUp(tx.outs.map((o) => ({ value: o.value, own: own.has(hex(o.script)), dust: DUST })), oldFee, vsize, rate);
+      fee = plan.fee;
+      tx.outs.forEach((o, i) => {
+        const owner = own.get(hex(o.script));
+        const value = i === plan.change ? plan.newChange : o.value;
+        if (owner) this.addOwnOutput(psbt, owner, value);
+        else psbt.addOutput({ script: o.script, value });
+        outputs.push([addressOf(o.script), Number(value), owner !== undefined]);
+      });
+    } else {
+      const change = await this.changeAddress();
+      // The outputs go, one P2WPKH (31 vB) comes.
+      unsignedVsize = vsize - tx.outs.reduce((s, o) => s + 9 + o.script.length, 0) + 31;
+      const plan = planCancel(total, oldFee, unsignedVsize, rate, DUST);
+      fee = plan.fee;
+      this.addOwnOutput(psbt, change, plan.value);
+      outputs.push([change.address, Number(plan.value), true]);
+    }
+    const payments = outputs.filter((o) => !o[2]);
+    const amount = BigInt(payments.reduce((s, o) => s + o[1], 0));
+    const recipient = payments[0]?.[0] ?? outputs[0]?.[0] ?? '';
+    const replaces: UtxoReplaceRequest = { txid, rawTx: rawHex, mode };
+    return {
+      family: 'utxo',
+      mode,
+      replaces,
+      recipient,
+      amount,
+      oldFee,
+      newFee: fee,
+      unsigned: {
+        family: 'btc',
+        psbt: psbt.toBase64(),
+        amount,
+        recipient,
+        fee,
+        maxFee: fee,
+        summary: { outputs, feeSats: Number(fee), ...btcWarnings({ outputs, feeSats: Number(fee), vsize: unsignedVsize }) },
+        size: { family: 'btc', vsize: unsignedVsize },
+      },
+    };
+  }
+
+  async signTx(unsigned: BtcUnsigned, password: string, replaces?: UtxoReplaceRequest): Promise<BtcSigned> {
+    const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password, ...accountArg(this.account), ...(replaces ? { replaces } : {}) });
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
@@ -293,9 +394,9 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   /** Signs on the hardware wallet `deviceId` (no password: native dialog + device screen). */
-  async signTxHw(unsigned: BtcUnsigned, deviceId: string): Promise<BtcSigned> {
+  async signTxHw(unsigned: BtcUnsigned, deviceId: string, replaces?: UtxoReplaceRequest): Promise<BtcSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
-    const res = await call('hw_sign_btc_psbt', { id: deviceId, accountId: this.hw.accountId, psbt: unsigned.psbt });
+    const res = await call('hw_sign_btc_psbt', { id: deviceId, accountId: this.hw.accountId, psbt: unsigned.psbt, ...(replaces ? { replaces } : {}) });
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();

@@ -7,6 +7,9 @@
   data it already loads; nothing leaves your device.
 - Send: the fee speeds show their cost before you fill in the amount, and a custom fee moved
   under Advanced, with its allowed range. Values outside that range are refused.
+- History: speed up or cancel a pending Bitcoin, Litecoin or EVM send, with hardware wallets too.
+  You see the extra cost first. Bitcoin and Litecoin sends are now marked replaceable, so this
+  works for sends made from this version on.
 - Price charts: "All" really goes back years (Bitcoin: 2013), opens at once, with
   the % from the first point and the year in the date.
 - Swap: the Best price panel now shows the provider, route, minimum received, Kyro fee,

@@ -84,6 +84,10 @@ export interface LocalTx {
   time: number;
   status: 'pending' | 'confirmed' | 'failed';
   cross?: LocalCross;
+  /** Speed up or cancel: the pending transaction this one replaces. */
+  replaces?: string;
+  /** The transaction sent to replace this one. */
+  replacedBy?: string;
 }
 
 export interface LocalCross {
@@ -137,6 +141,8 @@ export function isLocalTx(x: unknown, network: Network): x is LocalTx {
     (t.fee === undefined || (typeof t.fee === 'string' && DECIMAL.test(t.fee))) &&
     optStr('counterparty', 130) &&
     optStr('label') &&
+    optStr('replaces') &&
+    optStr('replacedBy') &&
     typeof t.time === 'number' &&
     Number.isFinite(t.time) &&
     (t.status === 'pending' || t.status === 'confirmed' || t.status === 'failed') &&

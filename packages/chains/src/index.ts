@@ -3,6 +3,7 @@ export * from './types';
 export * from './registry';
 export * from './units';
 export * from './fees';
+export * from './replace';
 export * from './factory';
 export * from './bitcoin/coinselect';
 export { BitcoinAdapter, type DerivedAddress, type BitcoinAdapterOptions } from './bitcoin/adapter';

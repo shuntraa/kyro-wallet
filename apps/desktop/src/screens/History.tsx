@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useMemo, useState } from 'react';
-import { BTC_TXS_CAP, toIpcError } from '@kyro/shared';
-import { assetsFor, findAsset, findChain, unitsToNumber } from '@kyro/chains';
+import { BTC_TXS_CAP, toIpcError, type ReplaceMode } from '@kyro/shared';
+import { assetsFor, canReplace, findAsset, findChain, unitsToNumber } from '@kyro/chains';
 import { buildRevoke, isUnlimitedAllowance } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -16,6 +16,7 @@ import { useAsync } from '../lib/useAsync';
 import { EmptyState, ErrorLine, PasswordField } from '../components/kit';
 import { TronNoHistoryLine, tronNoHistory } from '../components/ServerDown';
 import { HistoryRow, LoadingLine, entryTitle } from '../components/HistoryRow';
+import { ReplaceDialog } from '../components/ReplaceTx';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconImport } from '../components/icons';
@@ -39,8 +40,10 @@ function matches(e: HistoryEntry, f: Filter): boolean {
 
 export function History() {
   const { settings, hideBalances, network } = useApp();
+  const { activeWatch } = useVault();
   const pf = usePortfolio();
   const history = useHistory();
+  const [replacing, setReplacing] = useState<{ entry: HistoryEntry; mode: ReplaceMode } | null>(null);
   useOnTorReady(history.reload);
   useOnCbfSynced(history.reload);
   const [filter, setFilter] = useState<Filter>('all');
@@ -153,7 +156,26 @@ export function History() {
                     <span className="text-faint">{g.items.length}</span>
                   </div>
                   {g.items.map((e, i) => (
-                    <HistoryRow key={e.id} i={gi * 3 + i + 1} e={e} price={priceOf(e)} currency={cur} hidden={hideBalances} />
+                    <HistoryRow
+                      key={e.id}
+                      i={gi * 3 + i + 1}
+                      e={e}
+                      price={priceOf(e)}
+                      currency={cur}
+                      hidden={hideBalances}
+                      action={
+                        !activeWatch && canReplace(e, e.asset?.family) ? (
+                          <>
+                            <Button size="sm" onClick={() => setReplacing({ entry: e, mode: 'speedUp' })}>
+                              {t('history.speedUp')}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setReplacing({ entry: e, mode: 'cancel' })}>
+                              {t('history.cancelTx')}
+                            </Button>
+                          </>
+                        ) : undefined
+                      }
+                    />
                   ))}
                 </div>
               ))
@@ -198,6 +220,19 @@ export function History() {
           <Approvals />
         </div>
       </div>
+      {replacing && (
+        <ReplaceDialog
+          entry={replacing.entry}
+          mode={replacing.mode}
+          onClose={(done) => {
+            setReplacing(null);
+            if (done) {
+              history.reload();
+              pf.refresh();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

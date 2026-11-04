@@ -405,7 +405,7 @@ export interface UtxoCommands<P extends UtxoPrefix> {
   tip_height: { args: undefined; ret: number };
   broadcast: { args: { hex: string }; ret: string };
   /** Password → Rust summary → native dialog (+ reinforced) → signed. */
-  sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: UtxoTxSummary & { coin: CoinOf<P> } } };
+  sign_psbt: { args: { psbt: string; password: string; replaces?: UtxoReplaceRequest } & WithAccount; ret: { psbt: string; summary: UtxoTxSummary & { coin: CoinOf<P> } } };
 }
 
 type Prefixed<P extends UtxoPrefix> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
@@ -1951,6 +1951,26 @@ export type EarnEvmAction =
   | { kind: 'aaveSupply'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount: string; chainId?: number }
   | { kind: 'aaveWithdraw'; asset: 'USDT' | 'USDC' | 'DAI' | 'WETH'; amount?: string; chainId?: number };
 
+/** Speed up or cancel a pending transaction (docs/IPC.md §2.12). */
+export type ReplaceMode = 'speedUp' | 'cancel';
+
+/** The pending Bitcoin or Litecoin transaction a PSBT replaces; Rust recomputes its txid and fee. */
+export interface UtxoReplaceRequest {
+  txid: string;
+  rawTx: string;
+  mode: ReplaceMode;
+}
+
+/** The pending EVM transaction replaced, with its signature: Rust recomputes its hash. */
+export interface EvmReplaceRequest {
+  hash: string;
+  mode: ReplaceMode;
+  tx: EvmTxRequest;
+  yParity: number;
+  r: string;
+  s: string;
+}
+
 export interface EvmTxRequest {
   chainId: number;
   nonce: number;
@@ -2293,10 +2313,10 @@ export interface Commands {
   btc_address: { args: { kind: BtcKind; change: boolean; index: number } & WithAccount; ret: string };
   evm_decode_tx: { args: { tx: EvmTxRequest }; ret: EvmTxSummary };
   evm_sign_tx: {
-    args: { tx: EvmTxRequest; password: string } & WithAccount;
+    args: { tx: EvmTxRequest; password: string; replaces?: EvmReplaceRequest } & WithAccount;
     ret: { rawTx: string; hash: string };
   };
-  btc_sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: BtcTxSummary } };
+  btc_sign_psbt: { args: { psbt: string; password: string; replaces?: UtxoReplaceRequest } & WithAccount; ret: { psbt: string; summary: BtcTxSummary } };
   /** Rust decodes the message (v0 lookup tables fetched by Rust). Unlocked session required. */
   sol_decode_tx: { args: { message: string } & WithAccount; ret: SolTxSummary };
   /** Native dialog (+ a 2nd one when `requiresExtraConfirmation`). Place `signature` at `summary.ourSignerIndex`. */
@@ -2599,12 +2619,12 @@ export interface Commands {
   hw_account_remove: { args: { accountId: string }; ret: void };
   hw_verify_address: { args: { id: string; accountId: string; chain: HwChain; path: string }; ret: { address: string; path: string } };
   /** Native dialog → device → each signature verified. Signed, NOT finalized. */
-  hw_sign_btc_psbt: { args: { id: string; accountId: string; psbt: string }; ret: { psbt: string; summary: BtcTxSummary } };
+  hw_sign_btc_psbt: { args: { id: string; accountId: string; psbt: string; replaces?: UtxoReplaceRequest }; ret: { psbt: string; summary: BtcTxSummary } };
   /** 2nd dialog for a contract call or blind signing. Signs for `m/44'/60'/0'/0/{account}`. */
-  hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest }; ret: { rawTx: string; hash: string } };
+  hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest; replaces?: EvmReplaceRequest }; ret: { rawTx: string; hash: string } };
   hw_sign_sol_tx: { args: { id: string; accountId: string; message: string; recipient?: string }; ret: { signature: string; summary: SolTxSummary } };
   /** LTC / DOGE / BCH / DASH: every input of this account with `nonWitnessUtxo`. Partial signatures (BCH: finalized). */
-  hw_sign_utxo_psbt: { args: { id: string; accountId: string; chain: 'ltc' | 'doge' | 'bch' | 'dash'; psbt: string }; ret: { psbt: string; summary: UtxoTxSummary } };
+  hw_sign_utxo_psbt: { args: { id: string; accountId: string; chain: 'ltc' | 'doge' | 'bch' | 'dash'; psbt: string; replaces?: UtxoReplaceRequest }; ret: { psbt: string; summary: UtxoTxSummary } };
   hw_xrp_build_tx: { args: { accountId: string; to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } }; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };
   hw_sign_xrp_tx: { args: { id: string; accountId: string; blob: string }; ret: { blob: string; hash: string; summary: XrpTxSummary; context: XrpContext } };
   hw_xrp_broadcast: { args: { accountId: string; blob: string }; ret: string };

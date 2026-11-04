@@ -31,6 +31,7 @@ mod near;
 mod near_stake;
 mod network;
 mod polkadot;
+mod replace;
 mod sol;
 mod sol_decode;
 mod sol_stake;
@@ -107,8 +108,9 @@ pub use display::{sanitize_text, SanitizedText, CONTROL_MARKER};
 pub use error::{Error, Result};
 pub use evm::{
     evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_chain_network,
-    evm_checksum_address, evm_decode, evm_high_fee_threshold_wei, evm_hw_finalize, evm_path,
-    evm_sign_tx, evm_signing_payload, evm_tx_fields, evm_xpub_from_node, EvmTxFields, EvmTxKind,
+    evm_check_replacement, evm_checksum_address, evm_decode, evm_high_fee_threshold_wei,
+    evm_hw_finalize, evm_min_replacement_fee, evm_path, evm_sign_tx, evm_signing_payload,
+    evm_tx_fields, evm_xpub_from_node, EvmReplaceRequest, EvmReplacement, EvmTxFields, EvmTxKind,
     EvmTxRequest, EvmTxSummary, EvmWarning, EVM_KNOWN_CHAINS,
 };
 pub use hedera::{
@@ -178,6 +180,10 @@ pub use polkadot::{
     dot_asset_account_key, dot_asset_details_key, dot_asset_metadata_key, dot_decode_asset_account,
     dot_decode_asset_details, dot_decode_asset_metadata, dot_known_asset, dot_known_assets,
     DotAssetAccount, DotAssetDetails, DotAssetSummary, DotKnownAsset,
+};
+pub use replace::{
+    rbf_min_fee, utxo_check_replacement, ReplaceMode, UtxoReplaceRequest, UtxoReplacement,
+    RBF_INCREMENTAL_PER_VB, RBF_SEQUENCE,
 };
 pub use sol::{
     sol_address, sol_address_of_pubkey, sol_associated_token_address, sol_sign_message,

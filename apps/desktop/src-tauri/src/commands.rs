@@ -926,6 +926,62 @@ pub(crate) fn describe_evm_extra(
     )
 }
 
+/// First lines of the native window for a replacement: what is replaced, and why.
+fn replacement_head(lang: Lang, mode: wallet_core::ReplaceMode, id: &str) -> String {
+    use wallet_core::ReplaceMode;
+    let what = match (mode, lang) {
+        (ReplaceMode::SpeedUp, Lang::Fr) => "ACCÉLÉRATION d'une transaction en attente",
+        (ReplaceMode::SpeedUp, Lang::En) => "SPEED UP of a pending transaction",
+        (ReplaceMode::Cancel, Lang::Fr) => "ANNULATION d'une transaction en attente",
+        (ReplaceMode::Cancel, Lang::En) => "CANCEL of a pending transaction",
+    };
+    let mut out = format!("{what}\n{}{id}\n", lang.pick("Remplace : ", "Replaces: "));
+    if mode == ReplaceMode::Cancel {
+        out += lang.pick(
+            "Sans effet si l'originale est confirmée avant.\n",
+            "No effect if the original confirms first.\n",
+        );
+    }
+    out
+}
+
+pub(crate) fn describe_utxo_replacement(
+    lang: Lang,
+    symbol: &str,
+    r: &wallet_core::UtxoReplacement,
+) -> String {
+    let units = |v: u64| format_units_in(lang, &v.to_string(), 8);
+    format!(
+        "{}{}{} {symbol}\n{}{} {symbol}\n{}{} {symbol}\n\n",
+        replacement_head(lang, r.mode, &r.txid),
+        lang.pick("Frais d'origine : ", "Original fee: "),
+        units(r.old_fee),
+        lang.pick("Nouveaux frais : ", "New fee: "),
+        units(r.new_fee),
+        lang.pick("Coût en plus : ", "Extra cost: "),
+        units(r.extra_fee),
+    )
+}
+
+pub(crate) fn describe_evm_replacement(
+    lang: Lang,
+    chain_id: u64,
+    r: &wallet_core::EvmReplacement,
+) -> String {
+    let native = native_symbol(lang, chain_id);
+    let units = |raw: &str| format_units_in(lang, raw, 18);
+    format!(
+        "{}{}{}\n{}{} {native}\n{}{} {native}\n\n",
+        replacement_head(lang, r.mode, &r.hash),
+        lang.pick("Nonce (le même) : ", "Nonce (the same): "),
+        r.nonce,
+        lang.pick("Frais max d'origine : ", "Original max fee: "),
+        units(&r.old_max_fee_wei),
+        lang.pick("Nouveaux frais max : ", "New max fee: "),
+        units(&r.new_max_fee_wei),
+    )
+}
+
 #[tauri::command]
 pub fn evm_decode_tx(
     state: State<'_, AppState>,
@@ -948,6 +1004,7 @@ pub async fn evm_sign_tx(
     tx: EvmTxRequest,
     password: String,
     account: Option<u32>,
+    replaces: Option<wallet_core::EvmReplaceRequest>,
 ) -> AppResult<EvmSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
@@ -959,6 +1016,14 @@ pub async fn evm_sign_tx(
     let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
     let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
     let lang = crate::i18n::current();
+    let head = match &replaces {
+        Some(r) => describe_evm_replacement(
+            lang,
+            tx.chain_id,
+            &wallet_core::evm_check_replacement(&tx, r, &from)?,
+        ),
+        None => String::new(),
+    };
     let mut summary = summary;
     let (token, earn_body) = evm_earn_review(lang, &tx, &mut summary, &from, token)?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
@@ -968,7 +1033,7 @@ pub async fn evm_sign_tx(
         lang.confirm_tx_title(),
         signer.body(
             lang,
-            &format!("{}{from}\n{body}", lang.pick("De : ", "From: ")),
+            &format!("{head}{}{from}\n{body}", lang.pick("De : ", "From: ")),
         ),
     )
     .await?;
@@ -1066,6 +1131,21 @@ pub(crate) fn describe_btc_extra(lang: Lang, s: &wallet_core::BtcTxSummary) -> S
     out
 }
 
+/// Checks a Bitcoin replacement against its original; empty when this is an ordinary send.
+pub(crate) fn btc_replacement_head(
+    lang: Lang,
+    psbt: &str,
+    replaces: Option<&wallet_core::UtxoReplaceRequest>,
+    summary: &wallet_core::BtcTxSummary,
+) -> AppResult<String> {
+    let Some(r) = replaces else {
+        return Ok(String::new());
+    };
+    let change: Vec<bool> = summary.outputs.iter().map(|o| o.2).collect();
+    let checked = wallet_core::utxo_check_replacement(psbt, r, &change)?;
+    Ok(describe_utxo_replacement(lang, "BTC", &checked))
+}
+
 #[derive(Serialize)]
 pub struct BtcSigned {
     psbt: String,
@@ -1079,6 +1159,7 @@ pub async fn btc_sign_psbt(
     psbt: String,
     password: String,
     account: Option<u32>,
+    replaces: Option<wallet_core::UtxoReplaceRequest>,
 ) -> AppResult<BtcSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
@@ -1090,10 +1171,11 @@ pub async fn btc_sign_psbt(
     let (s, p) = (seed.clone(), psbt.clone());
     let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, a, &p)?)).await?;
     let lang = crate::i18n::current();
+    let head = btc_replacement_head(lang, &psbt, replaces.as_ref(), &summary)?;
     confirm_native(
         &app,
         lang.confirm_tx_title(),
-        signer.body(lang, &describe_btc(lang, &summary)),
+        signer.body(lang, &(head + &describe_btc(lang, &summary))),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
@@ -1295,6 +1377,41 @@ pub fn lock_on_exit(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replacement_dialog_says_what_is_replaced_and_what_it_costs() {
+        let r = wallet_core::UtxoReplacement {
+            mode: wallet_core::ReplaceMode::SpeedUp,
+            txid: "ab".repeat(32),
+            old_fee: 1_000,
+            new_fee: 3_500,
+            extra_fee: 2_500,
+        };
+        let text = describe_utxo_replacement(Lang::En, "BTC", &r);
+        assert!(
+            text.starts_with("SPEED UP of a pending transaction\n"),
+            "{text}"
+        );
+        assert!(text.contains(&format!("Replaces: {}", "ab".repeat(32))));
+        assert!(text.contains("Extra cost: 0.000025 BTC"), "{text}");
+        assert!(!text.contains("No effect"));
+
+        let cancel = wallet_core::EvmReplacement {
+            mode: wallet_core::ReplaceMode::Cancel,
+            hash: "0xabc".into(),
+            nonce: 7,
+            old_max_fee_wei: "1000000000000000".into(),
+            new_max_fee_wei: "2000000000000000".into(),
+        };
+        let text = describe_evm_replacement(Lang::Fr, 1, &cancel);
+        assert!(
+            text.starts_with("ANNULATION d'une transaction en attente\n"),
+            "{text}"
+        );
+        assert!(text.contains("Sans effet si l'originale est confirmée avant."));
+        assert!(text.contains("Nonce (le même) : 7"), "{text}");
+        assert!(text.contains("ETH"), "{text}");
+    }
 
     #[test]
     fn evm_reinforced_dialog_text() {

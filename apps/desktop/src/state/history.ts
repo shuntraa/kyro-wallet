@@ -8,6 +8,7 @@ import { netFetch } from '@kyro/shared';
 import { exolixOrderStatus, lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
+import { reconcileReplaced } from '../lib/replaced';
 import type { AsyncState } from '../lib/useAsync';
 import { fingerprint, historyKey, loadHistory, mergeHistory, saveHistory, type HistoryCache } from '../lib/balanceCache';
 import { Dedupe, settleWithin } from '../lib/dedupe';
@@ -82,7 +83,8 @@ function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string,
   // Local swap/approval records replace the raw ERC-20 log of the same tx.
   const localIds = new Set(local.map((l) => l.id));
   const merged: Array<HistoryItem & { label?: string; account?: string }> = [...remote.filter((x) => !localIds.has(x.id.split(/[:@]/)[0] ?? '')), ...local];
-  const entries: HistoryEntry[] = merged.map(({ account, ...x }) => {
+  const shown = reconcileReplaced(merged, getLocalTxs(network));
+  const entries: HistoryEntry[] = shown.map(({ account, ...x }) => {
     const chain = findChain(network, x.chainKey);
     const asset = findAsset(network, x.assetId);
     const feeAsset = chain ? findAsset(network, nativeAssetId(chain)) : undefined;
@@ -267,6 +269,8 @@ export function useHistory(): AsyncState<HistoryData> {
         try {
           const r = await ad.client.getTransactionReceipt({ hash: t.id as `0x${string}` });
           updateLocalTx(network, t.id, { status: r.status === 'success' ? 'confirmed' : 'failed' });
+          // Same nonce: once this one is mined, the transaction it replaced never will be.
+          if (t.replaces) updateLocalTx(network, t.replaces, { status: 'failed' });
           changed = true;
         } catch {
           /* not mined yet */

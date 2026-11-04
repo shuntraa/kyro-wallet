@@ -117,7 +117,7 @@ pub struct BtcTxSummary {
 }
 
 /// Signed vsize estimate: P2WPKH 108 WU witness, P2TR 66 (lower bound, never underestimates fee).
-fn estimated_vsize(psbt: &Psbt, prevouts: &[TxOut]) -> u64 {
+pub(crate) fn estimated_vsize(psbt: &Psbt, prevouts: &[TxOut]) -> u64 {
     let base = psbt.unsigned_tx.base_size() as u64;
     let witness: u64 = prevouts
         .iter()

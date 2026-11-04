@@ -40,6 +40,7 @@ export const LITECOIN_SPEC: UtxoCoinSpec = {
   model: { overhead: 10.5, input: 68 },
   minOutput: litecoinDust,
   needsPrevTx: false,
+  replaceable: true,
   unit: 'litoshis',
   // Litecoin Core minimum relay fee: 1 000 litoshis/kvB.
   minRate: 1,

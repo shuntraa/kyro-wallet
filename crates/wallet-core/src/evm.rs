@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, secp, XprivGuard};
 use crate::mnemonic::Seed;
 use crate::network::Network;
+use crate::replace::ReplaceMode;
 
 #[allow(clippy::all, clippy::pedantic, missing_docs, unexpected_cfgs)]
 mod u256 {
@@ -373,6 +374,124 @@ fn parse_request(tx: &EvmTxRequest) -> Result<Eip1559> {
         to: parse_address(&tx.to)?,
         value: parse_decimal_u256("value_wei", &tx.value_wei)?,
         data: parse_data(&tx.data)?,
+    })
+}
+
+/// The pending transaction to replace, as read from the node. Its signature is given so that Rust
+/// can recompute the hash: a node cannot lie about the fields of the transaction it names.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvmReplaceRequest {
+    /// Hash of the original.
+    pub hash: String,
+    /// Speed up or cancel.
+    pub mode: ReplaceMode,
+    /// The original's fields (same chain id as the replacement).
+    pub tx: EvmTxRequest,
+    /// Signature parity of the original, 0 or 1.
+    pub y_parity: u8,
+    /// Signature `r`, hex.
+    pub r: String,
+    /// Signature `s`, hex.
+    pub s: String,
+}
+
+/// What the native window says about a checked replacement.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvmReplacement {
+    /// Speed up or cancel.
+    pub mode: ReplaceMode,
+    /// Hash of the original.
+    pub hash: String,
+    /// Nonce both transactions share.
+    pub nonce: u64,
+    /// Maximum fee of the original, in wei.
+    pub old_max_fee_wei: String,
+    /// Maximum fee of the replacement, in wei.
+    pub new_max_fee_wei: String,
+}
+
+/// Smallest fee value a node accepts in place of `old`: nodes (geth's default `pricebump`) refuse a
+/// same-nonce replacement that does not raise **both** fee fields by 10%.
+pub fn evm_min_replacement_fee(old: u128) -> u128 {
+    let bump = old / 10 + u128::from(old % 10 != 0);
+    old.saturating_add(bump.max(1))
+}
+
+fn word32(field: &str, s: &str) -> Result<[u8; 32]> {
+    let hex_part = s.strip_prefix("0x").unwrap_or(s);
+    if hex_part.is_empty() || hex_part.len() > 64 {
+        return Err(Error::input(format!("{field} must be at most 32 bytes")));
+    }
+    let padded = format!("{hex_part:0>64}");
+    let mut out = [0u8; 32];
+    hex::decode_to_slice(padded, &mut out).map_err(|_| Error::input(format!("invalid {field}")))?;
+    Ok(out)
+}
+
+/// Checks a same-nonce replacement against the transaction it replaces, whatever the interface
+/// built: same chain and nonce, both fee fields up by at least 10%, then the same payment
+/// (speed-up) or a 0-value send to yourself with no data (cancel).
+pub fn evm_check_replacement(
+    tx: &EvmTxRequest,
+    req: &EvmReplaceRequest,
+    own: &str,
+) -> Result<EvmReplacement> {
+    let refuse = |msg: &str| Error::input(format!("replacement refused: {msg}"));
+    let new = parse_request(tx)?;
+    let old = parse_request(&req.tx)?;
+    let sig = EcdsaSig {
+        y_parity: match req.y_parity {
+            0 => false,
+            1 => true,
+            _ => return Err(refuse("invalid signature parity")),
+        },
+        r: word32("r", &req.r)?,
+        s: word32("s", &req.s)?,
+    };
+    let hash = format!("0x{}", hex::encode(keccak256(&old.envelope(Some(&sig)))));
+    if !hash.eq_ignore_ascii_case(req.hash.trim()) {
+        return Err(refuse("the original does not match its hash"));
+    }
+    if new.chain_id != old.chain_id {
+        return Err(refuse("another network"));
+    }
+    if new.nonce != old.nonce {
+        return Err(refuse("the nonce must stay the same"));
+    }
+    if new.max_fee_per_gas < evm_min_replacement_fee(old.max_fee_per_gas)
+        || new.max_priority_fee_per_gas < evm_min_replacement_fee(old.max_priority_fee_per_gas)
+    {
+        return Err(refuse("both fee fields must rise by at least 10%"));
+    }
+    match req.mode {
+        ReplaceMode::SpeedUp => {
+            if new.to != old.to
+                || new.value != old.value
+                || new.data != old.data
+                || new.gas_limit != old.gas_limit
+            {
+                return Err(refuse("a speed-up changes only the fees"));
+            }
+        }
+        ReplaceMode::Cancel => {
+            if new.to != parse_address(own)? || !new.value.is_zero() || !new.data.is_empty() {
+                return Err(refuse("a cancel is a 0-value send to yourself"));
+            }
+        }
+    }
+    let max_fee = |p: &Eip1559| {
+        U256::from(p.gas_limit)
+            .checked_mul(U256::from(p.max_fee_per_gas))
+            .ok_or_else(|| Error::input("fee overflow"))
+    };
+    Ok(EvmReplacement {
+        mode: req.mode,
+        hash,
+        nonce: new.nonce,
+        old_max_fee_wei: max_fee(&old)?.to_string(),
+        new_max_fee_wei: max_fee(&new)?.to_string(),
     })
 }
 

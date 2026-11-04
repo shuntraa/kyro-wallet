@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+import type { ReactNode } from 'react';
 import type { Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtFiat, fmtWhen, shortAddress, MINUS } from '../lib/format';
@@ -31,7 +32,7 @@ export function statusBadge(e: HistoryEntry) {
   return <Badge tone="mute">{e.asset?.family === 'sol' ? t('history.badgeFinalized') : t('history.badgeConfirmed')}</Badge>;
 }
 
-export function HistoryRow({ e, price, currency, hidden, compact, i = 0 }: { e: HistoryEntry; price: number | null; currency: Currency; hidden: boolean; compact?: boolean; /** Row index, for the staggered entrance. */ i?: number }) {
+export function HistoryRow({ e, price, currency, hidden, compact, i = 0, action }: { e: HistoryEntry; price: number | null; currency: Currency; hidden: boolean; compact?: boolean; /** Buttons of a pending transaction (History). */ action?: ReactNode; /** Row index, for the staggered entrance. */ i?: number }) {
   const icon = e.kind === 'swap' ? <IconSwap size={16} sw={2.2} /> : e.kind === 'approval' ? <IconCheck size={16} /> : e.direction === 'in' ? <IconDown size={16} /> : <IconUp size={16} />;
   const color = e.direction === 'in' ? 'text-up' : 'text-text';
   const decimals = e.asset?.decimals ?? 18;
@@ -53,6 +54,7 @@ export function HistoryRow({ e, price, currency, hidden, compact, i = 0 }: { e: 
         <span className="truncate text-[14px] font-medium">{entryTitle(e)}</span>
         <span className="truncate text-[12px] text-mute">{sub}</span>
       </span>
+      {action && <span className="flex shrink-0 items-center gap-1.5">{action}</span>}
       {!compact && <span className="shrink-0">{statusBadge(e)}</span>}
       <span className="flex w-[150px] shrink-0 flex-col items-end">
         <span className={cn('text-[14px] font-medium', color)}>{hidden ? HIDDEN : `${sign}${fmtCrypto(e.amount, decimals, symbol)}`}</span>

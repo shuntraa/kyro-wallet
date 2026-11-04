@@ -1680,6 +1680,22 @@ Hardware wallets: not offered (no `hw_*` command). What it would take: Ledger "A
 
 **Done on the UI side**: `Family` `'apt'`, `AccountChain` `'apt'`, `Commands` types (`aptos_*`, `Accounts.aptos`), demo backend (`mock-aptos.ts`), Wallet / Asset / Receive (address only, no payment link) / Send (full address mandatory, "without checksum" warning, creation of the recipient account, estimated and maximum fees, Rust summary before the password, `aptos_tx_status` tracking) / History (poisoning decoys: zero amount, withdrawal not signed by us) screens, address book, "Outgoing connections". Adapter: `AptosAdapter` (`packages/chains/src/aptos/`), `aptosChain(network)`. Price: CoinGecko `aptos`.
 
+### 2.12 Speed up or cancel (replacement of a pending send)
+
+No new command: the signing commands take an optional `replaces`. Without it they behave as before.
+
+| Command | Added argument |
+|---|---|
+| `btc_sign_psbt`, `ltc_sign_psbt`, `hw_sign_btc_psbt`, `hw_sign_utxo_psbt` (`ltc` only: any other coin is `INVALID_INPUT`) | `replaces?: { txid, rawTx, mode: 'speedUp' \| 'cancel' }` |
+| `evm_sign_tx`, `hw_sign_evm_tx` | `replaces?: { hash, mode, tx: EvmTxRequest, yParity, r, s }`: the original's fields and signature, as read from `eth_getTransactionByHash` |
+
+Before the native window, wallet-core checks the transaction to sign against the original and answers `INVALID_INPUT` (`replacement refused: …`) otherwise.
+
+- `utxo_check_replacement(psbt, request, change)`: txid of `rawTx` recomputed; original marked replaceable (one input below `0xfffffffe`); every new input replaceable; exactly the same inputs; fee ≥ old fee + `RBF_INCREMENTAL_PER_VB` × estimated vsize. Speed-up: same outputs in the same order, only an output proven ours may lower. Cancel: a single output, proven ours. Fees are computed from the PSBT's input amounts, never read from a server.
+- `evm_check_replacement(tx, request, own)`: hash recomputed from the fields and the signature; same chain and nonce; `maxFeePerGas` and `maxPriorityFeePerGas` each ≥ `evm_min_replacement_fee` (+10%, rounded up). Speed-up: same `to`, value, data and gas limit. Cancel: `to` = `own`, value 0, no data.
+
+The window then starts with the action, the id replaced and the fees (`describe_utxo_replacement`, `describe_evm_replacement`). The interface builds the transaction with `planReplacement` (`BitcoinAdapter`, `UtxoAdapter` for Litecoin, `EvmAdapter`), which refuses early with `ReplaceRefused` (`confirmed`, `notReplaceable`, `notOurs`, `unknown`, `hasChild`, `noChange`, `tooSmall`, `unsupported`), and calls it again just before signing. Reads use the existing commands (`*_tx_hex`, `*_address_txs`, `net_fetch`): no new host.
+
 ## 3. Network allowlist (`net_fetch`)
 
 | Host | Use |

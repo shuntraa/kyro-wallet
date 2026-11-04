@@ -131,6 +131,7 @@ pub async fn hw_sign_utxo_psbt(
     account_id: String,
     chain: Chain,
     psbt: String,
+    replaces: Option<wallet_core::UtxoReplaceRequest>,
 ) -> AppResult<HwUtxoSigned> {
     let coin = coin_of(chain)?;
     let (acc, info) = account_for(&state, Some(&id), &account_id, chain)?;
@@ -144,10 +145,13 @@ pub async fn hw_sign_utxo_psbt(
     check_same_device(&app, &state, &id, &acc, chain).await?;
     let lang = crate::i18n::current();
     let summary = plan.summary.clone();
+    let head =
+        crate::commands_utxo::replacement_head(lang, coin, &psbt, replaces.as_ref(), &summary)?;
     confirm_native(
         &app,
         title(lang, chain),
-        crate::commands_utxo::describe_utxo(lang, &summary, net) + &device_line(lang, &info),
+        head + &crate::commands_utxo::describe_utxo(lang, &summary, net)
+            + &device_line(lang, &info),
     )
     .await?;
     if summary.requires_extra_confirmation {

@@ -13,9 +13,10 @@ import {
   type Hex,
   type PublicClient,
 } from 'viem';
-import { call, HttpError, jsonRpc, jsonRpcBatch, JsonRpcError, netFetch, type EvmTokenHint, type JsonRpcOutcome, type EvmTxRequest, type EvmTxSummary, type NetFetch, l10n } from '@kyro/shared';
+import { call, HttpError, jsonRpc, jsonRpcBatch, JsonRpcError, netFetch, type EvmReplaceRequest, type EvmTokenHint, type JsonRpcOutcome, type EvmTxRequest, type EvmTxSummary, type NetFetch, type ReplaceMode, l10n } from '@kyro/shared';
 import { ERC20_TOKENS, nativeAssetId, type AssetDef, type EvmChain } from '../registry';
 import { evmFeeOptionsFromHistory } from '../fees';
+import { evmReplacementFees, ReplaceRefused, type EvmFees, type EvmReplacementPlan } from '../replace';
 import type { Balance, BuildParams, ChainAdapter, EvmSigned, EvmUnsigned, FeeEstimates, FeeParams, HistoryItem } from '../types';
 import type { HwSigner } from '../hw';
 import { simulateCall, type SimBackend, type SimCall, type SimLog, type SimReport, type SimTrace } from './simulate';
@@ -53,6 +54,24 @@ const hexToBigInt = (v: unknown): bigint => {
   if (typeof v !== 'string' || !/^0x[0-9a-fA-F]+$/.test(v)) throw new Error(l10n('solde natif illisible', 'unreadable native balance'));
   return BigInt(v);
 };
+
+/** `eth_getTransactionByHash`: what a replacement needs (hex quantities). */
+interface RpcTx {
+  from: string;
+  to: string | null;
+  nonce: string;
+  gas: string;
+  value: string;
+  input: string;
+  type?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
+  blockNumber: string | null;
+  yParity?: string;
+  v?: string;
+  r: string;
+  s: string;
+}
 
 /** keccak256('Transfer(address,address,uint256)'). */
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
@@ -347,21 +366,62 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return out;
   }
 
+  /**
+   * Builds the same-nonce replacement of a pending transaction: same payment with higher fees
+   * (speed-up), or a 0-value send to ourselves (cancel). `live` is the wanted level; the node's
+   * +10% minimum applies if it is higher. Refused once it is mined or its nonce is used.
+   */
+  async planReplacement(hash: string, mode: ReplaceMode, live: EvmFees, asset: AssetDef): Promise<EvmReplacementPlan> {
+    const t = await jsonRpc<RpcTx | null>(this.fetcher, this.rpcUrl, 'eth_getTransactionByHash', [hash]);
+    if (!t) throw new ReplaceRefused('unknown');
+    if (t.blockNumber) throw new ReplaceRefused('confirmed');
+    if (getAddress(t.from) !== this.address) throw new ReplaceRefused('notOurs');
+    if (t.type !== '0x2' || !t.to || !t.maxFeePerGas || !t.maxPriorityFeePerGas) throw new ReplaceRefused('unsupported');
+    const nonce = Number(BigInt(t.nonce));
+    const mined = await this.client.getTransactionCount({ address: this.address, blockTag: 'latest' });
+    if (mined > nonce) throw new ReplaceRefused('confirmed');
+
+    const old: EvmFees = { maxFeePerGas: BigInt(t.maxFeePerGas), maxPriorityFeePerGas: BigInt(t.maxPriorityFeePerGas) };
+    const fee = { family: 'evm' as const, ...evmReplacementFees(old, live) };
+    const oldGas = BigInt(t.gas);
+    const original = this.request(t.to, BigInt(t.value), t.input as Hex, oldGas, { family: 'evm', ...old }, nonce);
+    const parity = t.yParity ?? t.v;
+    if (parity === undefined) throw new ReplaceRefused('unsupported');
+    const replaces: EvmReplaceRequest = { hash, mode, tx: original, yParity: Number(BigInt(parity)), r: t.r, s: t.s };
+
+    const cancel = mode === 'cancel';
+    const gasLimit = cancel ? await this.gas(this.address, '0x', 0n) : oldGas;
+    const tx = cancel ? this.request(this.address, 0n, '0x', gasLimit, fee, nonce) : this.request(t.to, BigInt(t.value), t.input as Hex, gasLimit, fee, nonce);
+    const l1 = await this.l1DataFeeMargin();
+    const newFee = gasLimit * fee.maxFeePerGas + l1;
+    const amount = BigInt(tx.valueWei);
+    return {
+      family: 'evm',
+      mode,
+      replaces,
+      recipient: tx.to,
+      amount,
+      oldFee: oldGas * old.maxFeePerGas + l1,
+      newFee,
+      unsigned: { family: 'evm', tx, asset, amount, recipient: tx.to, maxFee: newFee, size: { family: 'evm', gasLimit }, kind: t.input === '0x' ? 'transfer' : 'contract' },
+    };
+  }
+
   /** Rust-side decoding for the "En clair" preview (before the password). */
   decode(unsigned: EvmUnsigned): Promise<EvmTxSummary> {
     return call('evm_decode_tx', { tx: unsigned.tx });
   }
 
-  async signTx(unsigned: EvmUnsigned, password: string): Promise<EvmSigned> {
+  async signTx(unsigned: EvmUnsigned, password: string, replaces?: EvmReplaceRequest): Promise<EvmSigned> {
     // No token hint: Rust names tokens from its own table only (unknown = raw units).
-    const res = await call('evm_sign_tx', { tx: unsigned.tx, password, ...accountArg(this.account) });
+    const res = await call('evm_sign_tx', { tx: unsigned.tx, password, ...accountArg(this.account), ...(replaces ? { replaces } : {}) });
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
 
   /** Signs on the hardware wallet `deviceId` (native dialog, 2nd one if blind signing, device). */
-  async signTxHw(unsigned: EvmUnsigned, deviceId: string): Promise<EvmSigned> {
+  async signTxHw(unsigned: EvmUnsigned, deviceId: string, replaces?: EvmReplaceRequest): Promise<EvmSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
-    const res = await call('hw_sign_evm_tx', { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx });
+    const res = await call('hw_sign_evm_tx', { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx, ...(replaces ? { replaces } : {}) });
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
 

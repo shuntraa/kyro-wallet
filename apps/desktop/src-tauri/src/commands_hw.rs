@@ -676,6 +676,7 @@ pub async fn hw_sign_btc_psbt(
     id: String,
     account_id: String,
     psbt: String,
+    replaces: Option<wallet_core::UtxoReplaceRequest>,
 ) -> AppResult<HwBtcSigned> {
     guard(&state)?;
     let net = state.network;
@@ -727,13 +728,14 @@ pub async fn hw_sign_btc_psbt(
     }
     let summary = plan.summary.clone();
     let lang = crate::i18n::current();
+    let head = crate::commands::btc_replacement_head(lang, &psbt, replaces.as_ref(), &summary)?;
     confirm_native(
         &app,
         lang.pick(
             "Confirmer la transaction (hardware wallet)",
             "Confirm the transaction (hardware wallet)",
         ),
-        describe_btc(lang, &summary) + &device_line(lang, &info),
+        head + &describe_btc(lang, &summary) + &device_line(lang, &info),
     )
     .await?;
     if summary.requires_extra_confirmation {
@@ -781,6 +783,7 @@ pub async fn hw_sign_evm_tx(
     id: String,
     account_id: String,
     tx: EvmTxRequest,
+    replaces: Option<wallet_core::EvmReplaceRequest>,
 ) -> AppResult<HwEvmSigned> {
     guard(&state)?;
     let acc = load_account(&state, &account_id)?;
@@ -791,6 +794,14 @@ pub async fn hw_sign_evm_tx(
         .ok_or_else(|| AppError::InvalidInput("this account has no EVM key".into()))?;
     let mut summary = wallet_core::evm_decode(&tx, state.network)?;
     let lang = crate::i18n::current();
+    let head = match &replaces {
+        Some(r) => crate::commands::describe_evm_replacement(
+            lang,
+            tx.chain_id,
+            &wallet_core::evm_check_replacement(&tx, r, &expected)?,
+        ),
+        None => String::new(),
+    };
     // Earn (Lido, Aave v3): same pinned decoding and review as the seed path.
     let (earn_token, earn_body) = evm_earn_review(lang, &tx, &mut summary, &expected, None)?;
     let descriptor = match (info.kind, summary.kind, summary.token_contract.as_deref()) {
@@ -830,7 +841,7 @@ pub async fn hw_sign_evm_tx(
             "Confirmer la transaction (hardware wallet)",
             "Confirm the transaction (hardware wallet)",
         ),
-        earn_body.unwrap_or_else(|| describe_evm(lang, &summary, hint.as_ref()))
+        head + &earn_body.unwrap_or_else(|| describe_evm(lang, &summary, hint.as_ref()))
             + &device_line(lang, &info),
     )
     .await?;
