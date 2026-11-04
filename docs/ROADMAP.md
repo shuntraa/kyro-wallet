@@ -23,6 +23,10 @@ Feasibility study of 2026-10-30 (versions and dependencies checked on crates.io)
 - **Enable `cbf` by default on or after 2026-11-11**, once `bip157 0.8.1` (published 2026-10-28) and `bitcoin-address-book 0.2.2` (2026-10-23) are at least two weeks old: rerun `cargo audit` and `cargo deny check` with the feature, and re-read the diff of each crate against the version reviewed on 2026-10-30 (no `build.rs`, no procedural macro, file access only in dead code or tests).
 - **Propose upstream (bip157) RFC 1929 SOCKS5 authentication** (username / password): our bridge could then require a random token per launch, in addition to the peer list. Do not maintain a local patch.
 
+## Later
+
+- **Lightning payments**: the code is on the branch, off in every build. It needs a real small payment, a real refund, `.lnswaps` in the backup and a cap first ([LIGHTNING.md](LIGHTNING.md)).
+
 ## What cannot be done safely today
 
 - alloy's Ledger/Trezor signers and the `xrpl-rust` crate: they reintroduce `k256` or `crypto-bigint` 0.5.

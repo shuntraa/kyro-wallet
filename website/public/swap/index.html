@@ -148,7 +148,7 @@
           <h2 id="s-fee">Included in the rate, <em>and public</em></h2>
           <div data-reveal>
           <p>The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, and it is 0.9% when the token price is unknown. It funds the project.</p>
-          <ul class="checks"><li>What you see as “You receive” already includes everything: Kyro’s fee and the provider’s own costs.</li><li>NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).</li><li>It is collected through each provider’s official integrator mechanism.</li><li>Exolix routes are the exception: the fee is a second ordinary transfer on the source chain. Lightning payments work the same way.</li><li>The rates live in one open file. <a href="https://github.com/shuntraa/kyro-wallet/blob/main/packages/swap/src/fees.ts">Read fees.ts</a>.</li></ul>
+          <ul class="checks"><li>What you see as “You receive” already includes everything: Kyro’s fee and the provider’s own costs.</li><li>NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).</li><li>It is collected through each provider’s official integrator mechanism.</li><li>Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.</li><li>The rates live in one open file. <a href="https://github.com/shuntraa/kyro-wallet/blob/main/packages/swap/src/fees.ts">Read fees.ts</a>.</li></ul>
           <p><a href="/fees/">Fee table and calculator</a></p></div>
         </div>
         <div class="feature-visual" data-reveal>
@@ -178,20 +178,6 @@
         
         <div class="rows" data-reveal-group>
           <article class="glow-card spot g-ice"><span class="mini-icon ic-eye" aria-hidden="true"></span><h3>Decoded first</h3><p>Kyro decodes the provider’s transaction before asking for your password: recipient, minimum amount and fee.</p></article><article class="glow-card spot g-deep"><span class="mini-icon ic-shield" aria-hidden="true"></span><h3>Official contracts</h3><p>It checks that the transaction targets the provider’s official contract.</p></article><article class="glow-card spot g-sky"><span class="mini-icon ic-lock" aria-hidden="true"></span><h3>Exact approvals</h3><p>Token approvals are for the exact amount. An unlimited approval needs an explicit action and shows a warning.</p></article><article class="glow-card spot g-ice"><span class="mini-icon ic-swap" aria-hidden="true"></span><h3>Simulated</h3><p>The transaction is simulated just before you sign it.</p></article>
-        </div></div>
-    </section>
-
-    
-    <section class="section" aria-labelledby="s-lightning">
-      <div class="wrap">
-        
-        <div class="head-center">
-          <p class="eyebrow" data-reveal>Lightning</p>
-          <h2 id="s-lightning">Pay an invoice <em>from Bitcoin</em></h2>
-          <p data-reveal>Paste a Lightning invoice in Send on a Bitcoin account. No channels to open.</p>
-        </div>
-        <div class="prose" data-reveal>
-          <ul class="checks"><li>Coinos or SATS Routing pays the invoice from a swap, over Tor and without an account. Kyro picks the cheapest that accepts the amount.</li><li>Kyro rebuilds the swap’s address on your device. The provider can only take your bitcoin by paying this invoice.</li><li>If it fails, your coins stay locked for about 7 days. Then you take them back yourself, without the provider.</li><li>Amounts from 25,000 to 5,000,000 sat. Provider fees read on 4 November 2026: 0.1% + 302 sat, or 0.5% + 167 sat.</li><li>The Kyro fee is a second transfer, as on Exolix routes, and the Bitcoin network fees are yours.</li><li>The invoice needs a fixed amount and at least an hour left. The provider pays after one confirmation, so this is not instant.</li><li>Not available on hardware accounts. Receiving over Lightning is not supported.</li></ul>
         </div></div>
     </section>
 

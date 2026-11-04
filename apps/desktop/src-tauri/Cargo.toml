@@ -18,6 +18,8 @@ tauri-build = { version = "=2.7.3", features = [] }
 default = []
 # Compact block filters (BIP157/158) Bitcoin backend. Off by default.
 cbf = ["dep:bip157", "dep:tor-socksproto"]
+# Lightning payments. Off, not part of any release: see docs/LIGHTNING.md before turning it on.
+lightning = ["wallet-core/lightning"]
 
 [dependencies]
 wallet-core = { path = "../../../crates/wallet-core", version = "=1.0.7" }

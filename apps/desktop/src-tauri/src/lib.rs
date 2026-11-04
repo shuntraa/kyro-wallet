@@ -30,6 +30,7 @@ mod commands_hw_stake;
 mod commands_hw_sui;
 mod commands_hw_ton;
 mod commands_kaspa;
+#[cfg(feature = "lightning")]
 mod commands_ln;
 mod commands_near;
 mod commands_servers;
@@ -127,6 +128,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
         .setup(move |app| {
+            // Off by default: `capabilities/default.json` does not grant the `ln_*` commands.
+            #[cfg(feature = "lightning")]
+            app.add_capability(include_str!("../lightning.capability.json"))?;
             app.manage(phrase_window::PhraseState::default());
             app.manage(backup::BackupState::default());
             let dir = app.path().app_data_dir()?;
@@ -520,12 +524,19 @@ pub fn run() {
             commands_hw::hw_thp_forget,
             updater::update_status,
             alerts::alert_notify,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_invoice_decode,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_swap_key,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_swap_accept,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_swaps,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_swap_deposited,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_refund,
+            #[cfg(feature = "lightning")]
             commands_ln::ln_refund_broadcast,
             backup::backup_export,
             backup::backup_pick,

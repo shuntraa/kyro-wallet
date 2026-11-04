@@ -972,6 +972,7 @@ fn live_smoke_exolix_tor() {
 /// Lightning providers over Tor: pairs of each, through the host rewrite (SATS Routing goes to its
 /// onion). With `KYRO_LN_INVOICES` (two throwaway invoices, comma-separated), also creates a swap at
 /// each with a real refund key and runs Rust's checks on the answer. Nothing is ever deposited.
+#[cfg(feature = "lightning")]
 #[test]
 #[ignore]
 fn live_smoke_lightning_tor() {

@@ -1,5 +1,35 @@
 # Paying Lightning invoices
 
+## Status: off
+
+**Lightning is not in any release.** No real payment or refund has been run, and an open swap cannot be recovered from the recovery phrase alone. The code stays on the branch, tested, behind a switch. In a default build there is no Lightning screen, no `ln_*` command, no `.lnswaps` file, no swap resume, and no provider host or onion in the allowlist. `musig2` and `lightning-invoice` are not compiled.
+
+Everything below describes the feature as it works when turned on.
+
+### What it takes to turn it on
+
+All of these, before it reaches a user:
+
+1. A **real small payment**, on mainnet, from a real build.
+2. A **real refund**, on mainnet, after a payment that failed, using only Kyro and the chain.
+3. **`.lnswaps` in the backup**: the swap terms cannot be derived from the phrase, so a lost file today means a lost refund. An open swap must survive a restore.
+4. **A cap** on the amount of one payment, chosen by the owner and enforced in Rust.
+
+Then, in one change: bring back the entries listed under "Removed from the docs while off", and make the two switches below the default.
+
+### How to build it
+
+```bash
+# Interface: Send's Lightning box and screen, swap status in History.
+KYRO_LIGHTNING=1 pnpm --filter @kyro/desktop tauri build --features lightning
+# Rust tests of the feature (they do not run in a default `cargo test`).
+cargo test -p wallet-core --features lightning
+cargo test -p kyro-desktop --features lightning
+```
+
+Both switches are needed. `lightning` (Cargo, `wallet-core` and `kyro-desktop`) brings the commands, the provider hosts and the onion, and grants the commands through `apps/desktop/src-tauri/lightning.capability.json`. `KYRO_LIGHTNING=1` (Vite constant `__KYRO_LIGHTNING__`) brings the interface. Do not ship one without the other.
+
+
 Kyro pays a BOLT11 invoice from a Bitcoin account through a **submarine swap**: an on-chain payment to a script the provider can only claim by paying the invoice. No channels, nothing to receive. Boltz itself is gone (see "Boltz, 2026-11-04" below), but other operators run the same open backend.
 
 ## How a payment works
@@ -125,3 +155,42 @@ All of these need to be true:
 The requirements any provider must meet: local verification of the invoice and of the lockup script, a seed-derived refund key, encrypted swap state with resume after restart, and a script-path refund that needs no Boltz server. A script-path refund matters most here, because a service that disappears mid-swap is no longer a theoretical case.
 
 To re-run the check, add a temporary `#[ignore]` test to `apps/desktop/src-tauri/src/live_smoke.rs` that fetches the hosts above, with mempool's onion as the control. The hosts must be added to `ALLOWED_HOSTS` or `ONION_HOSTS` for that run only.
+
+## Removed from the docs while off
+
+Kept here to restore them. In SECURITY.md, table "Security architecture":
+
+| Lightning payments | Send pays a BOLT11 invoice from a Bitcoin account through a **submarine swap** with Coinos or SATS Routing (Boltz backends, no key, over Tor; see [docs/LIGHTNING.md](docs/LIGHTNING.md)). **Trust model: atomic, with a wait.** The provider can only claim your deposit by revealing the invoice's preimage, which it learns by paying. It cannot take the coins without paying, but it can fail or refuse: your coins are then locked until the refund block, about 7 days, and only you can take them back. Before any deposit, Rust decodes the invoice (signature, amount, expiry, network) and rebuilds the lockup address itself: claim leaf tied to this invoice's payment hash, refund leaf paying your key, internal key a MuSig2 aggregate including your key, timeout 144 to 1,440 blocks, fee at most 3% + 3,000 sat. Any difference is refused. The native window names the payment, its provider and its refund block when an output goes to a known lockup address. The refund key is derived from your seed; the refund is signed by Rust, to your own address, after a native window, and needs no server. **Limits**: Rust trusts the invoice you pasted. A clipboard program that replaces it changes who you pay, so compare the amount and the node shown. Paying from the chain reveals the invoice, your deposit and your change to the provider. A hardware account is refused. The swap file is encrypted but not in Settings › Backup: losing it during an open payment loses the refund. A provider that lies about status changes what History says, not who can spend. No payment with real funds has been made yet, and the refund has never been broadcast. |
+
+In docs/NETWORK.md, table of hosts:
+
+| `swap.coinos.io` | Lightning payments (Boltz API v2 backend, no key, through a Tor exit): limits `GET /v2/swap/submarine`, swap `POST /v2/swap/submarine`, status `GET /v2/swap/{id}`, Tor family `swap` | The invoice (amount, payee, payment hash) and your refund public key, a new one per payment; then the swap id. It also sees the deposit on the chain, so it can link your Bitcoin coins to that invoice |
+| `satsrouting.exchange` (mainnet), `w2mqd2fcbgiop7oyxoes2ozmdnvgon22oipj7vzh2rquepf7cxauauad.onion` (Tor mode, `http://`) | Same API as `swap.coinos.io`. In Tor mode Rust rewrites the host to the onion service, whose pairs matched the clearnet host on 2026-11-04 | Same as `swap.coinos.io` |
+
+In docs/IPC.md, §3:
+
+| `swap.coinos.io`, `satsrouting.exchange` (rewritten to `w2mqd2fc…auad.onion` in Tor mode) | Lightning payments, Boltz API v2 (keyless): `GET` and `POST /v2/swap/submarine`, `GET /v2/swap/{id}`; Tor family `swap` |
+
+In docs/SWAP_FEES.md, section "Lightning payments":
+
+Paying an invoice (Send › Lightning, [LIGHTNING.md](LIGHTNING.md)) carries the same Kyro rate, on the amount deposited, at the swap's dollar value. Coinos and SATS Routing have no integrator fee, so it works as on Exolix: a **second ordinary transfer** of BTC to `recipients.bitcoin`, right after the deposit, on top of the invoice. It is rounded up, with a floor of 546 sat so it can relay: under about $25 the rate is higher than the curve. The review shows it. No fee address, no payment.
+
+The providers' own fees, read over Tor on 2026-11-04: Coinos 0.1% + 302 sat, SATS Routing 0.5% + 167 sat. A failed payment does not return Kyro's fee or either network fee.
+
+In docs/IPC.md, after §2.12 (renumber):
+
+#### Lightning payments
+
+See [LIGHTNING.md](LIGHTNING.md). Mainnet only. The interface talks to the provider through `net_fetch`; the checks are Rust's.
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `ln_invoice_decode` | `{ invoice }` | `LnInvoice` | Refuses a bad checksum or signature, no amount, expired, another network. |
+| `ln_swap_key` | none | `{ index, publicKey }` | Next refund key. Needs an unlocked session. A number is never reused. |
+| `ln_swap_accept` | `{ request: { invoice, terms, keyIndex, provider, account? } }` | `LnSwapChecked` | Reads the tip, runs `ln_check_swap` and saves the terms, encrypted. Refuses an invoice already deposited. Must succeed before the deposit. |
+| `ln_swaps` | none | `LnSwapRecord[]` | Reads the encrypted swap file. |
+| `ln_swap_deposited` | `{ id, txid }` | `null` | Marks the deposit, so the same invoice is never sent twice. |
+| `ln_refund` | `{ id, feeRate, password }` | `LnRefund` | Password, then Rust reads the coins, derives the account's first address, shows the native window and signs the refund leaf. Refused before the timeout. |
+| `ln_refund_broadcast` | `{ id, hex }` | txid | Broadcasts and remembers the refund. |
+
+`btc_sign_psbt` also adds the payment's lines at the top of the native window when an output pays a known lockup address.

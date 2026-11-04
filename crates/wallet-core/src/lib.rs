@@ -26,6 +26,7 @@ mod hw_keys;
 mod kaspa;
 mod keys;
 mod ledger_cal;
+#[cfg(feature = "lightning")]
 mod lightning;
 mod mnemonic;
 mod monero;
@@ -156,6 +157,7 @@ pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
     LEDGER_ERC20_SIGNER,
 };
+#[cfg(feature = "lightning")]
 pub use lightning::{
     ln_check_swap, ln_decode_invoice, ln_open_state, ln_refund_public_key, ln_refund_tx,
     ln_seal_state, LnInvoice, LnLockedCoin, LnRefund, LnSwapChecked, LnSwapTerms,

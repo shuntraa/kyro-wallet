@@ -228,7 +228,7 @@ export function swapRate(sellAmount: bigint, sellDecimals: number, buyAmount: bi
 
 /** History label of a cross-chain transfer (li.quest `/v1/status`, or 1Click's own status). */
 export function crossStatusLabel(status: string | undefined, toChainLabel: string, bridge?: string): string {
-  if (bridge && lnProviderOfBridge(bridge)) {
+  if (__KYRO_LIGHTNING__ && bridge && lnProviderOfBridge(bridge)) {
     return status === 'SUCCESS' ? t('ln.statusPaid') : status === 'FAILED' ? t('ln.statusFailed') : status === 'REFUNDED' ? t('ln.statusRefunded') : t('ln.statusWaiting');
   }
   switch (status) {

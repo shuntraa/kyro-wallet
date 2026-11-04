@@ -1,0 +1,14 @@
+{
+  "identifier": "lightning",
+  "description": "Lightning payments, only with the `lightning` feature (docs/LIGHTNING.md).",
+  "windows": ["main"],
+  "permissions": [
+    "allow-ln-invoice-decode",
+    "allow-ln-swap-key",
+    "allow-ln-swap-accept",
+    "allow-ln-swaps",
+    "allow-ln-swap-deposited",
+    "allow-ln-refund",
+    "allow-ln-refund-broadcast"
+  ]
+}

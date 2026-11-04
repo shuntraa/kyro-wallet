@@ -15,14 +15,6 @@ const COMMANDS: &[&str] = &[
     "vault_backup_verify",
     "session_touch",
     "alert_notify",
-    // Lightning payments (docs/LIGHTNING.md).
-    "ln_invoice_decode",
-    "ln_swap_key",
-    "ln_swap_accept",
-    "ln_swaps",
-    "ln_swap_deposited",
-    "ln_refund",
-    "ln_refund_broadcast",
     // Encrypted backup of contacts and settings (docs/IPC.md).
     "backup_export",
     "backup_pick",
@@ -383,10 +375,26 @@ const COMMANDS: &[&str] = &[
     "hw_sign_zec_tx",
 ];
 
+/// Lightning payments (docs/LIGHTNING.md): only with the `lightning` feature, which also grants
+/// them at startup (`lightning.capability.json`). The default build has no such command.
+const LIGHTNING_COMMANDS: &[&str] = &[
+    "ln_invoice_decode",
+    "ln_swap_key",
+    "ln_swap_accept",
+    "ln_swaps",
+    "ln_swap_deposited",
+    "ln_refund",
+    "ln_refund_broadcast",
+];
+
 fn main() {
+    let mut commands = COMMANDS.to_vec();
+    if std::env::var_os("CARGO_FEATURE_LIGHTNING").is_some() {
+        commands.extend_from_slice(LIGHTNING_COMMANDS);
+    }
     tauri_build::try_build(
         tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
+            .app_manifest(tauri_build::AppManifest::new().commands(commands.leak())),
     )
     .expect("failed to run tauri-build");
 }

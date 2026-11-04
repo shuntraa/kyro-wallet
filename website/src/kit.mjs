@@ -93,7 +93,6 @@ export const DONE = [
   ['Tor built in', 'On by default, a circuit per blockchain family, no fallback to a direct connection.'],
   ['Signed automatic updates', 'Downloaded over Tor, verified against a pinned public key, applied at the next start.'],
   ['Swaps across chains', 'Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.'],
-  ['Lightning payments', 'Pay an invoice from a Bitcoin account, through a swap checked on your device. New in 1.0.7.'],
   ['Earn', '16 options: Lido, Aave v3, and staking on Solana, Cardano, TRON, NEAR, Sui and Aptos.'],
   ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, token sends on Solana, TRON, TON, Stellar, Sui, Aptos, Algorand and NEAR.'],
   ['Staking from hardware wallets', 'Solana and Cardano on Ledger and Trezor, NEAR on Ledger.'],
@@ -110,7 +109,8 @@ export const NEXT = [
   ['winget', 'Install and update with the Windows package manager.'],
   ['More Ledger chains', 'Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.'],
   ['Compact filters for Bitcoin', 'A private way to read Bitcoin without an address server, once its dependencies pass review.'],
-  ['Reproducible builds', 'Bit-for-bit reproducible builds are a goal, not yet a guarantee.']
+  ['Reproducible builds', 'Bit-for-bit reproducible builds are a goal, not yet a guarantee.'],
+  ['Lightning payments', 'Later. Paying an invoice from a Bitcoin account, once a real payment and a real refund have been run.']
 ];
 
 export const ul = (items, cls = 'checks') => `<ul class="${cls}">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;

@@ -289,7 +289,7 @@ export function useHistory(): AsyncState<HistoryData> {
         const c = t.cross;
         if (!c) return;
         try {
-          const ln = lnProviderOfBridge(c.bridge);
+          const ln = __KYRO_LIGHTNING__ ? lnProviderOfBridge(c.bridge) : null;
           const st = ln && c.orderId
             ? await lnSwapStatus(netFetch, ln, c.orderId)
             : c.bridge === 'exolix' && c.orderId

@@ -20,6 +20,8 @@ export default defineConfig({
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // Lightning stays out of the bundle unless asked for (docs/LIGHTNING.md). Its tests keep running.
+    __KYRO_LIGHTNING__: JSON.stringify(process.env.KYRO_LIGHTNING === '1' || !!process.env.VITEST),
   },
   build: {
     // BigInt literals + modern syntax; WebView2 (Chromium) and WKWebView (Safari 16+).

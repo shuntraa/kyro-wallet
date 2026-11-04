@@ -2,7 +2,7 @@
 // Send: recipient with clipboard guard + 4-char blocks, amount + MAX, fees slow/normal/fast/custom,
 // recap decoded by the Rust core, password.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, intlLocale, kaspaAddressProblem, sameTonAccount, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
 import {
   assetsFor,
@@ -90,7 +90,6 @@ import { NetworkDownLine, ServerDownLine, ServerMissingLine, networkDown, server
 import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { looksLikeInvoice } from '@kyro/swap';
-import { PayLightning } from './PayLightning';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { TronEstimateView } from '../components/TronEstimateView';
@@ -117,6 +116,9 @@ import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
 
 type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; sol: SolTxSummary | null; key: string };
+
+// Lightning is out of the build unless turned on (docs/LIGHTNING.md).
+const PayLightning = __KYRO_LIGHTNING__ ? lazy(() => import('./PayLightning').then((m) => ({ default: m.PayLightning }))) : null;
 
 function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adapters']): AnyAdapter | undefined {
   if (asset.family === 'btc') return adapters.btc ?? undefined;
@@ -665,18 +667,20 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   }
 
   // Bitcoin on mainnet: a pasted invoice, or the Lightning box, opens the invoice view.
-  const lightningOk = asset.family === 'btc' && network === 'mainnet';
-  if (lightningOk && (lightning || looksLikeInvoice(to))) {
+  const lightningOk = __KYRO_LIGHTNING__ && asset.family === 'btc' && network === 'mainnet';
+  if (PayLightning && lightningOk && (lightning || looksLikeInvoice(to))) {
     return (
-      <PayLightning
-        asset={asset}
-        adapter={adapter}
-        initial={looksLikeInvoice(to) ? to.trim() : ''}
-        onExit={() => {
-          setLightning(false);
-          if (looksLikeInvoice(to)) setTo('');
-        }}
-      />
+      <Suspense fallback={null}>
+        <PayLightning
+          asset={asset}
+          adapter={adapter}
+          initial={looksLikeInvoice(to) ? to.trim() : ''}
+          onExit={() => {
+            setLightning(false);
+            if (looksLikeInvoice(to)) setTo('');
+          }}
+        />
+      </Suspense>
     );
   }
 

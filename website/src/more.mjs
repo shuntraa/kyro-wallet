@@ -210,7 +210,7 @@ function swap(chains) {
             'What you see as “You receive” already includes everything: Kyro’s fee and the provider’s own costs.',
             'NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).',
             'It is collected through each provider’s official integrator mechanism.',
-            'Exolix routes are the exception: the fee is a second ordinary transfer on the source chain. Lightning payments work the same way.',
+            'Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.',
             `The rates live in one open file. <a href="${REPO}/blob/main/packages/swap/src/fees.ts">Read fees.ts</a>.`
           ])}
           <p><a href="/fees/">Fee table and calculator</a></p>`, confirmCard())}
@@ -223,20 +223,6 @@ function swap(chains) {
           ['Exact approvals', 'Token approvals are for the exact amount. An unlimited approval needs an explicit action and shows a warning.', 'ic-lock'],
           ['Simulated', 'The transaction is simulated just before you sign it.', 'ic-swap']
         ], true)}`)}
-
-    ${sec('s-lightning', html`
-        ${head('Lightning', 's-lightning', 'Pay an invoice <em>from Bitcoin</em>', 'Paste a Lightning invoice in Send on a Bitcoin account. No channels to open.')}
-        <div class="prose" data-reveal>
-          ${ul([
-            'Coinos or SATS Routing pays the invoice from a swap, over Tor and without an account. Kyro picks the cheapest that accepts the amount.',
-            'Kyro rebuilds the swap’s address on your device. The provider can only take your bitcoin by paying this invoice.',
-            'If it fails, your coins stay locked for about 7 days. Then you take them back yourself, without the provider.',
-            'Amounts from 25,000 to 5,000,000 sat. Provider fees read on 4 November 2026: 0.1% + 302 sat, or 0.5% + 167 sat.',
-            'The Kyro fee is a second transfer, as on Exolix routes, and the Bitcoin network fees are yours.',
-            'The invoice needs a fixed amount and at least an hour left. The provider pays after one confirmation, so this is not instant.',
-            'Not available on hardware accounts. Receiving over Lightning is not supported.'
-          ])}
-        </div>`)}
 
     ${sec('s-limits', html`
         ${head('Limits', 's-limits', 'What does <em>not</em> swap yet', 'Better here than in a failed quote.')}

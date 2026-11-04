@@ -126,8 +126,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Exolix public API v2 (no key): Monero swaps (`/api/v2/rate`, `/api/v2/transactions`).
     "exolix.com",
     // Lightning payments (Boltz API v2 backends, no key): `/v2/swap/submarine`, `/v2/swap/{id}`.
-    // SATS Routing goes to its onion in Tor mode.
+    // SATS Routing goes to its onion in Tor mode. Off by default (docs/LIGHTNING.md).
+    #[cfg(feature = "lightning")]
     "swap.coinos.io",
+    #[cfg(feature = "lightning")]
     "satsrouting.exchange",
     // Lido API (keyless): stETH APR (7-day average) for the Earn screen; Tor family `market`.
     "eth-api.lido.fi",
@@ -190,16 +192,22 @@ pub fn electrum_default_allowed(host: &str, port: u16, family: Family) -> bool {
 pub const MEMPOOL_ONION: &str = "mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion";
 
 /// SATS Routing's onion service (the same swap pairs as its clearnet host, checked 2026-11-04).
+/// Reachable only with the `lightning` feature.
 pub const SATS_ROUTING_ONION: &str =
     "w2mqd2fcbgiop7oyxoes2ozmdnvgon22oipj7vzh2rquepf7cxauauad.onion";
 
 /// Onion services we may reach — ONLY over Tor, and only these.
-pub const ONION_HOSTS: &[&str] = &[MEMPOOL_ONION, SATS_ROUTING_ONION];
+pub const ONION_HOSTS: &[&str] = &[
+    MEMPOOL_ONION,
+    #[cfg(feature = "lightning")]
+    SATS_ROUTING_ONION,
+];
 
 /// Clearnet hosts that, in Tor mode, are transparently replaced by their onion service
 /// (same scheme-less path and query), so no exit relay is involved at all.
 const ONION_REWRITES: &[(&str, &str)] = &[
     ("mempool.space", MEMPOOL_ONION),
+    #[cfg(feature = "lightning")]
     ("satsrouting.exchange", SATS_ROUTING_ONION),
 ];
 
@@ -551,15 +559,13 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Market
     } else if matches!(
         host,
-        "api.0x.org"
-            | "li.quest"
-            | "lite-api.jup.ag"
-            | "1click.chaindefuser.com"
-            | "exolix.com"
-            | "swap.coinos.io"
-            | "satsrouting.exchange"
-            | SATS_ROUTING_ONION
-    ) {
+        "api.0x.org" | "li.quest" | "lite-api.jup.ag" | "1click.chaindefuser.com" | "exolix.com"
+    ) || (cfg!(feature = "lightning")
+        && matches!(
+            host,
+            "swap.coinos.io" | "satsrouting.exchange" | SATS_ROUTING_ONION
+        ))
+    {
         Family::Swap
     } else {
         Family::Other
@@ -1200,6 +1206,21 @@ mod tests {
         ));
     }
 
+    #[cfg(not(feature = "lightning"))]
+    #[test]
+    fn lightning_hosts_are_closed_in_the_default_build() {
+        let c = NetContext::default();
+        for host in ["swap.coinos.io", "satsrouting.exchange", SATS_ROUTING_ONION] {
+            assert!(!ALLOWED_HOSTS.contains(&host), "{host}");
+            assert!(!ONION_HOSTS.contains(&host), "{host}");
+            assert_eq!(family_for(host, &c), Family::Other, "{host}");
+            assert!(prep(&format!("https://{host}/v2/swap/submarine"), &c).is_err());
+        }
+        assert!(ONION_REWRITES
+            .iter()
+            .all(|(h, _)| *h != "satsrouting.exchange"));
+    }
+
     #[test]
     fn onion_policy() {
         let tor = ctx(true);
@@ -1367,9 +1388,10 @@ mod tests {
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
         assert_eq!(family_for("exolix.com", &c), Family::Swap);
-        assert_eq!(family_for("swap.coinos.io", &c), Family::Swap);
-        assert_eq!(family_for("satsrouting.exchange", &c), Family::Swap);
-        assert_eq!(family_for(SATS_ROUTING_ONION, &c), Family::Swap);
+        #[cfg(feature = "lightning")]
+        for host in ["swap.coinos.io", "satsrouting.exchange", SATS_ROUTING_ONION] {
+            assert_eq!(family_for(host, &c), Family::Swap);
+        }
         assert_eq!(family_for("eth-api.lido.fi", &c), Family::Market);
         assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
         assert_eq!(family_for("nile.trongrid.io", &c), Family::Tron);

@@ -389,7 +389,7 @@ Network feeSeparate, paid to the network
 
 - The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote.
 
-- It is collected by each provider's official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain. Lightning payments work the same way, in BTC.
+- It is collected by each provider's official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.
 
 - Quotes are compared after fees: the best price shown already includes them.
 
@@ -5769,7 +5769,7 @@ The Kyro fee slides from 5% on a swap of $5 or less down to 0.7% from $10,000, a
 
 - It is collected through each provider's official integrator mechanism.
 
-- Exolix routes are the exception: the fee is a second ordinary transfer on the source chain. Lightning payments work the same way.
+- Exolix routes are the exception: the fee is a second ordinary transfer on the source chain.
 
 - The rates live in one open file. Read fees.ts.
 
@@ -5796,26 +5796,6 @@ Token approvals are for the exact amount. An unlimited approval needs an explici
 ### Simulated
 
 The transaction is simulated just before you sign it.
-
-Lightning
-
-## Pay an invoice from Bitcoin
-
-Paste a Lightning invoice in Send on a Bitcoin account. No channels to open.
-
-- Coinos or SATS Routing pays the invoice from a swap, over Tor and without an account. Kyro picks the cheapest that accepts the amount.
-
-- Kyro rebuilds the swap's address on your device. The provider can only take your bitcoin by paying this invoice.
-
-- If it fails, your coins stay locked for about 7 days. Then you take them back yourself, without the provider.
-
-- Amounts from 25,000 to 5,000,000 sat. Provider fees read on 4 November 2026: 0.1% + 302 sat, or 0.5% + 167 sat.
-
-- The Kyro fee is a second transfer, as on Exolix routes, and the Bitcoin network fees are yours.
-
-- The invoice needs a fixed amount and at least an hour left. The provider pays after one confirmation, so this is not instant.
-
-- Not available on hardware accounts. Receiving over Lightning is not supported.
 
 Limits
 
@@ -6393,10 +6373,6 @@ Downloaded over Tor, verified against a pinned public key, applied at the next s
 
 Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.
 
-### Lightning payments
-
-Pay an invoice from a Bitcoin account, through a swap checked on your device. New in 1.0.7.
-
 ### Earn
 
 16 options: Lido, Aave v3, and staking on Solana, Cardano, TRON, NEAR, Sui and Aptos.
@@ -6459,6 +6435,10 @@ A private way to read Bitcoin without an address server, once its dependencies p
 
 Bit-for-bit reproducible builds are a goal, not yet a guarantee.
 
+### Lightning payments
+
+Later. Paying an invoice from a Bitcoin account, once a real payment and a real refund have been run.
+
 Not today
 
 ## What Kyro will not rush
@@ -6511,8 +6491,6 @@ Changelog
 Every release of Kyro, newest first. This page is generated from CHANGELOG.md at build time.
 
 ## 1.0.7Latest
-
-- Lightning: pay an invoice from a Bitcoin account. Paste it in Send or tick Lightning. Kyro checks the swap on your device and shows every fee first. The provider can only take your bitcoin by paying the invoice. If it fails, your coins stay locked about 7 days, then you take them back yourself. Not for hardware accounts, and an invoice needs at least an hour left.
 
 - Backup: Settings > Backup exports your contacts, labels, watch list, favorites, alerts and settings to one encrypted file, with a password you choose. Import shows what would change first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.
 

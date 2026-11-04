@@ -2466,7 +2466,7 @@ export interface Commands {
   btc_address_txs: { args: { address: string }; ret: EsploraTx[] };
   btc_fee_rates: { args: undefined; ret: BtcFeeRates };
   btc_tip_height: { args: undefined; ret: number };
-  /** Lightning payments (docs/LIGHTNING.md): decoded and checked by Rust. */
+  /** Lightning payments (docs/LIGHTNING.md): decoded and checked by Rust. Registered only with the `lightning` feature. */
   ln_invoice_decode: { args: { invoice: string }; ret: LnInvoice };
   ln_swap_key: { args: undefined; ret: { index: number; publicKey: string } };
   ln_swap_accept: { args: { request: { invoice: string; terms: LnSwapTermsIpc; keyIndex: number; provider: string; account?: number } }; ret: LnSwapChecked };

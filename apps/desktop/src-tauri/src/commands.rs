@@ -1209,8 +1209,9 @@ pub async fn btc_sign_psbt(
     let (s, p) = (seed.clone(), psbt.clone());
     let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, a, &p)?)).await?;
     let lang = crate::i18n::current();
-    let head = btc_replacement_head(lang, &psbt, replaces.as_ref(), &summary)?
-        + &crate::commands_ln::deposit_head(&state, lang, &summary);
+    let head = btc_replacement_head(lang, &psbt, replaces.as_ref(), &summary)?;
+    #[cfg(feature = "lightning")]
+    let head = head + &crate::commands_ln::deposit_head(&state, lang, &summary);
     confirm_native(
         &app,
         lang.confirm_tx_title(),
