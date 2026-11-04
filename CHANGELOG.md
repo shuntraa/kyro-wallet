@@ -2,10 +2,14 @@
 
 ## 1.0.7
 
-- Dust protection: tiny coins from strangers on an address already in use stay out of your sends, on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash. Send shows them as Set aside, with a box to include them. Your balance does not change.
-- History marks tiny EVM transfers worth under 1 as a possible scam, next to zero transfers.
-- Recovery phrase passphrase, the 25th word: optional when you create or import a wallet (Advanced). It follows BIP39, on every chain. Unlocking still takes only your password. If you forget it, these funds are lost. Nobody can recover it.
-- Lightning: pay an invoice from a Bitcoin account. Paste it in Send or tick Lightning. Kyro checks the swap on your device and shows every fee first. The provider can only take your bitcoin by paying the invoice. If it fails, your coins stay locked about 7 days, then you take them back yourself. Not for hardware accounts, and an invoice needs at least an hour left.
+- Dust protection: tiny coins from strangers on an address already in use stay out of your sends,
+  on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash. Send shows them as Set aside, with
+  a box to include them. Your balance does not change.
+- History marks EVM transfers worth less than 1 in your currency as a possible scam, like zero
+  transfers.
+- Recovery phrase passphrase, the 25th word: optional when you create or import a wallet
+  (Advanced). It follows BIP39, on every chain. Unlocking still takes only your password. If you
+  forget it, these funds are lost. Nobody can recover it.
 - Tor bridges: if your country blocks Tor, paste plain bridge lines in Settings › Privacy. Kyro
   then connects only through them and stays offline if none answers. obfs4 and other disguised
   bridges don't work yet.
