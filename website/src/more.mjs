@@ -395,7 +395,7 @@ function hardware(chains) {
     ${sec('h-limits', html`
         ${head('Limits', 'h-limits', 'What to <em>know first</em>', 'Hardware support is the youngest part of Kyro. Read this before you move real money.')}
         ${cards([
-          ['Testing status', 'Checked on a real Ledger Nano X: addresses on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, and test signatures on Bitcoin, Ethereum and Solana, never broadcast. Real sends, other chains and Trezor devices were tested on recorded exchanges and simulated devices only. Start with a small amount.', 'ic-eye'],
+          ['Testing status', 'Kyro has run on real Ledger and Trezor devices. On a Ledger Nano X, addresses were checked on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON, with test signatures on Bitcoin, Ethereum and Solana. Chains whose app wasn't installed were not checked on a device. Start with a small amount.', 'ic-eye'],
           ['Blind signing', 'When the device cannot decode a transaction, its screen shows only raw data and it protects your keys, not your consent. Kyro flags this with a hardened confirmation. Keep blind signing off until you need it.', 'ic-shield'],
           ['Earn', 'Lido and Aave only. Staking on Solana, Cardano, TRON and NEAR is refused from a hardware account.', 'ic-stake'],
           ['Token sends', 'EVM chains, Solana SPL, and TRC-20 on Ledger. Native coins elsewhere.', 'ic-send'],

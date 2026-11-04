@@ -300,7 +300,7 @@ Technical details: [docs/IPC.md §2.8](docs/IPC.md). As with payments, **Kyro bu
 
 ## Hardware wallets (Ledger, Trezor)
 
-Technical details: [docs/IPC.md §2.3](docs/IPC.md). **Status: checked on a real Ledger Nano X (`docs/LEDGER_CHECK.md`) for addresses on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON and test signatures on Bitcoin, Ethereum and Solana, nothing broadcast; everything else is only** tested on APDU exchanges recorded by Ledger and a simulated Trezor firmware (Trezor Safe 7: against Trezor's device-side THP implementation, see below). Supported chains (the same list as the app and README.md):
+Technical details: [docs/IPC.md §2.3](docs/IPC.md). **Status: run by the project owner on real Ledger and Trezor devices. On a Ledger Nano X (`docs/LEDGER_CHECK.md`): addresses on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON and test signatures on Bitcoin, Ethereum and Solana, nothing broadcast. The rest is** tested on APDU exchanges recorded by Ledger and a simulated Trezor firmware (Trezor Safe 7: against Trezor's device-side THP implementation, see below). Supported chains (the same list as the app and README.md):
 
 | Device | Chains |
 |---|---|
