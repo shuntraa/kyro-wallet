@@ -6830,7 +6830,7 @@ Kyro Wallet is a free, open-source, non-custodial desktop wallet for Windows, ma
 
 ## Type
 
-Headlines use Archivo. Everything else uses Geist. Both are under the SIL Open Font License, with the licence files in OFL-Geist and OFL-Archivo.
+Headlines and text use Geist, with Instrument Serif Italic for the accent words in headlines. The Kyro wordmark uses Archivo. All three are under the SIL Open Font License, with the licence files in OFL-Geist, OFL-Instrument-Serif and OFL-Archivo.
 
 ## Usage
 
