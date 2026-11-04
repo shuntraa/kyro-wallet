@@ -106,6 +106,15 @@ export function isMethodMissing(e: unknown): boolean {
   return e.code === -32601 || e.code === -32600 || /not (found|supported|available|allowed|exist)|unsupported|whitelist|disabled|unknown method/.test(m);
 }
 
+/**
+ * JSON-RPC « internal error »: the node broke, it says nothing about the call (BSC's public node
+ * answers `eth_simulateV1` with « global signer not initialized »). The next method decides, and
+ * `eth_call` still reports a real revert.
+ */
+function isNodeFault(e: unknown): boolean {
+  return e instanceof JsonRpcError && e.code === -32603;
+}
+
 /** Short reason of a failure, on one line. */
 export function simFailure(e: unknown): string {
   const raw = e instanceof Error ? ((e as { shortMessage?: string }).shortMessage ?? e.message) : String(e);
@@ -222,7 +231,7 @@ export async function simulateCall(b: SimBackend, call: SimCall, ctx: SimContext
         break;
       }
     } catch (e) {
-      if (isMethodMissing(e)) continue;
+      if (isMethodMissing(e) || isNodeFault(e)) continue;
       if (e instanceof JsonRpcError) {
         answered = true;
         failure = simFailure(e);

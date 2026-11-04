@@ -121,6 +121,17 @@ describe('simulateCall', () => {
     expect(r.reason).toContain('insufficient funds');
   });
 
+  it('a node fault on eth_simulateV1 is not a revert: eth_call decides', async () => {
+    const fault = () => Promise.reject(new JsonRpcError(-32603, 'global signer not initialized'));
+    const missing = () => Promise.reject(new JsonRpcError(-32601, 'the method debug_traceCall does not exist'));
+    const passes = await simulateCall(backend({ simulateV1: fault, traceCall: missing, ethCall: async () => {} }), call, ctx);
+    expect(passes.status).toBe('checked');
+    expect(passes.warnings).not.toContain('fails');
+    const reverts = await simulateCall(backend({ simulateV1: fault, traceCall: missing, ethCall: () => Promise.reject(new JsonRpcError(3, 'execution reverted')) }), call, ctx);
+    expect(reverts.status).toBe('failed');
+    expect(reverts.reason).toContain('execution reverted');
+  });
+
   it('a node that answers nothing is unavailable, not safe', async () => {
     const down = () => Promise.reject(new Error('network down'));
     const r = await simulateCall(backend({ simulateV1: down, traceCall: down, ethCall: down, estimateGas: down, code: down }), call, ctx);
