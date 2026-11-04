@@ -310,7 +310,7 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
         sm.receiver,
         "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA"
     );
-    assert!(wallet_core::algo_hw_message(&blob).is_err());
+    assert!(wallet_core::algo_hw_message(&blob).is_ok());
 }
 
 #[test]

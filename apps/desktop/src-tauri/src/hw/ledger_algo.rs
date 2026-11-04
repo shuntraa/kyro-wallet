@@ -106,6 +106,62 @@ mod tests {
         assert!(parse_address(&bad).is_err());
     }
 
+    /// USDC opt-in and transfer: the app signs `TX` and the msgpack, which must verify for the
+    /// account.
+    #[test]
+    fn asset_transfer_and_opt_in() {
+        use ed25519_dalek::Signer;
+        use wallet_core::Network;
+        let k = ed25519_dalek::SigningKey::from_bytes(&[6; 32]);
+        let pk = k.verifying_key().to_bytes();
+        let me = wallet_core::algo_address_of_pubkey(&pk);
+        let (gen, gh) = wallet_core::algo_genesis(Network::Mainnet).unwrap();
+        let usdc = wallet_core::algo_known_assets(Network::Mainnet)[0];
+        for (receiver, amount) in [([9u8; 32], 1_500_000), (pk, 0)] {
+            let p = wallet_core::AlgoPayment {
+                amount: 0,
+                close_remainder_to: None,
+                fee: 1_000,
+                first_valid: 100,
+                genesis_id: gen.into(),
+                genesis_hash: gh,
+                group: None,
+                last_valid: 1_000,
+                lease: None,
+                note: Vec::new(),
+                receiver: [0; 32],
+                rekey_to: None,
+                sender: pk,
+                asset: Some(wallet_core::AlgoAssetTransfer {
+                    asset_id: usdc.id,
+                    amount,
+                    receiver,
+                    close_to: None,
+                    asset_sender: None,
+                }),
+            };
+            let blob = hex::encode(p.encode());
+            let msg = wallet_core::algo_hw_message(&blob).unwrap();
+            let sig = k.sign(&[b"TX".as_slice(), &msg].concat()).to_bytes();
+            let mut lines = app("Algorand", "2.1.15").to_vec();
+            let apdus = sign_apdus(0, &msg).unwrap();
+            for (i, a) in apdus.iter().enumerate() {
+                lines.push(format!("=> {}", hex::encode(a)));
+                lines.push(if i + 1 == apdus.len() {
+                    format!("<= {}9000", hex::encode(sig))
+                } else {
+                    "<= 9000".into()
+                });
+            }
+            let r = Replay::new(&lines);
+            let c = ctl();
+            let a = App::open(&r, &c, HwKeyChain::Algo).unwrap();
+            let got = sign(&a, 0, &msg).unwrap();
+            assert!(r.done());
+            wallet_core::algo_hw_signed(&blob, Network::Mainnet, &me, &got).unwrap();
+        }
+    }
+
     #[test]
     fn sign_chunks_like_zondax() {
         let msg = vec![0x8a; 260];

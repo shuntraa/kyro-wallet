@@ -11,6 +11,8 @@ import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { Button, Notice, Spinner } from './ui/primitives';
 import { Dialog } from './ui/dialog';
 import { PasswordField } from './kit';
+import { HwWaiting } from './hw';
+import { pickDevice, withDevice } from '../state/hw';
 import { useAsync } from '../lib/useAsync';
 import { IconCheck, IconInfo, IconWarn } from './icons';
 import { cn } from '../lib/cn';
@@ -217,6 +219,8 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ txid: string; symbol: string } | null>(null);
+  const [device, setDevice] = useState<string | null>(null);
+  const hw = adapter.hw;
   const known = adapter.knownAssets();
   if (!known.length) return null;
   const spendable = me.data ? BigInt(me.data.spendable) : null;
@@ -226,7 +230,14 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
     setError(null);
     try {
       const u = await adapter.buildOptIn(target.id);
-      const signed = await adapter.signTx(u, pw);
+      let signed;
+      if (hw) {
+        const d = await pickDevice(hw.device);
+        setDevice(d.id);
+        signed = await withDevice(d.id, () => adapter.signTxHw(u, d.id));
+      } else {
+        signed = await adapter.signTx(u, pw);
+      }
       setPw('');
       await adapter.broadcast(signed);
       setSent({ txid: signed.txid, symbol: target.symbol });
@@ -278,13 +289,14 @@ export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; o
             <p className="m-0 text-text2">{t('algo.enableExplain', { symbol: target.symbol })}</p>
             <Notice tone="info">{t('algo.enableMinBalance', { spendable: spendable !== null ? ALGO(spendable) : '…' })}</Notice>
             {spendable !== null && spendable < ALGO_ACTIVATION + 1_000n && <span className="text-down">{t('algo.enableTooPoor')}</span>}
-            <PasswordField id="algo-optin-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void enable()} />
+            {!hw && <PasswordField id="algo-optin-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void enable()} />}
+            {busy && device && <HwWaiting deviceId={device} />}
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
               <Button onClick={() => setTarget(null)} disabled={busy}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="primary" disabled={!pw || busy} onClick={() => void enable()}>
+              <Button variant="primary" disabled={(!hw && !pw) || busy} onClick={() => void enable()}>
                 {busy && <Spinner />} {t('algo.enableConfirm', { symbol: target.symbol })}
               </Button>
             </div>

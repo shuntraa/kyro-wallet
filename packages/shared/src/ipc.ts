@@ -2646,6 +2646,8 @@ export interface Commands {
   hw_aptos_build_tx: { args: { accountId: string; to: string; amount: string }; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   hw_sign_aptos_tx: { args: { id: string; accountId: string; raw: string }; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
   hw_aptos_broadcast: { args: { accountId: string; signed: string }; ret: string };
+  hw_algo_build_optin_tx: { args: { accountId: string; assetId: number }; ret: AlgoBuilt };
+  hw_algo_build_asset_tx: { args: { accountId: string; assetId: number; to: string; amount: string; note?: string }; ret: AlgoBuilt };
   hw_algo_build_tx: { args: { accountId: string; to: string; amount: string; note?: string }; ret: AlgoBuilt };
   hw_sign_algo_tx: { args: { id: string; accountId: string; blob: string }; ret: { blob: string; txid: string; summary: AlgoTxSummary; context: AlgoContext } };
   hw_algo_broadcast: { args: { accountId: string; blob: string }; ret: string };

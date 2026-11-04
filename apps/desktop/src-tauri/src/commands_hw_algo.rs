@@ -6,12 +6,12 @@ use wallet_core::HwKeyChain;
 
 use crate::commands::confirm_native;
 use crate::commands_algo::{
-    broadcast_checked, build, ctx, describe_algo, describe_algo_extra, prepare_sign, AlgoBuilt,
-    AlgoSigned,
+    broadcast_checked, build, build_asset, ctx, describe_algo, describe_algo_extra, prepare_sign,
+    AlgoBuilt, AlgoSigned,
 };
 use crate::commands_hw::device_line;
 use crate::commands_hw_keys::{check_device, device_sign, stored_key};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
 const CHAIN: HwKeyChain = HwKeyChain::Algo;
@@ -26,6 +26,42 @@ pub async fn hw_algo_build_tx(
 ) -> AppResult<AlgoBuilt> {
     let (_, key) = stored_key(&state, &account_id, CHAIN)?;
     build(&ctx(&state), &key.address, &to, &amount, note.as_deref()).await
+}
+
+/// Opt-in to a known asset from the hardware account: a 0-unit transfer of it to itself.
+#[tauri::command]
+pub async fn hw_algo_build_optin_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset_id: u64,
+) -> AppResult<AlgoBuilt> {
+    let (_, key) = stored_key(&state, &account_id, CHAIN)?;
+    build_asset(&ctx(&state), &key.address, asset_id, &key.address, 0, None).await
+}
+
+/// Transfer of `amount` base units of a known asset to `to` (who must have opted in).
+#[tauri::command]
+pub async fn hw_algo_build_asset_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset_id: u64,
+    to: String,
+    amount: String,
+    note: Option<String>,
+) -> AppResult<AlgoBuilt> {
+    let (_, key) = stored_key(&state, &account_id, CHAIN)?;
+    let units: u64 = amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|a| *a > 0)
+        .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
+    let to = to.trim();
+    if to == key.address {
+        return Err(AppError::InvalidInput("cannot send to yourself".into()));
+    }
+    let c = ctx(&state);
+    build_asset(&c, &key.address, asset_id, to, units, note.as_deref()).await
 }
 
 #[tauri::command]

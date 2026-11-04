@@ -23,6 +23,7 @@
   the amount from the coins themselves (8 coins per transfer at most).
 - Hardware wallets: Aptos USDC and USDt can be sent from Ledger accounts (Aptos app 0.10.1 or
   later), shown by name and amount on the device.
+- Hardware wallets: Algorand USDC and USDt can be enabled and sent from Ledger accounts.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Simulation before signing: on swaps and Earn calls, the review now says what you send and
   receive, which approvals you grant, and warns about a call that would fail, an unlimited

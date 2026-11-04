@@ -57,15 +57,13 @@ export function rustAlgoBackend(account = 0): AlgoBackend {
 
 /** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustAlgoHwBackend(accountId: string): AlgoBackend {
-  const base = rustAlgoBackend();
-  // Tokens are not signed on a hardware wallet yet (holdings stay readable).
-  delete base.buildOptIn;
-  delete base.buildAsset;
   return {
-    ...base,
+    ...rustAlgoBackend(),
     build: (to, amount, note) => call('hw_algo_build_tx', { accountId, to, amount, ...(note ? { note } : {}) }),
     sign: (blob, id) => call('hw_sign_algo_tx', { id, accountId, blob }),
     broadcast: (blob) => call('hw_algo_broadcast', { accountId, blob }),
+    buildOptIn: (assetId) => call('hw_algo_build_optin_tx', { accountId, assetId }),
+    buildAsset: (assetId, to, amount, note) => call('hw_algo_build_asset_tx', { accountId, assetId, to, amount, ...(note ? { note } : {}) }),
   };
 }
 
@@ -164,7 +162,7 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
     return (await this.backend.holdings(address)).filter((h) => known.has(h.assetId));
   }
 
-  /** Tokens can be enabled and sent from this account (not on a hardware wallet yet). */
+  /** Tokens can be enabled and sent from this account. */
   get tokensSignable(): boolean {
     return !!this.backend.buildOptIn && !!this.backend.buildAsset;
   }

@@ -854,13 +854,7 @@ pub fn algo_verify_signed(
 
 /// Ledger Algorand app: the strictly decoded msgpack (the app prefixes `TX` itself).
 pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
-    let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
-    if p.asset.is_some() {
-        return Err(bad(
-            "Algorand tokens: not supported on hardware wallets yet",
-        ));
-    }
-    Ok(p.encode())
+    Ok(AlgoPayment::decode(&unhex(blob_hex)?)?.encode())
 }
 
 /// HW: signed tx (hex) and tx id from the device sig, checked like [`algo_verify_signed`].
@@ -874,11 +868,6 @@ pub fn algo_hw_signed(
         .try_into()
         .map_err(|_| bad("device signature: 64 bytes expected"))?;
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
-    if p.asset.is_some() {
-        return Err(bad(
-            "Algorand tokens: not supported on hardware wallets yet",
-        ));
-    }
     let signed = hex::encode(algo_encode_signed(&p, &sig));
     let (txid, _) = algo_verify_signed(&signed, net, our_address)?;
     Ok((signed, txid))

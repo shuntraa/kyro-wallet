@@ -302,6 +302,8 @@
     "allow-hw-sign-aptos-tx",
     "allow-hw-aptos-broadcast",
     "allow-hw-algo-build-tx",
+    "allow-hw-algo-build-optin-tx",
+    "allow-hw-algo-build-asset-tx",
     "allow-hw-sign-algo-tx",
     "allow-hw-algo-broadcast",
     "allow-hw-near-build-tx",
