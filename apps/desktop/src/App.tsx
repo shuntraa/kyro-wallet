@@ -20,6 +20,7 @@ import { Swap } from './screens/Swap';
 import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
 import { useLongHistoryWarmup } from './state/charts';
+import { useAlerts } from './state/alerts';
 import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
@@ -120,6 +121,7 @@ function Unlocked() {
   const { lang } = useT();
   useHistoryWarmup();
   useLongHistoryWarmup();
+  useAlerts();
 
   const assetName = useCallback(
     (id: string) => {

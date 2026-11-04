@@ -127,6 +127,15 @@ export function unreachable(data: Pick<HistoryData, 'errors' | 'chains'>, ignore
   return { keys, all: keys.length > 0 && Object.keys(data.errors).length >= data.chains.length };
 }
 
+/** Stable id of an account list, the key of its caches. */
+export const sourcesFingerprint = (sources: readonly Source[]): string => fingerprint(sourcesKeyOf(sources));
+
+/** The history as last fetched, without asking any network (local alerts read this). */
+export function cachedHistory(network: LocalTx['network'], sources: readonly Source[], isMultiAccount: (f: Source['family']) => boolean): HistoryData | null {
+  const cache = loadHistory(network, sourcesFingerprint(sources));
+  return cache ? assemble(jobsOf(sources), cache, {}, network, isMultiAccount, new Set()) : null;
+}
+
 /** Networks asked at once by the background warm-up: low priority, leaves room for balances. */
 export const WARM_CONCURRENCY = 2;
 

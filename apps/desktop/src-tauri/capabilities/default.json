@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window's only permissions: our commands and window control (custom title bar). No fs, no shell, no http on the webview side. Only external link: open_fees_page (fixed URL kyrowallet.com/frais, opened by Rust).",
+  "description": "The main window's only permissions: our commands and window control (custom title bar). No fs, no shell, no http on the webview side. Only external link: open_fees_page (fixed URL kyrowallet.com/frais, opened by Rust). Local alerts: only the alert_notify command; none of the notification plugin's own permissions (Rust calls it, with fixed texts).",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -21,6 +21,7 @@
     "allow-vault-backup-show",
     "allow-vault-backup-verify",
     "allow-session-touch",
+    "allow-alert-notify",
     "allow-accounts-get",
     "allow-vault-accounts-get",
     "allow-vault-account-add",

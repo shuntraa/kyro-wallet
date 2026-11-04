@@ -139,6 +139,12 @@ export interface Settings {
   weeklyCount: boolean;
 }
 
+/** Which fixed notification text Rust shows (`alerts.rs`); `symbol` and the figures are checked there. */
+export type AlertNote =
+  | { kind: 'priceAbove' | 'priceBelow'; symbol: string; price: string }
+  | { kind: 'received'; symbol: string; amount: string | null }
+  | { kind: 'test' };
+
 /** `update_status`: the running version, and (once, after a start that applied an update) the new one. */
 export interface UpdateStatus {
   version: string;
@@ -2632,6 +2638,8 @@ export interface Commands {
   config_get: { args: undefined; ret: AppConfig };
   /** Running version; `updatedTo` is set once after an automatic update was applied. */
   update_status: { args: undefined; ret: UpdateStatus };
+  /** Local alert: Rust writes the text from a fixed template (docs/IPC.md §2.11). */
+  alert_notify: { args: { note: AlertNote }; ret: void };
   network_get: { args: undefined; ret: NetworkInfo };
   network_set: { args: { network: Network }; ret: boolean };
 }

@@ -2,6 +2,7 @@
 #![recursion_limit = "256"]
 
 mod accounts;
+mod alerts;
 mod algo_backend;
 mod aptos_backend;
 mod btc_backend;
@@ -111,6 +112,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(nav_guard::init(dev_url))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
         .setup(|app| {
             app.manage(phrase_window::PhraseState::default());
@@ -459,6 +461,7 @@ pub fn run() {
             commands_hw::hw_thp_pairings,
             commands_hw::hw_thp_forget,
             updater::update_status,
+            alerts::alert_notify,
             commands_hw_coins::hw_sign_utxo_psbt,
             commands_hw_coins::hw_xrp_build_tx,
             commands_hw_coins::hw_sign_xrp_tx,

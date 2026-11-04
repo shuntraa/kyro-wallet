@@ -13,6 +13,7 @@ const COMMANDS: &[&str] = &[
     "vault_backup_show",
     "vault_backup_verify",
     "session_touch",
+    "alert_notify",
     "accounts_get",
     // Account lists of the vault (docs/IPC.md §2.9).
     "vault_accounts_get",

@@ -33,6 +33,8 @@ Why the onion: `mempool.space` does not respond to Tor exit relays (timeout at t
 
 ## What each server sees
 
+**Local alerts** (price, funds received) add no request and no host: they read the prices and the history cache the app already holds, and the notification is shown by the operating system.
+
 In clear mode, every server contacted sees your **IP address**; in Tor mode (default), it sees that of an exit relay. In both modes, blockchain nodes see the **public addresses** whose balance you request. To avoid this: use **your own nodes** (Settings → Networks and servers).
 
 | Host | Why | Data sent |

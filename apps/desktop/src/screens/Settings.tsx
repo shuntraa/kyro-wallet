@@ -25,10 +25,12 @@ import { useMedia } from '../components/motion';
 import { useT, type Key } from '../i18n';
 import { XmrWalletSection } from '../components/Monero';
 import { CurrencySelect } from '../components/CurrencySelect';
+import { AlertsSection } from './settings/Alerts';
 
 const SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
   { key: 'privacy', label: 'settings.sectionPrivacy' },
+  { key: 'alerts', label: 'settings.sectionAlerts' },
   { key: 'accounts', label: 'settings.sectionAccounts' },
   { key: 'hardware', label: 'settings.sectionHardware' },
   { key: 'networks', label: 'settings.sectionNetworks' },
@@ -88,6 +90,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
+          {section === 'alerts' && <AlertsSection />}
           {section === 'accounts' && <AccountsSection {...(family ? { family } : {})} />}
           {section === 'hardware' && <Devices />}
           {section === 'networks' && (
