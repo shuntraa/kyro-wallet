@@ -51,7 +51,8 @@ type Mode = 'home' | 'create' | 'import' | 'hw' | 'watch';
 export function Welcome() {
   const [mode, setMode] = useState<Mode>('home');
   const [info, setInfo] = useState<null | 'threat' | 'code' | 'network'>(null);
-  const { network, enterVault } = useApp();
+  const { network, enterVault, status, cancelAddWallet } = useApp();
+  const adding = status?.creating ?? null;
   const netInfo = useNetworkInfo();
   const [switchTo, setSwitchTo] = useState<'mainnet' | 'testnet' | null>(null);
   const { t } = useT();
@@ -89,22 +90,29 @@ export function Welcome() {
       <div className="flex max-w-[560px] flex-col gap-10">
         <div className="flex flex-col gap-3">
           <h1 className="rise m-0 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]" style={idx(0)}>
-            {t('welcome.title')}
+            {adding ? t('wallets.addTitle', { name: adding }) : t('welcome.title')}
           </h1>
-          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{t('welcome.subtitle')}</p>
+          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{adding ? t('wallets.addBody') : t('welcome.subtitle')}</p>
+          {adding && (
+            <button type="button" onClick={() => void cancelAddWallet()} className="self-start text-[13px] font-semibold text-ice hover:underline">
+              {t('wallets.addCancel')}
+            </button>
+          )}
         </div>
 
         <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(2)}>
-          <ChoiceCard
-            icon={<IconUsbKey size={20} />}
-            iconClass="text-ice"
-            title={t('welcome.choiceHw')}
-            subtitle={t('welcome.choiceHwSub')}
-            onClick={() => setMode('hw')}
-          />
+          {!adding && (
+            <ChoiceCard
+              icon={<IconUsbKey size={20} />}
+              iconClass="text-ice"
+              title={t('welcome.choiceHw')}
+              subtitle={t('welcome.choiceHwSub')}
+              onClick={() => setMode('hw')}
+            />
+          )}
           <ChoiceCard icon={<IconPlus size={20} />} title={t('welcome.choiceCreate')} subtitle={t('welcome.choiceCreateSub')} onClick={() => setMode('create')} />
           <ChoiceCard icon={<IconImport size={20} />} title={t('welcome.choiceImport')} subtitle={t('welcome.choiceImportSub')} onClick={() => setMode('import')} />
-          <ChoiceCard icon={<IconEye size={20} />} title={t('watch.welcomeChoice')} subtitle={t('watch.welcomeChoiceSub')} onClick={() => setMode('watch')} />
+          {!adding && <ChoiceCard icon={<IconEye size={20} />} title={t('watch.welcomeChoice')} subtitle={t('watch.welcomeChoiceSub')} onClick={() => setMode('watch')} />}
         </div>
 
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallet-switch"
+description = "Enables the wallet_switch command without any pre-configured scope."
+commands.allow = ["wallet_switch"]
+
+[[permission]]
+identifier = "deny-wallet-switch"
+description = "Denies the wallet_switch command without any pre-configured scope."
+commands.deny = ["wallet_switch"]

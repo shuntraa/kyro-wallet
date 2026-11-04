@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -45,7 +46,14 @@ pub struct AppState {
     pub network_source: crate::network::Source,
     /// Native signature dialogs currently open (the network cannot be switched meanwhile).
     pub dialogs: crate::network::DialogCounter,
+    /// The first wallet's vault file (also locates the data directory).
     pub vault_path: PathBuf,
+    /// List of the added wallets (`wallets.rs`).
+    pub wallets_path: PathBuf,
+    /// The wallet in use: which vault file every password and signature goes to.
+    active: Mutex<ActiveVault>,
+    /// Changes with the active wallet: an unlock begun on another wallet cannot open a session.
+    wallet_epoch: AtomicU64,
     pub settings_path: PathBuf,
     /// Shared with background tasks (Monero scanning).
     pub net: Arc<NetClient>,
@@ -65,7 +73,6 @@ pub struct AppState {
     pub vault_create_lock: tokio::sync::Mutex<()>,
     /// Monero: scan tasks, their status and transfers awaiting signature (`xmr_backend`).
     pub xmr: crate::xmr_backend::XmrManager,
-    attempts_path: PathBuf,
     session: Mutex<Option<Session>>,
     settings: Mutex<Settings>,
     guard: Mutex<Guard>,
@@ -73,6 +80,31 @@ pub struct AppState {
     approved_hosts: Mutex<BTreeSet<String>>,
     picked_cookie: Mutex<Option<String>>,
     pending_backup: Mutex<Option<PendingBackup>>,
+}
+
+/// The wallet in use.
+struct ActiveVault {
+    id: String,
+    path: PathBuf,
+    attempts_path: PathBuf,
+    /// Set while a new wallet is being created: its name and the wallet to go back to.
+    creating: Option<(String, String)>,
+}
+
+impl ActiveVault {
+    fn of(main: &Path, list_path: &Path, id: &str) -> ActiveVault {
+        let path = if id == crate::wallets::MAIN {
+            main.to_path_buf()
+        } else {
+            crate::wallets::wallet_vault(list_path, id)
+        };
+        ActiveVault {
+            id: id.to_owned(),
+            attempts_path: path.with_extension("attempts"),
+            path,
+            creating: None,
+        }
+    }
 }
 
 const FREE_ATTEMPTS: u32 = 5;
@@ -117,15 +149,19 @@ impl AppState {
         let (network, network_source) = crate::network::startup(&data_dir);
         let settings_path = data_dir.join("settings.json");
         let vault_path = crate::network::vault_file(&data_dir, network);
-        let attempts_path = vault_path.with_extension("attempts");
+        let wallets_path = crate::network::wallets_file(&data_dir, network);
+        let last = crate::wallets::WalletList::load(&wallets_path).active;
+        let active = ActiveVault::of(&vault_path, &wallets_path, &last);
         let settings = Settings::load(&settings_path, network);
         crate::i18n::apply(settings.language);
         Ok(Self {
             network,
             network_source,
             dialogs: crate::network::DialogCounter::default(),
-            guard: Mutex::new(Guard::load(&attempts_path)),
-            attempts_path,
+            guard: Mutex::new(Guard::load(&active.attempts_path)),
+            active: Mutex::new(active),
+            wallet_epoch: AtomicU64::new(0),
+            wallets_path,
             vault_path,
             settings: Mutex::new(settings),
             settings_path,
@@ -155,19 +191,96 @@ impl AppState {
             .unwrap_or_default()
     }
 
+    /// True when the active wallet has its vault file.
     pub fn vault_exists(&self) -> bool {
-        self.vault_path.exists()
+        lock(&self.active).path.exists()
+    }
+
+    /// True when any wallet needs a password on this device (public data stays behind it, also
+    /// while a new wallet is being created).
+    pub fn any_vault_exists(&self) -> bool {
+        self.vault_path.exists() || self.vault_exists()
+    }
+
+    /// Id of the wallet in use.
+    pub fn active_wallet(&self) -> String {
+        lock(&self.active).id.clone()
+    }
+
+    /// Name of the wallet being created, if any.
+    pub fn creating_wallet(&self) -> Option<String> {
+        lock(&self.active).creating.as_ref().map(|c| c.0.clone())
+    }
+
+    /// Value of the wallet epoch, to pass to [`AppState::start_session_for`].
+    pub fn wallet_epoch(&self) -> u64 {
+        self.wallet_epoch.load(Ordering::SeqCst)
+    }
+
+    /// Ends the session and points every vault operation at wallet `id`, with its own attempts.
+    pub fn activate_wallet(&self, id: &str) {
+        self.lock_session();
+        let next = ActiveVault::of(&self.vault_path, &self.wallets_path, id);
+        self.set_active(next);
+    }
+
+    fn set_active(&self, next: ActiveVault) {
+        *lock(&self.guard) = Guard::load(&next.attempts_path);
+        *lock(&self.active) = next;
+        self.wallet_epoch.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Same, for a wallet that has no vault file yet. It joins the list once written.
+    pub fn begin_new_wallet(&self, id: &str, name: String) {
+        let previous = self.active_wallet();
+        self.lock_session();
+        let mut next = ActiveVault::of(&self.vault_path, &self.wallets_path, id);
+        next.creating = Some((name, previous));
+        self.set_active(next);
+    }
+
+    /// Back to the wallet the add flow started from.
+    pub fn cancel_new_wallet(&self) -> AppResult<()> {
+        let previous = lock(&self.active).creating.as_ref().map(|c| c.1.clone());
+        match previous {
+            Some(p) if !self.vault_exists() => {
+                self.activate_wallet(&p);
+                Ok(())
+            }
+            _ => Err(AppError::InvalidInput("no wallet being added".into())),
+        }
+    }
+
+    /// The new wallet's vault is written: it joins the list and becomes the wallet in use.
+    fn finish_new_wallet(&self) -> AppResult<()> {
+        let (id, created) = {
+            let mut a = lock(&self.active);
+            (a.id.clone(), a.creating.take())
+        };
+        let Some((name, _)) = created else {
+            return Ok(());
+        };
+        let mut list = crate::wallets::WalletList::load(&self.wallets_path);
+        list.wallets.push(crate::wallets::WalletEntry {
+            id: id.clone(),
+            name,
+        });
+        list.active = id;
+        list.save(&self.wallets_path)
     }
 
     pub fn read_vault(&self) -> AppResult<VaultFile> {
-        let raw = fs::read_to_string(&self.vault_path)
+        let path = lock(&self.active).path.clone();
+        let raw = fs::read_to_string(&path)
             .map_err(|_| AppError::InvalidInput("no vault on this device".into()))?;
         Ok(serde_json::from_str(&raw)?)
     }
 
     /// Writes a NEW vault: fails if one already exists (never overwrites).
     pub fn write_new_vault(&self, file: &VaultFile) -> AppResult<()> {
-        crate::settings::write_new(&self.vault_path, serde_json::to_string(file)?.as_bytes())
+        let path = lock(&self.active).path.clone();
+        crate::settings::write_new(&path, serde_json::to_string(file)?.as_bytes())?;
+        self.finish_new_wallet()
     }
 
     pub fn start_session(&self, seed: Seed, cardano: CardanoRoot, polkadot: PolkadotRoot) {
@@ -177,6 +290,24 @@ impl AppState {
             polkadot,
             last_activity: Instant::now(),
         });
+    }
+
+    /// Starts the session unless the active wallet changed since `epoch` was read (the keys
+    /// would belong to another wallet than the one the app now shows).
+    pub fn start_session_for(
+        &self,
+        epoch: u64,
+        seed: Seed,
+        cardano: CardanoRoot,
+        polkadot: PolkadotRoot,
+    ) -> AppResult<()> {
+        if self.wallet_epoch() != epoch {
+            return Err(AppError::InvalidInput(
+                "the wallet changed: unlock it again".into(),
+            ));
+        }
+        self.start_session(seed, cardano, polkadot);
+        Ok(())
     }
 
     pub fn lock_session(&self) {
@@ -264,7 +395,8 @@ impl AppState {
         // Best effort: an unwritable data dir must not lock the user out (the in-memory
         // counter still applies).
         if let Ok(json) = serde_json::to_vec(g) {
-            let _ = crate::settings::write_atomic(&self.attempts_path, &json);
+            let path = lock(&self.active).attempts_path.clone();
+            let _ = crate::settings::write_atomic(&path, &json);
         }
     }
 
@@ -325,10 +457,18 @@ impl AppState {
         new.validate()?;
         let mut current = lock(&self.settings);
         new.accounts = current.accounts.clone();
+        new.wallet_accounts = current.wallet_accounts.clone();
         new.save(&self.settings_path)?;
         crate::i18n::apply(new.language);
         *current = new.clone();
         Ok(new)
+    }
+
+    /// Account lists of the wallet in use.
+    pub fn vault_accounts(&self) -> crate::accounts::VaultAccounts {
+        lock(&self.settings)
+            .accounts_of(&self.active_wallet())
+            .clone()
     }
 
     /// Read-modify-write of the vault's account lists, saved atomically with the settings.
@@ -338,7 +478,8 @@ impl AppState {
     ) -> AppResult<T> {
         let mut current = lock(&self.settings);
         let mut next = current.clone();
-        let out = f(&mut next.accounts)?;
+        let id = self.active_wallet();
+        let out = f(next.accounts_mut(&id))?;
         next.save(&self.settings_path)?;
         *current = next;
         Ok(out)
@@ -352,6 +493,151 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wallets::{wallet_vault, wallets_dir, WalletList, MAIN};
+    use wallet_core::{seal, KdfParams, Mnemonic};
+
+    const PHRASE_1: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    const PHRASE_2: &str =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    const ID: &str = "w-0123456789abcdef";
+
+    fn with_two_wallets(tag: &str) -> (AppState, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("kyro-state-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let state = AppState::new(dir.clone()).unwrap();
+        let sealed = |p: &str, pw: &str| {
+            seal(&Mnemonic::parse(p).unwrap(), pw, KdfParams::minimum()).unwrap()
+        };
+        state
+            .write_new_vault(&sealed(PHRASE_1, "first password"))
+            .unwrap();
+        fs::create_dir_all(wallets_dir(&state.wallets_path)).unwrap();
+        state.begin_new_wallet(ID, "Two".into());
+        assert!(!state.vault_exists());
+        assert!(state.any_vault_exists());
+        assert_eq!(state.creating_wallet().as_deref(), Some("Two"));
+        state
+            .write_new_vault(&sealed(PHRASE_2, "second password"))
+            .unwrap();
+        (state, dir)
+    }
+
+    fn phrase(state: &AppState, pw: &str) -> Option<String> {
+        wallet_core::open(&state.read_vault().unwrap(), pw)
+            .ok()
+            .map(|m| m.words().join(" "))
+    }
+
+    #[test]
+    fn each_wallet_opens_its_own_file_and_the_first_is_left_alone() {
+        let (state, dir) = with_two_wallets("files");
+        let main_bytes = fs::read(&state.vault_path).unwrap();
+        assert_eq!(state.creating_wallet(), None);
+        assert_eq!(state.active_wallet(), ID);
+        assert!(wallet_vault(&state.wallets_path, ID).exists());
+        assert_eq!(phrase(&state, "second password").as_deref(), Some(PHRASE_2));
+        assert_eq!(phrase(&state, "first password"), None);
+
+        let list = WalletList::load(&state.wallets_path);
+        assert_eq!(list.active, ID);
+        assert_eq!(list.name_of(ID).as_deref(), Some("Two"));
+
+        state.activate_wallet(MAIN);
+        assert_eq!(phrase(&state, "first password").as_deref(), Some(PHRASE_1));
+        assert_eq!(fs::read(&state.vault_path).unwrap(), main_bytes);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_new_start_reopens_the_last_wallet() {
+        let (state, dir) = with_two_wallets("restart");
+        drop(state);
+        let again = AppState::new(dir.clone()).unwrap();
+        assert_eq!(again.active_wallet(), ID);
+        assert_eq!(phrase(&again, "second password").as_deref(), Some(PHRASE_2));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_unlock_begun_before_a_switch_cannot_open_a_session() {
+        let (state, dir) = with_two_wallets("epoch");
+        let m = Mnemonic::parse(PHRASE_2).unwrap();
+        let keys = |m: &Mnemonic| {
+            (
+                m.to_seed(""),
+                CardanoRoot::from_mnemonic(m, ""),
+                PolkadotRoot::from_mnemonic(m, "").unwrap(),
+            )
+        };
+        let epoch = state.wallet_epoch();
+        state.activate_wallet(MAIN);
+        let (s, c, p) = keys(&m);
+        assert!(state.start_session_for(epoch, s, c, p).is_err());
+        assert!(!state.is_unlocked());
+
+        let (s, c, p) = keys(&m);
+        state
+            .start_session_for(state.wallet_epoch(), s, c, p)
+            .unwrap();
+        assert!(state.is_unlocked());
+        // Switching ends the session: never two seeds, never a seed under another wallet's name.
+        state.activate_wallet(ID);
+        assert!(!state.is_unlocked());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn attempts_are_counted_per_wallet_and_survive_a_switch() {
+        let (state, dir) = with_two_wallets("attempts");
+        for _ in 0..FREE_ATTEMPTS {
+            state.reserve_attempt().unwrap();
+        }
+        assert!(matches!(
+            state.reserve_attempt(),
+            Err(AppError::RateLimited(_))
+        ));
+        state.activate_wallet(MAIN);
+        state.reserve_attempt().unwrap();
+        // Going through another wallet does not clear the delay.
+        state.activate_wallet(ID);
+        assert!(matches!(
+            state.reserve_attempt(),
+            Err(AppError::RateLimited(_))
+        ));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cancelling_a_new_wallet_leaves_nothing() {
+        let (state, dir) = with_two_wallets("cancel");
+        state.activate_wallet(MAIN);
+        let other = "w-00000000000000ff";
+        state.begin_new_wallet(other, "Three".into());
+        state.cancel_new_wallet().unwrap();
+        assert_eq!(state.active_wallet(), MAIN);
+        assert_eq!(state.creating_wallet(), None);
+        assert!(!wallet_vault(&state.wallets_path, other).exists());
+        assert!(!WalletList::load(&state.wallets_path).knows(other));
+        assert!(state.cancel_new_wallet().is_err());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn account_lists_are_per_wallet() {
+        let (state, dir) = with_two_wallets("accounts");
+        let net = state.network;
+        let chain = crate::accounts::Chain::Btc;
+        state
+            .update_accounts(|a| a.add(net, chain, 3, "Second wallet only"))
+            .unwrap();
+        assert_eq!(state.vault_accounts().indices(net, chain), vec![0, 3]);
+        state.activate_wallet(MAIN);
+        assert_eq!(state.vault_accounts().indices(net, chain), vec![0]);
+        state.activate_wallet(ID);
+        assert_eq!(state.vault_accounts().indices(net, chain), vec![0, 3]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn attempts_reserved_and_persisted() {

@@ -311,8 +311,7 @@ impl SignerInfo {
             account,
             path,
             name: state
-                .settings()
-                .accounts
+                .vault_accounts()
                 .name_of(state.network, chain, account),
         }
     }
@@ -410,7 +409,7 @@ fn require_unlocked(state: &AppState) -> AppResult<()> {
 
 #[tauri::command]
 pub fn vault_accounts_get(state: tauri::State<'_, AppState>) -> BTreeMap<Chain, Vec<AccountEntry>> {
-    state.settings().accounts.all(state.network)
+    state.vault_accounts().all(state.network)
 }
 
 #[tauri::command]

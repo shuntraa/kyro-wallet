@@ -750,8 +750,7 @@ pub async fn btc_core_setup(
     let net = state.network;
     let fp = fingerprint(&state)?;
     let accounts = state
-        .settings()
-        .accounts
+        .vault_accounts()
         .indices(net, crate::accounts::Chain::Btc);
     let descriptors = state.with_seed(|seed| {
         let mut all = Vec::new();

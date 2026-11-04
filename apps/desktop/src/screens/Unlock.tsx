@@ -11,12 +11,13 @@ import { useT } from '../i18n';
 import { idx } from '../components/motion';
 
 export function Unlock() {
-  const { enterVault, demo } = useApp();
+  const { enterVault, demo, wallets, walletName, walletLabel, switchWallet } = useApp();
   const { t } = useT();
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [wrong, setWrong] = useState(0);
+  const several = (wallets?.wallets.length ?? 1) > 1;
 
   const submit = async () => {
     if (!pw || busy) return;
@@ -43,7 +44,7 @@ export function Unlock() {
             <IconLock size={22} className="text-mute" />
             {t('welcome.lockedTitle')}
           </h1>
-          <p className="rise m-0 text-[15px] leading-[1.6] text-mute" style={idx(2)}>{t('welcome.lockedIntro')}</p>
+          <p className="rise m-0 text-[15px] leading-[1.6] text-mute" style={idx(2)}>{several ? t('wallets.unlockIntro', { name: walletName }) : t('welcome.lockedIntro')}</p>
         </div>
         <form
           className="rise flex flex-col gap-4"
@@ -60,6 +61,18 @@ export function Unlock() {
             {busy && <Spinner />} {t('welcome.unlock')}
           </Button>
         </form>
+        {several && (
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-mute">
+            {t('wallets.openOther')}
+            {wallets?.wallets
+              .filter((w) => w.id !== wallets.active)
+              .map((w) => (
+                <button key={w.id} type="button" onClick={() => void switchWallet(w.id)} className="font-semibold text-ice hover:underline">
+                  {walletLabel(w.id)}
+                </button>
+              ))}
+          </div>
+        )}
         <p className="m-0 border-t border-line pt-4 text-[12px] leading-[1.6] text-faint">{t('welcome.cannotRecover')}</p>
       </div>
     </OnboardingFrame>

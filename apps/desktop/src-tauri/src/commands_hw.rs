@@ -50,7 +50,7 @@ pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
 }
 
 pub(crate) fn guard(state: &AppState) -> AppResult<()> {
-    if state.vault_exists() && !state.is_unlocked() {
+    if state.any_vault_exists() && !state.is_unlocked() {
         return Err(AppError::Locked);
     }
     Ok(())

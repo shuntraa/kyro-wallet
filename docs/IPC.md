@@ -699,6 +699,12 @@ Reference TypeScript types: `packages/shared/src/ipc.ts`. Names in `snake_case`,
 | `alert_notify` | `{ note: { kind: 'priceAbove' \| 'priceBelow', symbol, price } \| { kind: 'received', symbol, amount: string \| null } \| { kind: 'test' } }` | — | Local alert (`alerts.rs`, `tauri-plugin-notification` called from Rust; no plugin permission for the webview). Rust writes the text from fixed EN/FR templates; `symbol` and the figures are checked (`INVALID_INPUT` on free text). At most 6 per minute, the rest dropped silently. No network. |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage }` | `systemLanguage`: `'fr' \| 'en'`, the computer's language (what `settings.language = 'auto'` uses); never the keys themselves; each `hasXKey` = environment variable **or** key saved in the settings (e.g. TronGrid: `KYRO_TRONGRID_API_KEY` or `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | network choice from within the application, applied by **restarting** the app: see §2.10 |
+| `wallets_get` | — | `{ active, wallets: { id, name }[] }` | the wallets of this device (§2.9b); works locked: names are plain text and opening one still takes its password |
+| `wallet_switch` | `{ id }` | `WalletsInfo` | ends the session, the next `vault_unlock` goes to `id`; refused while a native window is open |
+| `wallet_new` | `{ name }` | `void` | unlocked session. Ends it and points `vault_create` / `vault_import` at a new vault file; `vault_status.creating` holds the name until the vault is written |
+| `wallet_new_cancel` | — | `void` | back to the previous wallet (locked); nothing was written |
+| `wallet_rename` | `{ id, name }` | `WalletsInfo` | unlocked session |
+| `wallet_remove` | `{ id, password }` | `WalletsInfo` | added wallet only, while it is open, with its password. Back to the first wallet; the encrypted file stays as `.kyrovault.removed` |
 | `watch_addresses_get` | — | `WatchAddress[]` | public addresses and xpubs followed without a key (§2.3b); `LOCKED` if a vault exists and is locked |
 | `watch_address_add` | `{ family, value, label }` | `WatchAddress` | §2.3b. Rust refuses a private key (xprv, WIF), a phrase, a duplicate, Monero |
 | `watch_address_rename` | `{ id, label }` | `WatchAddress` | |
@@ -1365,6 +1371,15 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 **Many addresses, easily** (no new command: `vault_account_add` called once per account, Rust checks every rule). The "Account" selector (Send, Receive, Swap, Staking, Asset) has a **"New account"** entry: it creates the next free number with its default name ("Bitcoin 2"), selects it and shows its address (read with `accounts_get({ account })` before the selection). Receive also has a visible "New account" button (the BTC/LTC "New address" stays) and shows the derivation path of the chosen account (`path` field of `accounts_get`, e.g. `m/44'/60'/0'/0/1` for "Ethereum 2"). Settings › Accounts: **"Create several…"** (1 to 10 at once, within the limit of 20 per chain; a failure along the way keeps the accounts already created). Send: **"My accounts"** next to "Address book" lists the **other** accounts of the same chain (name, short address, balance) and can create a new one as the recipient; choosing an account fills in the address, then it is an ordinary send (Rust decoding, native dialog, same checks). The summary names the recipient "Your account “X”" when the address belongs to one of your accounts. Pure functions tested: `planNewAccounts`, `otherOwnAccounts`, `ownAccountOf` (`apps/desktop/src/lib/accounts.ts`). Account 0's addresses do not change.
 
 **Hardware wallets.** Already multi-account in their own way: `hw_account_add({ account })` registers one account per number (BTC `m/84'|86'/c'/a'`, EVM `m/44'/60'/0'/0/a`, Solana `m/44'/501'/a'/0'`), displayed as a separate wallet in the title bar selector; they are not (yet) grouped by chain like the vault accounts.
+
+### 2.9b Several wallets
+
+A wallet is a recovery phrase with its own password. The first one stays in `coffre-<network>.kyrovault`, unchanged; added ones are `wallets-<network>/<id>.kyrovault`, written by the same `wallet_core::seal` (same format, no migration). `wallets-<network>.json` holds names and the last wallet opened; if it is missing or broken, only the first wallet shows and no file is touched.
+
+- One wallet open at a time: every `wallet_*` that changes the active wallet ends the session first, so one seed at most is in memory. `vault_status.walletId` says which one is active.
+- An unlock begun before a switch cannot open a session (`wallet_epoch`).
+- Per wallet: password attempts (`<id>.attempts`), account lists (`settings.json` `walletAccounts`), and in the webview transactions, approvals, backup state, account choice and balance cache (key suffix `@<id>`). Monero caches and Bitcoin Core wallets were already keyed by the keys.
+- Shared by the device: settings, servers, contacts, hardware-wallet accounts and watch addresses.
 
 ### 2.10 Network choice (mainnet / testnet)
 

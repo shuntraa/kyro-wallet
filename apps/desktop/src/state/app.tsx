@@ -2,7 +2,7 @@
 // Application state: vault lifecycle, settings, accounts/adapters, routing.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchAddress, type WatchOnlyAccount } from '@kyro/shared';
+import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WalletsInfo, type WatchAddress, type WatchOnlyAccount } from '@kyro/shared';
 import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, watchToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
 import { readJson, scoped, setWalletScope, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
@@ -96,6 +96,18 @@ interface AppContextValue {
   /** The active account when it is a watch address: nothing can be signed. */
   activeWatch: WatchAddress | null;
   refreshWatchAddresses: (select?: string) => Promise<void>;
+  /** The wallets of this device: one recovery phrase and one password each. */
+  wallets: WalletsInfo | null;
+  /** Name of the wallet in use. */
+  walletName: string;
+  /** Name of wallet `id` (the default one when never renamed). */
+  walletLabel: (id: string) => string;
+  refreshWallets: () => Promise<void>;
+  /** Ends the session and asks the password of `id`. */
+  switchWallet: (id: string) => Promise<void>;
+  /** Ends the session and opens the create or import flow for a new wallet. */
+  addWallet: (name: string) => Promise<void>;
+  cancelAddWallet: () => Promise<void>;
   activeAccountId: string;
   selectAccount: (id: string) => void;
   refreshHwAccounts: (select?: string) => Promise<void>;
@@ -129,6 +141,9 @@ export function useVault(): AppContextValue & { accounts: WalletAccounts; adapte
 
 const TOUCH_THROTTLE_MS = 15_000;
 
+/** Local records of the first wallet keep their historical keys. */
+const walletScopeOf = (s: VaultStatus | null): string => (s && s.walletId !== 'main' ? s.walletId : '');
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>('boot');
   const [fatal, setFatal] = useState<string | null>(null);
@@ -141,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useState<Partial<Record<AccountChain, number>>>({});
   const [hwAccounts, setHwAccounts] = useState<WatchOnlyAccount[]>([]);
   const [watchAddresses, setWatchAddresses] = useState<WatchAddress[]>([]);
+  const [wallets, setWallets] = useState<WalletsInfo | null>(null);
   const [activeAccountId, setActiveAccountId] = useState<string>('vault');
   const [history, setHistory] = useState<Route[]>([{ name: 'portfolio' }]);
   const [hideBalances, setHideBalances] = useState(false);
@@ -163,6 +179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVaultAccounts(null);
     setVaultLists(null);
     setExtraAccounts(new Map());
+    setSelection({});
     setHistory([{ name: 'portfolio' }]);
     setPhase('locked');
   }, []);
@@ -180,6 +197,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const enterVault = useCallback(async () => {
     const s = await call('vault_status');
     setStatus(s);
+    setWalletScope(walletScopeOf(s));
+    setWallets(await call('wallets_get').catch(() => null));
+    if (s.creating !== null) {
+      setPhase('welcome');
+      return;
+    }
     const hw = await call('hw_accounts_get').catch(() => [] as WatchOnlyAccount[]);
     setHwAccounts(hw);
     const watched = await call('watch_addresses_get').catch(() => [] as WatchAddress[]);
@@ -296,7 +319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeHw = activeAccountId === 'vault' ? null : (hwAccounts.find((a) => a.id === activeAccountId) ?? null);
   const activeWatch = activeAccountId === 'vault' ? null : (watchAddresses.find((a) => a.id === activeAccountId) ?? null);
   const single = !!activeHw || !!activeWatch;
-  setWalletScope(activeWatch ? activeWatch.id : '');
+  setWalletScope(activeWatch ? activeWatch.id : walletScopeOf(status));
   const serversKey = JSON.stringify(settings.servers);
 
   const listedIndices = useMemo(() => {
@@ -483,6 +506,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [status?.exists, hwAccounts],
   );
 
+  const walletLabel = useCallback((id: string) => wallets?.wallets.find((w) => w.id === id)?.name || t('settings.mainAccount'), [wallets]);
+  const refreshWallets = useCallback(async () => setWallets(await call('wallets_get')), []);
+  const switchWallet = useCallback(
+    async (id: string) => {
+      await call('wallet_switch', { id });
+      setActiveAccountId('vault');
+      toLocked();
+      await enterVault();
+    },
+    [toLocked, enterVault],
+  );
+  const addWallet = useCallback(
+    async (name: string) => {
+      await call('wallet_new', { name });
+      setActiveAccountId('vault');
+      toLocked();
+      await enterVault();
+    },
+    [toLocked, enterVault],
+  );
+  const cancelAddWallet = useCallback(async () => {
+    await call('wallet_new_cancel');
+    await enterVault();
+  }, [enterVault]);
+
   const lock = useCallback(async () => {
     if (status && !status.exists) return; // hardware-wallet-only: no vault to lock
     try {
@@ -527,6 +575,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     watchAddresses,
     activeWatch,
     refreshWatchAddresses,
+    wallets,
+    walletName: walletLabel(wallets?.active ?? 'main'),
+    walletLabel,
+    refreshWallets,
+    switchWallet,
+    addWallet,
+    cancelAddWallet,
     activeAccountId,
     selectAccount,
     refreshHwAccounts,

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -137,6 +138,29 @@ pub struct Settings {
     pub weekly_count: bool,
     /// The vault's account lists (see `accounts.rs`).
     pub accounts: VaultAccounts,
+    /// Account lists of the added wallets (`wallets.rs`), by wallet id.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub wallet_accounts: BTreeMap<String, VaultAccounts>,
+}
+
+impl Settings {
+    /// Account lists of wallet `id`.
+    pub fn accounts_of(&self, id: &str) -> &VaultAccounts {
+        static EMPTY: std::sync::OnceLock<VaultAccounts> = std::sync::OnceLock::new();
+        if id == crate::wallets::MAIN {
+            return &self.accounts;
+        }
+        self.wallet_accounts
+            .get(id)
+            .unwrap_or_else(|| EMPTY.get_or_init(VaultAccounts::default))
+    }
+
+    pub fn accounts_mut(&mut self, id: &str) -> &mut VaultAccounts {
+        if id == crate::wallets::MAIN {
+            return &mut self.accounts;
+        }
+        self.wallet_accounts.entry(id.to_owned()).or_default()
+    }
 }
 
 fn lenient_language<'de, D: serde::Deserializer<'de>>(
@@ -162,6 +186,7 @@ impl Default for Settings {
             auto_update: true,
             weekly_count: true,
             accounts: VaultAccounts::default(),
+            wallet_accounts: BTreeMap::new(),
         }
     }
 }

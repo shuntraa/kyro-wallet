@@ -13,6 +13,22 @@ export interface VaultStatus {
   unlocked: boolean;
   autoLockSecs: number;
   lockInSecs: number | null;
+  /** Wallet in use (`main` = the first one). */
+  walletId: string;
+  /** Name of the wallet being added: its vault does not exist yet. */
+  creating: string | null;
+}
+
+/** A wallet of this device: one recovery phrase, one vault file, its own password (docs/IPC.md §2.9b). */
+export interface WalletEntry {
+  id: string;
+  /** Empty for a first wallet never renamed. */
+  name: string;
+}
+
+export interface WalletsInfo {
+  active: string;
+  wallets: WalletEntry[];
 }
 
 export interface BtcAccountInfo {
@@ -2567,6 +2583,12 @@ export interface Commands {
   /** Forgets one pairing (`key`) or all (no key: Kyro's THP key too). Returns how many. The device keeps Kyro until it is reset. */
   hw_thp_forget: { args: { key?: string }; ret: number };
   hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
+  wallets_get: { args: undefined; ret: WalletsInfo };
+  wallet_switch: { args: { id: string }; ret: WalletsInfo };
+  wallet_new: { args: { name: string }; ret: void };
+  wallet_new_cancel: { args: undefined; ret: void };
+  wallet_rename: { args: { id: string; name: string }; ret: WalletsInfo };
+  wallet_remove: { args: { id: string; password: string }; ret: WalletsInfo };
   watch_addresses_get: { args: undefined; ret: WatchAddress[] };
   watch_address_add: { args: { family: AccountChain; value: string; label: string }; ret: WatchAddress };
   watch_address_rename: { args: { id: string; label: string }; ret: WatchAddress };

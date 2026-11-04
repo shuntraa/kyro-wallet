@@ -130,6 +130,10 @@ pub struct VaultStatus {
     unlocked: bool,
     auto_lock_secs: u64,
     lock_in_secs: Option<u64>,
+    /// Wallet in use (`main` = the first one).
+    wallet_id: String,
+    /// Name of the wallet being added (its vault does not exist yet).
+    creating: Option<String>,
 }
 
 #[tauri::command]
@@ -139,6 +143,8 @@ pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
         unlocked: state.is_unlocked(),
         auto_lock_secs: state.settings().auto_lock_secs,
         lock_in_secs: state.lock_in_secs(),
+        wallet_id: state.active_wallet(),
+        creating: state.creating_wallet(),
     }
 }
 
@@ -321,6 +327,7 @@ pub async fn vault_unlock(
     state: State<'_, AppState>,
     password: String,
 ) -> AppResult<()> {
+    let epoch = state.wallet_epoch();
     let m = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
     let (seed, cardano, polkadot) = blocking(move || {
         Ok((
@@ -330,7 +337,7 @@ pub async fn vault_unlock(
         ))
     })
     .await?;
-    state.start_session(seed, cardano, polkadot);
+    state.start_session_for(epoch, seed, cardano, polkadot)?;
     crate::weekly_count::after_unlock(&app);
     Ok(())
 }

@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+export const wallets = {
+  'wallets.title': 'Portefeuilles',
+  'wallets.intro': 'Chaque portefeuille a sa phrase de récupération, son mot de passe, ses comptes et son historique. Un seul est ouvert à la fois.',
+  'wallets.inUse': 'Ouvert',
+  'wallets.open': 'Ouvrir',
+  'wallets.rename': 'Renommer',
+  'wallets.renameTitle': 'Renommer {name}',
+  'wallets.nameLabel': 'Nom',
+  'wallets.namePlaceholder': 'Par exemple Épargne',
+  'wallets.add': 'Ajouter un portefeuille',
+  'wallets.addHint': 'Une autre phrase de récupération',
+  'wallets.addButton': 'Continuer',
+  'wallets.addNote': 'Le portefeuille ouvert se verrouille pendant l’ajout.',
+  'wallets.addTitle': 'Nouveau portefeuille : {name}',
+  'wallets.addBody': 'Crée une nouvelle phrase ou importe la tienne. Ce portefeuille aura son propre mot de passe.',
+  'wallets.addCancel': 'Annuler et revenir',
+  'wallets.switchHint': 'Demande son mot de passe',
+  'wallets.unlockIntro': 'Saisis le mot de passe de {name}.',
+  'wallets.openOther': 'Ouvrir un autre portefeuille :',
+  'wallets.remove': 'Retirer',
+  'wallets.removeTitle': 'Retirer {name} ?',
+  'wallets.removeBody': 'Il quitte la liste. Le fichier chiffré reste sur cet appareil, mais Kyro ne l’ouvrira plus : garde ta phrase de récupération. Rien ne change sur le réseau.',
+  'wallets.removePassword': 'Mot de passe de ce portefeuille',
+} as const;

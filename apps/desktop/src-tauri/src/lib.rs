@@ -77,6 +77,7 @@ mod tor;
 mod tron_backend;
 mod updater;
 mod utxo_backend;
+mod wallets;
 mod weekly_count;
 mod xmr_backend;
 mod xrp_backend;
@@ -372,6 +373,12 @@ pub fn run() {
             commands_kaspa::kas_txs,
             commands_kaspa::kas_watch_account,
             commands_kaspa::kas_watch_txs,
+            wallets::wallets_get,
+            wallets::wallet_switch,
+            wallets::wallet_new,
+            wallets::wallet_new_cancel,
+            wallets::wallet_rename,
+            wallets::wallet_remove,
             commands_watch::watch_addresses_get,
             commands_watch::watch_address_add,
             commands_watch::watch_address_rename,

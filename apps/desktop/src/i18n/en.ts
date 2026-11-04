@@ -16,6 +16,7 @@ import { settings } from './en/settings';
 import { servers } from './en/servers';
 import { hw } from './en/hw';
 import { watch } from './en/watch';
+import { wallets } from './en/wallets';
 import { stellar } from './en/stellar';
 import { near } from './en/near';
 import { algo } from './en/algo';
@@ -45,6 +46,7 @@ export const en: Record<keyof typeof fr, string> = {
   ...servers,
   ...hw,
   ...watch,
+  ...wallets,
   ...stellar,
   ...near,
   ...algo,
@@ -60,4 +62,4 @@ export const en: Record<keyof typeof fr, string> = {
   ...multinet,
 };
 
-export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet } as const;
+export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet } as const;

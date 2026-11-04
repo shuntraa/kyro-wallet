@@ -133,6 +133,11 @@ pub fn watch_addresses_file(dir: &Path, n: Network) -> PathBuf {
     dir.join(format!("watch-addresses-{}.json", name(n)))
 }
 
+/// List of the added wallets of `n` in `dir`; they live in the directory of the same name.
+pub fn wallets_file(dir: &Path, n: Network) -> PathBuf {
+    dir.join(format!("wallets-{}.json", name(n)))
+}
+
 fn other(n: Network) -> Network {
     match n {
         Network::Mainnet => Network::Testnet,

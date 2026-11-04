@@ -25,7 +25,7 @@ async function rejectCode(p: Promise<unknown>): Promise<string> {
 
 describe('mock IPC backend', () => {
   it('starts without a vault, creates one; the words only appear in the native dialog', async () => {
-    expect(await call('vault_status')).toEqual({ exists: false, unlocked: false, autoLockSecs: 900, lockInSecs: null });
+    expect(await call('vault_status')).toEqual({ exists: false, unlocked: false, autoLockSecs: 900, lockInSecs: null, walletId: 'main', creating: null });
     const shown: string[] = [];
     const m = createMockBackend({ network: 'testnet', confirm: (x) => (shown.push(x), true) });
     setBackend(m.invoke);

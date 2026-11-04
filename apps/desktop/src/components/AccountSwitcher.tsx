@@ -15,12 +15,17 @@ import { useT } from '../i18n';
 const ADD = '__add__';
 const ACCOUNTS = '__accounts__';
 const WATCH = '__watch__';
+const WALLET = 'wallet:';
+const NEW_WALLET = '__wallet__';
 
 export function AccountSwitcher() {
-  const { hwAccounts, activeAccountId, activeHw, activeWatch, watchAddresses, selectAccount, navigate, hwOnly } = useApp();
+  const { hwAccounts, activeAccountId, activeHw, activeWatch, watchAddresses, selectAccount, navigate, hwOnly, wallets, walletName, walletLabel, switchWallet } = useApp();
   const { t } = useT();
   const items = [
-    ...(hwOnly ? [] : [{ value: 'vault', label: t('settings.mainAccount'), hint: t('shell.vaultHint'), icon: <IconShield size={15} className="text-mute" /> }]),
+    ...(hwOnly ? [] : [{ value: 'vault', label: walletName, hint: t('shell.vaultHint'), icon: <IconShield size={15} className="text-mute" /> }]),
+    ...(wallets?.wallets ?? [])
+      .filter((w) => w.id !== wallets?.active)
+      .map((w) => ({ value: `${WALLET}${w.id}`, label: walletLabel(w.id), hint: t('wallets.switchHint'), icon: <IconShield size={15} className="text-mute" /> })),
     ...hwAccounts.map((a) => ({
       value: a.id,
       label: a.label,
@@ -35,6 +40,7 @@ export function AccountSwitcher() {
     })),
     ...(hwOnly ? [] : [{ value: ACCOUNTS, label: t('shell.accountsPerChain'), hint: t('shell.accountsPerChainHint'), icon: <IconPlus size={15} className="text-mute" /> }]),
     { value: ADD, label: t('shell.addDevice'), hint: t('shell.addDeviceHint'), icon: <IconPlus size={15} className="text-mute" /> },
+    ...(hwOnly ? [] : [{ value: NEW_WALLET, label: t('wallets.add'), hint: t('wallets.addHint'), icon: <IconPlus size={15} className="text-mute" /> }]),
     { value: WATCH, label: t('watch.add'), hint: t('watch.addHint'), icon: <IconEye size={15} className="text-mute" /> },
   ];
   return (
@@ -42,11 +48,11 @@ export function AccountSwitcher() {
       label={t('shell.activeAccount')}
       value={activeAccountId}
       items={items}
-      onSelect={(v) => (v === ADD ? navigate({ name: 'settings', section: 'hardware' }) : v === ACCOUNTS || v === WATCH ? navigate({ name: 'settings', section: 'accounts' }) : selectAccount(v))}
+      onSelect={(v) => (v === ADD ? navigate({ name: 'settings', section: 'hardware' }) : v === ACCOUNTS || v === WATCH || v === NEW_WALLET ? navigate({ name: 'settings', section: 'accounts' }) : v.startsWith(WALLET) ? void switchWallet(v.slice(WALLET.length)) : selectAccount(v))}
       trigger={
         <button type="button" aria-label={t('shell.switchAccount')} className="flex min-w-0 items-center gap-1.5 rounded-[8px] px-1.5 py-0.5 text-[13px] text-mute hover:bg-raised hover:text-text">
           {activeHw && <IconUsbKey size={13} className="shrink-0 text-ice" />}
-          <span className="truncate">{activeHw ? activeHw.label : activeWatch ? activeWatch.label : t('settings.mainAccount')}</span>
+          <span className="truncate">{activeHw ? activeHw.label : activeWatch ? activeWatch.label : walletName}</span>
           {activeWatch && <Badge className="shrink-0">{t('watch.tag')}</Badge>}
           <IconChevronDown size={13} className="shrink-0" />
         </button>

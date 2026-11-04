@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+import type { wallets as fr } from '../fr/wallets';
+
+export const wallets: Record<keyof typeof fr, string> = {
+  'wallets.title': 'Wallets',
+  'wallets.intro': 'Each wallet has its own recovery phrase, password, accounts and history. One is open at a time.',
+  'wallets.inUse': 'Open',
+  'wallets.open': 'Open',
+  'wallets.rename': 'Rename',
+  'wallets.renameTitle': 'Rename {name}',
+  'wallets.nameLabel': 'Name',
+  'wallets.namePlaceholder': 'For example Savings',
+  'wallets.add': 'Add a wallet',
+  'wallets.addHint': 'Another recovery phrase',
+  'wallets.addButton': 'Continue',
+  'wallets.addNote': 'The open wallet locks while you add one.',
+  'wallets.addTitle': 'New wallet: {name}',
+  'wallets.addBody': 'Create a new phrase or import yours. This wallet gets its own password.',
+  'wallets.addCancel': 'Cancel and go back',
+  'wallets.switchHint': 'Asks for its password',
+  'wallets.unlockIntro': 'Enter the password of {name}.',
+  'wallets.openOther': 'Open another wallet:',
+  'wallets.remove': 'Remove',
+  'wallets.removeTitle': 'Remove {name}?',
+  'wallets.removeBody': 'It leaves the list. The encrypted file stays on this device, but Kyro will not open it again: keep your recovery phrase. Nothing changes on the network.',
+  'wallets.removePassword': 'Password of this wallet',
+};

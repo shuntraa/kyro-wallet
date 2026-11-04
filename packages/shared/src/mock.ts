@@ -27,6 +27,8 @@ import {
   type Settings,
   type SettingsInput,
   type VaultStatus,
+  type WalletEntry,
+  type WalletsInfo,
   type WatchAddress,
 } from './ipc';
 import { emitDemoEvent } from './events';
@@ -678,7 +680,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const status = (): VaultStatus => {
     lockIfExpired();
     const left = Math.max(0, Math.ceil((lastTouch + settings.autoLockSecs * 1000 - now()) / 1000));
-    return { exists: vault !== null, unlocked, autoLockSecs: settings.autoLockSecs, lockInSecs: unlocked ? left : null };
+    return { exists: vault !== null, unlocked, autoLockSecs: settings.autoLockSecs, lockInSecs: unlocked ? left : null, walletId, creating: creating?.name ?? null };
   };
 
   const decodeEvm = (tx: EvmTxRequest): EvmTxSummary => {
@@ -731,6 +733,24 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   };
 
   let watchList: WatchAddress[] = [];
+  // Several wallets: each its own password; the demo keys stay the same for all of them.
+  let walletId = 'main';
+  let walletEntries: WalletEntry[] = [{ id: 'main', name: '' }];
+  const walletVaults = new Map<string, typeof vault>();
+  let creating: { name: string; id: string; previous: string } | null = null;
+  const walletsInfo = (): WalletsInfo => ({ active: walletId, wallets: walletEntries });
+  const openWallet = (id: string) => {
+    if (!creating) walletVaults.set(walletId, vault);
+    walletId = id;
+    vault = walletVaults.get(id) ?? null;
+    unlocked = false;
+    creating = null;
+  };
+  const finishWallet = () => {
+    if (!creating) return;
+    walletEntries = [...walletEntries, { id: creating.id, name: creating.name }];
+    creating = null;
+  };
 
   // Hardware wallets: keys from a separate public demo seed, same native-dialog emulation.
   const hw = createDemoHw(opts.hw ?? detectDemoHwScenario(), {
@@ -765,6 +785,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       const count = a.words === 12 ? 12 : 24;
       const words = generateMnemonic(wordlist, count === 12 ? 128 : 256).split(' ');
       vault = { password, words };
+      finishWallet();
       unlocked = true;
       lastTouch = now();
       // Like Rust: the words are never returned, only shown in the native dialog.
@@ -798,6 +819,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       const phrase = String(a.phrase ?? '').trim().toLowerCase().split(/\s+/).join(' ');
       if (!validateMnemonic(phrase, wordlist)) throw new IpcError('INVALID_INPUT', l10n('Phrase de récupération invalide (mot inconnu ou somme de contrôle fausse).', 'Invalid recovery phrase (unknown word or wrong checksum).'));
       vault = { password, words: phrase.split(' ') };
+      finishWallet();
       unlocked = true;
       lastTouch = now();
     },
@@ -1033,6 +1055,40 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_thp_pairings: () => hw.thpPairings(),
     hw_thp_forget: (a) => hw.thpForget(a.key),
     hw_get_xpub: (a) => hw.getXpub(a),
+    wallets_get: () => walletsInfo(),
+    wallet_switch: (a) => {
+      if (!walletEntries.some((w) => w.id === a.id)) throw new IpcError('INVALID_INPUT', 'unknown wallet');
+      openWallet(String(a.id));
+      return walletsInfo();
+    },
+    wallet_new: (a) => {
+      if (!unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
+      const name = String(a.name ?? '').trim();
+      if (!name) throw new IpcError('INVALID_INPUT', 'name required');
+      if (walletEntries.some((w) => w.name.toLowerCase() === name.toLowerCase())) throw new IpcError('INVALID_INPUT', 'a wallet already has this name');
+      const id = `w-${(walletEntries.length + 1).toString(16).padStart(16, '0')}`;
+      const previous = walletId;
+      openWallet(id);
+      creating = { name, id, previous };
+    },
+    wallet_new_cancel: () => {
+      if (!creating) throw new IpcError('INVALID_INPUT', 'no wallet being added');
+      openWallet(creating.previous);
+    },
+    wallet_rename: (a) => {
+      if (!unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
+      walletEntries = walletEntries.map((w) => (w.id === a.id ? { ...w, name: String(a.name).trim() } : w));
+      return walletsInfo();
+    },
+    wallet_remove: (a) => {
+      if (a.id === 'main' || a.id !== walletId) throw new IpcError('INVALID_INPUT', 'only the added wallet in use can be removed');
+      checkPassword(a.password);
+      const id = walletId;
+      openWallet('main');
+      walletEntries = walletEntries.filter((w) => w.id !== id);
+      walletVaults.delete(id);
+      return walletsInfo();
+    },
     watch_addresses_get: () => watchList,
     watch_address_add: (a) => {
       const label = String(a.label ?? '').trim();

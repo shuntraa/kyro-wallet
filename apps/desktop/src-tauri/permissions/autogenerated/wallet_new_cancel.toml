@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-wallet-new-cancel"
+description = "Enables the wallet_new_cancel command without any pre-configured scope."
+commands.allow = ["wallet_new_cancel"]
+
+[[permission]]
+identifier = "deny-wallet-new-cancel"
+description = "Denies the wallet_new_cancel command without any pre-configured scope."
+commands.deny = ["wallet_new_cancel"]

@@ -5,7 +5,7 @@
 
 import type { HistoryItem } from '@kyro/chains';
 import type { SimplePrice } from '@kyro/market';
-import { readJson, writeJson } from './storage';
+import { readJson, scoped, writeJson } from './storage';
 
 /** How long a chain may keep failing (automatic retries included) before the UI says anything. */
 export const ERROR_GRACE_MS = 180_000;
@@ -58,10 +58,10 @@ export function decodeBalances(raw: unknown, fp: string): Balances | null {
 }
 
 export function loadBalances(network: string, fp: string): Balances | null {
-  return decodeBalances(readJson<unknown>(`cache.balances.${network}`, null), fp);
+  return decodeBalances(readJson<unknown>(scoped(`cache.balances.${network}`), null), fp);
 }
 export function saveBalances(network: string, fp: string, m: Balances): void {
-  if (m.size > 0) writeJson(`cache.balances.${network}`, encodeBalances(fp, m));
+  if (m.size > 0) writeJson(scoped(`cache.balances.${network}`), encodeBalances(fp, m));
 }
 
 export function decodePrices(raw: unknown): Record<string, SimplePrice> {
