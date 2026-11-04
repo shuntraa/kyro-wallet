@@ -43,6 +43,7 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Several wallets** on one device, each with its own recovery phrase, password, accounts and history.
 - **Watch addresses**: follow any public address or xpub with no key: balance, tokens and history, nothing signable.
 - **Local alerts**: price levels and funds received, as system notifications, computed on your device.
+- **Lock before sleep (Windows)**: Kyro locks as the computer goes to sleep. macOS and Linux lock on wake.
 - **Tray icon (Windows)**: Open, Lock and Quit from the tray. Staying in the tray after closing, and starting with Windows, are off until you turn them on.
 - **Encrypted backup**: contacts, labels, watch list, favorites, alerts and settings in one password-protected file (Settings › Backup). Never your phrase, keys or API keys.
 - **Gains and losses**: average cost and unrealized gain per coin and in total, computed on your device. Where a price or an origin is unknown, Kyro shows « — » or says the figure is partial.
