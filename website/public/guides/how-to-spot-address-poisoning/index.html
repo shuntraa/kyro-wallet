@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Address poisoning: how to spot it and stay safe | Kyro</title>
+  <meta name="description" content="Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.">
+  <link rel="canonical" href="https://kyrowallet.com/guides/how-to-spot-address-poisoning/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Address poisoning: how to spot it and stay safe | Kyro">
+  <meta property="og:description" content="Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.">
+  <meta property="og:url" content="https://kyrowallet.com/guides/how-to-spot-address-poisoning/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Address poisoning: how to spot it and stay safe | Kyro">
+  <meta name="twitter:description" content="Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/#page","url":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/","name":"How to spot address poisoning","description":"Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://kyrowallet.com/guides/"},{"@type":"ListItem","position":3,"name":"How to spot address poisoning","item":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/"}]},{"@type":"Article","@id":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/#article","headline":"How to spot address poisoning","description":"Address poisoning hides a lookalike address in your transaction history so you copy it by mistake. How the scam works, how Kyro flags it, and the habits that stop it.","url":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/","mainEntityOfPage":"https://kyrowallet.com/guides/how-to-spot-address-poisoning/#page","datePublished":"2026-11-04","dateModified":"2026-11-04","inLanguage":"en","image":"https://kyrowallet.com/img/og.jpg","author":{"@id":"https://kyrowallet.com/#org"},"publisher":{"@id":"https://kyrowallet.com/#org"},"about":{"@id":"https://kyrowallet.com/#app"}}]}</script>
+  <script src="/boot.js"></script>
+  <script src="/motion.js" defer></script>
+  <script src="/silk.js" defer></script>
+  <script src="/download.js" defer></script>
+  <script src="/copy.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+        <span class="brand-name" aria-hidden="true">Kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li>
+            <details class="nav-more" data-pop>
+              <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+              <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/" aria-current="page">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
+            </details>
+          </li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu" data-pop>
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/guides/" aria-current="page">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/guides/">Guides</a></li><li><span aria-current="page">How to spot address poisoning</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow">Guide</p>
+            <h1 id="page-title">How to spot <em>address poisoning</em></h1>
+            <p class="lead">No hack and no malware: a scammer only needs you to copy the wrong line from your own history.</p>
+            <p class="article-meta">2 min read</p>
+          </div>
+          
+        </div>
+      </div>
+    </section>
+    <section class="section section-tight" aria-label="Article">
+      <div class="wrap">
+        <article class="prose" data-reveal>
+      <h2>How the scam works</h2>
+      <ol class="os-steps"><li>A scammer watches who you send to.</li><li>They generate an address that starts and ends like that one.</li><li>They slip it into your history with a dust transaction, a zero-value transfer, or a fake transfer displayed as “sent”.</li><li>Next time, you copy the “recent” address from your history. The middle is different, and your money goes to them.</li></ol>
+      <p>It works because most people check only the first and last few characters, and because a long address is hard to read.</p>
+      <h2>What Kyro does</h2>
+      <ul class="checks"><li>A blocking red alert appears if a recipient shares the first 4 and last 4 characters with a known address without being identical.</li><li>Known addresses are your address book, your accounts and sends signed by this Kyro. The server’s history is never trusted.</li><li>Addresses are displayed in blocks, and anything outside the address book is marked “Unknown address”.</li><li>After you paste, Kyro watches the field for clipboard tampering.</li><li>The native confirmation window shows the recipient Rust decoded.</li></ul>
+      
+  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+    <div class="dlg-body">
+      <div class="dlg-amount"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><strong>1.2345 ETH</strong></div>
+      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
+      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+    </div>
+  </div></div>
+      <h2>What it cannot catch</h2>
+      <p>A lookalike that already differs within those 8 characters is not detected. A clipboard swap that happens before you paste cannot be seen either. Only comparing against your source will find those, so these habits still matter.</p>
+      <h2>Habits that stop it</h2>
+      <ul class="checks"><li>Never copy a recipient from your transaction history.</li><li>Save the addresses you use in the address book. Send offers “Save” for a new recipient.</li><li>Compare the whole address with your source, block by block.</li><li>For large amounts, send a small test and have the recipient confirm it.</li><li>Ignore unexpected tiny deposits. You do not need to do anything about them.</li></ul>
+      <h2>If it already happened</h2>
+      <p>Transfers on a blockchain cannot be reversed, and neither Kyro nor anyone else can pull funds back. Your keys were not stolen, so your wallet itself remains safe to use. Be wary of anyone offering to “recover” the money for a fee.</p></article>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="g-next">
+      <div class="wrap">
+        
+        <div class="head-center">
+          
+          <h2 id="g-next">Keep <em>reading</em></h2>
+          
+        </div>
+        <ul class="link-cards" data-reveal-group>
+          <li class="glow-card spot"><h3><a href="/guides/why-a-wallet-should-use-tor/">Why a wallet should use Tor</a></h3><p>Your IP and your addresses in the same log line.</p></li><li class="glow-card spot"><h3><a href="/guides/back-up-your-recovery-phrase/">Back up your recovery phrase</a></h3><p>Paper, in order, offline. What to do and what to avoid.</p></li><li class="glow-card spot"><h3><a href="/guides/verify-your-download/">Verify your download</a></h3><p>Check a release with SHA-256 in two minutes.</p></li>
+        </ul></div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="cta-panel spot" data-reveal>
+          <h2 id="cta-title">Get <em>Kyro</em></h2>
+          <p class="dl-sub">Version 1.0.6 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row spot" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row spot" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-main">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="24" height="24" alt="">
+            <span class="brand-name" aria-hidden="true">Kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li><li><a href="/tor/">Tor wallet</a></li><li><a href="/monero/">Monero wallet</a></li><li><a href="/swap/">Swaps</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/download/">Download</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Platforms</h2>
+          <ul>
+            <li><a href="/wallets/windows/">Windows</a></li><li><a href="/wallets/macos/">macOS</a></li><li><a href="/wallets/linux/">Linux</a></li><li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/">All 36 blockchains</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Learn</h2>
+          <ul>
+            <li><a href="/guides/">Guides</a></li><li><a href="/glossary/">Glossary</a></li><li><a href="/faq/">FAQ</a></li><li><a href="/guides/verify-your-download/">Verify a download</a></li><li><a href="/guides/first-steps-with-kyro/">First steps</a></li><li><a href="/changelog/">Changelog</a></li><li><a href="/roadmap/">Roadmap</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="/about/">About</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/brand/">Brand</a></li><li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li><li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li><li><a href="/privacy/">Privacy</a></li><li><a href="/code-signing-policy/">Code signing policy</a></li><li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.6 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+      </div>
+    </div>
+    </div>
+    <div class="foot-word" aria-hidden="true"></div>
+  </footer>
+</body>
+</html>

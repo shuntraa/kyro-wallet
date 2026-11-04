@@ -51,7 +51,7 @@ const GUIDES = () => [
       <p>Tor needs a moment to connect at launch. If it is not ready within 60 seconds, a request fails and nothing is sent in the clear.</p>
       <h2>6. Receive, then send a little</h2>
       ${steps([
-        'Open an asset and choose <b>Receive</b>. Copy the address, or show the QR code if your wallet offers one.',
+        'Open an asset and choose <b>Receive</b>. Copy the address, or use the QR code.',
         'Send a small amount from wherever your coins are now.',
         'Back in Kyro, check that it arrives.',
         'Send a small amount out. Kyro asks for your password, then shows the decoded transaction in a system window. Read it, then confirm.'

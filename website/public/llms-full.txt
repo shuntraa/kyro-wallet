@@ -4864,3 +4864,1008 @@ Version 1.0.6 · Free · Windows, macOS and Linux
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
 One-line install, all files and checksums
+
+================================================================
+Guides: use a private crypto wallet well | Kyro Wallet
+URL: https://kyrowallet.com/guides/
+================================================================
+
+Guides
+
+# Learn it once
+
+Short, practical articles on using a private crypto wallet well. No hype, and the limits stated.
+
+## Getting started
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+### Verify your download
+
+Check a release with SHA-256 in two minutes.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### Move from another wallet
+
+Import your phrase, or send your coins across.
+
+### What Windows SmartScreen means for Kyro
+
+Why the warning shows, and how to handle it.
+
+## Privacy and safety
+
+### Why a wallet should use Tor
+
+Your IP and your addresses in the same log line.
+
+### How to spot address poisoning
+
+The lookalike address in your own history.
+
+## Swap and earn
+
+### Swap to Monero
+
+From BTC, ETH, SOL, USDT and more to XMR.
+
+### Stake SOL
+
+Pick a validator, delegate, and get your SOL back.
+
+## Hardware wallets
+
+### Connect a Ledger
+
+Close Ledger Live, plug in, one Connect.
+
+### Connect a Trezor
+
+Including pairing a Trezor Safe 7.
+
+New to the words? Read the glossary
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+First steps with Kyro: set up your wallet | Kyro Wallet
+URL: https://kyrowallet.com/guides/first-steps-with-kyro/
+================================================================
+
+Guide
+
+# First steps with Kyro
+
+Ten calm minutes: install, choose how to start, save your phrase, then try a small amount before you move anything serious.
+
+2 min read
+
+## 1. Install Kyro
+
+The quickest way is the one-line command. It downloads the latest release from GitHub and checks its SHA-256 before installing.
+
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+If you prefer the file, download it and verify it first.
+
+## 2. Choose how to start
+
+The welcome screen offers three ways in. There is no account in any of them.
+
+- Use a Ledger or Trezor. Your keys stay in the device, and Kyro stores only public keys.
+
+- Create a new vault. Kyro makes a new recovery phrase, 24 words by default.
+
+- Import a recovery phrase. 12 or 24 BIP39 words from another wallet.
+
+## 3. Pick a password
+
+At least 10 characters, and a phrase of four words or more is better. It encrypts the vault on this computer, and you will type it to unlock Kyro and to sign. It cannot be recovered.
+
+## 4. Write down your phrase
+
+Kyro shows the words in a separate window, blurred until you choose to show them. Write them on paper, in order, then type the three words Kyro asks for. How to keep that paper safe.
+
+## 5. Look around
+
+Portfolio shows your total and your assets. Swap, Earn and History sit in the side rail. Ctrl K searches assets and addresses. The vault panel shows Tor, auto-lock and whether any unlimited approval is active.
+
+Tor needs a moment to connect at launch. If it is not ready within 60 seconds, a request fails and nothing is sent in the clear.
+
+## 6. Receive, then send a little
+
+- Open an asset and choose Receive. Copy the address, or use the QR code.
+
+- Send a small amount from wherever your coins are now.
+
+- Back in Kyro, check that it arrives.
+
+- Send a small amount out. Kyro asks for your password, then shows the decoded transaction in a system window. Read it, then confirm.
+
+## Worth a look in Settings
+
+- Privacy. The anonymous weekly count is on by default, over Tor only. You can turn it off here.
+
+- Security. Check your phrase again, and for Monero, set the scan height.
+
+- Networks. Point a blockchain at your own node.
+
+## Keep reading
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### Verify your download
+
+Check a release with SHA-256 in two minutes.
+
+### Move from another wallet
+
+Import your phrase, or send your coins across.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to verify your Kyro download with SHA-256 | Kyro Wallet
+URL: https://kyrowallet.com/guides/verify-your-download/
+================================================================
+
+Guide
+
+# Verify your download
+
+A wallet is a bad thing to install from a fake link. This takes two minutes and proves your file matches the published release.
+
+2 min read
+
+## Where Kyro comes from
+
+Kyro is published only on GitHub Releases. The links on our download page point there. There is no mobile app, so anything in an app store using the name is not ours.
+
+## The easy way
+
+The one-line install does this check for you. It compares the SHA-256 of the file with SHA256SUMS, and stops if they differ. Read the scripts first if you like: install.ps1 and install.sh.
+
+## By hand
+
+- Download your installer and SHA256SUMS into the same folder.
+
+- Run the command for your system.
+
+- Compare the result with the line for your file in SHA256SUMS. Every character must match.
+
+## If the hashes differ
+
+Delete the file and download it again from GitHub Releases. Do not run it.
+
+## What this proves, and what it does not
+
+A match proves your file is the one listed in that release, with no corruption and no swap along the way. It does not prove the code is free of bugs, and it depends on the release itself being genuine.
+
+Two more honest limits. The installers are not code-signed yet, so your system warns on first launch: check the hash before you click through. Bit-for-bit reproducible builds are a goal, not a guarantee yet. If you want more certainty, build Kyro from source.
+
+## After the first install
+
+Updates verify themselves. Each one is signed, and Kyro checks the signature against a public key built into the app before installing. A bad signature is rejected.
+
+## Keep reading
+
+### What Windows SmartScreen means for Kyro
+
+Why the warning shows, and how to handle it.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+### How to spot address poisoning
+
+The lookalike address in your own history.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to back up your recovery phrase safely | Kyro Wallet
+URL: https://kyrowallet.com/guides/back-up-your-recovery-phrase/
+================================================================
+
+Guide
+
+# Back up your recovery phrase
+
+Your recovery phrase is your wallet. Kyro keeps no copy and cannot reset it, so this page matters more than any other on the site.
+
+2 min read
+
+## What the phrase is
+
+The 12 or 24 words generate every key in your wallet, on all 36 blockchains. Anyone who has them can spend your coins from anywhere. If you lose them and also lose your computer or your password, your funds are gone. There is no support desk that can help.
+
+Your phrase and your password do different jobs. The password protects the vault on this computer. The phrase rebuilds the wallet on any computer. You need to protect both, and the phrase is the one that matters most.
+
+## How Kyro shows it
+
+The phrase only appears in a separate native window, never in the app's interface. The words stay blurred until you choose to show them, and they cannot be copied. On Windows the window is excluded from screenshots and screen sharing, and from most capture on macOS. That protection does not exist on Linux, and it never stops a camera, so check who and what can see your screen.
+
+## Write it down
+
+- Use paper and a pen. Write the words in order, with their numbers.
+
+- Check each word against the screen, one at a time.
+
+- Type the three words Kyro asks for. That confirms the sheet is right.
+
+- If you skipped this, do it later in Settings > Security.
+
+## Keep it safe
+
+- Keep it somewhere safe from water, fire and curious visitors.
+
+- A second copy in another place protects you against losing the first.
+
+- Tell someone you trust how to find it if something happens to you, without giving them the words.
+
+- No photos, no screenshots, no notes app.
+
+- No cloud storage, email or chat, even to yourself.
+
+- No password manager synced online, unless you have thought hard about what that means.
+
+- Never type it on a website.
+
+Nobody legitimate will ever ask for your phrase: not Kyro, not support, not an airdrop. Anyone who asks is trying to steal from you.
+
+## If someone may have seen it
+
+Act as if they have. Create a new vault with a new phrase, then send everything to the new addresses. Do this before anything else.
+
+## Monero's 25 words
+
+Kyro can also show a 25-word Monero seed for the same wallet, to restore it in Monero GUI, Feather or Cake Wallet. Treat it the same way. It only covers your XMR, so it does not replace your recovery phrase.
+
+## Hardware wallets
+
+With a Ledger or Trezor, the phrase belongs to the device. Back it up the way the manufacturer tells you, and initialize the device with a phrase it generated itself.
+
+## Keep reading
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+### Move from another wallet
+
+Import your phrase, or send your coins across.
+
+### How to spot address poisoning
+
+The lookalike address in your own history.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Move to Kyro from another wallet with your phrase | Kyro
+URL: https://kyrowallet.com/guides/move-from-another-wallet/
+================================================================
+
+Guide
+
+# Move from another wallet
+
+If your wallet uses a standard BIP39 phrase, you can import it in a minute. Sometimes a fresh phrase is the better move.
+
+2 min read
+
+## Two ways to move
+
+Import your phrase. Quick, and your old wallet keeps working, because both now hold the same keys.
+
+Create a new phrase and send your coins. Slower and it costs network fees, but your funds end up on keys that have never been in another app. Choose this if you are unsure how your old phrase was handled.
+
+## Import a phrase
+
+- On the welcome screen, choose Import a recovery phrase.
+
+- Enter your BIP39 words in English, in order. You can paste the whole phrase into the first box. Screenshots are blocked while you type.
+
+- Choose a password to encrypt the phrase on this device.
+
+- Kyro shows your accounts. Wait for each blockchain to answer over Tor.
+
+## If a balance looks wrong
+
+- Different derivation. The same phrase can give different addresses in different wallets. Compare a receive address from both. If they differ, your coins are safe, but they sit on keys Kyro is not showing. Send them across from the old wallet.
+
+- Another account. Kyro supports several accounts per blockchain. Coins may sit on a later account.
+
+- Ledger accounts. On NEAR, TON and Cardano, a Ledger gives different accounts than the same phrase in software.
+
+- Monero. Kyro scans from a starting block. If this phrase received XMR earlier, pick an older height in Settings > Security.
+
+## What does not import
+
+- A 25-word Monero phrase made elsewhere. Send those XMR to your Kyro address.
+
+- Phrases that are not BIP39 English words. Send those coins across instead.
+
+- Your history of labels and contacts. Add addresses to Kyro's address book as you go.
+
+## Send across, safely
+
+- Create your new vault and back up the phrase first.
+
+- Copy your Kyro receive address. Paste it and compare it in full, with care.
+
+- Send a small test, and wait for it to arrive.
+
+- Send the rest, chain by chain.
+
+Token approvals you gave from the old keys stay in place if you keep using them, so moving to fresh keys also leaves those behind.
+
+## Keep reading
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+### Why a wallet should use Tor
+
+Your IP and your addresses in the same log line.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Windows SmartScreen warning for Kyro, explained | Kyro Wallet
+URL: https://kyrowallet.com/guides/windows-smartscreen/
+================================================================
+
+Guide
+
+# What SmartScreen means for Kyro
+
+"Windows protected your PC" is about reputation and signatures. Here is what that means for Kyro today, plainly.
+
+2 min read
+
+## Why you see it
+
+Kyro's Windows installers are not code-signed yet. A file downloaded by a browser carries a "downloaded from the internet" mark, so SmartScreen shows the warning until that file has built up reputation.
+
+Reputation is tied to the file's hash. Every release is a new file, so every release starts from zero.
+
+## What the warning tells you
+
+It says Windows does not recognise this file yet. It does not say the file is harmful, and clearing it would not prove the file is safe. Your own check is the one that counts.
+
+## What to do
+
+- Make sure the file came from GitHub Releases or our download page.
+
+- Verify its SHA-256 against SHA256SUMS.
+
+- Run it. On the blue window, click More info, then Run anyway.
+
+If the hash does not match, delete the file. Do not click through.
+
+## How to avoid it
+
+Install with the one-line command. PowerShell does not add the "downloaded from the internet" mark, and the script checks the SHA-256 for you.
+
+Updates applied by Kyro itself never trigger the warning either, and they are signed and verified.
+
+## What we do about it
+
+Each release's Windows installers are submitted to Microsoft for review. Microsoft does not guarantee this clears the warning for home users, since reputation mostly builds with downloads. Code signing is on the roadmap, and the code signing policy sets out the rules.
+
+## And macOS?
+
+Same cause, different screen. Gatekeeper blocks the first launch of a downloaded file. See Kyro for macOS.
+
+## Keep reading
+
+### Verify your download
+
+Check a release with SHA-256 in two minutes.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Why a crypto wallet should use Tor | Kyro Wallet
+URL: https://kyrowallet.com/guides/why-a-wallet-should-use-tor/
+================================================================
+
+Guide
+
+# Why a wallet should use Tor
+
+Self-custody protects your coins. It does little for your privacy. The leak happens before you ever send anything.
+
+2 min read
+
+## What a wallet does all day
+
+A wallet does not hold coins. It asks servers about addresses: what is the balance, what happened, what does this fee cost. Each of those questions travels with your IP address.
+
+Your IP points to your internet connection, and often to a city. Your addresses point to everything you have ever received and spent on a public blockchain. A server that sees both in one log line can connect them.
+
+A direct connection
+
+- Every server sees your IP address.
+
+- One IP asking about three addresses ties them to each other, and to you.
+
+- Your internet provider sees the hosts you reach.
+
+Kyro over Tor
+
+- Servers see the IP of a Tor exit relay, not yours.
+
+- Each blockchain has its own circuit, so the circuit does not link your lookups.
+
+- Your internet provider sees only that you use Tor.
+
+## The linking problem
+
+The worse part is what happens across addresses. Ask about your Bitcoin, Ethereum and Solana addresses from one IP, and you have told that server they belong together. Keeping separate accounts achieves little if a single connection asks about all of them.
+
+Why does it matter? Holders of crypto are targets. A record that ties a home connection to a balance is worth protecting, whatever the size of the balance.
+
+## What Tor changes
+
+Tor sends your traffic through three relays. The first sees your IP but not the destination. The last sees the destination but not you. The server sees a Tor exit relay.
+
+Kyro builds this in. It adds three things that matter for a wallet:
+
+- On by default. A privacy setting you forget to enable protects nobody.
+
+- Separate circuits. Each blockchain family has its own, so the circuit does not link your lookups.
+
+- Fails closed. If Tor is down, requests fail. A silent fallback to a direct connection would expose you at the worst moment.
+
+## What Tor does not change
+
+- The server you query still sees the addresses you ask about. Tor hides who is asking, not what is asked.
+
+- Blockchains stay public. Tor protects your connection, not the transaction record.
+
+- Swap providers see the order they process.
+
+- Your own habits still count: reusing addresses or sending between your accounts links them on chain.
+
+For the strongest setup, combine Tor with your own node, so no third party sees your addresses at all. For a coin built around private transfers, see Monero in Kyro.
+
+## Keep reading
+
+### How to spot address poisoning
+
+The lookalike address in your own history.
+
+### Swap to Monero
+
+From BTC, ETH, SOL, USDT and more to XMR.
+
+### Move from another wallet
+
+Import your phrase, or send your coins across.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Address poisoning: how to spot it and stay safe | Kyro
+URL: https://kyrowallet.com/guides/how-to-spot-address-poisoning/
+================================================================
+
+Guide
+
+# How to spot address poisoning
+
+No hack and no malware: a scammer only needs you to copy the wrong line from your own history.
+
+2 min read
+
+## How the scam works
+
+- A scammer watches who you send to.
+
+- They generate an address that starts and ends like that one.
+
+- They slip it into your history with a dust transaction, a zero-value transfer, or a fake transfer displayed as "sent".
+
+- Next time, you copy the "recent" address from your history. The middle is different, and your money goes to them.
+
+It works because most people check only the first and last few characters, and because a long address is hard to read.
+
+## What Kyro does
+
+- A blocking red alert appears if a recipient shares the first 4 and last 4 characters with a known address without being identical.
+
+- Known addresses are your address book, your accounts and sends signed by this Kyro. The server's history is never trusted.
+
+- Addresses are displayed in blocks, and anything outside the address book is marked "Unknown address".
+
+- After you paste, Kyro watches the field for clipboard tampering.
+
+- The native confirmation window shows the recipient Rust decoded.
+
+## What it cannot catch
+
+A lookalike that already differs within those 8 characters is not detected. A clipboard swap that happens before you paste cannot be seen either. Only comparing against your source will find those, so these habits still matter.
+
+## Habits that stop it
+
+- Never copy a recipient from your transaction history.
+
+- Save the addresses you use in the address book. Send offers "Save" for a new recipient.
+
+- Compare the whole address with your source, block by block.
+
+- For large amounts, send a small test and have the recipient confirm it.
+
+- Ignore unexpected tiny deposits. You do not need to do anything about them.
+
+## If it already happened
+
+Transfers on a blockchain cannot be reversed, and neither Kyro nor anyone else can pull funds back. Your keys were not stolen, so your wallet itself remains safe to use. Be wary of anyone offering to "recover" the money for a fee.
+
+## Keep reading
+
+### Why a wallet should use Tor
+
+Your IP and your addresses in the same log line.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### Verify your download
+
+Check a release with SHA-256 in two minutes.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to swap to Monero (XMR) in your wallet | Kyro Wallet
+URL: https://kyrowallet.com/guides/swap-to-monero/
+================================================================
+
+Guide
+
+# Swap to Monero
+
+From a coin you hold to XMR in your own wallet: no account, over Tor, in one screen.
+
+2 min read
+
+## Before you start
+
+Your Monero account comes from your recovery phrase, so it is already there. Give the first scan time to finish: Kyro scans blocks on your machine, and your XMR shows up once it reaches them.
+
+These reach XMR through Exolix: BTC, LTC, DOGE, TRX, USDT on TRON, ETH on Ethereum, Arbitrum, Base and Optimism, POL, SOL, and USDT and USDC on Ethereum and Solana. BNB and AVAX do not.
+
+## The swap
+
+- Open Swap and pick the coin you want to sell. Kyro shows any coin you hold, on any network.
+
+- Pick XMR as what you want. Search by name or ticker.
+
+- Enter the amount. "You receive" already has Kyro's fee out.
+
+- Choose Review the swap. Kyro creates the order, checks that it pays your own Monero address, and checks the deposit address.
+
+- Confirm in the system window. Kyro sends an ordinary transfer, with no contract involved.
+
+- Confirm the second transfer, which is Kyro's fee in the coin you sold.
+
+- Follow the status in History. The XMR appears when the provider has paid out and your scan reaches it.
+
+## Why two transfers
+
+Exolix has no integrator fee, so Kyro's fee cannot be taken inside the swap. The swapped amount is reduced by the normal rate, and the fee goes as a second ordinary transfer on the source chain. You pay the network fee on both. Fee table.
+
+## Who sees what
+
+Exolix sees the coins, the amount, your Monero address and your source address, so it can link those two accounts. Tor keeps your IP address away from it. The source chain shows your transfer publicly, like any other.
+
+Start small. This path is younger than the rest of Kyro, and it depends on a third-party provider completing the order.
+
+## Going back
+
+Since version 1.0.6 you can swap from XMR too, to the same coins. The steps are the same. Kyro's fee is then a second XMR transfer.
+
+## Keep reading
+
+### Why a wallet should use Tor
+
+Your IP and your addresses in the same log line.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### Stake SOL
+
+Pick a validator, delegate, and get your SOL back.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to stake SOL from a desktop wallet | Kyro Wallet
+URL: https://kyrowallet.com/guides/stake-sol/
+================================================================
+
+Guide
+
+# How to stake SOL
+
+Your SOL goes into a stake account in your name. A validator can earn you rewards, and it cannot take your coins.
+
+2 min read
+
+## Before you start
+
+- You need a recovery-phrase account. Staking SOL from a Ledger or Trezor is refused for now.
+
+- Keep some SOL unstaked for network fees.
+
+- Rates are estimates. The rate shown is network-wide, before the validator's commission.
+
+## Stake
+
+- Open Earn and choose Solana.
+
+- Choose Stake SOL. Kyro creates a stake account in your name, and only you can manage or withdraw it.
+
+- Pick a validator. Names are declared by the validators themselves and not verified, so look at commission and status too.
+
+- Enter the amount and review.
+
+- Confirm with your password in the system window.
+
+A commission above 10%, or a delinquent validator that has stopped voting, gets a second, reinforced confirmation.
+
+## Wait for activation
+
+A delegation activates at the start of the next epoch. An epoch lasts about two days.
+
+## Get your SOL back
+
+- Choose Deactivate on the stake account.
+
+- Wait out the cooldown: at least one epoch, about 2 to 3 days, and longer if a lot of stake is moving at once. There are no rewards during it.
+
+- Choose Withdraw. It goes to your own address.
+
+## Risks, plainly
+
+- There is no slashing on Solana today, so your stake is not confiscated.
+
+- A bad validator costs you rewards: high commission or downtime.
+
+- SOL can lose value while staked, and you wait days to move it.
+
+- The server can misreport validators. Kyro's Rust core still decodes what you sign, and refuses authority changes and lockups.
+
+Kyro takes no fee on staking. This guide explains how the feature works. It is not financial advice. For other options, see Earn.
+
+## Keep reading
+
+### Swap to Monero
+
+From BTC, ETH, SOL, USDT and more to XMR.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to connect a Ledger to Kyro Wallet
+URL: https://kyrowallet.com/guides/connect-a-ledger/
+================================================================
+
+Guide
+
+# Connect a Ledger
+
+One click reads every chain your Ledger supports. You approve each app on the device, and the keys never leave it.
+
+2 min read
+
+## Before you start
+
+- Close Ledger Live: it holds the USB device.
+
+- Use a data cable, and unlock the Ledger.
+
+- Install the apps you want with Ledger Live, and keep them up to date.
+
+- On Linux, install Ledger's udev rules first.
+
+## Connect
+
+- On the welcome screen choose Use a Ledger / Trezor, or go to Settings > Devices > Add a device.
+
+- Every chain the Ledger supports is ticked. Untick what you do not want.
+
+- Click Connect.
+
+- Approve "Open Bitcoin", "Open Ethereum" and the others on the device as Kyro asks. If another app is open, Kyro closes it first.
+
+- Read the result per chain: Added, Not installed, or Skipped.
+
+"Not installed" means you can add that app in Ledger Live and connect again. If an app is too old, Kyro says to update it.
+
+## Check a receive address
+
+Before you share an address, show it on the device and compare. Kyro compares it with the one it derives itself, and any difference is a blocking error. Treat the device screen as the truth.
+
+## Sign
+
+- Start a send as usual.
+
+- Read the decoded transaction in Kyro's system window.
+
+- Read it again on the Ledger and approve there.
+
+- Kyro verifies the signature before it broadcasts.
+
+## Blind signing
+
+Some transactions cannot be decoded by the device, which then shows raw data. A Ledger with blind signing off will refuse them, and Kyro names the setting to change. Solana tokens may need "Enable Blind signing in the Solana app settings". TRON tokens may need "Allow data" or "Custom contracts".
+
+With blind signing, the device protects your keys but cannot show you what you approve. Keep it off until you need it.
+
+## Limits
+
+- On NEAR, TON and Cardano the Ledger account differs from the software account for the same phrase.
+
+- Token sends work on EVM chains, Solana and TRON. Elsewhere, native coins only.
+
+- Earn covers Lido and Aave. Staking is refused from a hardware account.
+
+- Not available on Ledger: Monero, Polkadot, Kaspa and Zcash.
+
+Full table: Ledger and Trezor in Kyro. Hardware support is young, so start with a small amount.
+
+## Keep reading
+
+### Connect a Trezor
+
+Including pairing a Trezor Safe 7.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+How to connect a Trezor to Kyro Wallet
+URL: https://kyrowallet.com/guides/connect-a-trezor/
+================================================================
+
+Guide
+
+# Connect a Trezor
+
+Keys stay in the Trezor and the PIN stays on it. A Safe 7 pairs once with a 6-digit code.
+
+2 min read
+
+## Before you start
+
+- Close Trezor Suite: it holds the device.
+
+- Use a data cable, and update the firmware in Trezor Suite.
+
+- Run the authenticity check in Trezor Suite. Kyro does not run it.
+
+- On Linux, install Trezor's udev rules first.
+
+## Connect
+
+- On the welcome screen choose Use a Ledger / Trezor, or go to Settings > Devices > Add a device.
+
+- Unlock with your PIN on the device.
+
+- Choose Connect and pick your chains.
+
+- Kyro reads the public keys and adds the accounts. Hardware accounts are labelled as such.
+
+## Pair a Trezor Safe 7
+
+The Safe 7 uses an encrypted, authenticated channel. Pairing happens once per Kyro installation.
+
+- Accept the pairing with "Kyro Wallet" on the device.
+
+- The device shows a 6-digit code. Type it into Kyro.
+
+- On later connections, the Trezor asks you to confirm on its screen.
+
+A wrong code saves nothing: try again with the new code. To revoke access on the device side, for instance after losing a computer, reset its paired hosts.
+
+## Trezor One
+
+The Trezor One has no PIN entry on the device. It shows a shuffled grid and you click the matching positions in Kyro. Kyro receives only positions. A passphrase typed on the computer is refused. Cardano is not available on this model.
+
+## Sign
+
+Read the decoded transaction in Kyro's system window, then check it on the Trezor's screen and approve there. Kyro verifies the signature before it broadcasts. For a Solana token send, a Trezor shows the recipient wallet.
+
+## What works on Trezor
+
+- Bitcoin, all EVM networks, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar and Cardano.
+
+- Zcash transparent addresses, on Trezor only.
+
+- Token sends on EVM chains and Solana.
+
+- Earn with Lido and Aave.
+
+- XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON and NEAR: Ledger only.
+
+- Monero, Polkadot and Kaspa: no hardware wallet support.
+
+- Staking on Solana, Cardano, TRON and NEAR is refused from a hardware account.
+
+Safe 7 support has been tested against Trezor's device-side code, not yet on a real Safe 7. Other hardware paths are young too. Start with a small amount.
+
+Full table: Ledger and Trezor in Kyro.
+
+## Keep reading
+
+### Connect a Ledger
+
+Close Ledger Live, plug in, one Connect.
+
+### Back up your recovery phrase
+
+Paper, in order, offline. What to do and what to avoid.
+
+### First steps with Kyro
+
+From the welcome screen to your first receive address.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums
+
+================================================================
+Crypto wallet glossary in plain language | Kyro Wallet
+URL: https://kyrowallet.com/glossary/
+================================================================
+
+Glossary
+
+# Words, in plain language
+
+What a recovery phrase is, why gas costs money, what a Tor circuit does. The terms you meet in a crypto wallet, kept short.
+
+AddressThe public string you share to receive coins. Safe to give out, though it can link your activity on a public blockchain.Address poisoningA scam that plants a lookalike address in your history so you copy it by mistake. How to spot it.ApprovalPermission you give a contract to move a token from your account. Kyro approves the exact amount by default. An unlimited approval needs an explicit action and shows a warning.APYAnnual percentage yield: a yearly rate of return, with compounding. In Kyro every APY is an estimate, never a promise.BIP39The standard that turns a random number into 12 or 24 English words. It is why a phrase can move between wallets.Blind signingApproving a transaction your hardware wallet cannot decode. The device shows raw data, so it protects your keys but not your consent.BlockchainA shared public record of transactions, kept by many computers.Clear modeKyro with Tor turned off. Servers see your IP address. You can only reach it by confirming in a system window.Custodial walletA wallet where a company holds the keys for you. You trust it to give your coins back. Kyro is not one.DecoyIn Monero, other outputs mixed with your real one when you send, so an observer cannot tell which was spent.DepegWhen a token meant to track another asset, such as a stablecoin or stETH, drifts from its target price.Derivation pathThe recipe that turns a phrase into a specific key. Two wallets using different paths show different addresses for the same phrase.EpochA fixed period on a proof-of-stake network. Staking changes often take effect at an epoch boundary.Exit relayThe last Tor relay, which connects to the server. The server sees its IP address instead of yours.Fail closedStopping when a protection is missing, rather than carrying on without it. If Tor is down, Kyro sends nothing.GasThe fee for running a transaction on Ethereum and similar networks. It goes to the network, not to Kyro.Hardware walletA small device that keeps your keys and signs on its own screen. Ledger and Trezor in Kyro.LendingDepositing tokens in a protocol such as Aave so borrowers can use them, for a variable rate. Contract risk applies.Liquid stakingStaking through a protocol such as Lido that gives you a token, stETH, standing for your stake.Network feeWhat you pay the blockchain to process a transaction. It is separate from any Kyro fee.NodeA computer that keeps a copy of a blockchain and answers questions about it. Running your own means no third party sees your lookups.Non-custodial walletA wallet where you alone hold the keys. Nobody can freeze your funds or recover them for you.Onion serviceA server reachable only inside Tor, so no exit relay is involved. Kyro uses one for Bitcoin lookups.Private keyThe secret that signs transactions. Kyro derives it for each signature in the Rust core, then wipes it from memory.Recovery phrase12 or 24 words that restore your whole wallet. Also called a seed phrase. How to back it up.RPC serverA server a wallet talks to in order to read a blockchain and broadcast transactions.SeedThe secret value your keys come from. In everyday use, the same thing as your recovery phrase.SlashingA penalty that destroys part of a stake. Delegators on Solana, Cardano, TRON and NEAR are not slashed today.SlippageThe gap between the quoted swap rate and the rate you get. Your maximum slippage is the most you accept.StablecoinA token designed to track a currency, such as USDC or USDT.StakingSupporting a proof-of-stake network with your coins in exchange for rewards. In Kyro, you delegate from your own account.Stake poolA group stake run by an operator, as on Cardano and NEAR.SwapExchanging one coin for another from your wallet, through a provider. Kyro's fee is included in the rate.TokenAn asset that lives on a blockchain, such as an ERC-20 or SPL token, as opposed to the chain's native coin.TorA network that hides your IP address by routing traffic through volunteer relays. How Kyro uses it.Tor circuitThe path of three relays a connection takes through Tor. Kyro keeps a separate one for each blockchain family.ValidatorA computer that helps run a proof-of-stake network and earns rewards. It cannot spend what you delegate.View keyA Monero key that reads incoming payments but cannot spend. In Kyro it stays on your machine.xpubAn extended public key. It can show all addresses of an account, but cannot spend. Kyro stores xpubs for hardware accounts.
+
+## Keep reading
+
+### Guides
+
+Step-by-step articles for the things you will actually do.
+
+### FAQ
+
+Short answers about Kyro.
+
+### Security
+
+How Kyro protects your keys.
+
+## Get Kyro
+
+Version 1.0.6 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+One-line install, all files and checksums

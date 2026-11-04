@@ -35,6 +35,8 @@ Key facts:
 - [Changelog](https://kyrowallet.com/changelog/): What changed in each version of Kyro Wallet, from 1.0.0 to 1.0.6. Generated from the CHANGELOG.md file in the repository.
 - [Open source](https://kyrowallet.com/open-source/): Kyro is an open source wallet under GPL-3.0-or-later. How to read the code, build it, verify a release, contribute and report a vulnerability.
 - [Brand kit](https://kyrowallet.com/brand/): Download Kyro Wallet logos, marks and app icons, with the colours, typefaces, a short description and simple usage rules for writing about the project.
+- [Guides](https://kyrowallet.com/guides/): Plain guides for Kyro Wallet: back up your phrase, verify a download, move from another wallet, swap to Monero, stake SOL and connect a Ledger or Trezor.
+- [Glossary](https://kyrowallet.com/glossary/): 39 crypto wallet terms in plain language: recovery phrase, non-custodial, Tor circuit, seed, gas, slippage, staking, blind signing and more.
 
 ## Blockchains
 
