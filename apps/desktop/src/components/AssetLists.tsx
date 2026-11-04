@@ -3,7 +3,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { matchesCoinQuery } from '@kyro/chains';
 import type { MarketCoin } from '@kyro/market';
 import { getLang, type Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
@@ -16,7 +16,7 @@ import { Sparkline } from './charts';
 import { useTorBlocked } from './Tor';
 import { cbfPending, networkDown, serverDown, serverMissing, useCustomServer } from './ServerDown';
 import { Menu } from './ui/menu';
-import { Badge, Skeleton } from './ui/primitives';
+import { Skeleton } from './ui/primitives';
 import { IconChevronDown, IconChevronRight, IconInfo, IconSearch, IconStar } from './icons';
 import { idx } from './motion';
 import { getLanguage, t, useT } from '../i18n';
@@ -237,7 +237,6 @@ function MineList({ sort }: { sort: Sort }) {
             </div>
           );
         })}
-        {WATCH_ONLY_CHAINS.map((w, j) => <WatchRow key={w.key} i={i + j} coinId={w.coingeckoId} name={w.name} symbol={w.symbol} glyph={w.glyph} color={w.color} />)}
         {pf.balancesLoaded && pf.holdings.every((h) => h.amount === 0n) && (
           <EmptyState title={t('portfolio.emptyVault')} action={<button type="button" onClick={() => navigate({ name: 'receive' })} className="text-[13px] font-semibold text-ice hover:underline">{t('portfolio.receiveFunds')}</button>}>
             {t('portfolio.emptyVaultHint')}
@@ -245,37 +244,6 @@ function MineList({ sort }: { sort: Sort }) {
         )}
       </div>
     </div>
-  );
-}
-
-function WatchRow({ coinId, name, symbol, glyph, color, i }: { coinId: string; name: string; symbol: string; glyph: string; color: string; i: number }) {
-  const pf = usePortfolio();
-  const { settings, navigate } = useApp();
-  const m = pf.marketById.get(coinId);
-  const p = pf.price(coinId);
-  const { t } = useT();
-  return (
-    <button type="button" style={idx(i)} onClick={() => navigate({ name: 'asset', id: `cg:${coinId}` })} className={cn(GRID, 'h-16 w-full border-t border-line/60 px-6 text-left transition-[background-color,filter] duration-150 [filter:saturate(.4)_brightness(.85)] hover:bg-raised/60 hover:[filter:none]')}>
-      <span className="flex min-w-0 items-center gap-3.5">
-        <CoinIcon glyph={glyph} color={color} symbol={symbol} id={`cg:${coinId}`} size={40} />
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{name}</span>
-          <span className="truncate text-[13px] text-mute">{t('portfolio.readOnly', { symbol })}</span>
-        </span>
-      </span>
-      <span className="flex flex-col">
-        <span className="text-[14px]">{p ? fmtFiat(p.price, settings.currency) : '—'}</span>
-        <span className={cn('text-[12px]', trendColor(p?.change24h))}>{fmtPct(p?.change24h)}</span>
-      </span>
-      {m && m.sparkline7d.length > 1 ? <Sparkline values={m.sparkline7d} color={trendHex(m.change7d)} /> : <span />}
-      <span className="flex flex-col items-end">
-        <span className="text-[14px] font-medium">—</span>
-        
-      </span>
-      <span>
-        <Badge tone="ice">{t('portfolio.soon')}</Badge>
-      </span>
-    </button>
   );
 }
 

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { MotionConfig, motion } from 'motion/react';
-import { WATCH_ONLY_CHAINS } from '@kyro/chains';
 import { coinSearch } from './lib/coinSearch';
 import { fmtNumber } from './lib/format';
 import { AppProvider, useApp, type Route } from './state/app';
@@ -133,7 +132,6 @@ function Unlocked() {
 
   const search = useCallback(
     (q: string): SearchResult[] => {
-      const s = q.toLowerCase();
       const out: SearchResult[] = [];
       for (const c of coinSearch(q, pf.holdings, pf.markets ?? [])) {
         out.push({
@@ -143,11 +141,6 @@ function Unlocked() {
           icon: c.asset ?? { id: c.id, symbol: c.symbol },
           onSelect: () => navigate({ name: 'asset', id: c.id }),
         });
-      }
-      for (const w of WATCH_ONLY_CHAINS) {
-        if (w.name.toLowerCase().includes(s) && !out.some((o) => o.id === `cg:${w.coingeckoId}`)) {
-          out.push({ id: `cg:${w.coingeckoId}`, label: w.name, hint: t('shell.searchSoon'), onSelect: () => navigate({ name: 'asset', id: `cg:${w.coingeckoId}` }) });
-        }
       }
       if (/^(0x[0-9a-fA-F]{40}|(bc|tb)1[0-9a-z]{20,}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(q)) {
         out.unshift({ id: `send:${q}`, label: t('shell.searchSendTo', { address: q.slice(0, 10) }), hint: t('shell.searchAddressHint'), onSelect: () => navigate({ name: 'send', to: q }) });

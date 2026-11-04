@@ -157,7 +157,7 @@ export const settings = {
   'settings.bulkRange': 'Entre 1 et {max}.',
   'settings.bulkNewOne': 'Nouveau compte : {name}.',
   'settings.bulkNewMany': 'Nouveaux comptes : {names}.',
-  'settings.bulkRenameLater': 'Tu pourras les renommer ici.',
+  'settings.bulkRenameHint': 'Tu pourras les renommer ici.',
   'settings.bulkCreate_one': 'Créer le compte',
   'settings.bulkCreate_other': 'Créer {count} comptes',
 

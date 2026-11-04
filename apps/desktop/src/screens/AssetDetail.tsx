@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { assetsFor, evmChains, findAsset, findChain, WATCH_ONLY_CHAINS, type AssetDef } from '@kyro/chains';
+import { assetsFor, evmChains, findAsset, findChain, type AssetDef } from '@kyro/chains';
+import { canSwapFrom } from '../lib/crossSwap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { coinPeriods, useCoinChart, type Period } from '../state/charts';
@@ -37,7 +38,6 @@ export function AssetDetail({ id }: { id: string }) {
   const asset: AssetDef | undefined = id.startsWith('cg:') ? undefined : findAsset(network, id);
   const coinId = asset?.coingeckoId ?? id.replace(/^cg:/, '');
   const coin = pf.marketById.get(coinId);
-  const watch = WATCH_ONLY_CHAINS.find((w) => w.coingeckoId === coinId);
   // From the markets list (`cg:` id): the native coin, else the pinned token (Ethereum first).
   const supported = asset ?? pickForCoin(assetsFor(network).filter((a) => a.coingeckoId === coinId));
   const multi = !!supported && isMultiAccount(supported.family);
@@ -50,10 +50,10 @@ export function AssetDetail({ id }: { id: string }) {
   const month = useCoinChart(coinId, '1M');
   const history = useHistory();
 
-  const name = supported?.name ?? coin?.name ?? watch?.name ?? coinId;
-  const symbol = supported?.symbol ?? coin?.symbol ?? watch?.symbol ?? '';
-  const color = supported?.color ?? watch?.color;
-  const glyph = supported?.glyph ?? watch?.glyph ?? symbol.slice(0, 1);
+  const name = supported?.name ?? coin?.name ?? coinId;
+  const symbol = supported?.symbol ?? coin?.symbol ?? '';
+  const color = supported?.color;
+  const glyph = supported?.glyph ?? symbol.slice(0, 1);
   const price = pf.price(coinId);
   const points = chart.data ?? [];
   const values = points.map((p) => p[1]);
@@ -117,7 +117,7 @@ export function AssetDetail({ id }: { id: string }) {
             </span>
           </button>
         </div>
-        {supported && !watch ? (
+        {supported ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" size="lg" disabled={supported.readOnly || !!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
               <IconUp size={16} /> {t('common.send')}
@@ -127,8 +127,8 @@ export function AssetDetail({ id }: { id: string }) {
             </Button>
             <Button
               size="lg"
-              disabled={!!activeWatch || (supported.family !== 'evm' && supported.family !== 'sol')}
-              title={activeWatch ? t('watch.noSign') : supported.family !== 'evm' && supported.family !== 'sol' ? t('portfolio.swapSoon', { name: supported.name }) : undefined}
+              disabled={!!activeWatch || !canSwapFrom(findChain(network, supported.chainKey), network)}
+              title={activeWatch ? t('watch.noSign') : !canSwapFrom(findChain(network, supported.chainKey), network) ? t('portfolio.swapUnavailable', { name: supported.name }) : undefined}
               onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}
             >
               <IconSwap size={16} sw={2.2} /> Swap
@@ -146,7 +146,7 @@ export function AssetDetail({ id }: { id: string }) {
           </div>
         ) : (
           <Badge tone="ice" className="h-6 px-2">
-            {watch ? t('portfolio.soonReadOnly') : t('portfolio.unsupported')}
+            {t('portfolio.unsupported')}
           </Badge>
         )}
       </header>
@@ -196,7 +196,7 @@ export function AssetDetail({ id }: { id: string }) {
         </section>
 
         <aside className="rise flex w-[clamp(280px,34%,360px)] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-6 py-6">
-          {supported && !watch ? (
+          {supported ? (
             <>
               <span className="eyebrow">{t('portfolio.yourBalance')}</span>
               <span className="figure text-[36px] leading-none tracking-[-0.035em]">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
@@ -273,8 +273,8 @@ export function AssetDetail({ id }: { id: string }) {
               )}
             </>
           ) : (
-            <EmptyState title={watch ? t('portfolio.comingPhase4', { name }) : t('portfolio.assetUnsupported')}>
-              {watch ? t('portfolio.comingHint') : t('portfolio.unsupportedHint')}
+            <EmptyState title={t('portfolio.assetUnsupported')}>
+              {t('portfolio.unsupportedHint')}
             </EmptyState>
           )}
         </aside>

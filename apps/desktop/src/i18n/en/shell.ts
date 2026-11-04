@@ -9,7 +9,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.earn': 'Earn',
   'shell.searchMine': '{symbol} · my assets',
   'shell.searchRank': '{symbol} · rank {rank}',
-  'shell.searchSoon': 'Coming soon',
   'shell.searchSendTo': 'Send to {address}…',
   'shell.searchAddressHint': 'address',
   'shell.navigation': 'Navigation',

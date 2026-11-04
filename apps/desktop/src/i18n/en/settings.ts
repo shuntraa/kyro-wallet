@@ -148,7 +148,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.bulkRange': 'Between 1 and {max}.',
   'settings.bulkNewOne': 'New account: {name}.',
   'settings.bulkNewMany': 'New accounts: {names}.',
-  'settings.bulkRenameLater': 'You can rename them here.',
+  'settings.bulkRenameHint': 'You can rename them here.',
   'settings.bulkCreate_one': 'Create the account',
   'settings.bulkCreate_other': 'Create {count} accounts',
 

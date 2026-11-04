@@ -10,7 +10,6 @@ export const shell = {
   'shell.earn': 'Gagner',
   'shell.searchMine': '{symbol} · mes actifs',
   'shell.searchRank': '{symbol} · rang {rank}',
-  'shell.searchSoon': 'Bientôt',
   'shell.searchSendTo': 'Envoyer à {address}…',
   'shell.searchAddressHint': 'adresse',
   // Nav rail / title bar

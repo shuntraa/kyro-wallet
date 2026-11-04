@@ -331,7 +331,7 @@ function BulkCreateDialog({ family, list, onClose }: { family: AccountChain; lis
       {count === null && <span className="text-[12px] text-warn">{room === 0 ? t('settings.bulkLimit', { max: MAX_ACCOUNTS_PER_CHAIN }) : t('settings.bulkRange', { max: room })}</span>}
       {names.length > 0 && (
         <p className="m-0 text-[13px] leading-[1.55] text-text2">
-          {names.length === 1 ? t('settings.bulkNewOne', { name: names[0] ?? '' }) : t('settings.bulkNewMany', { names: names.length <= 4 ? names.join(', ') : `${names.slice(0, 3).join(', ')}… ${names[names.length - 1]}` })} {t('settings.bulkRenameLater')}
+          {names.length === 1 ? t('settings.bulkNewOne', { name: names[0] ?? '' }) : t('settings.bulkNewMany', { names: names.length <= 4 ? names.join(', ') : `${names.slice(0, 3).join(', ')}… ${names[names.length - 1]}` })} {t('settings.bulkRenameHint')}
         </p>
       )}
       {error && <Notice tone="error">{error}</Notice>}
