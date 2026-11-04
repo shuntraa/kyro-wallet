@@ -1016,7 +1016,7 @@ mod live {
                 "--- dialog ---\n{}",
                 describe(Lang::En, &b.summary, &b.context, Network::Mainnet)
             ),
-            Err(e) => eprintln!("build: {e}"),
+            Err(e) => return Err(e),
         }
         if let Some(p) = o.positions.first() {
             let action = SuiStakeRequest::Withdraw {
@@ -1027,7 +1027,7 @@ mod live {
                     "--- dialog ---\n{}",
                     describe(Lang::En, &b.summary, &b.context, Network::Mainnet)
                 ),
-                Err(e) => eprintln!("build: {e}"),
+                Err(e) => return Err(e),
             }
         }
         Ok(())

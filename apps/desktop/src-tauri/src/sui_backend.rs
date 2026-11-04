@@ -64,14 +64,34 @@ fn short(s: &str) -> String {
     crate::dialog_text::sanitize(s, 200)
 }
 
+/// The host's front end refuses some Tor exits (measured 2026-11-04: 2 requests in 24 still refused
+/// after the fresh circuits of `tor.rs`), and one build makes several requests. No other public
+/// GraphQL host answered over Tor, so each request gets this many rounds, then a clear error. A
+/// refused request never reached Sui; sending a signed transaction twice is harmless anyway.
+const TOR_REFUSED_ROUNDS: usize = 3;
+
+fn tor_exit_refused(status: u16, tor: bool) -> bool {
+    tor && matches!(status, 403 | 429)
+}
+
 pub(crate) async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
     let u = url::Url::parse(&ctx.url)
         .map_err(|_| AppError::ServerInvalid("invalid Sui GraphQL URL".into()))?;
     let body = json!({ "query": query, "variables": variables }).to_string();
-    let (status, bytes) = ctx
-        .net_client
-        .server_request(ServerRequest::post_json(u, Family::Sui, body), ctx.tor)
-        .await?;
+    let mut rounds = 1;
+    let (status, bytes) = loop {
+        let request = ServerRequest::post_json(u.clone(), Family::Sui, body.clone());
+        let (status, bytes) = ctx.net_client.server_request(request, ctx.tor).await?;
+        if !tor_exit_refused(status, ctx.tor) {
+            break (status, bytes);
+        }
+        if rounds == TOR_REFUSED_ROUNDS {
+            return Err(bad(format!(
+                "Sui refused these Tor routes (HTTP {status}). Try again: Kyro takes new ones."
+            )));
+        }
+        rounds += 1;
+    };
     let v: Value = serde_json::from_slice(&bytes).map_err(|_| {
         bad(format!(
             "Sui: HTTP {status}, non-JSON response ({})",
@@ -607,6 +627,12 @@ pub async fn txs(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_a_refused_tor_exit_gets_another_round() {
+        assert!(tor_exit_refused(403, true) && tor_exit_refused(429, true));
+        assert!(!tor_exit_refused(403, false));
+        assert!(!tor_exit_refused(200, true) && !tor_exit_refused(500, true));
+    }
 
     fn coin(b: u64, id: u8) -> SuiCoin {
         SuiCoin {
