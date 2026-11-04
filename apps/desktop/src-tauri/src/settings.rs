@@ -389,6 +389,26 @@ mod tests {
     use crate::servers::{BtcServer, CoreAuth};
     use wallet_core::Network;
 
+    /// A settings file as 1.0.6 wrote it: every value survives, and a device with one wallet
+    /// writes back no new key.
+    #[test]
+    fn settings_file_of_1_0_6_opens_unchanged() {
+        let json = r#"{"currency":"CHF","autoLockSecs":600,"hideBalancesOnStart":true,"captureProtection":false,"clipboardGuard":false,"servers":{},"apiKeys":{},"tor":{"enabled":false},"language":"fr","autoUpdate":false,"weeklyCount":false,"accounts":{"mainnet":{"evm":[{"index":1,"name":"Savings"}]}}}"#;
+        let raw = serde_json::from_str(json).unwrap();
+        let s = Settings::from_saved(Some(raw), || "EUR");
+        assert_eq!(s.currency, "CHF");
+        assert_eq!(s.auto_lock_secs, 600);
+        assert!(s.hide_balances_on_start);
+        assert!(!s.capture_protection && !s.clipboard_guard);
+        assert!(!s.tor.enabled && !s.auto_update && !s.weekly_count);
+        assert!(s.wallet_accounts.is_empty());
+        let accounts = serde_json::to_value(s.accounts_of(crate::wallets::MAIN)).unwrap();
+        assert_eq!(accounts["mainnet"]["evm"][0]["name"], "Savings");
+        let written = serde_json::to_value(&s).unwrap();
+        assert!(written.get("walletAccounts").is_none());
+        assert_eq!(written["language"], "fr");
+    }
+
     #[test]
     fn legacy_rpc_is_migrated_and_never_written_back() {
         let json = r#"{"currency":"USD","rpc":{"esplora":"https://esplora.example/api","ethereum":"https://eth.example","solana":"https://sol.example"}}"#;
