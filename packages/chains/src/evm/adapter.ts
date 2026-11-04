@@ -18,6 +18,7 @@ import { ERC20_TOKENS, nativeAssetId, type AssetDef, type EvmChain } from '../re
 import { evmFeeOptionsFromHistory } from '../fees';
 import type { Balance, BuildParams, ChainAdapter, EvmSigned, EvmUnsigned, FeeEstimates, FeeParams, HistoryItem } from '../types';
 import type { HwSigner } from '../hw';
+import { simulateCall, type SimBackend, type SimCall, type SimLog, type SimReport, type SimTrace } from './simulate';
 
 export interface EvmAdapterOptions {
   chain: EvmChain;
@@ -85,6 +86,26 @@ export function evmRecipientProblem(recipient: string, asset: Pick<AssetDef, 'ki
   if (/^0x0{40}$/.test(r)) return l10n('Adresse nulle (0x000…000) : les fonds seraient détruits. Envoi refusé.', 'Null address (0x000…000): the funds would be destroyed. Sending refused.');
   if (asset.kind === 'erc20' && asset.contract && asset.contract.toLowerCase() === r) return l10n('Cette adresse est le contrat du token lui-même, pas un portefeuille : les fonds seraient perdus. Envoi refusé.', 'This address is the token contract itself, not a wallet: the funds would be lost. Sending refused.');
   return null;
+}
+
+/** One frame of `debug_traceCall`'s `callTracer`. */
+interface TraceFrame {
+  type?: string;
+  from: string;
+  to?: string;
+  value?: string;
+  error?: string;
+  revertReason?: string;
+  logs?: SimLog[];
+  calls?: TraceFrame[];
+}
+
+/** Logs and inner native moves of the frames that did not revert. The top frame's value is the call's own. */
+function walkTrace(f: TraceFrame, top: boolean, out: SimTrace): void {
+  if (f.error) return;
+  out.logs.push(...(f.logs ?? []));
+  if (!top && f.to && f.value && f.value !== '0x0' && f.type !== 'DELEGATECALL') out.internal.push({ from: f.from, to: f.to, value: BigInt(f.value) });
+  for (const c of f.calls ?? []) walkTrace(c, false, out);
 }
 
 /** Create a viem transport that sends JSON-RPC through `net_fetch`. */
@@ -373,6 +394,62 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       const msg = e instanceof Error ? (e as { shortMessage?: string }).shortMessage ?? e.message : String(e);
       return { ok: false, reason: msg.split('\n')[0] ?? msg };
     }
+  }
+
+  /**
+   * What this call would do, read through the chain's own RPC before anything is signed. A warning
+   * tool: `known` lists the contracts Kyro pinned for this flow (its tokens are always known).
+   */
+  simulateBeforeSigning(tx: { to: string; data: Hex; value?: bigint }, known: readonly string[] = []): Promise<SimReport> {
+    const tokens = ERC20_TOKENS[this.chain.key] ?? [];
+    const knownTokens = new Map(tokens.map((t) => [t.contract.toLowerCase(), { symbol: t.symbol, decimals: t.decimals }]));
+    return simulateCall(
+      this.simBackend(),
+      { from: this.address, to: getAddress(tx.to), data: tx.data, value: tx.value ?? 0n },
+      {
+        knownContracts: new Set([...knownTokens.keys(), ...known.map((a) => a.toLowerCase())]),
+        knownTokens,
+        native: { symbol: this.chain.nativeSymbol, decimals: this.chain.nativeDecimals },
+        blockTimeSecs: this.chain.blockTimeSecs,
+      },
+    );
+  }
+
+  private simBackend(): SimBackend {
+    const rpc = <T>(method: string, params: unknown[]) => jsonRpc<T>(this.fetcher, this.rpcUrl, method, params);
+    const callObject = (c: SimCall) => ({ from: c.from, to: c.to, data: c.data, value: `0x${c.value.toString(16)}` });
+    return {
+      simulateV1: async (c) => {
+        type Call = { status: string; logs?: SimLog[]; error?: { message?: string } };
+        const blocks = await rpc<Array<{ calls: Call[] }> | null>('eth_simulateV1', [{ blockStateCalls: [{ calls: [callObject(c)] }], traceTransfers: true, validation: false }, 'latest']);
+        const r = blocks?.[0]?.calls[0];
+        if (!r) return null;
+        if (r.status !== '0x1') throw new JsonRpcError(3, r.error?.message ?? 'execution reverted');
+        return { logs: r.logs ?? [], internal: [] };
+      },
+      traceCall: async (c) => {
+        const top = await rpc<TraceFrame | null>('debug_traceCall', [callObject(c), 'latest', { tracer: 'callTracer', tracerConfig: { withLog: true } }]);
+        if (!top) return null;
+        if (top.error) throw new JsonRpcError(3, top.revertReason ?? top.error);
+        const out: SimTrace = { logs: [], internal: [] };
+        walkTrace(top, true, out);
+        return out;
+      },
+      ethCall: async (c) => {
+        await this.client.call({ account: c.from as `0x${string}`, to: c.to as `0x${string}`, data: c.data, value: c.value });
+      },
+      estimateGas: async (c) => hexToBigInt(await rpc<string>('eth_estimateGas', [callObject(c)])),
+      code: async (address, blocksAgo) => {
+        const at = blocksAgo === undefined ? 'latest' : `0x${((await this.blockNumber()) - blocksAgo > 0n ? (await this.blockNumber()) - blocksAgo : 0n).toString(16)}`;
+        return rpc<string>('eth_getCode', [address, at]);
+      },
+      tokenInfo: async (address) => {
+        const contract = { address: getAddress(address), abi: erc20Abi } as const;
+        const [symbol, decimals] = await Promise.all([this.client.readContract({ ...contract, functionName: 'symbol' }), this.client.readContract({ ...contract, functionName: 'decimals' })]);
+        // A token writes its own name: printable and short, or nothing.
+        return /^[\x21-\x7e]{1,16}$/.test(symbol) && decimals <= 36 ? { symbol, decimals } : null;
+      },
+    };
   }
 
   /** Dry-run that also measures what we RECEIVE: `eth_simulateV1` with `traceTransfers` (native transfers then appear as Transfer logs from 0xEeee…), summing the Transfer logs of `token` (`native` for the chain's coin) to our address. */

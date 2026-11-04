@@ -36,6 +36,7 @@ import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
+import { SimulationPanel } from '../components/SimulationPanel';
 import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { AccountPicker } from '../components/AccountPicker';
@@ -195,6 +196,16 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const busy = phase !== 'idle' && phase !== 'done';
   const shown = confirmOpen ? reviewed ?? chosen : chosen;
   const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck)) && (shown.tx.kind !== 'deposit' || (!!deposit && !!sourceAdapter));
+
+  // Before the password: what the next signature would do. With an approval still to sign, the swap
+  // itself cannot run yet, so the approval is what gets simulated.
+  const reviewTx = confirmOpen && shown?.tx.kind === 'evm' ? shown.tx : null;
+  const reviewApproval = reviewTx && needsApproval && shown?.allowanceTarget && sell.contract && sellAmount ? buildApproval({ token: sell.contract, spender: shown.allowanceTarget, amount: sellAmount, unlimited }) : null;
+  const pinned = shown && chain?.family === 'evm' ? knownSwapContract(shown.provider, chain.chainId) : null;
+  const review = useAsync(
+    reviewTx && evmAdapter ? () => evmAdapter.simulateBeforeSigning(reviewApproval ?? reviewTx, pinned ? [pinned] : []) : null,
+    [reviewTx?.data, reviewTx?.to, reviewApproval?.data, confirmOpen],
+  );
 
   const dialogFees = useAsync(confirmOpen && evmAdapter ? () => evmAdapter.estimateFees() : null, [confirmOpen, evmAdapter]);
   const dialogFee = dialogFees.data?.options.normal.params;
@@ -705,6 +716,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                   : t('swap.plainExact', { provider: shown.providerName, amount: fmtCrypto(sellAmount, sell.decimals, sell.symbol) })
                 : ''}
             </EnClair>
+            {shown.tx.kind === 'evm' && <SimulationPanel report={review.data} loading={review.loading} {...(reviewApproval ? { note: t('sim.afterApproval') } : {})} />}
             {shown.tx.kind === 'evm' && (
               <SecondConfirmNotice
                 lines={[

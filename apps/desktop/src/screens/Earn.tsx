@@ -8,10 +8,11 @@ import { call, toIpcError, type EarnEvmAction, type HwDeviceKind } from '@kyro/s
 import { signAndBroadcastHw, tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import { buildApproval, buildRevoke, requiresZeroAllowanceFirst } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
-import { useCachedAsync } from '../lib/useAsync';
+import { useAsync, useCachedAsync } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
 import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
 import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
+import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
@@ -256,6 +257,24 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
   const fn = mode === 'claim' ? 'claimWithdrawal' : isLido ? (mode === 'in' ? 'submit' : 'requestWithdrawals') : mode === 'in' ? 'supply' : 'withdraw';
   const asset: AssetDef = { id: isLido ? 'evm:1' : `erc20:${chainId}:${reserve!.asset}`, chainKey: reserve?.chainKey ?? 'ethereum', family: 'evm', kind: isLido ? 'native' : 'erc20', symbol: opt.symbol, name: opt.name, decimals: opt.decimals, ...(isLido ? {} : { contract: reserve!.asset }) } as AssetDef;
 
+  // Before the password: what the next signature would do. An approval still to sign goes first,
+  // and the call behind it cannot run until then.
+  const pinned = isLido ? [LIDO_STETH, LIDO_QUEUE] : [pool, reserve!.asset];
+  const review = useAsync(
+    phase === 'review' && amount !== null && action
+      ? async () => {
+          const spending = isLido ? (mode === 'out' ? { token: LIDO_STETH, spender: LIDO_QUEUE } : null) : mode === 'in' ? { token: reserve!.asset, spender: pool } : null;
+          if (spending && (await eth.allowance(spending.token, spending.spender)) < amount) {
+            const ap = buildApproval({ ...spending, amount });
+            return { report: await eth.simulateBeforeSigning(ap, pinned), approval: true };
+          }
+          const b = await call('earn_evm_build', { action: mode === 'claim' && claims[0] ? { kind: 'lidoClaim', requestId: claims[0].id.toString() } : action, ...(eth.account ? { account: eth.account } : {}) });
+          return { report: await eth.simulateBeforeSigning({ to: b.to, data: b.data as Hex, value: BigInt(b.valueWei) }, pinned), approval: false };
+        }
+      : null,
+    [phase, amount, mode, opt.id],
+  );
+
   const run = async () => {
     if (!action || amount === null) return;
     setPhase('busy');
@@ -379,6 +398,7 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
               </>
             )}
           </dl>
+          <SimulationPanel report={review.data?.report} loading={review.loading} {...(review.data?.approval ? { note: t('sim.nextCall') } : {})} />
           <Notice tone="info" icon={<IconShield size={15} className="mt-0.5 shrink-0 text-ice" />}>
             {t('earn.risk')}
           </Notice>

@@ -1372,6 +1372,10 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 
 **Hardware wallets.** Already multi-account in their own way: `hw_account_add({ account })` registers one account per number (BTC `m/84'|86'/c'/a'`, EVM `m/44'/60'/0'/0/a`, Solana `m/44'/501'/a'/0'`), displayed as a separate wallet in the title bar selector; they are not (yet) grouped by chain like the vault accounts.
 
+### 2.9c Simulation before signing (EVM)
+
+`EvmAdapter.simulateBeforeSigning(tx, known)` runs in the review of a swap or an Earn call, before the password and the native window. Everything goes through the chain's RPC by `net_fetch`: no new host, no third-party service. Calls, in order of what the node offers: `eth_simulateV1` with `traceTransfers`, then `debug_traceCall` (`callTracer`, `withLog`), then `eth_call`; alongside, `eth_estimateGas`, and `eth_getCode` at `latest` and about 7 days back. It returns a `SimReport`: `status` (`traced`, `checked`, `failed`, `unavailable`), what you send and receive (net per asset), approvals (from the logs and the calldata) and warnings. It never blocks and never replaces the decoded review; Rust's native window does not read it.
+
 ### 2.9b Several wallets
 
 A wallet is a recovery phrase with its own password. The first one stays in `coffre-<network>.kyrovault`, unchanged; added ones are `wallets-<network>/<id>.kyrovault`, written by the same `wallet_core::seal` (same format, no migration). `wallets-<network>.json` holds names and the last wallet opened; if it is missing or broken, only the first wallet shows and no file is touched.

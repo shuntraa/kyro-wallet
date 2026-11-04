@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+export const sim = {
+  'sim.title': 'Simulation',
+  'sim.running': 'Simulation en cours…',
+  'sim.sendReceive': 'Tu envoies {send}, tu reçois environ {receive}.',
+  'sim.sendOnly': 'Tu envoies {send}.',
+  'sim.receiveOnly': 'Tu reçois environ {receive}.',
+  'sim.noMoves': 'Aucun mouvement de fonds vu.',
+  'sim.checked': 'L’appel passe, mais ce nœud ne montre pas ce qui bouge.',
+  'sim.unavailable': 'Simulation indisponible sur ce nœud : fie-toi à la revue.',
+  'sim.fails': 'Cet appel échouerait : {reason}',
+  'sim.approval': 'Autorise {spender} à dépenser {amount}.',
+  'sim.approvalUnlimited': 'Autorise {spender} à dépenser tout ton {symbol}, sans limite.',
+  'sim.approvalAll': 'Autorise {spender} à déplacer toute ta collection {symbol}.',
+  'sim.wUnknownContract': 'Contrat inconnu de Kyro.',
+  'sim.wNewContract': 'Contrat déployé il y a moins de 7 jours.',
+  'sim.wNotContract': 'Il n’y a pas de contrat à cette adresse.',
+  'sim.wUnlimited': 'Autorisation illimitée : ce contrat pourra dépenser ce token plus tard sans te redemander.',
+  'sim.wUnknownToken': 'Token hors de la liste de Kyro : son nom peut mentir.',
+  'sim.wNothingBack': 'Tu envoies des fonds et rien ne revient.',
+  'sim.limits': 'Simulé par ton nœud sur l’état actuel du réseau : le résultat peut changer à la signature. La revue fait foi.',
+  'sim.afterApproval': 'Le swap sera simulé après l’autorisation, juste avant sa signature.',
+  'sim.nextCall': 'L’opération elle-même sera simulée après cette autorisation.',
+} as const;

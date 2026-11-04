@@ -19,6 +19,10 @@
 - Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
   enabled or removed there (Receive), each shown in full on the device.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
+- Simulation before signing: on swaps and Earn calls, the review now says what you send and
+  receive, which approvals you grant, and warns about a call that would fail, an unlimited
+  approval, or an unknown or brand-new contract. It runs on your own RPC node and only warns:
+  the review stays the reference.
 - Several wallets: keep more than one recovery phrase on this device, each with its own
   password, accounts and history. Switch from the title bar; add, rename and remove in
   Settings › Accounts. Your existing wallet and its file do not change.
