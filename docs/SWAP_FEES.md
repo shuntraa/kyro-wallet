@@ -4,7 +4,7 @@ Kyro charges a service fee on every swap, at a **sliding rate** depending on the
 
 - **Configuration**: a single file, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_FEE_CURVE`, `UNKNOWN_PRICE_FEE_BPS`, `KYRO_SWAP_FEE`).
 - **Display**: the Swap screen shows "You send X" and "You receive ≈ Y", **Y already net** of the service fee, then the guaranteed minimum and the network fees. No line (screen or confirmation) shows the commission amount or rate; under the received amount, the discreet "Service fee included" note opens <https://kyrowallet.com/frais> in the system browser (Rust command `open_fees_page`, URL fixed in Rust; the page opens in your browser, outside Kyro's Tor).
-- **Collection**: the fee is taken on the blockchain through each provider's **official "integrator" mechanism**. Kyro never adds an extra transfer.
+- **Collection**: the fee is taken on the blockchain through each provider's **official "integrator" mechanism**. The exception is Exolix (no integrator fee): Kyro sends the fee as a second transfer on the source chain.
 - **Cap**: 5% (`MAX_FEE_BPS` = 500). A configuration beyond that (or a malformed curve) is rejected; each provider is additionally limited to its own maximum (below).
 
 ## Schedule
