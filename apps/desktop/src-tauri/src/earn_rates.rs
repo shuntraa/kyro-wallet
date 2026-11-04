@@ -53,7 +53,7 @@ pub fn trx_apr(pay_per_block_sun: u64, paid_votes: u64) -> Option<f64> {
     plausible(pay_per_block_sun as f64 / 1e6 * blocks_per_year / paid_votes as f64 * 100.0)
 }
 
-async fn sol(state: &AppState) -> AppResult<Option<f64>> {
+pub(crate) async fn sol(state: &AppState) -> AppResult<Option<f64>> {
     let infl = stake_sol::rpc(state, "getInflationRate", json!([])).await?;
     let supply = stake_sol::rpc(
         state,
@@ -76,7 +76,7 @@ fn f(v: &Value) -> Option<f64> {
     v.as_f64().or_else(|| v.as_str()?.parse().ok())
 }
 
-async fn ada(state: &AppState) -> AppResult<Option<f64>> {
+pub(crate) async fn ada(state: &AppState) -> AppResult<Option<f64>> {
     let c = crate::commands_cardano::ctx(state);
     let tip = first(&call(&c, "/tip", None).await?, "tip")?;
     let Some(e) = num(&tip["epoch_no"]) else {
@@ -107,7 +107,7 @@ async fn ada(state: &AppState) -> AppResult<Option<f64>> {
     })())
 }
 
-async fn trx(state: &AppState) -> AppResult<Option<f64>> {
+pub(crate) async fn trx(state: &AppState) -> AppResult<Option<f64>> {
     let c = crate::commands_tron::ctx(state);
     let params = tron_backend::request(&c, "/wallet/getchainparameters", Some(json!({}))).await?;
     let pay = params["chainParameter"]

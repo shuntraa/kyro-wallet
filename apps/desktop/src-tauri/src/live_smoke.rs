@@ -417,6 +417,70 @@ fn checks<'a>(state: &'a AppState, seed: &'a wallet_core::Seed) -> Vec<(String, 
     out
 }
 
+/// Reads added in 1.0.7, over Tor, nothing signed: Kaspa watch, Earn rates, and what each public
+/// EVM node answers to the simulation calls (empty call from one address to another).
+/// `cargo test -p kyro-desktop live_smoke_new_reads -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn live_smoke_new_reads_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-smoke-new-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let watched = "kaspa:qr85gz7hvp76mtws6p236uv5xxdk57dzfe4p06ues0rlqhtqy3rtqqx7eeq3u";
+    tauri::async_runtime::block_on(async {
+        state.net.tor.start();
+        while state.net.tor.status().state != TorState::Ready {
+            assert_ne!(state.net.tor.status().state, TorState::Error);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        let ks = crate::commands_kaspa::watched(state.network, watched).unwrap();
+        let c = crate::commands_kaspa::ctx(&state);
+        let daa = crate::kaspa_backend::network_info(&c).await;
+        let balance = crate::kaspa_backend::balance(&c, &ks).await;
+        let coins = crate::kaspa_backend::watch_utxos(&c, watched)
+            .await
+            .map(|u| u.len());
+        let history = crate::kaspa_backend::history(&c, &ks)
+            .await
+            .map(|h| h.len());
+        eprintln!("kaspa watch: daa {daa:?} balance {balance:?} utxos {coins:?} txs {history:?}");
+        assert!(daa.is_ok() && balance.is_ok() && coins.is_ok() && history.is_ok());
+
+        let sol = crate::earn_rates::sol(&state).await;
+        let ada = crate::earn_rates::ada(&state).await;
+        let trx = crate::earn_rates::trx(&state).await;
+        eprintln!("apy: sol {sol:?} ada {ada:?} trx {trx:?}");
+        for r in [sol, ada, trx] {
+            assert!(matches!(r, Ok(Some(_))), "{r:?}");
+        }
+
+        let call = json!({
+            "from": "0x0000000000000000000000000000000000000001",
+            "to": "0x0000000000000000000000000000000000000002",
+            "data": "0x",
+            "value": "0x0"
+        });
+        let v1 = json!([
+            { "blockStateCalls": [{ "calls": [call] }], "traceTransfers": true, "validation": false },
+            "latest"
+        ]);
+        let trace = json!([call, "latest", { "tracer": "callTracer", "tracerConfig": { "withLog": true } }]);
+        let short = |r: Result<Value, String>| match r {
+            Ok(_) => "ok".to_owned(),
+            Err(x) => x.chars().take(90).collect(),
+        };
+        for (name, url) in EVM {
+            let (a, b) = futures_util::future::join(
+                rpc(&state, url, "eth_simulateV1", v1.clone()),
+                rpc(&state, url, "debug_traceCall", trace.clone()),
+            )
+            .await;
+            eprintln!("{name}: simulateV1 {} | traceCall {}", short(a), short(b));
+        }
+    });
+}
+
 #[test]
 #[ignore]
 fn live_smoke_all_chains_mainnet() {
