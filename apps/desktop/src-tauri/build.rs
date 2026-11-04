@@ -15,6 +15,12 @@ const COMMANDS: &[&str] = &[
     "vault_backup_verify",
     "session_touch",
     "alert_notify",
+    // Encrypted backup of contacts and settings (docs/IPC.md).
+    "backup_export",
+    "backup_pick",
+    "backup_open",
+    "backup_apply",
+    "backup_cancel",
     "accounts_get",
     // Account lists of the vault (docs/IPC.md §2.9).
     "vault_accounts_get",

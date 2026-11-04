@@ -2,6 +2,9 @@
 
 ## 1.0.7
 
+- Backup: Settings › Backup exports your contacts, labels, watch list, favorites, alerts and
+  settings to one encrypted file, with a password you choose. Import shows what would change
+  first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.
 - Windows tray icon: Open, Lock and Quit. Settings › Security can keep Kyro in the tray when you
   close the window, and start it with Windows, minimized. Both are off by default. Going to the
   tray locks the wallet unless you change it, and quitting from the tray still applies a staged

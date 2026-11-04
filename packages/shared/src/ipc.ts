@@ -2073,6 +2073,52 @@ export interface NetResponse {
   body: string;
 }
 
+/** Address book, favorites and alerts of a backup (`backup.rs`). */
+export interface BackupContact {
+  name: string;
+  address: string;
+  family: string;
+  sends: number;
+}
+export interface BackupPriceAlert {
+  coinId: string;
+  symbol: string;
+  direction: 'above' | 'below';
+  level: number;
+  currency: string;
+}
+export interface BackupLocal {
+  contacts: BackupContact[];
+  favorites: string[];
+  alerts: { received: boolean; prices: BackupPriceAlert[] };
+}
+export interface BackupWatch {
+  label: string;
+  family: string;
+  value: string;
+}
+export interface BackupLabel {
+  chain: AccountChain;
+  index: number;
+  name: string;
+}
+/** What importing would change; nothing is written yet. */
+export interface BackupPreview {
+  createdAt: number;
+  /** Made on the other network: `watch` and `labels` are empty. */
+  otherNetwork: boolean;
+  local: BackupLocal;
+  watch: { add: BackupWatch[]; rename: Array<{ family: string; value: string; current: string; backup: string }>; same: number; refused: number };
+  labels: { add: BackupLabel[]; rename: Array<{ chain: AccountChain; index: number; current: string; backup: string }>; same: number };
+  settings: Array<{ key: string; current: unknown; backup: unknown }>;
+}
+export interface BackupChoices {
+  addWatch: boolean;
+  addLabels: boolean;
+  replaceNames: boolean;
+  settings: boolean;
+}
+
 export interface AppConfig {
   network: Network;
   hasZeroxKey: boolean;
@@ -2736,6 +2782,14 @@ export interface Commands {
   hw_sign_zec_tx: { args: { id: string; accountId: string; request: ZecSendArgs }; ret: { hex: string; txid: string; summary: ZecTxSummary } };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
+  /** Encrypts to a file chosen in the native window; `false` if cancelled. */
+  backup_export: { args: { password: string; local: BackupLocal }; ret: boolean };
+  /** Native open window: the file's name, `null` if cancelled. The path stays in Rust. */
+  backup_pick: { args: undefined; ret: string | null };
+  /** `WRONG_PASSWORD` for a wrong password or a modified file. Writes nothing. */
+  backup_open: { args: { password: string }; ret: BackupPreview };
+  backup_apply: { args: { choices: BackupChoices }; ret: Settings };
+  backup_cancel: { args: undefined; ret: void };
   settings_get: { args: undefined; ret: Settings };
   /** Async: live-checks every changed custom server before saving (`SERVER_INVALID`, `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`); */
   settings_set: { args: { settings: SettingsInput }; ret: Settings };

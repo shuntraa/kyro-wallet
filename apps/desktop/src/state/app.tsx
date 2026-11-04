@@ -26,7 +26,7 @@ function visibleAccounts<T extends object>(acc: T): T {
   return out as T;
 }
 
-export type SettingsSection = 'security' | 'privacy' | 'alerts' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
+export type SettingsSection = 'security' | 'privacy' | 'alerts' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts' | 'backup';
 
 export type Route =
   | { name: 'portfolio' }

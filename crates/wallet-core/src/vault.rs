@@ -150,9 +150,9 @@ fn derive_with(
     Ok(key)
 }
 
-fn aad(version: u8, kdf: &KdfParams, salt: &[u8]) -> Vec<u8> {
-    let mut aad = Vec::with_capacity(AAD_DOMAIN.len() + 1 + 12 + salt.len());
-    aad.extend_from_slice(AAD_DOMAIN);
+fn aad(domain: &[u8], version: u8, kdf: &KdfParams, salt: &[u8]) -> Vec<u8> {
+    let mut aad = Vec::with_capacity(domain.len() + 1 + 12 + salt.len());
+    aad.extend_from_slice(domain);
     aad.push(version);
     aad.extend_from_slice(&kdf.m_cost_kib.to_le_bytes());
     aad.extend_from_slice(&kdf.t_cost.to_le_bytes());
@@ -187,6 +187,18 @@ fn seal_with(
     kdf: KdfParams,
     argon2: Argon2<'static>,
 ) -> Result<VaultFile> {
+    let phrase = mnemonic.phrase();
+    seal_payload(AAD_DOMAIN, phrase.as_bytes(), password, kdf, argon2)
+}
+
+/// Encrypts `data` under `password` (another format than the vault's: see [`seal_data`]).
+fn seal_payload(
+    domain: &[u8],
+    data: &[u8],
+    password: &str,
+    kdf: KdfParams,
+    argon2: Argon2<'static>,
+) -> Result<VaultFile> {
     if password.is_empty() {
         return Err(Error::input("password must not be empty"));
     }
@@ -195,13 +207,12 @@ fn seal_with(
     let key = derive_with(argon2, password, &salt)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
         .map_err(|_| Error::crypto("cipher init failed"))?;
-    let phrase = mnemonic.phrase();
-    let aad = aad(VAULT_VERSION, &kdf, &salt);
+    let aad = aad(domain, VAULT_VERSION, &kdf, &salt);
     let ciphertext = cipher
         .encrypt(
             XNonce::from_slice(&nonce),
             Payload {
-                msg: phrase.as_bytes(),
+                msg: data,
                 aad: &aad,
             },
         )
@@ -217,6 +228,33 @@ fn seal_with(
 
 /// Decrypts a vault.
 pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
+    let plaintext = open_payload(AAD_DOMAIN, file, password)?;
+    let phrase = core::str::from_utf8(&plaintext)
+        .map_err(|_| Error::InvalidVault("decrypted payload is not UTF-8".into()))?;
+    Mnemonic::parse(phrase)
+}
+
+/// Encrypts `data` exactly as the vault encrypts the phrase (same KDF, cipher, floor and ceiling).
+/// `domain` is authenticated: a file sealed for one use never opens as another.
+pub(crate) fn seal_data(
+    domain: &[u8],
+    data: &[u8],
+    password: &str,
+    kdf: KdfParams,
+) -> Result<VaultFile> {
+    seal_payload(domain, data, password, kdf, kdf.argon2()?)
+}
+
+/// Decrypts what [`seal_data`] wrote. A wrong password and a modified file give the same error.
+pub(crate) fn open_data(
+    domain: &[u8],
+    file: &VaultFile,
+    password: &str,
+) -> Result<Zeroizing<Vec<u8>>> {
+    open_payload(domain, file, password)
+}
+
+fn open_payload(domain: &[u8], file: &VaultFile, password: &str) -> Result<Zeroizing<Vec<u8>>> {
     if file.version != VAULT_VERSION {
         return Err(Error::UnsupportedVaultVersion(file.version));
     }
@@ -232,8 +270,8 @@ pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
     let key = file.kdf.derive_key(password, &salt)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
         .map_err(|_| Error::crypto("cipher init failed"))?;
-    let aad = aad(file.version, &file.kdf, &salt);
-    let plaintext = Zeroizing::new(
+    let aad = aad(domain, file.version, &file.kdf, &salt);
+    Ok(Zeroizing::new(
         cipher
             .decrypt(
                 XNonce::from_slice(&nonce),
@@ -243,10 +281,7 @@ pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
                 },
             )
             .map_err(|_| Error::WrongPassword)?,
-    );
-    let phrase = core::str::from_utf8(&plaintext)
-        .map_err(|_| Error::InvalidVault("decrypted payload is not UTF-8".into()))?;
-    Mnemonic::parse(phrase)
+    ))
 }
 
 #[cfg(test)]

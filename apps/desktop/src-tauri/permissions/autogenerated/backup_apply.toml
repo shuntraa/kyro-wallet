@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-backup-apply"
+description = "Enables the backup_apply command without any pre-configured scope."
+commands.allow = ["backup_apply"]
+
+[[permission]]
+identifier = "deny-backup-apply"
+description = "Denies the backup_apply command without any pre-configured scope."
+commands.deny = ["backup_apply"]

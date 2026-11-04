@@ -27,6 +27,7 @@ import { useT, type Key } from '../i18n';
 import { XmrWalletSection } from '../components/Monero';
 import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
+import { BackupSection } from './settings/Backup';
 
 export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -39,6 +40,7 @@ export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'apikeys', label: 'settings.sectionApiKeys' },
   { key: 'connections', label: 'settings.sectionConnections' },
   { key: 'contacts', label: 'settings.sectionContacts' },
+  { key: 'backup', label: 'settings.sectionBackup' },
 ];
 
 export function SettingsScreen({ section: initial = 'security', family }: { section?: SettingsSection; family?: AccountChain }) {
@@ -104,6 +106,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
           {section === 'apikeys' && <ApiKeys />}
           {section === 'connections' && <Connections />}
           {section === 'contacts' && <Contacts />}
+          {section === 'backup' && <BackupSection />}
           {saved && <span className="fade-in text-[12px] text-up">✓ {t('settings.saved')}</span>}
           {section !== 'connections' && section !== 'accounts' && !wide && (
             <div className="shrink-0">

@@ -5,6 +5,7 @@ mod accounts;
 mod alerts;
 mod algo_backend;
 mod aptos_backend;
+mod backup;
 mod btc_backend;
 mod cardano_backend;
 #[cfg(feature = "cbf")]
@@ -126,6 +127,7 @@ pub fn run() {
         .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
         .setup(move |app| {
             app.manage(phrase_window::PhraseState::default());
+            app.manage(backup::BackupState::default());
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(state::AppState::new(dir)?);
@@ -517,6 +519,11 @@ pub fn run() {
             commands_hw::hw_thp_forget,
             updater::update_status,
             alerts::alert_notify,
+            backup::backup_export,
+            backup::backup_pick,
+            backup::backup_open,
+            backup::backup_apply,
+            backup::backup_cancel,
             commands_hw_coins::hw_sign_utxo_psbt,
             commands_hw_coins::hw_xrp_build_tx,
             commands_hw_coins::hw_sign_xrp_tx,

@@ -15,7 +15,7 @@ use crate::error::{AppError, AppResult};
 use crate::hw;
 use crate::state::AppState;
 
-fn load(path: &Path, net: Network) -> AppResult<WatchAddressStore> {
+pub(crate) fn load(path: &Path, net: Network) -> AppResult<WatchAddressStore> {
     match std::fs::read_to_string(path) {
         Ok(raw) => Ok(WatchAddressStore::from_json(&raw, net)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(WatchAddressStore::default()),
@@ -23,13 +23,13 @@ fn load(path: &Path, net: Network) -> AppResult<WatchAddressStore> {
     }
 }
 
-fn save(path: &Path, store: &WatchAddressStore, net: Network) -> AppResult<()> {
+pub(crate) fn save(path: &Path, store: &WatchAddressStore, net: Network) -> AppResult<()> {
     store.validate(net)?;
     crate::settings::write_atomic(path, store.to_json()?.as_bytes())
 }
 
 /// `wa-` + 16 hex. Uniqueness only (not a secret): std's randomly keyed hasher + clock.
-fn new_id(store: &WatchAddressStore) -> String {
+pub(crate) fn new_id(store: &WatchAddressStore) -> String {
     loop {
         let mut h = RandomState::new().build_hasher();
         h.write_u128(

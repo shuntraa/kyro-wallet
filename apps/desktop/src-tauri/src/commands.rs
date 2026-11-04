@@ -114,7 +114,7 @@ async fn show_words(app: &AppHandle, words: Zeroizing<Vec<String>>) -> AppResult
     crate::phrase_window::show(app, crate::phrase_window::recovery_view(lang, &words)).await
 }
 
-fn check_password_strength(password: &str) -> AppResult<()> {
+pub(crate) fn check_password_strength(password: &str) -> AppResult<()> {
     if password.chars().count() < MIN_PASSWORD_LEN {
         return Err(AppError::InvalidInput(format!(
             "the password must be at least {MIN_PASSWORD_LEN} characters long"

@@ -10,6 +10,7 @@
 mod algorand;
 mod aptos;
 mod aptos_stake;
+mod backup;
 mod btc;
 mod btc_hw;
 mod btc_watch;
@@ -69,6 +70,7 @@ pub use aptos_stake::{
     aptos_stake_decode, aptos_stake_sign, aptos_stake_simulation_bytes, aptos_stake_verify_signed,
     AptosStakeCall, AptosStakeSummary, AptosStakeTx,
 };
+pub use backup::{open_backup, seal_backup, MAX_BACKUP_FILE, MAX_BACKUP_PLAINTEXT};
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
     BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB, MAX_CHANGE_INDEX,

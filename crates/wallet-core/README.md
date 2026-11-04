@@ -6,6 +6,7 @@ Kyro's cryptographic core, in pure Rust. License GPL-3.0-or-later. The public co
 
 - **BIP39 recovery phrase** (English, 12 or 24 words, OsRng): generation, checksum validation, seed computation.
 - **Encrypted vault**: Argon2id (256 MiB, t=3, p=4) → XChaCha20-Poly1305. The salt and nonce are random; the header (version, KDF parameters, salt) is authenticated via the AAD. Serialized as JSON with base64 fields.
+- **Encrypted backup** (`seal_backup` / `open_backup`): the vault's encryption for a file of contacts and settings, under its own authenticated domain, with a size limit. The shell chooses what goes in; never key material.
 - **Bitcoin**: BIP84 (P2WPKH) and BIP86 (P2TR) accounts, xpub, addresses, PSBT signing and summary (outputs, change, fees).
 - **EVM**: address `m/44'/60'/0'/0/i` (EIP-55), EIP-1559 (type 2) signing, decoding of native transfers, of ERC-20 `transfer`/`approve` calls (with detection of unlimited approvals) and of other contract calls.
 - **Solana**: SLIP-10 ed25519 derivation `m/44'/501'/i'/0'` (same convention as Phantom and Solflare), ed25519 signature of a transaction message.
