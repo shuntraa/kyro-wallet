@@ -17,6 +17,9 @@ export const FILES = {
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
+/** Words behind redaction bars: real text in the HTML, one bar per word so long phrases can wrap. */
+export const redact = (text) => text.split(' ').map((w) => `<span class="wd"><span>${w}</span><i class="bar"></i></span>`).join(' ');
+
 /** Tagged template that leaves interpolated strings untouched (they are already HTML). */
 export const html = (strings, ...values) =>
   strings.reduce((out, s, i) => out + s + (i < values.length ? (Array.isArray(values[i]) ? values[i].join('') : values[i] ?? '') : ''), '');
@@ -176,7 +179,6 @@ export function page(opts) {
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/fonts/archivo-display-italic.woff2" as="font" type="font/woff2" crossorigin>
   ${preload || ''}
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chains.css">
@@ -208,7 +210,7 @@ ${header(path)}
 
   <div class="cursor-light" aria-hidden="true"></div>
   <main id="content">
-${body}
+${body.replace(/(<h[12]\b[^>]*>)([\s\S]*?)(<\/h[12]>)/g, (m, a, b, c) => a + b.replace(/<em>(.*?)<\/em>/g, (_, t) => `<span class="rd">${redact(t)}</span>`) + c)}
   </main>
 ${footer(chains)}
 </body>

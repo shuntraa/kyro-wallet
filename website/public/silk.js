@@ -113,14 +113,14 @@
     resize(false);
     measure();
   }
-  window.addEventListener('resize', onResize);
+  K.resize(onResize);
   window.addEventListener('load', measure);
   if (window.ResizeObserver) new ResizeObserver(measure).observe(document.body);
   onResize();
 
   var tone = 1.1, hue = 1, zoneT = 1.1, zoneH = 1;
   function pickZone(y) {
-    var c = y + window.innerHeight * 0.5;
+    var c = y + K.vh * 0.5;
     zoneT = 0.6;
     zoneH = 0.4;
     for (var i = 0; i < zones.length; i++) {
@@ -131,15 +131,27 @@
     }
   }
 
-  var mx = 0.68, my = 0.62, tx = mx, ty = my, speed = 0;
+  var mx = 0.68, my = 0.62, tx = mx, ty = my, speed = 0, touched = -1e9;
+  function point(e, bump) {
+    var nx = e.clientX / window.innerWidth;
+    var ny = 1 - e.clientY / K.vh;
+    speed = Math.min(1, speed + bump + Math.hypot(nx - tx, ny - ty) * 5);
+    tx = nx;
+    ty = ny;
+    touched = performance.now();
+  }
   window.addEventListener(
     'pointermove',
     function (e) {
-      var nx = e.clientX / window.innerWidth;
-      var ny = 1 - e.clientY / window.innerHeight;
-      speed = Math.min(1, speed + Math.hypot(nx - tx, ny - ty) * 5);
-      tx = nx;
-      ty = ny;
+      point(e, 0);
+    },
+    { passive: true }
+  );
+  // A tap rings the cloth where the finger landed.
+  window.addEventListener(
+    'pointerdown',
+    function (e) {
+      if (e.pointerType === 'touch') point(e, 0.7);
     },
     { passive: true }
   );
@@ -174,18 +186,24 @@
     hue = K.damp(hue, zoneH, 1.1, dt);
     // The cloth moves with the page, a touch behind it.
     travel = K.damp(travel, y, 0.16, dt);
+    // No pointer on a phone: the light wanders on its own, and follows the swipe a little.
+    if (coarse && now - touched > 2500) {
+      var w = (now - t0) / 1000;
+      tx = 0.5 + 0.32 * Math.sin(w * 0.31);
+      ty = 0.55 + 0.3 * Math.cos(w * 0.23) + Math.max(-0.2, Math.min(0.2, K.v / 9000));
+    }
     mx = K.damp(mx, tx, 0.14, dt);
     my = K.damp(my, ty, 0.14, dt);
     speed *= Math.exp(-dt / 0.45);
     gl.uniform2f(U.R, canvas.width, canvas.height);
     gl.uniform1f(U.T, (now - t0) / 1000);
     gl.uniform2f(U.M, mx, my);
-    gl.uniform1f(U.S, travel / (window.innerHeight || 800));
+    gl.uniform1f(U.S, travel / K.vh);
     gl.uniform1f(U.A, tone);
     gl.uniform1f(U.H, hue);
     gl.uniform1f(U.V, speed);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    K.p && (K.p.silk = (travel / (window.innerHeight || 800)) * 1.25);
+    K.p && (K.p.silk = (travel / K.vh) * 1.25);
   });
 
   // After the page is on screen: the hero never waits for the shader.

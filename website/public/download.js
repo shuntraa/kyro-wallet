@@ -35,7 +35,7 @@
     var os = detect();
     if (os === 'mobile') {
       each('[data-dl-other]', function (el) {
-        el.textContent = 'Kyro is a desktop app: open this page on your computer.';
+        el.textContent = 'Desktop app: open on your computer';
       });
       return;
     }

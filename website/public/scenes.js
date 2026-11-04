@@ -28,7 +28,8 @@
 
   // Track geometry is measured on resize, never inside a frame.
   var tracks = [];
-  var vh = window.innerHeight;
+  var vh = K.vh;
+  var PIN = '(min-height: 560px)'; // every portrait phone pins; a phone on its side reads as a page
   function measure(t) {
     var b = t.el.getBoundingClientRect();
     t.top = b.top + window.scrollY;
@@ -41,10 +42,10 @@
     return t;
   }
   function remeasure() {
-    vh = window.innerHeight;
+    vh = K.vh;
     tracks.forEach(measure);
   }
-  window.addEventListener('resize', remeasure);
+  K.resize(remeasure);
   window.addEventListener('load', remeasure);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasure);
   if (window.ResizeObserver) new ResizeObserver(remeasure).observe(document.body);
@@ -82,7 +83,7 @@
       canvas.height = h * dpr;
     }
     size();
-    window.addEventListener('resize', size);
+    K.resize(size);
     return {
       burst: function (x, y, n, speed) {
         for (var i = 0; i < n; i++) {
@@ -164,6 +165,10 @@
     var eye = el.querySelector('[data-eye]');
     var plain = el.querySelectorAll('[data-screen="0"] .v');
     var hidden = el.querySelectorAll('[data-screen="0"] .d');
+    var ring = el.querySelector('[data-ring]');
+    var sq = el.querySelector('[data-sq]');
+    var pglow = el.querySelector('[data-pglow]');
+    var bars = el.querySelectorAll('#hero-title .bar');
     var current = -1, lastMask = -1;
     var tr = track(el);
 
@@ -175,12 +180,8 @@
     }
     function setScreen(i, opacity, x) {
       var s = screens[i];
-      fade(s, +opacity.toFixed(3));
-      var vis = opacity > 0.004;
-      if (s.__v !== vis) {
-        s.__v = vis;
-        s.style.visibility = vis ? 'visible' : 'hidden';
-      }
+      // Never quite 0: a layer the browser has already drawn costs nothing when it appears.
+      fade(s, Math.max(0.002, +opacity.toFixed(3)));
       s.style.transform = 'translate3d(' + x.toFixed(1) + 'px,0,0)';
     }
     function captions(a, b, c, d) {
@@ -212,10 +213,10 @@
       })(t0);
     })(performance.now());
 
-    var wide = window.matchMedia('(min-width: 1100px) and (min-height: 640px)');
-    var wrapW = 1, vw = window.innerWidth, p = 0;
+    var wide = window.matchMedia(PIN);
+    var wrapW = 1, wrapH = 1, p = 0, sq0 = 1, ring0 = window.innerWidth < 1100 ? 0.1833 : 0.2125, holeY = 0;
     // Screen changes sit on the track with a wide crossfade: several notches long.
-    var SWAP = 0.46, EARN = 0.74, X = 0.06;
+    var SWAP = 0.52, EARN = 0.77, X = 0.055;
     var earnRows = Array.prototype.map.call(el.querySelectorAll('.kw-earn'), function (r) {
       var num = r.querySelector('[data-rate]');
       return { el: r, num: num, bar: r.querySelector('.kw-ratebar i'), rate: +num.getAttribute('data-rate'), k: -1 };
@@ -229,21 +230,31 @@
       }
       p = damp(p, pinned(tr, y), 0.1, dt);
       P.story = p;
-      var t = smooth(seg(p, 0, 0.18));
-      wrap.style.transform =
-        'translate3d(' + (lerp(0.27, 0, t) * vw).toFixed(2) + 'px,' + lerp(34, 0, t).toFixed(2) + 'px,0)' +
-        ' rotateY(' + lerp(-20, 0, t).toFixed(3) + 'deg) rotateX(' + lerp(7, 0, t).toFixed(3) + 'deg) rotateZ(' + lerp(1.2, 0, t).toFixed(3) + 'deg)' +
-        ' scale(' + lerp(0.7, 1, t).toFixed(4) + ')';
-      var c = seg(p, 0.01, 0.11);
+      // The headline goes back behind its bars, word after word.
+      for (var i = 0; i < bars.length; i++) bars[i].style.transform = 'scaleX(' + smooth(seg(p, 0.004 + i * 0.009, 0.04 + i * 0.009)).toFixed(4) + ')';
+      var c = seg(p, 0.05, 0.095);
       fade(copy, +(1 - smooth(c)).toFixed(3));
-      copy.style.transform = 'translate3d(' + (-smooth(seg(p, 0, 0.13)) * 90).toFixed(1) + 'px,0,0)';
       var cv = c < 1;
       if (copy.__v !== cv) {
         copy.__v = cv;
         copy.style.visibility = cv ? 'visible' : 'hidden';
       }
-      fade(ui, +smooth(seg(p, 0.11, 0.18)).toFixed(3));
-      ui.classList.toggle('live', p > 0.13);
+      // Then the mark opens: the ring flies past, the ice square grows into the wallet.
+      var e = smooth(seg(p, 0.05, 0.22));
+      var dy = holeY * (1 - e);
+      var rs = ring0 * Math.pow(1.8 / ring0, e);
+      ring.style.transform = 'translate3d(0,' + dy.toFixed(2) + 'px,0) scale(' + rs.toFixed(4) + ')';
+      fade(ring, +(1 - smooth(seg(p, 0.13, 0.2))).toFixed(3));
+      var ws = Math.pow(wrapW / sq0, e), hs = Math.pow(wrapH / sq0, e);
+      sq.style.transform = 'translate3d(0,' + dy.toFixed(2) + 'px,0) scale(' + ws.toFixed(3) + ',' + hs.toFixed(3) + ')';
+      fade(sq, +(1 - smooth(seg(p, 0.165, 0.225))).toFixed(3));
+      pglow.style.transform = 'translate3d(0,' + dy.toFixed(2) + 'px,0) scale(' + (1 + e * 2.4).toFixed(3) + ')';
+      fade(pglow, +(1 - smooth(seg(p, 0.17, 0.27))).toFixed(3));
+      var kw = sq0 / wrapW;
+      wrap.style.transform = 'translate3d(0,' + dy.toFixed(2) + 'px,0) scale(' + (kw * Math.pow(1 / kw, e)).toFixed(4) + ')';
+      fade(wrap, Math.max(0.004, +smooth(seg(p, 0.145, 0.195)).toFixed(3)));
+      fade(ui, +smooth(seg(p, 0.2, 0.25)).toFixed(3));
+      ui.classList.toggle('live', p > 0.2);
 
       var a = smooth(seg(p, SWAP - X, SWAP + X));
       var b = smooth(seg(p, EARN - X, EARN + X));
@@ -254,7 +265,7 @@
       show(b > 0.5 ? 2 : a > 0.5 ? 1 : 0);
 
       // The app's Hide balances: the numbers dim into dots, then come back.
-      var m = smooth(seg(p, 0.27, 0.32)) * (1 - smooth(seg(p, 0.37, 0.41)));
+      var m = smooth(seg(p, 0.33, 0.37)) * (1 - smooth(seg(p, 0.42, 0.46)));
       var mk = +m.toFixed(3);
       if (mk !== lastMask) {
         lastMask = mk;
@@ -302,20 +313,23 @@
     }
     function layout() {
       wrapW = wrap.offsetWidth;
-      vw = window.innerWidth;
+      wrapH = wrap.offsetHeight;
+      sq0 = sq.offsetWidth;
+      ring0 = window.innerWidth < 1100 ? 0.1833 : 0.2125;
+      holeY = -K.vh * (window.innerWidth < 1100 ? 0.245 : 0.165); // the mark sits above the middle at first
       if (wide.matches) {
         stopCycle();
       } else {
-        wrap.style.transform = '';
-        copy.style.cssText = '';
-        copy.__o = copy.__v = undefined;
-        ui.style.opacity = '';
-        ui.__o = undefined;
+        [wrap, copy, ui, ring, sq, pglow].forEach(function (n) {
+          n.style.cssText = '';
+          n.__o = n.__v = undefined;
+        });
+        for (var i = 0; i < bars.length; i++) bars[i].style.transform = '';
         cycleTo(idx);
         startCycle();
       }
     }
-    window.addEventListener('resize', layout);
+    K.resize(layout);
     layout();
     show(0);
     p = pinned(tr, K.y);
@@ -323,7 +337,7 @@
     Array.prototype.forEach.call(dots, function (btn, i) {
       btn.addEventListener('click', function () {
         if (wide.matches) {
-          var stops = [0.24, 0.6, 0.92];
+          var stops = [0.29, 0.64, 0.93];
           K.scrollTo(tr.top + stops[i] * (tr.h - vh));
         } else {
           stopCycle();
@@ -348,7 +362,7 @@
     var rings = packet.querySelectorAll('i');
     var hops = el.querySelectorAll('[data-hop]');
     var rt = el.querySelector('.rt');
-    var pin = window.matchMedia('(min-width: 900px) and (min-height: 640px)');
+    var pin = window.matchMedia(PIN);
     var OCT = ['203', '0', '113', '42'];
     var NOTES = ['Your address (example)', 'Hidden behind relay 1', 'Hidden behind relay 2', 'Hidden behind relay 3', 'A Tor exit relay'];
     var GLYPH = '0123456789';
@@ -400,7 +414,7 @@
       py = window.innerWidth <= 640 ? 20 : 27;
     }
     size();
-    window.addEventListener('resize', size);
+    K.resize(size);
     tailX = px = x0;
 
     K.frame(function (y, now, dt) {
@@ -534,13 +548,13 @@
       }
     }
     build();
-    window.addEventListener('resize', build);
+    K.resize(build);
     if (K.fine) {
       window.addEventListener(
         'pointermove',
         function (e) {
           tx = e.clientX / window.innerWidth - 0.5;
-          ty = e.clientY / window.innerHeight - 0.5;
+          ty = e.clientY / K.vh - 0.5;
         },
         { passive: true }
       );
@@ -554,6 +568,10 @@
       }
       p = first ? pinned(tr, y) : damp(p, pinned(tr, y), 0.13, dt);
       P.gather = p;
+      if (!K.fine) {
+        ty = clamp(K.v / 3000, -0.5, 0.5); // the crowd leans with the swipe
+        tx = Math.sin(p * 5) * 0.2;
+      }
       mx = damp(mx, tx, 0.22, dt);
       my = damp(my, ty, 0.22, dt);
       var time = now / 1000;
@@ -594,6 +612,7 @@
       fade(cta, +ctaIn.toFixed(3));
       cta.style.transform = 'translate3d(0,' + ((1 - ctaIn) * 40).toFixed(1) + 'px,0)';
       cta.style.pointerEvents = ctaIn > 0.5 ? '' : 'none';
+      cta.classList.toggle('in', ctaIn > 0.5);
       // The moment the coins become the logo: one flash, sparks, then the logo breathes.
       if (p > 0.72 && !flashed) {
         flashed = true;
@@ -609,6 +628,59 @@
       }
       glowPos.classList.toggle('alive', p > 0.76);
       fx.tick(dt);
+    });
+  }
+
+  // ---------- the blockchains: a sheet in the dark, lit by a beam that passes as you scroll
+  function wallScene() {
+    var el = document.querySelector('[data-wall]');
+    if (!el || !K.motion) return;
+    var tr = track(el);
+    var tiles = [], W = 1, H = 1, top = 0, p = 0, px = -1, py = -1, ux = 0, uy = 0, over = 0;
+    function size() {
+      var b = el.getBoundingClientRect();
+      W = b.width;
+      H = b.height;
+      top = b.top + window.scrollY;
+      tiles = Array.prototype.map.call(el.querySelectorAll('.wall-t'), function (t) {
+        var r = t.getBoundingClientRect();
+        return { x: r.left - b.left + r.width / 2, y: r.top - b.top + r.height / 2, img: t.querySelector('img'), glow: t.querySelector('.wall-l') };
+      });
+    }
+    size();
+    K.resize(size);
+    window.addEventListener('load', size);
+    if (K.fine) {
+      el.addEventListener('pointermove', function (e) {
+        var b = el.getBoundingClientRect();
+        px = e.clientX - b.left;
+        py = e.clientY - b.top;
+      });
+      el.addEventListener('pointerleave', function () {
+        px = py = -1;
+      });
+    }
+    K.frame(function (y, now, dt) {
+      if (!near(tr, y)) return;
+      p = damp(p, passing(tr, y), 0.14, dt);
+      var t = now / 1000;
+      // The beam crosses the sheet with the scroll and keeps drifting on its own.
+      var bx = W * (0.5 + 0.46 * Math.sin(p * 7 + t * 0.32));
+      var by = H * clamp(1.25 * p - 0.12 + 0.12 * Math.sin(t * 0.5), 0, 1);
+      over = damp(over, px >= 0 ? 1 : 0, 0.16, dt);
+      if (px >= 0) {
+        ux = damp(ux, px, 0.1, dt);
+        uy = damp(uy, py, 0.1, dt);
+      }
+      bx = lerp(bx, ux, over);
+      by = lerp(by, uy, over);
+      var r2 = 2 * Math.pow(Math.min(W, 900) * 0.2, 2);
+      for (var i = 0; i < tiles.length; i++) {
+        var c = tiles[i], dx = c.x - bx, dyy = c.y - by;
+        var l = Math.exp(-(dx * dx + dyy * dyy) / r2);
+        fade(c.img, +(0.3 + 0.7 * l).toFixed(2));
+        fade(c.glow, +l.toFixed(2));
+      }
     });
   }
 
@@ -642,7 +714,7 @@
   function ledger() {
     var list = document.querySelectorAll('[data-ledger]');
     if (!list.length || !K.motion) return;
-    var pin = window.matchMedia('(min-width: 900px) and (min-height: 640px)');
+    var pin = window.matchMedia(PIN);
     Array.prototype.forEach.call(list, function (root) {
       var owner = root.closest('[data-ledger-track]');
       var tr = track(owner || root);
@@ -700,7 +772,7 @@
           'pointermove',
           function (e) {
             tx = e.clientX / window.innerWidth - 0.5;
-            ty = e.clientY / window.innerHeight - 0.5;
+            ty = e.clientY / K.vh - 0.5;
           },
           { passive: true }
         );
@@ -714,6 +786,10 @@
         }
         p = damp(p, goal, 0.12, dt);
         if (owner) P.hw = p;
+        if (!K.fine) {
+          tx = Math.sin(p * 6.3) * 0.32;
+          ty = Math.cos(p * 4.1) * 0.22;
+        }
         mx = damp(mx, tx, 0.2, dt);
         my = damp(my, ty, 0.2, dt);
         stage.style.transform = 'perspective(1100px) rotateY(' + (mx * 16).toFixed(2) + 'deg) rotateX(' + (-my * 12).toFixed(2) + 'deg)';
@@ -836,6 +912,7 @@
   // The hero runs at once; the scenes further down wait until the page is idle.
   story();
   function rest() {
+    wallScene();
     earn();
     ledger();
     tor();

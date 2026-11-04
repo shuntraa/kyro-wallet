@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: the one frame loop and the smooth-scroll driver, scroll reveals, word by word
-// titles, magnetic buttons, the cursor light on cards and the small-screen menu. Motion is off for
+// Kyro Wallet site: the one frame loop and the smooth-scroll driver, scroll reveals, redaction bars,
+// magnetic buttons, the cursor light on cards and the small-screen menu. Motion is off for
 // reduced motion.
 (function () {
   'use strict';
@@ -34,12 +34,36 @@
     }
   });
 
+  // A phone's address bar changes innerHeight while scrolling. K.vh is the small viewport height,
+  // which does not move, and K.resize only reports real resizes: nothing re-measures mid-swipe.
+  var probe = document.createElement('div');
+  probe.className = 'vh-probe';
+  document.body.appendChild(probe);
+  function readVh() {
+    K.vh = probe.offsetHeight || window.innerHeight;
+  }
+  readVh();
+  var coarse = window.matchMedia('(pointer: coarse)').matches;
+  var resizers = [], lastW = window.innerWidth, lastH = window.innerHeight;
+  K.coarse = coarse;
+  K.resize = function (fn) {
+    resizers.push(fn);
+  };
+  window.addEventListener('resize', function () {
+    var w = window.innerWidth, h = window.innerHeight;
+    if (w === lastW && (coarse || h === lastH)) return;
+    lastW = w;
+    lastH = h;
+    readVh();
+    for (var i = 0; i < resizers.length; i++) resizers[i]();
+  });
+
   var maxY = 0;
   function measure() {
     maxY = root.scrollHeight - window.innerHeight;
   }
   measure();
-  window.addEventListener('resize', measure);
+  K.resize(measure);
   window.addEventListener('load', measure);
   if (window.ResizeObserver) new ResizeObserver(measure).observe(document.body);
 
@@ -115,7 +139,7 @@
     })();
   }
 
-  var marquees = [], rate = 1, last = 0, barY = -1, shrunk = false;
+  var last = 0, barY = -1, shrunk = false;
   function loop(now) {
     requestAnimationFrame(loop);
     var raw = now - last;
@@ -127,7 +151,7 @@
     // Wheel: pos is already eased and unrounded. Anything native gets the same kind of ease here.
     var y = moving ? wheel.pos() : window.scrollY;
     var prev = K.y;
-    K.y = moving ? y : damp(K.y, y, 0.07, dt);
+    K.y = moving ? y : damp(K.y, y, coarse ? 0.09 : 0.07, dt);
     if (Math.abs(K.y - y) < 0.05) K.y = y;
     K.v = damp(K.v, (K.y - prev) / dt, 0.18, dt);
     // Two thresholds: a notch around either one never flips the bar.
@@ -145,38 +169,6 @@
       bar.style.transform = 'scaleX(' + (maxY > 0 ? Math.min(K.y / maxY, 1) : 0).toFixed(4) + ')';
     }
     for (var i = 0; i < jobs.length; i++) jobs[i](K.y, now, dt);
-    // The coin rows run faster while the page moves.
-    if (marquees.length) {
-      var r = 1 + Math.min(Math.abs(K.v) / 700, 4);
-      if (Math.abs(r - rate) > 0.04) {
-        rate = r;
-        for (var m = 0; m < marquees.length; m++) marquees[m].updatePlaybackRate(rate);
-      }
-    }
-  }
-
-  function words(el) {
-    var n = 0;
-    (function walk(node) {
-      var kids = Array.prototype.slice.call(node.childNodes);
-      kids.forEach(function (kid) {
-        if (kid.nodeType === 1) return walk(kid);
-        if (kid.nodeType !== 3 || !kid.nodeValue.trim()) return;
-        var frag = document.createDocumentFragment();
-        kid.nodeValue.split(/(\s+)/).forEach(function (part) {
-          if (!part) return;
-          if (/^\s+$/.test(part)) return frag.appendChild(document.createTextNode(' '));
-          var outer = document.createElement('span');
-          var inner = document.createElement('span');
-          outer.className = 'wd';
-          inner.textContent = part;
-          inner.style.setProperty('--i', n++);
-          outer.appendChild(inner);
-          frag.appendChild(outer);
-        });
-        node.replaceChild(frag, kid);
-      });
-    })(el);
   }
 
   /** Rolls the number inside el up from zero, keeping its prefix, suffix and decimals. */
@@ -198,9 +190,6 @@
   K.roll = roll;
 
   function reveals() {
-    var titles = document.querySelectorAll('[data-words]');
-    for (var t = 0; t < titles.length; t++) words(titles[t]);
-
     var groups = document.querySelectorAll('[data-reveal-group]');
     for (var g = 0; g < groups.length; g++) {
       for (var k = 0; k < groups[g].children.length; k++) {
@@ -232,7 +221,7 @@
     );
     var fees = document.querySelectorAll('.fee-value');
     for (var f = 0; f < fees.length; f++) if (!fees[f].querySelector('[data-roll]')) fees[f].setAttribute('data-roll', '');
-    var items = document.querySelectorAll('[data-reveal], [data-words], [data-roll]');
+    var items = document.querySelectorAll('[data-reveal], [data-roll], h2 .rd');
     for (var j = 0; j < items.length; j++) io.observe(items[j]);
     window.addEventListener('beforeprint', function () {
       for (var p = 0; p < items.length; p++) items[p].classList.add('in');
@@ -335,7 +324,7 @@
       });
     });
     current(list.querySelector('[aria-current]'));
-    window.addEventListener('resize', place);
+    K.resize(place);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
 
     // Home page: the light follows the section. It only changes once the middle of the screen is
@@ -352,11 +341,11 @@
       });
     }
     measureZones();
-    window.addEventListener('resize', measureZones);
+    K.resize(measureZones);
     window.addEventListener('load', measureZones);
     if (window.ResizeObserver) new ResizeObserver(measureZones).observe(document.body);
     K.frame(function (y) {
-      var c = y + window.innerHeight * 0.5;
+      var c = y + K.vh * 0.5;
       if (cur >= 0 && c >= zones[cur].top - EDGE && c < zones[cur].bottom + EDGE) return;
       for (var i = 0; i < zones.length; i++) {
         if (c >= zones[i].top + (i > cur ? EDGE : 0) && c < zones[i].bottom - (i < cur ? EDGE : 0)) {
@@ -365,6 +354,18 @@
           return;
         }
       }
+    });
+  }
+
+  /** Touch has no hover: a tap on a redacted word closes it for a moment. */
+  function taps() {
+    document.addEventListener('click', function (e) {
+      var w = e.target.closest ? e.target.closest('h2 .rd.in') : null;
+      if (!w) return;
+      w.classList.add('re');
+      window.setTimeout(function () {
+        w.classList.remove('re');
+      }, 900);
     });
   }
 
@@ -399,14 +400,11 @@
 
   if (motion) {
     reveals();
+    if (!fine) taps();
     if (fine) {
       magnets();
       cursor();
     }
-    Array.prototype.forEach.call(document.querySelectorAll('.mq-row'), function (row) {
-      var a = row.getAnimations && row.getAnimations()[0];
-      if (a && a.updatePlaybackRate) marquees.push(a);
-    });
   }
   requestAnimationFrame(loop);
 })();

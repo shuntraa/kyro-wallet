@@ -12,7 +12,6 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/fonts/archivo-display-italic.woff2" as="font" type="font/woff2" crossorigin>
   
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chains.css">
@@ -80,7 +79,7 @@
           <div class="ph-text">
             
             <p class="eyebrow">Version 1.0.6</p>
-            <h1 id="page-title">Download <em>Kyro Wallet</em></h1>
+            <h1 id="page-title">Download <span class="rd"><span class="wd"><span>Kyro</span><i class="bar"></i></span> <span class="wd"><span>Wallet</span><i class="bar"></i></span></span></h1>
             <p class="lead">Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is published only on GitHub Releases.</p>
             <div class="hero-cta">
           <a class="btn btn-primary btn-xl magnet" href="/download/" data-dl-hero>
@@ -100,7 +99,7 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Recommended</p>
-          <h2 id="install-title">Install with <em>one command</em></h2>
+          <h2 id="install-title">Install with <span class="rd"><span class="wd"><span>one</span><i class="bar"></i></span> <span class="wd"><span>command</span><i class="bar"></i></span></span></h2>
           <p>Paste the command for your system into PowerShell (Windows) or Terminal (macOS, Linux). It downloads the latest release from GitHub, checks its SHA-256 and installs it. A file fetched this way is not marked as downloaded from the internet, so Windows SmartScreen and macOS Gatekeeper do not block the first launch.</p>
           
           <div class="install" data-install data-copy-scope>
@@ -124,7 +123,7 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Or</p>
-          <h2 id="dl-files">Download <em>the file</em></h2>
+          <h2 id="dl-files">Download <span class="rd"><span class="wd"><span>the</span><i class="bar"></i></span> <span class="wd"><span>file</span><i class="bar"></i></span></span></h2>
         </div>
         <div data-reveal>
           <div class="os-cards">
@@ -191,7 +190,7 @@ sudo apt install ./Kyro-linux-amd64.deb</code></pre>
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Checksum</p>
-          <h2 id="verify-title">Verify <em>your download</em></h2>
+          <h2 id="verify-title">Verify <span class="rd"><span class="wd"><span>your</span><i class="bar"></i></span> <span class="wd"><span>download</span><i class="bar"></i></span></span></h2>
           <p>The install commands do this for you. If you downloaded a file yourself, download <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a> next to it, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.</p>
           <h3>Windows (PowerShell)</h3>
           <pre><code>Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256</code></pre>
@@ -207,7 +206,7 @@ sudo apt install ./Kyro-linux-amd64.deb</code></pre>
       <div class="wrap">
         <div class="prose" data-reveal>
           <p class="eyebrow">Source</p>
-          <h2 id="source-title">Build it <em>yourself</em></h2>
+          <h2 id="source-title">Build it <span class="rd"><span class="wd"><span>yourself</span><i class="bar"></i></span></span></h2>
           <p>You need Rust, Node.js 22+, pnpm 11 and the Tauri prerequisites. See the <a href="https://github.com/shuntraa/kyro-wallet#build-from-source">README</a>.</p>
           <pre><code>git clone https://github.com/shuntraa/kyro-wallet.git
 cd kyro-wallet
