@@ -2699,6 +2699,11 @@ export interface Commands {
   hw_ada_stake_build: { args: { accountId: string; action: AdaStakeRequest }; ret: Commands['ada_stake_build']['ret'] };
   hw_ada_stake_sign: { args: { id: string; accountId: string; tx: string }; ret: Commands['ada_stake_sign']['ret'] };
   hw_ada_stake_broadcast: { args: { accountId: string; tx: string }; ret: string };
+  /** NEAR staking on a Ledger (§2.8): the implicit account of the Ledger key, not the vault's. */
+  hw_near_stake_overview: { args: { accountId: string }; ret: NearStakeOverview };
+  hw_near_stake_build: { args: { accountId: string; action: NearStakeRequest }; ret: Commands['near_stake_build']['ret'] };
+  hw_near_stake_sign: { args: { id: string; accountId: string; tx: string }; ret: Commands['near_stake_sign']['ret'] };
+  hw_near_stake_broadcast: { args: { accountId: string; signed: string }; ret: NearTxOutcome };
   /** TON on a Ledger: the account's own v4R2 wallet (`m/44'/607'/0'/0'/account'/0'`); status: `ton_tx_status`. */
   hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
   hw_ton_build_jetton_tx: { args: { accountId: string; master: string; to: string; amount: string }; ret: TonBuilt };

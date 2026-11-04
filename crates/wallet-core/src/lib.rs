@@ -170,9 +170,9 @@ pub use near::{
     NearWarning, NEAR_DECIMALS, NEAR_FT_GAS, NEAR_MAX_STORAGE_DEPOSIT,
 };
 pub use near_stake::{
-    near_stake_code_ok, near_stake_decode, near_stake_pool_network, near_stake_sign,
-    near_stake_verify_signed, NearStakeAction, NearStakeCall, NearStakeSummary, NearStakeTx,
-    NEAR_STAKE_GAS,
+    near_stake_code_ok, near_stake_decode, near_stake_hw_message, near_stake_hw_signed,
+    near_stake_pool_network, near_stake_sign, near_stake_verify_signed, NearStakeAction,
+    NearStakeCall, NearStakeSummary, NearStakeTx, NEAR_STAKE_GAS,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{

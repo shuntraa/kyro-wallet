@@ -827,7 +827,7 @@ pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool
   const hwStakeDemo = (): never => {
     throw new IpcError('HW_UNSUPPORTED', l10n('Mode démo : le staking sur hardware wallet n’est pas simulé.', 'Demo mode: staking on a hardware wallet is not simulated.'));
   };
-  const hwHandlers: Record<Extract<keyof Commands, `hw_${'sol' | 'ada'}_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const hwHandlers: Record<Extract<keyof Commands, `hw_${'sol' | 'ada' | 'near'}_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     hw_sol_stake_overview: () => solHandlers.sol_stake_overview({}),
     hw_sol_stake_build: (a) => solHandlers.sol_stake_build(a),
     hw_sol_stake_sign: hwStakeDemo,
@@ -836,6 +836,10 @@ pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool
     hw_ada_stake_build: (a) => adaHandlers.ada_stake_build(a),
     hw_ada_stake_sign: hwStakeDemo,
     hw_ada_stake_broadcast: hwStakeDemo,
+    hw_near_stake_overview: () => nearHandlers.near_stake_overview({}),
+    hw_near_stake_build: (a) => nearHandlers.near_stake_build(a),
+    hw_near_stake_sign: hwStakeDemo,
+    hw_near_stake_broadcast: hwStakeDemo,
   };
 
   return {

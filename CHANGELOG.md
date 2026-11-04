@@ -20,6 +20,7 @@
   withdraw), decoded on the device.
 - Staking from hardware wallets: Cardano delegation on Ledger and Trezor. Rewards can be
   withdrawn on a Trezor (firmware 2.8.5 or later), not on a Ledger: its app does not show them.
+- Staking from hardware wallets: NEAR pools on Ledger, from the Ledger's own NEAR account.
 - Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the
   device shows the token, the amount and the recipient. No comment on these transfers: the
   app cannot show it.

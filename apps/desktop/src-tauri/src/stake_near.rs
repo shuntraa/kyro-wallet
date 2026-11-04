@@ -465,23 +465,31 @@ pub async fn near_stake_build(
     account: Option<u32>,
 ) -> AppResult<NearStakeBuilt> {
     let (me, pk) = ours(&state, account_arg(account)?)?;
-    let c = ctx(&state);
+    build(&ctx(&state), &me, &pk, &action).await
+}
+
+pub(crate) async fn build(
+    c: &NearCtx<'_>,
+    me: &str,
+    pk: &[u8; 32],
+    action: &NearStakeRequest,
+) -> AppResult<NearStakeBuilt> {
     let pool = action.pool();
     if !pool_on_network(pool, c.network) {
         return Err(invalid(format!("{pool}: not a staking pool Kyro accepts")));
     }
-    let (key_nonce, block_hash, _) = near_backend::access_key(&c, &me, &pk).await?;
+    let (key_nonce, block_hash, _) = near_backend::access_key(c, me, pk).await?;
     let tx = NearStakeTx {
-        signer_id: me.clone(),
-        public_key: pk,
+        signer_id: me.to_owned(),
+        public_key: *pk,
         nonce: key_nonce + 1,
         pool_id: pool.to_owned(),
         block_hash,
         call: action.call()?,
     };
     let hex = hex::encode(tx.encode());
-    let summary = wallet_core::near_stake_decode(&hex, &me, &pk)?;
-    let context = context_for(&c, &summary).await?;
+    let summary = wallet_core::near_stake_decode(&hex, me, pk)?;
+    let context = context_for(c, &summary).await?;
     Ok(NearStakeBuilt {
         tx: hex,
         summary,
@@ -606,6 +614,28 @@ pub struct NearStakeSigned {
     pub context: NearStakeContext,
 }
 
+/// Strict decoding for our account and key, fresh nonce and block, live pool facts.
+pub(crate) async fn prepare_sign(
+    c: &NearCtx<'_>,
+    me: &str,
+    pk: &[u8; 32],
+    tx: &str,
+) -> AppResult<(NearStakeSummary, NearStakeContext)> {
+    let summary = wallet_core::near_stake_decode(tx, me, pk)?;
+    let (key_nonce, _, height) = near_backend::access_key(c, me, pk).await?;
+    if summary.nonce.parse::<u64>().unwrap_or(0) <= key_nonce {
+        return Err(invalid(
+            "stale nonce (another transaction went through in the meantime): rebuild it",
+        ));
+    }
+    let built_at = near_backend::block_height(c, &summary.block_hash).await?;
+    if height.saturating_sub(built_at) > MAX_BLOCK_AGE {
+        return Err(invalid("staking transaction too old: rebuild it"));
+    }
+    let context = context_for(c, &summary).await?;
+    Ok((summary, context))
+}
+
 #[tauri::command]
 pub async fn near_stake_sign(
     app: AppHandle,
@@ -620,19 +650,7 @@ pub async fn near_stake_sign(
     let a = account_arg(account)?;
     let (me, pk) = ours(&state, a)?;
     let signer = SignerInfo::new(&state, Chain::Near, a, wallet_core::near_path(a));
-    let summary = wallet_core::near_stake_decode(&tx, &me, &pk)?;
-    let c = ctx(&state);
-    let (key_nonce, _, height) = near_backend::access_key(&c, &me, &pk).await?;
-    if summary.nonce.parse::<u64>().unwrap_or(0) <= key_nonce {
-        return Err(invalid(
-            "stale nonce (another transaction went through in the meantime): rebuild it",
-        ));
-    }
-    let built_at = near_backend::block_height(&c, &summary.block_hash).await?;
-    if height.saturating_sub(built_at) > MAX_BLOCK_AGE {
-        return Err(invalid("staking transaction too old: rebuild it"));
-    }
-    let context = context_for(&c, &summary).await?;
+    let (summary, context) = prepare_sign(&ctx(&state), &me, &pk, &tx).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
     confirm_native(
@@ -677,12 +695,20 @@ pub async fn near_stake_broadcast(
     account: Option<u32>,
 ) -> AppResult<NearTxOutcome> {
     let (me, _) = ours(&state, account_arg(account)?)?;
-    let (tx, hash) = wallet_core::near_stake_verify_signed(&signed)?;
+    broadcast_checked(&ctx(&state), &me, &signed).await
+}
+
+pub(crate) async fn broadcast_checked(
+    c: &NearCtx<'_>,
+    me: &str,
+    signed: &str,
+) -> AppResult<NearTxOutcome> {
+    let (tx, hash) = wallet_core::near_stake_verify_signed(signed)?;
     if tx.signer_id != me {
         return Err(invalid("this transaction is not signed by your account"));
     }
     let raw = hex::decode(signed.trim()).map_err(|_| invalid("hexadecimal expected"))?;
-    near_backend::send(&ctx(&state), &raw, &hash).await
+    near_backend::send(c, &raw, &hash).await
 }
 
 #[cfg(test)]

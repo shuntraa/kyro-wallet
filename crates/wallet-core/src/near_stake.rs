@@ -418,6 +418,28 @@ pub fn near_stake_sign(
     ))
 }
 
+/// HW: the Borsh the device signs, after the strict decoding for our account and key.
+pub fn near_stake_hw_message(
+    tx_hex: &str,
+    our_account: &str,
+    our_pubkey: &[u8; 32],
+) -> Result<Vec<u8>> {
+    near_stake_decode(tx_hex, our_account, our_pubkey)?;
+    unhex(tx_hex)
+}
+
+/// HW: signed transaction (hex) and hash (base58) from the device signature, checked by
+/// [`near_stake_verify_signed`].
+pub fn near_stake_hw_signed(tx_hex: &str, sig: &[u8]) -> Result<(String, String)> {
+    let sig: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| bad("device signature: 64 bytes expected"))?;
+    let tx = NearStakeTx::decode(&unhex(tx_hex)?)?;
+    let signed = hex::encode(tx.encode_signed(&sig));
+    let (_, hash) = near_stake_verify_signed(&signed)?;
+    Ok((signed, hash))
+}
+
 /// Checks a signed staking transaction: strict decode, strict ed25519, implicit signer = key.
 pub fn near_stake_verify_signed(signed_hex: &str) -> Result<(NearStakeTx, String)> {
     let (tx, sig) = NearStakeTx::decode_signed(&unhex(signed_hex)?)?;

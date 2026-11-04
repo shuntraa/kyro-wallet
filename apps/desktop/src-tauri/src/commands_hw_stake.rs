@@ -6,12 +6,13 @@
 //! Only what the device shows decoded gets here. Solana: the four Kyro messages are in the
 //! closed list of `stake_sol::classify`, and both firmwares parse them (Ledger app `libsol`
 //! briefs, Trezor `programs.json`). Cardano: certificates are always shown; a withdrawal is not
-//! on every device, so `ada_hidden` refuses those transactions (`HW_UNSUPPORTED`). TRON and the
-//! other staking chains have no command here.
+//! on every device, so `ada_hidden` refuses those transactions (`HW_UNSUPPORTED`). NEAR (Ledger):
+//! the app shows a pool `FunctionCall` (method, arguments, deposit); the account is the implicit
+//! one of the Ledger key, not the vault's. TRON and the other staking chains have no command here.
 
 use base64::Engine as _;
 use tauri::{AppHandle, State};
-use wallet_core::{CardanoContext, CardanoHwPlan, HwDeviceKind, WatchOnlyAccount};
+use wallet_core::{CardanoContext, CardanoHwPlan, HwDeviceKind, HwKeyChain, WatchOnlyAccount};
 
 use crate::commands::confirm_native;
 use crate::commands_cardano::ctx as ada_ctx;
@@ -19,11 +20,17 @@ use crate::commands_hw::{
     check_brand, device_line, guard, load_account, prompt_fn, same_device, T_CONFIRM, T_READ,
 };
 use crate::commands_hw_ada_zec::check_same_device;
+use crate::commands_hw_keys::{check_device, device_sign, key_array, stored_key};
+use crate::commands_near::ctx as near_ctx;
 use crate::error::{AppError, AppResult};
 use crate::hw::Chain;
+use crate::near_backend::NearTxOutcome;
 use crate::solana;
 use crate::stake_ada::{
     self, AdaStakeBuilt, AdaStakeKeys, AdaStakeOverview, AdaStakeRequest, AdaStakeSigned,
+};
+use crate::stake_near::{
+    self, NearStakeBuilt, NearStakeOverview, NearStakeRequest, NearStakeSigned,
 };
 use crate::stake_sol::{self, SolStakeBuilt, SolStakeOverview, SolStakeRequest, SolStakeSigned};
 use crate::state::AppState;
@@ -313,6 +320,81 @@ pub async fn hw_ada_stake_broadcast(
     stake_ada::broadcast_checked(&ada_ctx(&state), &keys, &tx).await
 }
 
+const NEAR: HwKeyChain = HwKeyChain::Near;
+
+#[tauri::command]
+pub async fn hw_near_stake_overview(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> AppResult<NearStakeOverview> {
+    let (_, key) = stored_key(&state, &account_id, NEAR)?;
+    stake_near::overview(&near_ctx(&state), &key.address).await
+}
+
+#[tauri::command]
+pub async fn hw_near_stake_build(
+    state: State<'_, AppState>,
+    account_id: String,
+    action: NearStakeRequest,
+) -> AppResult<NearStakeBuilt> {
+    let (_, key) = stored_key(&state, &account_id, NEAR)?;
+    stake_near::build(&near_ctx(&state), &key.address, &key_array(&key)?, &action).await
+}
+
+#[tauri::command]
+pub async fn hw_near_stake_sign(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    account_id: String,
+    tx: String,
+) -> AppResult<NearStakeSigned> {
+    let (acc, key) = stored_key(&state, &account_id, NEAR)?;
+    let pk = key_array::<32>(&key)?;
+    let info = check_device(&app, &state, &id, &acc, &key).await?;
+    let c = near_ctx(&state);
+    let (summary, context) = stake_near::prepare_sign(&c, &key.address, &pk, &tx).await?;
+    let lang = crate::i18n::current();
+    confirm_native(
+        &app,
+        lang.pick(
+            "Confirmer l'opération de staking NEAR (hardware wallet)",
+            "Confirm the NEAR staking operation (hardware wallet)",
+        ),
+        stake_near::describe(lang, &summary, &context, state.network) + &device_line(lang, &info),
+    )
+    .await?;
+    if context.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            lang.pick("Attention : pool à vérifier", "Warning: pool to check"),
+            stake_near::describe_extra(lang, &context),
+        )
+        .await?;
+    }
+    let message = wallet_core::near_stake_hw_message(&tx, &key.address, &pk)?;
+    let sig = device_sign(&app, &state, &id, &acc, NEAR, message).await?;
+    let (signed, hash) = wallet_core::near_stake_hw_signed(&tx, &sig)
+        .map_err(|e| AppError::HwBadResponse(e.to_string()))?;
+    state.touch();
+    Ok(NearStakeSigned {
+        signed,
+        hash,
+        summary,
+        context,
+    })
+}
+
+#[tauri::command]
+pub async fn hw_near_stake_broadcast(
+    state: State<'_, AppState>,
+    account_id: String,
+    signed: String,
+) -> AppResult<NearTxOutcome> {
+    let (_, key) = stored_key(&state, &account_id, NEAR)?;
+    stake_near::broadcast_checked(&near_ctx(&state), &key.address, &signed).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::ada_hidden;
@@ -452,6 +534,63 @@ mod tests {
         let both = ada_plan_with(vec![dereg], vec![5]);
         assert!(ada_hidden(l, &both).is_some());
         assert!(ada_hidden(t, &both).is_some_and(|m| m.contains("first")));
+    }
+
+    /// The Ledger key's implicit account signs each pool call: scripted exchange through the
+    /// NEAR app's chunking, signature of that key (not the vault's), Kyro's check.
+    #[test]
+    fn near_pool_calls_through_the_ledger() {
+        use crate::hw::ledger_apps::App;
+        use crate::hw::ledger_near as near;
+        use ed25519_dalek::{Signer, SigningKey};
+        use wallet_core::{HwKeyChain, NearStakeCall, NearStakeTx};
+        let device = SigningKey::from_bytes(&[0x42; 32]);
+        let pk = device.verifying_key().to_bytes();
+        let me = hex::encode(pk);
+        let path = HwKeyChain::Near.path(0);
+        for call in [
+            NearStakeCall::DepositAndStake(1_000_000_000_000_000_000_000_000),
+            NearStakeCall::Unstake(5),
+            NearStakeCall::UnstakeAll,
+            NearStakeCall::WithdrawAll,
+        ] {
+            let tx = NearStakeTx {
+                signer_id: me.clone(),
+                public_key: pk,
+                nonce: 7,
+                pool_id: "epic.poolv1.near".into(),
+                block_hash: [3; 32],
+                call,
+            };
+            let tx_hex = hex::encode(tx.encode());
+            let msg = wallet_core::near_stake_hw_message(&tx_hex, &me, &pk).unwrap();
+            assert_eq!(hex::encode(&msg), tx_hex);
+            assert!(wallet_core::near_stake_hw_message(&tx_hex, "vault.near", &pk).is_err());
+            assert!(wallet_core::near_stake_hw_message(&tx_hex, &me, &[9; 32]).is_err());
+
+            let sig = device.sign(&tx.hash()).to_bytes();
+            let mut lines = app("NEAR", "2.5.0").to_vec();
+            lines.push("=> 8006000000".into());
+            lines.push("<= 0205009000".into());
+            let apdus = near::sign_apdus(&path, &msg).unwrap();
+            for (i, a) in apdus.iter().enumerate() {
+                lines.push(format!("=> {}", hex::encode(a)));
+                lines.push(if i + 1 == apdus.len() {
+                    format!("<= {}9000", hex::encode(sig))
+                } else {
+                    "<= 9000".into()
+                });
+            }
+            let r = Replay::new(&lines);
+            let c = ctl();
+            let a = App::open(&r, &c, HwKeyChain::Near).unwrap();
+            let got = near::sign(&a, &path, &msg).unwrap();
+            assert!(r.done());
+            let (signed, hash) = wallet_core::near_stake_hw_signed(&tx_hex, &got).unwrap();
+            let (back, again) = wallet_core::near_stake_verify_signed(&signed).unwrap();
+            assert_eq!((back.signer_id.as_str(), again), (me.as_str(), hash));
+            assert!(wallet_core::near_stake_hw_signed(&tx_hex, &[1; 64]).is_err());
+        }
     }
 
     /// Scripted Ledger exchange and Trezor request for each message; the "device" signature is

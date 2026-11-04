@@ -155,7 +155,7 @@ function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; ha
   const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !refused('sol') && has.sol ? () => (activeHw ? call('hw_sol_stake_overview', { accountId: activeHw.id }) : call('sol_stake_overview', acct('sol'))) : null, [activeHw?.id, has.sol, acct('sol').account], p);
   const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !refused('ada') && has.ada ? () => (activeHw ? call('hw_ada_stake_overview', { accountId: activeHw.id }) : call('ada_stake_overview', acct('ada'))) : null, [activeHw?.id, has.ada, acct('ada').account], p);
   const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !refused('tron') && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [activeHw?.id, has.tron, acct('tron').account], p);
-  const near = useCachedAsync(sk('near_stake_overview', 'near'), !refused('near') && has.near ? () => call('near_stake_overview', acct('near')) : null, [activeHw?.id, has.near, acct('near').account], p);
+  const near = useCachedAsync(sk('near_stake_overview', 'near'), !refused('near') && has.near ? () => (activeHw ? call('hw_near_stake_overview', { accountId: activeHw.id }) : call('near_stake_overview', acct('near'))) : null, [activeHw?.id, has.near, acct('near').account], p);
   const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !refused('sui') && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [activeHw?.id, has.sui, acct('sui').account], p);
   const aptos = useCachedAsync(sk('aptos_stake_overview', 'apt'), !refused('apt') && has.apt ? () => call('aptos_stake_overview', acct('apt')) : null, [activeHw?.id, has.apt, acct('apt').account], p);
   useOnTorReady(() => {
@@ -1341,9 +1341,9 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
 }
 
 function NearStaking() {
-  const { hideBalances } = useApp();
+  const { hideBalances, activeHw } = useApp();
   const acct = useStakeAccount();
-  const ov = useCachedAsync(useStakeKey()('near_stake_overview', acct('near')), () => call('near_stake_overview', acct('near')), [acct('near').account], { intervalMs: 60_000 });
+  const ov = useCachedAsync(useStakeKey()('near_stake_overview', acct('near')), () => (activeHw ? call('hw_near_stake_overview', { accountId: activeHw.id }) : call('near_stake_overview', acct('near'))), [activeHw?.id, acct('near').account], { intervalMs: 60_000 });
   const vs = useCachedAsync(useStakeKey()('near_stake_validators'), () => call('near_stake_validators'), [], { persist: true });
   useOnTorReady(ov.reload);
   const { t } = useT();
@@ -1438,6 +1438,7 @@ function NearPoolPicker({ value, onChange, validators, apy }: { value: string; o
 }
 
 function NearOpDialog({ op, pool: initialPool, o, validators, apy, onClose, onDone }: { op: NearOp; pool: string; o: NearStakeOverview; validators: NearValidator[]; apy: number | null; onClose: () => void; onDone: () => void }) {
+  const { activeHw } = useApp();
   const acct = useStakeAccount();
   const [pool, setPool] = useState(initialPool);
   const [amount, setAmount] = useState('');
@@ -1478,7 +1479,7 @@ function NearOpDialog({ op, pool: initialPool, o, validators, apy, onClose, onDo
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('near_stake_build', { action, ...acct('near') }),
+    build: () => (activeHw ? call('hw_near_stake_build', { accountId: activeHw.id, action }) : call('near_stake_build', { action, ...acct('near') })),
     enClair: (b) => {
       const x = b.summary.action;
       const c = b.context;
@@ -1508,7 +1509,8 @@ function NearOpDialog({ op, pool: initialPool, o, validators, apy, onClose, onDo
     },
     warnings: (b) => b.context.warnings.map(nearWarningText),
     sign: (b, password) => call('near_stake_sign', { tx: b.tx, password, ...acct('near') }),
-    broadcast: async (s) => (await call('near_stake_broadcast', { signed: s.signed, ...acct('near') })).hash,
+    signHw: (b, id) => call('hw_near_stake_sign', { id, accountId: activeHw!.id, tx: b.tx }),
+    broadcast: async (s) => (await (activeHw ? call('hw_near_stake_broadcast', { accountId: activeHw.id, signed: s.signed }) : call('near_stake_broadcast', { signed: s.signed, ...acct('near') }))).hash,
     doneText: t('staking.doneNear'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;

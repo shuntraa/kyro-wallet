@@ -72,6 +72,9 @@ describe('earn routing', () => {
     expect(earnBlock(by('sol'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBeNull();
     expect(earnBlock(by('sol'), { hw: true, hwStake, hasAccount: () => false, hasEvm: true })).toBe('noAccount');
     expect(earnBlock(by('ada'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBeNull();
+    expect(earnBlock(by('near'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBeNull();
+    const trezor = (c: string) => (HW_STAKE.trezor as readonly string[]).includes(c);
+    expect(earnBlock(by('near'), { hw: true, hwStake: trezor, hasAccount: all, hasEvm: true })).toBe('hw');
     expect(earnBlock(by('trx'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBe('hw');
   });
 });
