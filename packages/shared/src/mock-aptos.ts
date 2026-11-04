@@ -173,7 +173,7 @@ export function createDemoAptos(d: DemoAptosDeps) {
   const describe = (s: AptosTxSummary, c: AptosContext) =>
     l10n(`Envoi Aptos${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n\nMontant : ${aptText(s.amount)} (${s.amount} octas)\n${c.recipientNew ? "Ce compte n'a encore rien reçu : le transfert le crée.\n" : ''}\nFrais maximum : ${aptText(s.maxFee)}\nSolde : ${aptText(c.account.balance)}\nFonction : ${s.function}\nSéquence ${s.sequenceNumber} · chaîne ${s.chainId}`, `Aptos send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.recipient}\n\nAmount: ${aptText(s.amount)} (${s.amount} octas)\n${c.recipientNew ? 'This account has not received anything yet: the transfer creates it.\n' : ''}\nMaximum fee: ${aptText(s.maxFee)}\nBalance: ${aptText(c.account.balance)}\nFunction: ${s.function}\nSequence ${s.sequenceNumber} · chain ${s.chainId}`);
 
-  const handlers: Record<Extract<keyof Commands, `aptos_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const handlers: Record<Exclude<Extract<keyof Commands, `aptos_${string}`>, `aptos_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     aptos_backend_info: (): AptosBackendInfo => ({ network: netKey, label: d.network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com', tor: torOn() }),
     aptos_address: (a) => {
       d.requireUnlocked();

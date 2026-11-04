@@ -274,6 +274,11 @@ const COMMANDS: &[&str] = &[
     "sui_stake_build",
     "sui_stake_sign",
     "sui_stake_broadcast",
+    "aptos_stake_overview",
+    "aptos_stake_pools",
+    "aptos_stake_build",
+    "aptos_stake_sign",
+    "aptos_stake_broadcast",
     // Earn on Ethereum (Lido, Aave v3): Rust builds the calldata.
     "earn_evm_build",
     // Earn: estimated SOL / ADA / TRX staking rates (read only, existing hosts).

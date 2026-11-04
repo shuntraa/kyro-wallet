@@ -66,6 +66,7 @@ mod servers;
 mod settings;
 mod solana;
 mod stake_ada;
+mod stake_aptos;
 mod stake_near;
 mod stake_sol;
 mod stake_sui;
@@ -426,6 +427,11 @@ pub fn run() {
             stake_sui::sui_stake_build,
             stake_sui::sui_stake_sign,
             stake_sui::sui_stake_broadcast,
+            stake_aptos::aptos_stake_overview,
+            stake_aptos::aptos_stake_pools,
+            stake_aptos::aptos_stake_build,
+            stake_aptos::aptos_stake_sign,
+            stake_aptos::aptos_stake_broadcast,
             commands::set_capture_protection,
             commands::open_fees_page,
             commands::config_get,

@@ -120,9 +120,9 @@ const RAW_TX_SALT: &[u8] = b"APTOS::RawTransaction";
 const TX_SALT: &[u8] = b"APTOS::Transaction";
 const MODULE_NAME: &[u8] = b"aptos_account";
 const FUNCTION_NAME: &[u8] = b"transfer";
-const MAX_BCS: usize = 4 * 1024;
+pub(crate) const MAX_BCS: usize = 4 * 1024;
 
-fn bad(msg: impl Into<String>) -> Error {
+pub(crate) fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("Aptos transaction refused: {}", msg.into()))
 }
 
@@ -143,7 +143,7 @@ pub fn aptos_path(account: u32) -> String {
     format!("m/44'/637'/{account}'/0'/0'")
 }
 
-fn signing_key(seed: &Seed, account: u32) -> Result<ed25519_dalek::SigningKey> {
+pub(crate) fn signing_key(seed: &Seed, account: u32) -> Result<ed25519_dalek::SigningKey> {
     let path = [
         hardened(44)?,
         hardened(637)?,
@@ -217,7 +217,7 @@ pub fn aptos_parse_address(address: &str) -> Result<[u8; 32]> {
     Ok(out)
 }
 
-fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
+pub(crate) fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     loop {
         let b = (v & 0x7f) as u8;
         v >>= 7;
@@ -229,12 +229,12 @@ fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     }
 }
 
-fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
+pub(crate) fn put_bytes(out: &mut Vec<u8>, b: &[u8]) {
     put_uleb(out, b.len() as u64);
     out.extend_from_slice(b);
 }
 
-struct Reader<'a>(&'a [u8]);
+pub(crate) struct Reader<'a>(pub(crate) &'a [u8]);
 
 impl<'a> Reader<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8]> {
@@ -246,23 +246,23 @@ impl<'a> Reader<'a> {
         Ok(h)
     }
 
-    fn u8(&mut self) -> Result<u8> {
+    pub(crate) fn u8(&mut self) -> Result<u8> {
         Ok(self.take(1)?[0])
     }
 
-    fn u64(&mut self) -> Result<u64> {
+    pub(crate) fn u64(&mut self) -> Result<u64> {
         let mut a = [0u8; 8];
         a.copy_from_slice(self.take(8)?);
         Ok(u64::from_le_bytes(a))
     }
 
-    fn arr32(&mut self) -> Result<[u8; 32]> {
+    pub(crate) fn arr32(&mut self) -> Result<[u8; 32]> {
         let mut a = [0u8; 32];
         a.copy_from_slice(self.take(32)?);
         Ok(a)
     }
 
-    fn uleb(&mut self) -> Result<u32> {
+    pub(crate) fn uleb(&mut self) -> Result<u32> {
         let mut v: u64 = 0;
         for i in 0..5 {
             let b = self.u8()?;
@@ -277,7 +277,7 @@ impl<'a> Reader<'a> {
         Err(bad("ULEB128 too long"))
     }
 
-    fn bytes(&mut self, max: usize) -> Result<&'a [u8]> {
+    pub(crate) fn bytes(&mut self, max: usize) -> Result<&'a [u8]> {
         let n = self.uleb()? as usize;
         if n > max {
             return Err(bad("field too long"));
@@ -490,7 +490,7 @@ pub fn aptos_tx_hash(signed: &[u8]) -> String {
     )
 }
 
-fn unhex(s: &str, what: &str) -> Result<Vec<u8>> {
+pub(crate) fn unhex(s: &str, what: &str) -> Result<Vec<u8>> {
     let t = s.trim();
     hex::decode(t.strip_prefix("0x").unwrap_or(t))
         .map_err(|_| Error::input(format!("{what}: hexadecimal expected")))

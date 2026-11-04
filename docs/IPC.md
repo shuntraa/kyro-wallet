@@ -1314,6 +1314,21 @@ type SuiStakeContext = { gas: SuiContext /*§2.5; receives: SUI back from a with
                          warnings: SuiStakeWarning[]; requiresExtraConfirmation: boolean };
 ```
 
+#### Aptos (`aptos_stake_*`) — delegation pools, `m/44'/637'/a'/0'/0'`
+
+| Command | Arguments | Return | Notes |
+|---|---|---|---|
+| `aptos_stake_overview` | — | `AptosStakeOverview` | pools of the account from the indexer (`delegator_distinct_pool`, at most 20), then per pool the views `delegation_pool::get_stake`, `operator_commission_percentage`, `stake::get_lockup_secs` |
+| `aptos_stake_pools` | — | `AptosPools` | `0x1::stake::ValidatorSet` crossed with the indexer (`current_delegated_staking_pool_balances`, `delegated_staking_pools`): active delegation pools only; `grossApy` from `StakingRewardsConfig` (else `StakingConfig`) and `BlockResource.epoch_interval`, `apy` = that minus commission, **estimates** |
+| `aptos_stake_build` | `{ action: AptosStakeRequest }` | `{ raw, summary: AptosStakeSummary, context: AptosStakeContext }` | Rust builds and simulates; max gas = 1.5 × simulated, at most 60,000 units |
+| `aptos_stake_sign` | `{ raw, password }` | `{ signed, hash, summary, context }` | wallet-core decoding (`aptos_stake_decode`), then **re-reads live** ledger, sequence, `delegation_pool_exists`, stake, validator state, add-stake fee and simulation; native dialog, then the reinforced one if `requiresExtraConfirmation` |
+| `aptos_stake_broadcast` | `{ signed }` | hash | strict decode + strict ed25519, sender and chain id = ours, then `POST /transactions` |
+
+```ts
+type AptosStakeRequest = { kind: 'stake'; pool: string; amount: string /*octas*/ } | { kind: 'unlock'; pool: string; amount: string } | { kind: 'withdraw'; pool: string };
+type AptosStakeWarning = { kind: 'highCommission'; pct: number } | { kind: 'notValidating' } | { kind: 'highFee' };
+```
+
 #### NEAR (`near_stake_*`) — staking pools, implicit account `m/44'/397'/a'`
 
 | Command | Arguments | Return | Notes |

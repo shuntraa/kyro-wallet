@@ -9,6 +9,7 @@
 
 mod algorand;
 mod aptos;
+mod aptos_stake;
 mod btc;
 mod btc_hw;
 mod btc_watch;
@@ -63,6 +64,10 @@ pub use aptos::{
     AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_FA_TRANSFER_FUNCTION,
     APTOS_HIGH_FEE_OCTAS, APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION,
     OCTAS_PER_APT,
+};
+pub use aptos_stake::{
+    aptos_stake_decode, aptos_stake_sign, aptos_stake_simulation_bytes, aptos_stake_verify_signed,
+    AptosStakeCall, AptosStakeSummary, AptosStakeTx,
 };
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,

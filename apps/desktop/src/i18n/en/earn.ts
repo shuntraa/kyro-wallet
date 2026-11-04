@@ -29,6 +29,7 @@ export const earn: Record<keyof typeof fr, string> = {
   'earn.lockSol': '≈ 2–3 days',
   'earn.lockTron': '14 days',
   'earn.lockNear': '≈ 2–3 days',
+  'earn.lockApt': 'Up to 14 days',
   'earn.risk': 'Variable yields, paid by the protocol. Risks: contract bugs, depeg, validator penalties.',
   'earn.hw': 'Not available with a hardware wallet yet.',
   'earn.hwSign': 'Check and confirm on your {device}.',

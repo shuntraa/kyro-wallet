@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote delegation), TRON
-// (Stake 2.0 + SR votes), NEAR (staking pools), Sui (native staking).
+// (Stake 2.0 + SR votes), NEAR (staking pools), Sui (native staking), Aptos (delegation pools).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CHAIN_COLORS, tryParseUnits } from '@kyro/chains';
@@ -9,6 +9,8 @@ import {
   toIpcError,
   type AdaPool,
   type AdaStakeOverview,
+  type AptosPool,
+  type AptosStakeOverview,
   type Commands,
   type NearStakeOverview,
   type NearValidator,
@@ -30,6 +32,7 @@ import { fingerprint } from '../lib/balanceCache';
 import {
   adaPoolBadges,
   adaWarningText,
+  aptWarningText,
   drepArg,
   drepLabel,
   fmtDuration,
@@ -43,6 +46,7 @@ import {
   solWarningText,
   sortPools,
   sortValidators,
+  sortAptPools,
   sortSuiValidators,
   sortWitnesses,
   suiValidatorBadges,
@@ -88,6 +92,7 @@ const ADA = { decimals: 6, symbol: 'ADA' };
 const TRX = { decimals: 6, symbol: 'TRX' };
 const NEAR = { decimals: 24, symbol: 'NEAR' };
 const SUI = { decimals: 9, symbol: 'SUI' };
+const APT = { decimals: 8, symbol: 'APT' };
 const amt = (v: string | bigint | null | undefined, u: { decimals: number; symbol: string }) => (v === null || v === undefined ? '—' : fmtCrypto(BigInt(v), u.decimals, u.symbol, u.decimals));
 
 const pc = (n: number, maxFrac = 0) => (getLanguage() === 'fr' ? `${fmtNumber(n, maxFrac)} %` : `${fmtNumber(n, maxFrac)}%`);
@@ -99,7 +104,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const { accounts } = useVault();
   const { t } = useT();
   const tab: 'home' | StakeChain = chain ?? 'home';
-  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui };
+  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui, apt: !!accounts.aptos };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
       <header className="flex items-end justify-between gap-4">
@@ -116,6 +121,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
             { value: 'tron', label: 'TRON', disabled: !!activeHw || !has.tron },
             { value: 'near', label: 'NEAR', disabled: !!activeHw || !has.near },
             { value: 'sui', label: 'Sui', disabled: !!activeHw || !has.sui },
+            { value: 'apt', label: 'Aptos', disabled: !!activeHw || !has.apt },
           ]}
         />
       </header>
@@ -124,7 +130,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
           <strong className="font-semibold text-text">{t('staking.hwTitle')}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
         </Notice>
       )}
-      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : tab === 'near' ? <NearStaking /> : <SuiStaking />}
+      {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : tab === 'tron' ? <TronStaking /> : tab === 'near' ? <NearStaking /> : tab === 'sui' ? <SuiStaking /> : <AptosStaking />}
     </div>
   );
 }
@@ -137,7 +143,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   // at once, then refresh in the background.
   const stakeKey = useStakeKey();
   const { accounts } = useVault();
-  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '', sui: accounts.sui?.address ?? '' };
+  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '', sui: accounts.sui?.address ?? '', apt: accounts.aptos?.address ?? '' };
   const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
   const p = { persist: true };
   const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account], p);
@@ -145,15 +151,18 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account], p);
   const near = useCachedAsync(sk('near_stake_overview', 'near'), !disabled && has.near ? () => call('near_stake_overview', acct('near')) : null, [disabled, has.near, acct('near').account], p);
   const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !disabled && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [disabled, has.sui, acct('sui').account], p);
+  const aptos = useCachedAsync(sk('aptos_stake_overview', 'apt'), !disabled && has.apt ? () => call('aptos_stake_overview', acct('apt')) : null, [disabled, has.apt, acct('apt').account], p);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
     tron.reload();
     near.reload();
     sui.reload();
+    aptos.reload();
   });
   const nearStaked = near.data?.positions.reduce((s, p) => s + BigInt(p.staked), 0n);
   const suiStaked = sui.data?.positions.reduce((s, p) => s + BigInt(p.principal), 0n);
+  const aptStaked = aptos.data?.positions.reduce((s, p) => s + BigInt(p.active), 0n);
   const solStaked = sol.data?.accounts.reduce((s, a) => s + BigInt(a.lamports), 0n);
   const tronStaked = tron.data ? BigInt(tron.data.stakedBandwidth) + BigInt(tron.data.stakedEnergy) : undefined;
   const hide = (s: string) => (hideBalances ? HIDDEN : s);
@@ -202,6 +211,15 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       what: t('staking.homeSuiWhat'),
       line: sui.data ? (sui.data.positions.length ? tp('staking.homeSuiLine', sui.data.positions.length, { amount: hide(amt(suiStaked, SUI)) }) : t('staking.homeNearNone')) : null,
       error: sui.error,
+    },
+    {
+      chain: 'apt',
+      name: 'Aptos',
+      glyph: 'A',
+      color: '#06F7F7',
+      what: t('staking.homeAptWhat'),
+      line: aptos.data ? (aptos.data.positions.length ? tp('staking.homeNearLine', aptos.data.positions.length, { amount: hide(amt(aptStaked, APT)) }) : t('staking.homeNearNone')) : null,
+      error: aptos.error,
     },
   ];
   return (
@@ -1601,6 +1619,179 @@ function SuiOpDialog({ op, o, validators, onClose, onDone }: { op: { kind: 'stak
     sign: (b, password) => call('sui_stake_sign', { bcs: b.bcs, password, ...acct('sui') }),
     broadcast: (s) => call('sui_stake_broadcast', { bcs: s.bcs, signature: s.signature, ...acct('sui') }),
     doneText: t('staking.doneSui'),
+  };
+  return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
+}
+
+function AptosStaking() {
+  const { hideBalances } = useApp();
+  const acct = useStakeAccount();
+  const ov = useCachedAsync(useStakeKey()('aptos_stake_overview', acct('apt')), () => call('aptos_stake_overview', acct('apt')), [acct('apt').account], { intervalMs: 60_000 });
+  const ps = useCachedAsync(useStakeKey()('aptos_stake_pools'), () => call('aptos_stake_pools'), [], { persist: true });
+  useOnTorReady(ov.reload);
+  const { t } = useT();
+  const [op, setOp] = useState<{ kind: AptOp; pool: string } | null>(null);
+  const o = ov.data;
+  const h = (s: string) => (hideBalances ? HIDDEN : s);
+  if (ov.error && !o) return <ErrorLine error={ov.error} onRetry={ov.reload}>{ov.error.message}</ErrorLine>;
+  if (!o) return <Skeleton className="h-64 w-full" />;
+  const staked = o.positions.reduce((s, p) => s + BigInt(p.active), 0n);
+  const apy = ps.data?.grossApy ?? null;
+  const left = (p: { lockupEnds: number | null }) => fmtDuration((p.lockupEnds ?? o.ledgerTime) - o.ledgerTime);
+  return (
+    <>
+      <Card className="flex flex-col gap-4 px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid flex-1 grid-cols-3 gap-6">
+            <Stat k={t('staking.available')} v={h(amt(o.balance, APT))} />
+            <Stat k={t('staking.nearStaked')} v={h(amt(staked, APT))} sub={t('staking.nearRewardsIn')} />
+            <Stat k={t('staking.nearApy')} v={apy !== null ? `≈ ${pc(apy, 1)}` : '—'} sub={t('staking.aptApySub')} />
+          </div>
+          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake', pool: '' })}>
+            {t('staking.stakeApt')}
+          </Button>
+        </div>
+        <Hint>{t('staking.aptHint')}</Hint>
+      </Card>
+      <Card className="flex flex-col">
+        <div className="flex h-[50px] items-center border-b border-line px-5">
+          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.nearPools')}</span>
+        </div>
+        {o.positions.length === 0 ? (
+          <EmptyState title={t('staking.nearNoPool')}>{t('staking.aptNoPoolBody')}</EmptyState>
+        ) : (
+          o.positions.map((p) => (
+            <div key={p.pool} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-semibold">{ps.data?.pools.find((x) => x.address === p.pool)?.name ?? shortAddress(p.pool)}</span>
+                <span className="text-[12px] text-faint">
+                  {t('staking.nearStakedIn', { amount: h(amt(p.active, APT)) })}
+                  {p.commissionPct !== null && ` · ${t('staking.nearFee', { pct: pc(p.commissionPct, 1) })}`}
+                </span>
+                {BigInt(p.pendingInactive) > 0n && <span className="text-[12px] text-mute">{t('staking.nearUnstakedWait', { amount: h(amt(p.pendingInactive, APT)), duration: left(p) })}</span>}
+                {BigInt(p.inactive) > 0n && <span className="text-[12px] text-mute">{t('staking.nearUnstakedReady', { amount: h(amt(p.inactive, APT)) })}</span>}
+              </span>
+              <span className="flex shrink-0 gap-2">
+                <Button size="sm" onClick={() => setOp({ kind: 'stake', pool: p.pool })}>
+                  {t('staking.nearAdd')}
+                </Button>
+                <Button size="sm" disabled={BigInt(p.active) === 0n} onClick={() => setOp({ kind: 'unlock', pool: p.pool })}>
+                  {t('staking.aptUnlock')}
+                </Button>
+                <Button size="sm" variant="ice" disabled={BigInt(p.inactive) === 0n} onClick={() => setOp({ kind: 'withdraw', pool: p.pool })}>
+                  {t('staking.withdraw')}
+                </Button>
+              </span>
+            </div>
+          ))
+        )}
+      </Card>
+      {op && <AptosOpDialog key={`${op.kind}-${op.pool}`} op={op.kind} pool={op.pool} o={o} pools={ps.data?.pools ?? []} onClose={() => setOp(null)} onDone={ov.reload} />}
+    </>
+  );
+}
+
+type AptOp = 'stake' | 'unlock' | 'withdraw';
+type AptBuilt = Ret<'aptos_stake_build'>;
+type AptSigned = Ret<'aptos_stake_sign'>;
+
+function AptosPoolPicker({ value, onChange, pools }: { value: string; onChange: (v: string) => void; pools: AptosPool[] }) {
+  const { t } = useT();
+  const [q, setQ] = useState('');
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return sortAptPools(pools).filter((p) => (p.name ?? '').toLowerCase().includes(needle) || p.address.startsWith(needle));
+  }, [pools, q]);
+  return (
+    <div className="flex flex-col gap-2">
+      <Input aria-label={t('staking.nearSearch')} placeholder={t('staking.nearSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+        {pools.length === 0 ? (
+          <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
+            <Spinner /> {t('staking.nearLoadingPools')}
+          </div>
+        ) : (
+          list.map((p) => (
+            <button key={p.address} type="button" onClick={() => onChange(p.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === p.address && 'bg-bg')}>
+              <span className="truncate font-medium">{p.name ?? shortAddress(p.address)}</span>
+              <span className="shrink-0 text-[12px] text-faint">
+                {p.apy !== null ? `≈ ${pc(p.apy, 1)} · ` : ''}
+                {t('staking.suiCommission', { pct: pc(p.commissionPct, 1) })}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AptosOpDialog({ op, pool: initialPool, o, pools, onClose, onDone }: { op: AptOp; pool: string; o: AptosStakeOverview; pools: AptosPool[]; onClose: () => void; onDone: () => void }) {
+  const acct = useStakeAccount();
+  const [pool, setPool] = useState(initialPool);
+  const [amount, setAmount] = useState('');
+  const { t } = useT();
+  const octas = tryParseUnits(amount, 8);
+  const pos = o.positions.find((p) => p.pool === pool);
+  const active = BigInt(pos?.active ?? '0');
+  const label = (a: string) => pools.find((p) => p.address === a)?.name ?? shortAddress(a);
+  let title: string;
+  let form: ReactNode | undefined;
+  let canBuild = true;
+  let action: Commands['aptos_stake_build']['args']['action'];
+  if (op === 'stake') {
+    title = t('staking.stakeApt');
+    const min = active > 0n ? 1n : BigInt(o.minFirstStake);
+    canBuild = !!pool && !!octas && octas >= min && octas <= BigInt(o.balance);
+    action = { kind: 'stake', pool, amount: (octas ?? 0n).toString() };
+    form = (
+      <>
+        {initialPool ? <Row k={t('staking.nearPool')} v={label(pool)} /> : <AptosPoolPicker value={pool} onChange={setPool} pools={pools} />}
+        <AmountField id="apt-stake" label={t('staking.amountToStake')} value={amount} onChange={setAmount} unit={APT} hint={t('staking.aptStakeHint', { available: amt(o.balance, APT), min: amt(min, APT) })} />
+      </>
+    );
+  } else if (op === 'unlock') {
+    title = t('staking.aptUnlockTitle');
+    canBuild = !!octas && octas > 0n && octas <= active;
+    action = { kind: 'unlock', pool, amount: (octas ?? 0n).toString() };
+    form = (
+      <>
+        <Row k={t('staking.nearPool')} v={label(pool)} />
+        <AmountField id="apt-unlock" label={t('staking.aptAmountToUnlock')} value={amount} onChange={setAmount} unit={APT} onMax={() => setAmount(toInputDecimal(active, 8))} hint={t('staking.aptUnlockHint', { staked: amt(active, APT) })} />
+      </>
+    );
+  } else {
+    title = t('staking.aptWithdrawTitle');
+    action = { kind: 'withdraw', pool };
+  }
+  const spec: FlowSpec<AptBuilt, AptSigned> = {
+    title,
+    ...(form ? { form } : {}),
+    canBuild,
+    build: () => call('aptos_stake_build', { action, ...acct('apt') }),
+    enClair: (b) => {
+      const s = b.summary;
+      const duration = fmtDuration((b.context.position.lockupEnds ?? b.context.ledgerTime) - b.context.ledgerTime);
+      const v = { amount: amt(s.amount, APT), pool: label(s.pool), duration };
+      return s.call === 'addStake' ? t('staking.plainAptStake', v) : s.call === 'unlock' ? t('staking.plainAptUnlock', v) : t('staking.plainNearWithdraw', v);
+    },
+    review: (b) => {
+      const c = b.context;
+      return (
+        <>
+          <Row k={t('staking.nearPool')} v={<span className="font-mono text-[12px]">{b.summary.pool}</span>} {...(c.validating ? {} : { tone: 'warn' as const })} />
+          {c.position.commissionPct !== null && <Row k={t('staking.nearPoolFee')} v={pc(c.position.commissionPct, 2)} {...(c.warnings.some((w) => w.kind === 'highCommission') ? { tone: 'warn' as const } : {})} />}
+          <Row k={t('staking.nearStakedBefore')} v={amt(c.position.active, APT)} />
+          {c.addStakeFee !== null && <Row k={t('staking.aptAddFee')} v={amt(c.addStakeFee, APT)} />}
+          <Row k={t('staking.nearNetworkFee')} v={t('staking.aptFeeRow', { bound: amt(b.summary.maxFee, APT) })} />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskApt')} />
+        </>
+      );
+    },
+    warnings: (b) => b.context.warnings.map(aptWarningText),
+    sign: (b, password) => call('aptos_stake_sign', { raw: b.raw, password, ...acct('apt') }),
+    broadcast: (s) => call('aptos_stake_broadcast', { signed: s.signed, ...acct('apt') }),
+    doneText: t('staking.doneApt'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }

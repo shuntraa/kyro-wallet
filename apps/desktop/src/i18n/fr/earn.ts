@@ -29,6 +29,7 @@ export const earn = {
   'earn.lockSol': '≈ 2–3 jours',
   'earn.lockTron': '14 jours',
   'earn.lockNear': '≈ 2–3 jours',
+  'earn.lockApt': 'Jusqu’à 14 jours',
   'earn.risk': 'Rendements variables, versés par le protocole. Risques : bug de contrat, dépeg, pénalités des validateurs.',
   'earn.hw': 'Pas encore disponible avec un hardware wallet.',
   'earn.hwSign': 'Vérifiez et confirmez sur votre {device}.',

@@ -1904,6 +1904,16 @@ export interface TronStakeSummary {
   rawSize: number;
 }
 export type TronStakeWarning = { kind: 'srNotPaid'; address: string; rank: number } | { kind: 'brokerageAll'; address: string } | { kind: 'votesReduced' };
+/** Aptos delegation pools (`aptos_stake_*`, docs/IPC.md §2.8). Amounts: octas, decimal strings. */
+export interface AptosPool { address: string; name: string | null; commissionPct: number; stake: string; apy: number | null }
+export interface AptosPools { pools: AptosPool[]; grossApy: number | null }
+export interface AptosPoolPosition { pool: string; active: string; pendingInactive: string; inactive: string; commissionPct: number | null; lockupEnds: number | null }
+export interface AptosStakeOverview { address: string; balance: string; positions: AptosPoolPosition[]; ledgerTime: number; minFirstStake: string }
+export type AptosStakeRequest = { kind: 'stake'; pool: string; amount: string } | { kind: 'unlock'; pool: string; amount: string } | { kind: 'withdraw'; pool: string };
+export interface AptosStakeSummary { sender: string; call: 'addStake' | 'unlock' | 'withdraw'; pool: string; amount: string; sequenceNumber: string; maxGasAmount: string; gasUnitPrice: string; maxFee: string; expirationTimestampSecs: number; chainId: number }
+export type AptosStakeWarning = { kind: 'highCommission'; pct: number } | { kind: 'notValidating' } | { kind: 'highFee' };
+export interface AptosStakeContext { account: AptosAccountInfo; position: AptosPoolPosition; validating: boolean; addStakeFee: string | null; gasUsed: string; ledgerTime: number; warnings: AptosStakeWarning[]; requiresExtraConfirmation: boolean }
+
 /** Sui native staking (`sui_stake_*`, docs/IPC.md §2.8). Amounts: MIST, decimal strings. */
 export interface SuiValidator { address: string; name: string; poolId: string; commissionPct: number; stake: string; atRisk: boolean; apy: number | null }
 export interface SuiValidators { validators: SuiValidator[]; networkApy: number | null }
@@ -2592,6 +2602,11 @@ export interface Commands {
   sui_stake_build: { args: { action: SuiStakeRequest } & WithAccount; ret: { bcs: string; summary: SuiStakeSummary; context: SuiStakeContext } };
   sui_stake_sign: { args: { bcs: string; password: string } & WithAccount; ret: { bcs: string; signature: string; digest: string; summary: SuiStakeSummary; context: SuiStakeContext } };
   sui_stake_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
+  aptos_stake_overview: { args: WithAccount | undefined; ret: AptosStakeOverview };
+  aptos_stake_pools: { args: undefined; ret: AptosPools };
+  aptos_stake_build: { args: { action: AptosStakeRequest } & WithAccount; ret: { raw: string; summary: AptosStakeSummary; context: AptosStakeContext } };
+  aptos_stake_sign: { args: { raw: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: AptosStakeSummary; context: AptosStakeContext } };
+  aptos_stake_broadcast: { args: { signed: string } & WithAccount; ret: string };
   /** Earn on Ethereum mainnet (Lido, Aave v3): Rust builds the call to a pinned contract (docs/IPC.md). */
   earn_evm_build: { args: { action: EarnEvmAction } & WithAccount; ret: { to: string; data: string; valueWei: string } };
   /** Estimated staking rates in percent a year, before commission; null = not readable. */

@@ -231,7 +231,7 @@ fn api_error(what: &str, status: u16, v: &Value) -> AppError {
     ))
 }
 
-fn u64_at(v: &Value) -> Option<u64> {
+pub(crate) fn u64_at(v: &Value) -> Option<u64> {
     match v {
         Value::String(s) => s.parse().ok(),
         Value::Number(n) => n.as_u64(),
@@ -429,6 +429,42 @@ pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
         }));
     }
     Ok(Value::Array(out))
+}
+
+/// Result of a Move view function (`POST /view`).
+pub(crate) async fn view(ctx: &AptosCtx<'_>, function: &str, args: Value) -> AppResult<Value> {
+    let body = json!({ "function": function, "type_arguments": [], "arguments": args }).to_string();
+    let req = ServerRequest::post_json(url(ctx, "/view")?, Family::Aptos, body);
+    let (status, v) = send(ctx, req, "/view").await?;
+    if status != 200 {
+        return Err(api_error("/view", status, &v));
+    }
+    Ok(v)
+}
+
+/// Data of the Move resource `resource` of `address`.
+pub(crate) async fn resource(
+    ctx: &AptosCtx<'_>,
+    address: &str,
+    resource: &str,
+) -> AppResult<Value> {
+    let path = format!("/accounts/{address}/resource/{resource}");
+    let (status, v) = get(ctx, &path).await?;
+    if status != 200 {
+        return Err(api_error("/resource", status, &v));
+    }
+    Ok(v["data"].clone())
+}
+
+/// Indexer query (`/graphql`): the `data` object.
+pub(crate) async fn graphql(ctx: &AptosCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
+    let body = json!({ "query": query, "variables": variables }).to_string();
+    let req = ServerRequest::post_json(url(ctx, "/graphql")?, Family::Aptos, body);
+    let (status, v) = send(ctx, req, "/graphql").await?;
+    if status != 200 || v.get("errors").is_some() {
+        return Err(api_error("/graphql", status, &v));
+    }
+    Ok(v["data"].clone())
 }
 
 /// `gas_estimate` of `/estimate_gas_price` (octas per gas unit).

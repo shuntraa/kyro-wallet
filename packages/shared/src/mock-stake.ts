@@ -20,6 +20,11 @@ import {
   type NearStakeRequest,
   type NearStakeSummary,
   type NearValidator,
+  type AptosPool,
+  type AptosPoolPosition,
+  type AptosStakeContext,
+  type AptosStakeRequest,
+  type AptosStakeSummary,
   type SuiStakeContext,
   type SuiStakePosition,
   type SuiStakeRequest,
@@ -763,8 +768,63 @@ pool ${o.act.pool}`), built.context.requiresExtraConfirmation, l10n('• le pool
     },
   };
 
+  // Aptos: delegation pools (no balance moves in the demo, only the positions).
+  const OCTA = 10n ** 8n;
+  const aptPools: AptosPool[] = ['alpha', 'bravo', 'charlie'].map((n, i) => ({ address: `0x${h(`apt-pool:${n}`)}`, name: i === 1 ? null : `${n}.apt`, commissionPct: i === 2 ? 25 : 7 + i * 3, stake: ((3_000_000n - BigInt(i) * 500_000n) * OCTA).toString(), apy: 2.4 - i / 5 }));
+  const aptPos = new Map<string, { active: bigint; pending: bigint; inactive: bigint }>([[aptPools[0]!.address, { active: 25n * OCTA, pending: 0n, inactive: 12n * OCTA }]]);
+  const aptBalance = 300n * OCTA;
+  const aptNow = () => Math.floor(d.now() / 1000);
+  const aptPosition = (pool: string): AptosPoolPosition => {
+    const p = aptPos.get(pool) ?? { active: 0n, pending: 0n, inactive: 0n };
+    return { pool, active: p.active.toString(), pendingInactive: p.pending.toString(), inactive: p.inactive.toString(), commissionPct: aptPools.find((x) => x.address === pool)?.commissionPct ?? null, lockupEnds: aptNow() + 6 * 86_400 };
+  };
+  const aptBuild = (act: AptosStakeRequest): { raw: string; summary: AptosStakeSummary; context: AptosStakeContext } => {
+    const pool = aptPools.find((x) => x.address === act.pool);
+    if (!pool) throw invalid(l10n(`${act.pool} : pas un pool de délégation : refusé`, `${act.pool}: not a delegation pool: refused`));
+    const pos = aptPosition(act.pool);
+    const amount = act.kind === 'withdraw' ? BigInt(pos.inactive) : BigInt(act.amount || '0');
+    if (act.kind === 'stake' && amount + OCTA / 10n > aptBalance) throw invalid(l10n('solde insuffisant pour ce montant plus les frais', 'balance too low for this amount plus the network fee'));
+    if (act.kind === 'stake' && amount + BigInt(pos.active) < 11n * OCTA) throw invalid(l10n('il faut au moins 11 APT dans le pool', 'a delegator needs at least 11 APT in the pool'));
+    if (act.kind === 'unlock' && (amount <= 0n || amount > BigInt(pos.active))) throw invalid(l10n('montant supérieur au stake de ce pool', 'amount above what is staked in this pool'));
+    if (act.kind === 'withdraw' && amount === 0n) throw invalid(l10n('rien à retirer pour l’instant', 'nothing to withdraw yet'));
+    const warnings: AptosStakeContext['warnings'] = act.kind === 'stake' && pool.commissionPct > 10 ? [{ kind: 'highCommission', pct: pool.commissionPct }] : [];
+    const raw = encode({ apt: true, act, amount: amount.toString(), at: d.now() });
+    const summary: AptosStakeSummary = { sender: `0x${h('apt-demo')}`, call: act.kind === 'stake' ? 'addStake' : act.kind, pool: act.pool, amount: amount.toString(), sequenceNumber: '4', maxGasAmount: '20000', gasUnitPrice: '100', maxFee: '2000000', expirationTimestampSecs: aptNow() + 600, chainId: testnet ? 2 : 1 };
+    const account = { address: summary.sender, balance: aptBalance.toString(), sequenceNumber: '4', authenticationKey: summary.sender, keyMatches: true };
+    return { raw, summary, context: { account, position: pos, validating: true, addStakeFee: act.kind === 'stake' ? (amount / 50_000n).toString() : null, gasUsed: '13000', ledgerTime: aptNow(), warnings, requiresExtraConfirmation: warnings.length > 0 } };
+  };
+  const aptHandlers: Record<Extract<keyof Commands, `aptos_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
+    aptos_stake_overview: () => ({ address: `0x${h('apt-demo')}`, balance: aptBalance.toString(), positions: [...aptPos.keys()].map(aptPosition).filter((p) => p.active !== '0' || p.pendingInactive !== '0' || p.inactive !== '0'), ledgerTime: aptNow(), minFirstStake: (11n * OCTA).toString() }),
+    aptos_stake_pools: () => ({ pools: aptPools.map((p) => ({ ...p })), grossApy: 2.6 }),
+    aptos_stake_build: (a) => {
+      d.requireUnlocked();
+      return aptBuild(a.action as AptosStakeRequest);
+    },
+    aptos_stake_sign: (a) => {
+      d.requireUnlocked();
+      const o = decode<{ apt?: boolean; act?: AptosStakeRequest }>(a.raw);
+      if (!o.apt || !o.act) throw invalid(l10n('ce n’est pas une transaction de staking Aptos de Kyro', 'this is not a Kyro Aptos staking transaction'));
+      const built = aptBuild(o.act);
+      d.checkPassword(a.password);
+      confirmTwice(l10n('Confirmer le staking Aptos', 'Confirm the Aptos staking'), built.context.requiresExtraConfirmation, l10n('• pool à vérifier', '• pool to check'));
+      return { signed: String(a.raw), hash: `0x${h(`tx:${String(a.raw)}`)}`, summary: built.summary, context: built.context };
+    },
+    aptos_stake_broadcast: (a) => {
+      const { act, amount } = decode<{ act: AptosStakeRequest; amount: string }>(a.signed);
+      const p = aptPos.get(act.pool) ?? { active: 0n, pending: 0n, inactive: 0n };
+      const v = BigInt(amount);
+      if (act.kind === 'stake') p.active += v;
+      else if (act.kind === 'unlock') {
+        p.active -= v;
+        p.pending += v;
+      } else p.inactive = 0n;
+      aptPos.set(act.pool, p);
+      return `0x${h(`tx:${String(a.signed)}`)}`;
+    },
+  };
+
   return {
-    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers, ...suiHandlers },
+    handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers, ...nearHandlers, ...suiHandlers, ...aptHandlers },
     tronStakeBroadcast,
     advanceSolEpochs(n: number) {
       solEpochShift += n;

@@ -222,6 +222,17 @@ describe('demo staking — TRON', () => {
 describe('demo staking — NEAR', () => {
   it('stake, unstake all, refusals, reinforced dialog for a high pool fee', async () => {
     const { texts } = setup();
+    const ap = (await call('aptos_stake_pools')).pools;
+    const a0 = ap[1]!.address;
+    await expect(call('aptos_stake_build', { action: { kind: 'stake', pool: a0, amount: '1' } })).rejects.toThrow(/11 APT/);
+    const ab = await call('aptos_stake_build', { action: { kind: 'stake', pool: a0, amount: '2000000000' } });
+    expect(ab.summary.call).toBe('addStake');
+    await call('aptos_stake_broadcast', { signed: (await call('aptos_stake_sign', { raw: ab.raw, password: PW })).signed });
+    const au = await call('aptos_stake_build', { action: { kind: 'unlock', pool: a0, amount: '500000000' } });
+    await call('aptos_stake_broadcast', { signed: (await call('aptos_stake_sign', { raw: au.raw, password: PW })).signed });
+    expect((await call('aptos_stake_overview')).positions.find((p) => p.pool === a0)).toMatchObject({ active: '1500000000', pendingInactive: '500000000' });
+    await expect(call('aptos_stake_build', { action: { kind: 'withdraw', pool: a0 } })).rejects.toThrow(/withdraw|retirer/i);
+
     const sv = (await call('sui_stake_validators')).validators;
     const sb = await call('sui_stake_build', { action: { kind: 'stake', validator: sv[0]!.address, amount: '2000000000' } });
     expect(sb.summary.action).toMatchObject({ type: 'add', amount: '2000000000' });

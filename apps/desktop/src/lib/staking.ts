@@ -2,11 +2,11 @@
 // Staking (docs/IPC.md §2.8): pure helpers for the screens — labels, warning texts that match
 // Rust's reinforced-dialog triggers, picker sorting and badges.
 
-import type { AdaPool, AdaStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, SuiStakeWarning, SuiValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
+import type { AdaPool, AdaStakeWarning, AptosPool, AptosStakeWarning, NearStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, SuiStakeWarning, SuiValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
 import { fmtCrypto, fmtNumber, shortAddress } from './format';
 import { t } from '../i18n';
 
-export type StakeChain = 'sol' | 'ada' | 'tron' | 'near' | 'sui';
+export type StakeChain = 'sol' | 'ada' | 'tron' | 'near' | 'sui' | 'apt';
 
 /** Rust thresholds (reinforced 2nd dialog). */
 export const SOL_HIGH_COMMISSION = 10;
@@ -14,10 +14,11 @@ export const ADA_HIGH_MARGIN = 0.1;
 export const ADA_SATURATED = 100;
 export const TRON_PAID_RANKS = 127;
 export const SUI_HIGH_COMMISSION = 10;
+export const APT_HIGH_COMMISSION = 10;
 
 export function networkLabel(chain: StakeChain, network: Network): string {
   if (network === 'mainnet') return 'mainnet';
-  return { sol: 'devnet', ada: 'preprod', tron: 'Nile', near: 'testnet', sui: 'testnet' }[chain];
+  return { sol: 'devnet', ada: 'preprod', tron: 'Nile', near: 'testnet', sui: 'testnet', apt: 'testnet' }[chain];
 }
 
 export function solStateLabel(s: SolStakeState): string {
@@ -124,6 +125,21 @@ export function suiValidatorBadges(v: SuiValidator): { tone: 'down' | 'warn'; te
 /** Sound validators first, then the best yield; a missing yield goes last. */
 export function sortSuiValidators(list: SuiValidator[]): SuiValidator[] {
   return [...list].sort((a, b) => Number(a.atRisk) - Number(b.atRisk) || (b.apy ?? -1) - (a.apy ?? -1) || cmpBig(b.stake, a.stake));
+}
+
+export function aptWarningText(w: AptosStakeWarning): string {
+  switch (w.kind) {
+    case 'highCommission':
+      return t('staking.warnAptCommission', { pct: fmtNumber(w.pct, 0) });
+    case 'notValidating':
+      return t('staking.warnNearNotValidating');
+    case 'highFee':
+      return t('staking.warnAptFee');
+  }
+}
+/** Best yield after commission first, then the largest pool. */
+export function sortAptPools(list: AptosPool[]): AptosPool[] {
+  return [...list].sort((a, b) => a.commissionPct - b.commissionPct || cmpBig(b.stake, a.stake));
 }
 
 /** Unlock estimate: what is left of this epoch plus the remaining full epochs. */

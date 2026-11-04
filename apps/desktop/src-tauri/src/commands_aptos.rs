@@ -26,7 +26,7 @@ pub(crate) fn ctx(state: &AppState) -> AptosCtx<'_> {
     }
 }
 
-fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
+pub(crate) fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     state.with_seed(|seed| {
         Ok((
             wallet_core::aptos_address(seed, account)?,
