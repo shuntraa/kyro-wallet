@@ -186,8 +186,8 @@ Key facts:
 - Blockchains (${chains.length}): ${P.listNames(chains.map((c) => c.name))}. 220+ tokens.
 - Earn: staking for SOL (Solana), ADA (Cardano), TRX (TRON), NEAR, SUI (Sui) and APT (Aptos); ETH liquid staking with Lido; lending on Aave v3. 16 options in all. Rates are estimates, never guaranteed, and nothing here is financial advice.
 - Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on ${P.listNames(hw)}. From a hardware account, Earn covers Lido, Aave, and staking on Solana and Cardano (Ledger and Trezor) and NEAR (Ledger).
-- Also: several wallets on one device, watch addresses with no key, local price and funds-received alerts, simulation before signing, fee speeds, speed up and cancel.
-- Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers.
+- Also: several wallets on one device, watch addresses with no key, local price and funds-received alerts, simulation before signing, fee speeds, speed up and cancel, an optional BIP39 passphrase (the 25th word), dust protection on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash, ENS names on Send for EVM chains, and read-only display of received tokens on Sui, Cosmos Hub and Bitcoin Cash.
+- Privacy: Tor built in and on by default, no personal data collected (only an anonymous weekly count over Tor, can be turned off), optional custom servers. Plain Tor bridges for places that block Tor; obfs4, webtunnel and snowflake are not supported. Lock before sleep on Windows only; macOS and Linux lock on wake.
 - Security status: internal security review done; no external audit published yet. Installers are not code-signed yet, so Windows and macOS warn on first launch.
 - Downloads: only from GitHub Releases (${REPO}/releases). No mobile app.
 - Vulnerability reports: privately to security@kyrowallet.com or via GitHub security advisories (${REPO}/security).

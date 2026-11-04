@@ -5536,6 +5536,9 @@ A: No. Tor hides who is asking. It does not hide what is asked: the server you q
 Q: Why is Kyro slower over Tor?
 A: Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers.
 
+Q: What if my country blocks Tor?
+A: Paste plain bridge lines in Settings, under Privacy. Kyro then connects only through them and stays offline if none answers. obfs4 and other disguised bridges do not work yet, so a censor that inspects traffic can still block a plain bridge.
+
 Q: Do my own servers go through Tor too?
 A: Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family.
 
@@ -6405,6 +6408,30 @@ On swaps and Earn calls: what you send and receive, what you approve, and calls 
 
 Slow, Normal or Fast on Send, and pending Bitcoin, Litecoin or EVM sends can be sped up or cancelled.
 
+### Recovery phrase passphrase
+
+The optional BIP39 25th word, on every chain. If you forget it, those funds are lost.
+
+### Dust protection
+
+Tiny coins from strangers stay out of your sends on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash.
+
+### ENS names on Send
+
+Type name.eth on EVM chains. The review shows the real address. Names stored off-chain are not read.
+
+### Tor bridges
+
+Plain bridge lines for places that block Tor. obfs4 and other disguised bridges are not supported yet.
+
+### Lock before sleep
+
+On Windows, Kyro locks as the computer goes to sleep. macOS and Linux lock on wake.
+
+### Tokens you receive
+
+Other Sui coins, Cosmos Hub tokens and CashTokens show read only. Kyro cannot send them yet.
+
 ### One-click Windows installer
 
 A single branded window since 1.0.1, and one-line install on every system.
@@ -6494,9 +6521,17 @@ Every release of Kyro, newest first. This page is generated from CHANGELOG.md at
 
 - Dust protection: tiny coins from strangers on an address already in use stay out of your sends, on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash. Send shows them as Set aside, with a box to include them. Your balance does not change.
 
-- History marks tiny EVM transfers worth under 1 as a possible scam, next to zero transfers.
+- History marks EVM transfers worth less than 1 in your currency as a possible scam, like zero transfers.
 
 - Recovery phrase passphrase, the 25th word: optional when you create or import a wallet (Advanced). It follows BIP39, on every chain. Unlocking still takes only your password. If you forget it, these funds are lost. Nobody can recover it.
+
+- Tor bridges: if your country blocks Tor, paste plain bridge lines in Settings > Privacy. Kyro then connects only through them and stays offline if none answers. obfs4 and other disguised bridges don't work yet.
+
+- Tokens you received on Sui, Cosmos Hub and Bitcoin Cash now show on the SUI, ATOM and BCH pages, read only: they can't be sent from Kyro yet. Tokens Kyro can't name stay folded, since many are spam.
+
+- Lock before sleep: on Windows, Kyro now locks as the computer goes to sleep, not only when it wakes up. On by default, in Settings > Security. macOS and Linux still lock on wake.
+
+- Send: type a name.eth as the recipient on EVM chains. Kyro shows the address under the field, and the review and the signing window show that real address. Names stored off-chain aren't read.
 
 - Backup: Settings > Backup exports your contacts, labels, watch list, favorites, alerts and settings to one encrypted file, with a password you choose. Import shows what would change first and replaces nothing unless you ask. Never your phrase, keys, API keys or servers.
 

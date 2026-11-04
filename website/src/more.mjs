@@ -21,6 +21,7 @@ function tor() {
     ['Can I turn Tor off?', 'Yes. It is your choice in Settings, confirmed in a native system window, so a compromised interface cannot switch it off for you. In clear mode, servers see your IP address.'],
     ['Does Tor make my transactions anonymous?', 'No. Tor hides who is asking. It does not hide what is asked: the server you query still sees the addresses and transactions you look up, and public blockchains stay public.'],
     ['Why is Kyro slower over Tor?', 'Requests take three relays instead of a direct path, and some servers refuse some exit relays. Kyro retries on a new circuit, and each blockchain shows as soon as it answers.'],
+    ['What if my country blocks Tor?', 'Paste plain bridge lines in Settings, under Privacy. Kyro then connects only through them and stays offline if none answers. obfs4 and other disguised bridges do not work yet, so a censor that inspects traffic can still block a plain bridge.'],
     ['Do my own servers go through Tor too?', 'Yes. When Tor is on, your custom servers use the isolated circuits of their own blockchain family.']
   ];
   const seen = [

@@ -101,6 +101,12 @@ export const DONE = [
   ['Alerts', 'Price levels and funds received, as system notifications computed on your device.'],
   ['Simulation before signing', 'On swaps and Earn calls: what you send and receive, what you approve, and calls that would fail.'],
   ['Fee choice, speed up and cancel', 'Slow, Normal or Fast on Send, and pending Bitcoin, Litecoin or EVM sends can be sped up or cancelled.'],
+  ['Recovery phrase passphrase', 'The optional BIP39 25th word, on every chain. If you forget it, those funds are lost.'],
+  ['Dust protection', 'Tiny coins from strangers stay out of your sends on Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash and Zcash.'],
+  ['ENS names on Send', 'Type name.eth on EVM chains. The review shows the real address. Names stored off-chain are not read.'],
+  ['Tor bridges', 'Plain bridge lines for places that block Tor. obfs4 and other disguised bridges are not supported yet.'],
+  ['Lock before sleep', 'On Windows, Kyro locks as the computer goes to sleep. macOS and Linux lock on wake.'],
+  ['Tokens you receive', 'Other Sui coins, Cosmos Hub tokens and CashTokens show read only. Kyro cannot send them yet.'],
   ['One-click Windows installer', 'A single branded window since 1.0.1, and one-line install on every system.']
 ];
 export const NEXT = [

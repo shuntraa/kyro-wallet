@@ -564,7 +564,7 @@ export function features(chains) {
           ${mini('ic-accounts', 'g-ice', 'Many accounts', 'Several accounts per blockchain from the same phrase. Move funds between them in two clicks.', true)}
           ${mini('ic-tor', 'g-deep', 'Tor built in', 'All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.')}
           ${mini('ic-eye', 'g-sky', 'No personal data', 'No account and no analytics. A weekly anonymous count over Tor, which you can turn off. Every server Kyro contacts is listed on GitHub.')}
-          ${mini('ic-lock', 'g-deep', 'Auto-lock', 'The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.')}
+          ${mini('ic-lock', 'g-deep', 'Auto-lock', 'The vault locks itself when the timer runs out, and on Windows as the computer goes to sleep. macOS and Linux lock on wake. Unlocking needs your password.')}
           ${mini('ic-send', 'g-sky', 'Your own servers', 'Point each blockchain at your own node or server. Kyro checks it is on the right network first.')}
           ${mini('ic-shield', 'g-deep', 'Approvals overview', 'The vault panel shows whether any unlimited token approval is active.')}
           ${mini('ic-swap', 'g-ice', `${chains.length} blockchains`, 'Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. <a href="/chains/">See every blockchain</a>.')}
