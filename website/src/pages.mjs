@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Content of every page on kyrowallet.com.
 
-import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
-import { strip, head, sec, faqBlock, faqLd } from './kit.mjs';
-import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon } from './components.mjs';
+import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, iconOf, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
+import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT } from './kit.mjs';
+import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon, term, phraseCard, privateCard, seesCards, moneroCard, roadList } from './components.mjs';
 
 const layers = () => html`
         <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
@@ -227,6 +227,30 @@ export function home(chains) {
       </div>
     </section>
 
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        ${head('How it works', 'how-title', 'Private in <em>three steps</em>', 'No account to open and nothing to configure. Tor is on before your first balance loads.')}
+        <div class="steps3" data-reveal-group>
+          <article class="step3 spot">
+            <h3><span>1</span>Install</h3>
+            <p>One command, or the installer. The script checks the SHA-256 before it runs anything.</p>
+            ${term('PowerShell', ['$ irm https://kyrowallet.com/install.ps1 | iex', 'Checking SHA-256…', 'Installing Kyro…'])}
+          </article>
+          <article class="step3 spot">
+            <h3><span>2</span>Create or import</h3>
+            <p>Make a new phrase, bring your own 12 or 24 words, or plug in a Ledger or Trezor.</p>
+            ${phraseCard()}
+          </article>
+          <article class="step3 spot">
+            <h3><span>3</span>You’re private</h3>
+            <p>Your keys are encrypted on your computer and your requests leave through Tor.</p>
+            ${privateCard()}
+          </article>
+        </div>
+        <p>${a('/guides/first-steps-with-kyro/', '<span class="more">First steps with Kyro</span>')}</p>
+      </div>
+    </section>
+
     <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
@@ -255,6 +279,15 @@ export function home(chains) {
         </div>
     </section>
 
+    <section class="section" id="sees" aria-labelledby="sees-title">
+      <div class="wrap">
+        ${head('What servers see', 'sees-title', 'Your IP stays <em>out of the log</em>', 'A wallet has to ask servers about your addresses. The question is whether your IP address comes with it.')}
+        <div data-reveal>${seesCards()}</div>
+        <p class="tor-note">Tor hides who is asking, not what is asked: the server you query still sees those addresses. Run your own node to avoid that.</p>
+        <p><a class="more" href="/tor/">How Kyro uses Tor</a></p>
+      </div>
+    </section>
+
     <section class="section" id="fees" aria-labelledby="swap-title">
       <div class="wrap">
         <div class="head-center">
@@ -275,18 +308,25 @@ export function home(chains) {
             <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full swap fee table</a></p>
           </article>
         </div>
+        <p><a class="more" href="/swap/">Routes, limits and checks</a></p>
       </div>
     </section>
+
+    ${row('monero-title', 'Monero', 'Monero, <em>done properly</em>', false, html`
+          <p>A full Monero desktop wallet with no light-wallet server. The node sends blocks and your machine scans them, so your view key never leaves it.</p>
+          ${ul(['Your addresses and keys are never sent to the node.', 'Tor hides your IP from it. Your own node or a .onion works too.', 'A 25-word seed restores the wallet in Monero GUI, Feather or Cake Wallet.'])}
+          <a class="more" href="/monero/">The private Monero wallet</a>`, moneroCard())}
 
     <section class="section" id="features" aria-labelledby="earn-title">
       <div class="wrap wrap-mid">
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
           <h2 id="earn-title">Earn <em>without an account</em></h2>
-          <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list. No sign-up, and your keys stay with you.</p>
+          <p data-reveal>Lido, Aave, Solana, Cardano, TRON and NEAR in one list. No sign-up, and your keys stay with you.</p>
         </div>
         <div class="earn-wrap" data-reveal data-rows>${earnCard()}</div>
         <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.</p>
+        <p class="center"><a class="more" href="/earn/">All 14 options and their risks</a></p>
       </div>
     </section>
 
@@ -301,11 +341,16 @@ export function home(chains) {
               <li class="on"><span>3</span>Confirm on the device</li>
             </ol>
             <p class="hw-count" data-reveal><strong data-ledger-n>${hwChains}</strong> blockchains, Trezor Safe 7 included.</p>
-            <a class="more" href="/features/#f-hw" data-reveal>Which device on which chain</a>
+            <a class="more" href="/hardware-wallets/" data-reveal>Which device on which chain</a>
           </div>
           ${ledgerScene()}
         </div>
     </section>
+
+    ${row('sign-title', 'Transaction review', 'Every signature, <em>decoded</em>', true, html`
+          <p>The interface never gets the last word. The Rust core decodes the real transaction and a native system window shows it, drawn outside the web view. A compromised page cannot change what you read.</p>
+          ${ul(['Amount, recipient, network and fee, as Rust read them.', 'Your password, then your click, for every signature.', 'Unusual transactions need a second, reinforced confirmation.', 'Address-poisoning alerts and clipboard checks before you send.'])}
+          <a class="more" href="/security/">Nothing is signed without you</a>`, confirmCard())}
 
     <section class="section" id="security" aria-labelledby="security-title">
       <div class="wrap">
@@ -332,6 +377,39 @@ export function home(chains) {
           </article>
         </div>
         <p><a class="more" href="/security/">How Kyro protects your keys</a></p>
+      </div>
+    </section>
+
+    <section class="section" id="compare" aria-labelledby="vs-title">
+      <div class="wrap wrap-mid">
+        ${head('Compare', 'vs-title', 'Kyro and <em>a typical wallet</em>', 'What to look for in a private crypto wallet, whichever one you pick.')}
+        ${tbl('Kyro compared with a typical wallet', ['', 'Kyro', 'A typical wallet'], [
+          ['Tor', 'Built in, on by default, stops if Tor fails', 'Direct connection'],
+          ['Account', 'None', 'Varies, some ask for an email'],
+          ['Analytics', 'None, one anonymous weekly count you can turn off', 'Varies'],
+          ['Source code', 'Public, GPL-3.0-or-later', 'Varies'],
+          ['Hardware wallets', `Ledger and Trezor, ${hwChains} blockchains`, 'Varies'],
+          ['Swaps', 'Several providers compared, fee in the rate', 'Varies'],
+          ['Signing', 'Decoded by Rust, shown in a system window', 'Usually shown inside the app']
+        ], 'matrix vs')}
+        <p class="tbl-note">“Typical” is a general description, not a test of any product. Check the wallet you use.</p>
+      </div>
+    </section>
+
+    ${row('oss-title', 'Open source', 'Read the code. <em>All of it.</em>', false, html`
+          <p>Kyro is an open source wallet under GPL-3.0-or-later: interface, Rust core and app shell, on <a href="${REPO}">GitHub</a>.</p>
+          ${ul(['Dependencies pinned to exact versions, with committed lockfiles.', '<code>cargo audit</code>, <code>cargo deny</code> and <code>pnpm audit</code> in CI.', 'SHA256SUMS with every release, and signed automatic updates.', 'Every server Kyro contacts is listed in the repo.'])}
+          <p class="small mute">Bit-for-bit reproducible builds are a goal, not a guarantee yet. The installers are not code-signed yet, so your system warns on first launch.</p>
+          ${a('/open-source/', '<span class="more">Read, build and verify</span>')}`, term('Terminal', [`$ git clone ${REPO}.git`, '$ cd kyro-wallet', '$ pnpm install --frozen-lockfile', '$ pnpm build']))}
+
+    <section class="section" id="roadmap" aria-labelledby="road-title">
+      <div class="wrap">
+        ${head('Roadmap', 'road-title', 'Shipped, <em>and next</em>', `Version ${VERSION} today. No dates we cannot keep.`)}
+        <div class="road-cols">
+          <div><h3 class="road-h">Shipped</h3>${roadList(DONE.slice(3, 6), 'done')}</div>
+          <div><h3 class="road-h">Next</h3>${roadList(NEXT.slice(0, 3), 'next')}</div>
+        </div>
+        <p>${a('/roadmap/', '<span class="more">The full roadmap</span>')}</p>
       </div>
     </section>
 
@@ -826,26 +904,26 @@ const FAQ = [
     items: [
       { home: true, q: 'Is Kyro Wallet free?', a: () => `<p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. <a href="/fees/">Fee details</a>.</p>` },
       { home: true, q: 'Is Kyro custodial?', a: () => `<p>No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.</p>` },
-      { q: 'Which blockchains does Kyro support?', a: (chains) => `<p>${chains.length} blockchains: ${listNames(chains.map((c) => c.name))}. Plus 220+ tokens on them. <a href="/chains/">What works on each one</a>.</p>` },
+      { home: true, q: 'Which blockchains does Kyro support?', a: (chains) => `<p>${chains.length} blockchains: ${listNames(chains.map((c) => c.name))}. Plus 220+ tokens on them. <a href="/chains/">What works on each one</a>.</p>` },
       { q: 'Which computers does Kyro run on?', a: () => `<p>Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). <a href="/download/">Download</a>.</p>` },
-      { q: 'Is there a mobile app?', a: () => `<p>No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.</p>` }
+      { home: true, q: 'Is there a mobile app?', a: () => `<p>No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.</p>` }
     ]
   },
   {
     title: 'Swaps and staking',
     items: [
-      { q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p>` },
-      { q: 'Can I stake with Kyro?', a: () => `<p>Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. <a href="/features/#f-stake">How staking works</a>.</p>` }
+      { home: true, q: 'How much does a swap cost?', a: () => `<p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p>` },
+      { home: true, q: 'Can I stake with Kyro?', a: () => `<p>Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p>` }
     ]
   },
   {
     title: 'Security',
     items: [
       { home: true, q: 'Does Kyro support hardware wallets?', a: (chains) => `<p>Yes: Ledger and Trezor, including Trezor Safe 7. Supported on ${listNames(chains.filter((c) => c.features.hardware).map((c) => c.name))}.</p>` },
-      { q: 'What happens if I lose my recovery phrase?', a: () => `<p>If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.</p>` },
-      { q: 'Can I import a recovery phrase from another wallet?', a: () => `<p>Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.</p>` },
-      { q: 'Does Kyro use Tor?', a: () => `<p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p>` },
-      { q: 'Does Kyro collect any data?', a: () => `<p>No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub’s download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies; it only reads the public usage counters from GitHub.</p>` },
+      { home: true, q: 'What happens if I lose my recovery phrase?', a: () => `<p>If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.</p>` },
+      { home: true, q: 'Can I import a recovery phrase from another wallet?', a: () => `<p>Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.</p>` },
+      { home: true, q: 'Does Kyro use Tor?', a: () => `<p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p>` },
+      { home: true, q: 'Does Kyro collect any data?', a: () => `<p>No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub’s download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies; it only reads the public usage counters from GitHub.</p>` },
       { home: true, q: 'Is Kyro open source? Has it been audited?', a: () => `<p>The full source is on <a href="${REPO}">GitHub</a> under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.</p>` },
       { q: 'How do I report a vulnerability?', a: () => `<p>Privately, through <a href="${REPO}/security">GitHub security advisories</a>. Please do not open a public issue. See the <a href="${REPO}/blob/main/SECURITY.md">security policy</a>.</p>` }
     ]
@@ -857,7 +935,7 @@ const FAQ = [
       { q: 'How do I verify my download?', a: () => `<p>Compare the SHA-256 of your file with the matching line in <code>SHA256SUMS</code>.</p><pre><code>Get-FileHash .\\${FILES.exe} -Algorithm SHA256   # Windows
 shasum -a 256 ${FILES.dmg}                                  # macOS
 sha256sum -c SHA256SUMS --ignore-missing                      # Linux</code></pre>` },
-      { q: 'Windows says “Windows protected your PC”. What do I do?', a: () => `<p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>. The <a href="/download/#install">one-line install command</a> checks the checksum for you and does not trigger this warning.</p>` },
+      { home: true, q: 'Windows says “Windows protected your PC”. What do I do?', a: () => `<p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>. The <a href="/download/#install">one-line install command</a> checks the checksum for you and does not trigger this warning.</p>` },
       { q: 'macOS says Kyro can’t be opened. What do I do?', a: () => `<p>Right-click Kyro in Applications and choose <b>Open</b>, or go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>.</p>` }
     ]
   }

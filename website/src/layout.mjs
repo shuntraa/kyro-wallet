@@ -99,6 +99,12 @@ function header(path) {
       <nav class="nav" aria-label="Main navigation">
         <ul>
           ${NAV.map(link)}
+          <li>
+            <details class="nav-more" data-pop>
+              <summary>More${navIcon('M6 9l6 6 6-6')}</summary>
+              <ul class="nav-more-panel">${more.map(plain)}</ul>
+            </details>
+          </li>
         </ul>
       </nav>
       <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>

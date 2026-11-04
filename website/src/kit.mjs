@@ -76,3 +76,36 @@ export const nextLinks = (id, list, h2 = 'Keep <em>reading</em>') =>
           ${list.map(([href, t, p]) => `<li class="glow-card spot"><h3>${a(href, t)}</h3><p>${p}</p></li>`)}
         </ul>`
   );
+
+/** The roadmap, shown on /roadmap/ and on the home page. */
+export const DONE = [
+  ['36 blockchains, one phrase', 'Bitcoin, EVM networks, Solana, TRON, Cardano, Monero and more, with 220+ tokens.'],
+  ['Tor built in', 'On by default, a circuit per blockchain family, no fallback to a direct connection.'],
+  ['Signed automatic updates', 'Downloaded over Tor, verified against a pinned public key, applied at the next start.'],
+  ['Swaps across chains', 'Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.'],
+  ['Earn', '14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.'],
+  ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.'],
+  ['One-click Windows installer', 'A single branded window since 1.0.1, and one-line install on every system.']
+];
+export const NEXT = [
+  ['More staking', 'Polkadot, Sui and Aptos.'],
+  ['Token sends on more chains', 'From hardware accounts, beyond EVM, Solana and TRON.'],
+  ['Code signing', 'So Windows and macOS stop warning on first launch. See the <a href="/code-signing-policy/">code signing policy</a>.'],
+  ['winget', 'Install and update with the Windows package manager.'],
+  ['More Ledger chains', 'Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.'],
+  ['Compact filters for Bitcoin', 'A private way to read Bitcoin without an address server, once its dependencies pass review.'],
+  ['Reproducible builds', 'Bit-for-bit reproducible builds are a goal, not yet a guarantee.']
+];
+
+export const ul = (items, cls = 'checks') => `<ul class="${cls}">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+
+export const tbl = (caption, heads, rows, cls = 'matrix') => html`
+        <div class="table-wrap" data-reveal>
+          <table class="${cls}">
+            <caption class="visually-hidden">${caption}</caption>
+            <thead><tr>${heads.map((h) => `<th scope="col">${h}</th>`)}</tr></thead>
+            <tbody>
+              ${rows.map(([first, ...rest]) => `<tr><th scope="row">${first}</th>${rest.map((c) => `<td>${c}</td>`).join('')}</tr>`)}
+            </tbody>
+          </table>
+        </div>`;

@@ -50,6 +50,12 @@
       <nav class="nav" aria-label="Main navigation">
         <ul>
           <li><a href="/features/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span>Features</span></a></li><li><a href="/chains/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></svg><span>Blockchains</span></a></li><li><a href="/security/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span>Security</span></a></li><li><a href="/fees/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18L18 6M8 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM16 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg><span>Fees</span></a></li><li><a href="/faq/"><svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.2 9.2A3 3 0 0115 10c0 2-3 2.4-3 4.2M12 17.6v.1M12 21a9 9 0 110-18 9 9 0 010 18z"/></svg><span>FAQ</span></a></li>
+          <li>
+            <details class="nav-more" data-pop>
+              <summary>More<svg class="nav-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+              <ul class="nav-more-panel"><li><a href="/tor/">Tor</a></li><li><a href="/monero/">Monero</a></li><li><a href="/swap/">Swap</a></li><li><a href="/earn/">Earn</a></li><li><a href="/hardware-wallets/">Hardware wallets</a></li><li><a href="/roadmap/">Roadmap</a></li><li><a href="/open-source/">Open source</a></li><li><a href="/about/">About</a></li></ul>
+            </details>
+          </li>
         </ul>
       </nav>
       <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
@@ -278,6 +284,53 @@
       </div>
     </section>
 
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>How it works</p>
+          <h2 id="how-title">Private in <em>three steps</em></h2>
+          <p data-reveal>No account to open and nothing to configure. Tor is on before your first balance loads.</p>
+        </div>
+        <div class="steps3" data-reveal-group>
+          <article class="step3 spot">
+            <h3><span>1</span>Install</h3>
+            <p>One command, or the installer. The script checks the SHA-256 before it runs anything.</p>
+            
+  <div class="term" role="img" aria-label="PowerShell"><div aria-hidden="true">
+    <div class="term-bar"><i></i><i></i><i></i><span>PowerShell</span></div>
+    <pre><b>$ irm kyrowallet.com/install.ps1 | iex</b>
+<span>Checking SHA-256…</span>
+<span>Installing Kyro…</span></pre>
+  </div></div>
+          </article>
+          <article class="step3 spot">
+            <h3><span>2</span>Create or import</h3>
+            <p>Make a new phrase, bring your own 12 or 24 words, or plug in a Ledger or Trezor.</p>
+            
+  <div class="kw-card kw-card-narrow phrase" role="img" aria-label="Kyro's recovery phrase window: numbered words, hidden until you choose to show them."><div aria-hidden="true">
+    <div class="kw-seg"><i class="on">Create</i><i>Import</i></div>
+    <ol><li><small>1</small><i></i></li><li><small>2</small><i></i></li><li><small>3</small><i></i></li><li><small>4</small><i></i></li><li><small>5</small><i></i></li><li><small>6</small><i></i></li><li><small>7</small><i></i></li><li><small>8</small><i></i></li><li><small>9</small><i></i></li><li><small>10</small><i></i></li><li><small>11</small><i></i></li><li><small>12</small><i></i></li></ol>
+    <p class="phrase-note"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3"/></svg>Stays on this device. Paper only.</p>
+  </div></div>
+          </article>
+          <article class="step3 spot">
+            <h3><span>3</span>You’re private</h3>
+            <p>Your keys are encrypted on your computer and your requests leave through Tor.</p>
+            
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro status: Tor on, vault encrypted on this device, no account, no analytics."><div aria-hidden="true">
+    <div class="kw-vault"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3z"/></svg><span><b>You’re private</b><small>Nothing to sign up for</small></span><em>Ready</em></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+    <div class="kw-kv"><span>Vault</span><b>On this device</b></div>
+    <div class="kw-kv"><span>Account</span><b class="up">None</b></div>
+    <div class="kw-kv"><span>Analytics</span><b class="up">None</b></div>
+  </div></div>
+          </article>
+        </div>
+        <p><span class="more">First steps with Kyro</span></p>
+      </div>
+    </section>
+
     <section class="section" id="tor" data-tor aria-labelledby="tor-title">
         <div class="wrap">
           <div class="head-center">
@@ -304,6 +357,48 @@
             </div>
           </div>
         </div>
+    </section>
+
+    <section class="section" id="sees" aria-labelledby="sees-title">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>What servers see</p>
+          <h2 id="sees-title">Your IP stays <em>out of the log</em></h2>
+          <p data-reveal>A wallet has to ask servers about your addresses. The question is whether your IP address comes with it.</p>
+        </div>
+        <div data-reveal>
+  <div class="sees">
+    <article class="sees-col spot">
+      <p class="sees-tag">A direct connection</p>
+      <div class="log" role="img" aria-label="Demo server log: one home IP address asks about three addresses, so they can be linked."><div aria-hidden="true">
+        <p><b class="bad">203.0.113.42</b> balance bc1q…7f3a</p>
+        <p><b class="bad">203.0.113.42</b> balance 0x12…cdef</p>
+        <p><b class="bad">203.0.113.42</b> balance So1a…9xK2</p>
+      </div></div>
+      <ul class="checks minus">
+        <li>Every server sees your IP address.</li>
+        <li>One IP asking about three addresses ties them to each other, and to you.</li>
+        <li>Your internet provider sees the hosts you reach.</li>
+      </ul>
+    </article>
+    <article class="sees-col sees-on spot">
+      <p class="sees-tag">Kyro over Tor</p>
+      <div class="log" role="img" aria-label="Demo server logs: each request arrives from a different Tor exit relay, one circuit per blockchain."><div aria-hidden="true">
+        <p><b>exit relay A</b> balance bc1q…7f3a</p>
+        <p><b>exit relay B</b> balance 0x12…cdef</p>
+        <p><b>exit relay C</b> balance So1a…9xK2</p>
+      </div></div>
+      <ul class="checks">
+        <li>Servers see the IP of a Tor exit relay, not yours.</li>
+        <li>Each blockchain has its own circuit, so the circuit does not link your lookups.</li>
+        <li>Your internet provider sees only that you use Tor.</li>
+      </ul>
+    </article>
+  </div></div>
+        <p class="tor-note">Tor hides who is asking, not what is asked: the server you query still sees those addresses. Run your own node to avoid that.</p>
+        <p><a class="more" href="/tor/">How Kyro uses Tor</a></p>
+      </div>
     </section>
 
     <section class="section" id="fees" aria-labelledby="swap-title">
@@ -338,6 +433,32 @@
             <p>From 0.7%, already taken out of the amount you receive. <a href="/fees/">Full swap fee table</a></p>
           </article>
         </div>
+        <p><a class="more" href="/swap/">Routes, limits and checks</a></p>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="monero-title">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Monero</p>
+          <h2 id="monero-title">Monero, <em>done properly</em></h2>
+          <div data-reveal>
+          <p>A full Monero desktop wallet with no light-wallet server. The node sends blocks and your machine scans them, so your view key never leaves it.</p>
+          <ul class="checks"><li>Your addresses and keys are never sent to the node.</li><li>Tor hides your IP from it. Your own node or a .onion works too.</li><li>A 25-word seed restores the wallet in Monero GUI, Feather or Cake Wallet.</li></ul>
+          <a class="more" href="/monero/">The private Monero wallet</a></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
+    <div class="kw-coin"><img class="tok" src="/img/coins/xmr.svg" width="32" height="32" alt="" decoding="async"><span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
+    <p class="coin-bal">12.3456 <span>XMR</span></p>
+    <p class="kw-label scan-l">Scanning Monero blocks on your machine… 87 %</p>
+    <div class="scan"><i></i></div>
+    <div class="kw-kv"><span>View key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Spend key</span><b class="up">Stays here</b></div>
+    <div class="kw-kv"><span>Node</span><b>Sends blocks, gets no key</b></div>
+    <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
+  </div></div></div>
       </div>
     </section>
 
@@ -346,7 +467,7 @@
         <div class="head-center">
           <p class="eyebrow" data-reveal>Earn</p>
           <h2 id="earn-title">Earn <em>without an account</em></h2>
-          <p data-reveal>Lido, Aave, Solana, Cardano and TRON in one list. No sign-up, and your keys stay with you.</p>
+          <p data-reveal>Lido, Aave, Solana, Cardano, TRON and NEAR in one list. No sign-up, and your keys stay with you.</p>
         </div>
         <div class="earn-wrap" data-reveal data-rows>
   <div class="kw-card" role="img" aria-label="Kyro Earn list with demo rates. Rates are estimates."><div aria-hidden="true">
@@ -393,6 +514,7 @@
             <i class="kw-b">Start</i>
           </div></div></div></div>
         <p class="center small mute">Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.</p>
+        <p class="center"><a class="more" href="/earn/">All 14 options and their risks</a></p>
       </div>
     </section>
 
@@ -407,7 +529,7 @@
               <li class="on"><span>3</span>Confirm on the device</li>
             </ol>
             <p class="hw-count" data-reveal><strong data-ledger-n>33</strong> blockchains, Trezor Safe 7 included.</p>
-            <a class="more" href="/features/#f-hw" data-reveal>Which device on which chain</a>
+            <a class="more" href="/hardware-wallets/" data-reveal>Which device on which chain</a>
           </div>
           
   <div class="lg" data-ledger role="img" aria-label="A hardware wallet wired to coins. Its screen asks to open Bitcoin, then confirms a demo transaction."><div class="lg-stage" aria-hidden="true">
@@ -435,6 +557,32 @@
     </svg>
   </div></div>
         </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="sign-title">
+      <div class="wrap feature-row flip">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Transaction review</p>
+          <h2 id="sign-title">Every signature, <em>decoded</em></h2>
+          <div data-reveal>
+          <p>The interface never gets the last word. The Rust core decodes the real transaction and a native system window shows it, drawn outside the web view. A compromised page cannot change what you read.</p>
+          <ul class="checks"><li>Amount, recipient, network and fee, as Rust read them.</li><li>Your password, then your click, for every signature.</li><li>Unusual transactions need a second, reinforced confirmation.</li><li>Address-poisoning alerts and clipboard checks before you send.</li></ul>
+          <a class="more" href="/security/">Nothing is signed without you</a></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+    <div class="dlg-body">
+      <div class="dlg-amount"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><strong>1.2345 ETH</strong></div>
+      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
+      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+    </div>
+  </div></div></div>
+      </div>
     </section>
 
     <section class="section" id="security" aria-labelledby="security-title">
@@ -465,6 +613,73 @@
       </div>
     </section>
 
+    <section class="section" id="compare" aria-labelledby="vs-title">
+      <div class="wrap wrap-mid">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Compare</p>
+          <h2 id="vs-title">Kyro and <em>a typical wallet</em></h2>
+          <p data-reveal>What to look for in a private crypto wallet, whichever one you pick.</p>
+        </div>
+        
+        <div class="table-wrap" data-reveal>
+          <table class="matrix vs">
+            <caption class="visually-hidden">Kyro compared with a typical wallet</caption>
+            <thead><tr><th scope="col"></th><th scope="col">Kyro</th><th scope="col">A typical wallet</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Tor</th><td>Built in, on by default, stops if Tor fails</td><td>Direct connection</td></tr><tr><th scope="row">Account</th><td>None</td><td>Varies, some ask for an email</td></tr><tr><th scope="row">Analytics</th><td>None, one anonymous weekly count you can turn off</td><td>Varies</td></tr><tr><th scope="row">Source code</th><td>Public, GPL-3.0-or-later</td><td>Varies</td></tr><tr><th scope="row">Hardware wallets</th><td>Ledger and Trezor, 33 blockchains</td><td>Varies</td></tr><tr><th scope="row">Swaps</th><td>Several providers compared, fee in the rate</td><td>Varies</td></tr><tr><th scope="row">Signing</th><td>Decoded by Rust, shown in a system window</td><td>Usually shown inside the app</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tbl-note">“Typical” is a general description, not a test of any product. Check the wallet you use.</p>
+      </div>
+    </section>
+
+    
+    <section class="section" aria-labelledby="oss-title">
+      <div class="wrap feature-row">
+        <div class="feature-text">
+          <p class="eyebrow" data-reveal>Open source</p>
+          <h2 id="oss-title">Read the code. <em>All of it.</em></h2>
+          <div data-reveal>
+          <p>Kyro is an open source wallet under GPL-3.0-or-later: interface, Rust core and app shell, on <a href="https://github.com/shuntraa/kyro-wallet">GitHub</a>.</p>
+          <ul class="checks"><li>Dependencies pinned to exact versions, with committed lockfiles.</li><li><code>cargo audit</code>, <code>cargo deny</code> and <code>pnpm audit</code> in CI.</li><li>SHA256SUMS with every release, and signed automatic updates.</li><li>Every server Kyro contacts is listed in the repo.</li></ul>
+          <p class="small mute">Bit-for-bit reproducible builds are a goal, not a guarantee yet. The installers are not code-signed yet, so your system warns on first launch.</p>
+          <a href="/open-source/"><span class="more">Read, build and verify</span></a></div>
+        </div>
+        <div class="feature-visual" data-reveal>
+  <div class="term" role="img" aria-label="Terminal"><div aria-hidden="true">
+    <div class="term-bar"><i></i><i></i><i></i><span>Terminal</span></div>
+    <pre><b>$ git clone https://github.com/shuntraa/kyro-wallet.git</b>
+<b>$ cd kyro-wallet</b>
+<b>$ pnpm install --frozen-lockfile</b>
+<b>$ pnpm build</b></pre>
+  </div></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap" aria-labelledby="road-title">
+      <div class="wrap">
+        
+        <div class="head-center">
+          <p class="eyebrow" data-reveal>Roadmap</p>
+          <h2 id="road-title">Shipped, <em>and next</em></h2>
+          <p data-reveal>Version 1.0.6 today. No dates we cannot keep.</p>
+        </div>
+        <div class="road-cols">
+          <div><h3 class="road-h">Shipped</h3>
+  <ul class="road" data-reveal-group>
+    <li class="road-i spot done"><span class="road-dot"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><h3>Swaps across chains</h3><p>Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.</p></div></li><li class="road-i spot done"><span class="road-dot"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><h3>Earn</h3><p>14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.</p></div></li><li class="road-i spot done"><span class="road-dot"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><h3>Hardware wallets</h3><p>Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.</p></div></li>
+  </ul></div>
+          <div><h3 class="road-h">Next</h3>
+  <ul class="road" data-reveal-group>
+    <li class="road-i spot next"><span class="road-dot"></span><div><h3>More staking</h3><p>Polkadot, Sui and Aptos.</p></div></li><li class="road-i spot next"><span class="road-dot"></span><div><h3>Token sends on more chains</h3><p>From hardware accounts, beyond EVM, Solana and TRON.</p></div></li><li class="road-i spot next"><span class="road-dot"></span><div><h3>Code signing</h3><p>So Windows and macOS stop warning on first launch. See the <a href="/code-signing-policy/">code signing policy</a>.</p></div></li>
+  </ul></div>
+        </div>
+        <p><a href="/roadmap/"><span class="more">The full roadmap</span></a></p>
+      </div>
+    </section>
+
     <section class="section" aria-labelledby="faq-title">
       <div class="wrap">
         <div class="head-center">
@@ -474,8 +689,17 @@
         <div class="faq" data-reveal>
           <details><summary>Is Kyro Wallet free?</summary><div class="answer"><p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. <a href="/fees/">Fee details</a>.</p></div></details>
           <details><summary>Is Kyro custodial?</summary><div class="answer"><p>No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.</p></div></details>
+          <details><summary>Which blockchains does Kyro support?</summary><div class="answer"><p>36 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa and Zcash. Plus 220+ tokens on them. <a href="/chains/">What works on each one</a>.</p></div></details>
+          <details><summary>Is there a mobile app?</summary><div class="answer"><p>No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.</p></div></details>
+          <details><summary>How much does a swap cost?</summary><div class="answer"><p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full fee table</a>.</p></div></details>
+          <details><summary>Can I stake with Kyro?</summary><div class="answer"><p>Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. <a href="/earn/">Options and risks</a>.</p></div></details>
           <details><summary>Does Kyro support hardware wallets?</summary><div class="answer"><p>Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand and Zcash.</p></div></details>
+          <details><summary>What happens if I lose my recovery phrase?</summary><div class="answer"><p>If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.</p></div></details>
+          <details><summary>Can I import a recovery phrase from another wallet?</summary><div class="answer"><p>Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.</p></div></details>
+          <details><summary>Does Kyro use Tor?</summary><div class="answer"><p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p></div></details>
+          <details><summary>Does Kyro collect any data?</summary><div class="answer"><p>No personal data. No account, no analytics, no identifiers. Once a week, Kyro anonymously downloads a tiny file from its GitHub release over Tor, so GitHub’s download counter can estimate how many wallets are active; you can turn it off in Settings, Privacy. Every server the app contacts is listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies; it only reads the public usage counters from GitHub.</p></div></details>
           <details><summary>Is Kyro open source? Has it been audited?</summary><div class="answer"><p>The full source is on <a href="https://github.com/shuntraa/kyro-wallet">GitHub</a> under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.</p></div></details>
+          <details><summary>Windows says “Windows protected your PC”. What do I do?</summary><div class="answer"><p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>. The <a href="/download/#install">one-line install command</a> checks the checksum for you and does not trigger this warning.</p></div></details>
           
           <details id="support">
             <summary>How can I support Kyro?</summary>

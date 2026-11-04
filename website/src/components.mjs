@@ -367,7 +367,7 @@ export const term = (title, lines) => `
 
 /** The recovery phrase window: the words stay blurred until shown, and are not real words here. */
 export const phraseCard = () => `
-  <div class="kw-card phrase" role="img" aria-label="Kyro's recovery phrase window: numbered words, hidden until you choose to show them."><div aria-hidden="true">
+  <div class="kw-card kw-card-narrow phrase" role="img" aria-label="Kyro's recovery phrase window: numbered words, hidden until you choose to show them."><div aria-hidden="true">
     <div class="kw-seg"><i class="on">Create</i><i>Import</i></div>
     <ol>${Array.from({ length: 12 }, (_, i) => `<li><small>${i + 1}</small><i></i></li>`).join('')}</ol>
     <p class="phrase-note">${icon('lock')}Stays on this device. Paper only.</p>
@@ -375,7 +375,7 @@ export const phraseCard = () => `
 
 /** The status panel after setup. */
 export const privateCard = () => `
-  <div class="kw-card" role="img" aria-label="Kyro status: Tor on, vault encrypted on this device, no account, no analytics."><div aria-hidden="true">
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro status: Tor on, vault encrypted on this device, no account, no analytics."><div aria-hidden="true">
     <div class="kw-vault">${icon('shield')}<span><b>You’re private</b><small>Nothing to sign up for</small></span><em>Ready</em></div>
     <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
     <div class="kw-kv"><span>Vault</span><b>On this device</b></div>
@@ -416,7 +416,7 @@ export const seesCards = () => `
 
 /** Monero in Kyro: blocks are scanned on your machine. */
 export const moneroCard = () => `
-  <div class="kw-card" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro's Monero panel with demo numbers: blocks scanned on your machine, the node gets no key."><div aria-hidden="true">
     <div class="kw-coin">${ico('xmr')}<span><b>Monero</b><small>XMR</small></span><em class="kw-demo">DEMO</em></div>
     <p class="coin-bal">12.3456 <span>XMR</span></p>
     <p class="kw-label scan-l">Scanning Monero blocks on your machine… 87 %</p>
@@ -429,7 +429,7 @@ export const moneroCard = () => `
 
 /** Fail closed, as the wallet behaves when Tor is not ready. */
 export const torDownCard = () => `
-  <div class="kw-card" role="img" aria-label="Kyro when Tor is not ready within 60 seconds: the request fails and nothing is sent in the clear."><div aria-hidden="true">
+  <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro when Tor is not ready within 60 seconds: the request fails and nothing is sent in the clear."><div aria-hidden="true">
     <div class="kw-vault">${icon('lock')}<span><b>Tor is not ready</b><small>TOR_UNAVAILABLE after 60 s</small></span><em>Stopped</em></div>
     <div class="kw-kv"><span>Sent in the clear</span><b class="up">Nothing</b></div>
     <div class="kw-kv"><span>Automatic fallback</span><b class="up">None</b></div>

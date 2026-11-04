@@ -410,7 +410,7 @@ Q: How much does a swap cost?
 A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. Full fee table.
 
 Q: Can I stake with Kyro?
-A: Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. How staking works.
+A: Yes. Earn lists 14 options: staking on Solana, Cardano, TRON and NEAR, ETH liquid staking with Lido, and lending on Aave. Rates are estimates, never guaranteed. Kyro takes no fee on staking, and nothing here is financial advice. Options and risks.
 
 ## Security
 
@@ -4444,7 +4444,7 @@ Bitcoin, EVM networks, Solana, TRON, Cardano, Monero and more, with 220+ tokens.
 
 ### Tor built in
 
-Default on, a circuit per blockchain family, no fallback to a direct connection.
+On by default, a circuit per blockchain family, no fallback to a direct connection.
 
 ### Signed automatic updates
 
@@ -4476,10 +4476,6 @@ Polkadot, Sui and Aptos.
 
 From hardware accounts, beyond EVM, Solana and TRON.
 
-### More Ledger chains
-
-Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.
-
 ### Code signing
 
 So Windows and macOS stop warning on first launch. See the code signing policy.
@@ -4487,6 +4483,10 @@ So Windows and macOS stop warning on first launch. See the code signing policy.
 ### winget
 
 Install and update with the Windows package manager.
+
+### More Ledger chains
+
+Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.
 
 ### Compact filters for Bitcoin
 

@@ -4,22 +4,9 @@
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, pageHero, dlButton, installBlock, ctaPanel } from './layout.mjs';
 import { swapWidget, earnCard, confirmCard, ledgerScene, coinHero, privateCard, moneroCard, torDownCard, torOffDialog, circuits, term, roadList, assetsCard, vaultCard } from './components.mjs';
-import { head, sec, row, cards, faqBlock, faqLd, nextLinks } from './kit.mjs';
+import { head, sec, row, cards, faqBlock, faqLd, nextLinks, ul, tbl, DONE, NEXT } from './kit.mjs';
 import { webPage, listNames, yesNo } from './pages.mjs';
 import { guidePages } from './guides.mjs';
-
-export const tbl = (caption, heads, rows, cls = 'matrix') => html`
-        <div class="table-wrap" data-reveal>
-          <table class="${cls}">
-            <caption class="visually-hidden">${caption}</caption>
-            <thead><tr>${heads.map((h) => `<th scope="col">${h}</th>`)}</tr></thead>
-            <tbody>
-              ${rows.map(([first, ...rest]) => `<tr><th scope="row">${first}</th>${rest.map((c) => `<td>${c}</td>`).join('')}</tr>`)}
-            </tbody>
-          </table>
-        </div>`;
-
-const ul = (items, cls = 'checks') => `<ul class="${cls}">${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 
 function assemble({ path, name, crumb, parent, title, description, hero, body, faqs, scripts = ['/download.js'] }) {
   const trail = [['/', 'Home'], ...(parent ? [parent] : []), [path, crumb]];
@@ -85,7 +72,7 @@ function tor(chains) {
 
     ${row('t-closed', 'Fails closed', 'No Tor, <em>no request</em>', true, html`
           <p>If Tor is not ready within 60 seconds, the request fails with <code>TOR_UNAVAILABLE</code>. Nothing goes out in the clear, and there is no automatic fallback.</p>
-          <p>Leaving Tor is your decision. Kyro asks in a native system window drawn outside the interface, so a compromised page cannot turn Tor off without you.</p>`, torDownCard() + torOffDialog())}
+          <p>Leaving Tor is your decision. Kyro asks in a native system window drawn outside the interface, so a compromised page cannot turn Tor off without you.</p>`, `<div class="stack2">${torDownCard()}${torOffDialog()}</div>`)}
 
     ${sec('t-limits', html`
         ${head('Limits', 't-limits', 'What Tor <em>does not do</em>', 'Tor is one layer. It hides your network location. These things stay true with it on.')}
@@ -616,25 +603,6 @@ function about() {
     ${ctaPanel()}`
   });
 }
-
-const DONE = [
-  ['36 blockchains, one phrase', 'Bitcoin, EVM networks, Solana, TRON, Cardano, Monero and more, with 220+ tokens.'],
-  ['Tor built in', 'Default on, a circuit per blockchain family, no fallback to a direct connection.'],
-  ['Signed automatic updates', 'Downloaded over Tor, verified against a pinned public key, applied at the next start.'],
-  ['Swaps across chains', 'Several providers compared, with Monero, Kaspa, Algorand and NEAR both ways through Exolix since 1.0.6.'],
-  ['Earn', '14 options since 1.0.5: Lido, Aave v3, and staking on Solana, Cardano, TRON and NEAR.'],
-  ['Hardware wallets', 'Ledger and Trezor, one-step Ledger connect, SPL and TRC-20 token sends in 1.0.6.'],
-  ['One-click Windows installer', 'A single branded window since 1.0.1, and one-line install on every system.']
-];
-const NEXT = [
-  ['More staking', 'Polkadot, Sui and Aptos.'],
-  ['Token sends on more chains', 'From hardware accounts, beyond EVM, Solana and TRON.'],
-  ['More Ledger chains', 'Polkadot, Kaspa and Zcash on Ledger, where the device apps make it possible.'],
-  ['Code signing', 'So Windows and macOS stop warning on first launch. See the <a href="/code-signing-policy/">code signing policy</a>.'],
-  ['winget', 'Install and update with the Windows package manager.'],
-  ['Compact filters for Bitcoin', 'A private way to read Bitcoin without an address server, once its dependencies pass review.'],
-  ['Reproducible builds', 'Bit-for-bit reproducible builds are a goal, not yet a guarantee.']
-];
 
 function roadmap() {
   return assemble({
