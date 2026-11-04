@@ -39,8 +39,6 @@ sources (Exolix, to any of those destinations and back). Only their native coin 
 
 | Coin | Reason |
 | --- | --- |
-| XMR as a source | Kyro has no Monero fee address yet. Exolix routes are never fee-free. |
-| KAS, ALGO, NEAR as sources | Kyro has no fee address on these chains, and Exolix's fee is a second transfer on the source chain. 1Click lists only wNEAR (NEP-141), not native NEAR. |
 | XLM as a source | 1Click and Exolix both ask for a memo on Stellar deposits. Kyro only sends plain transfers to deposit addresses. |
 | HBAR, HTS tokens | 1Click does not list Hedera. Exolix pays only to `0.0.N` account ids and wants a memo on deposits, while Kyro's Hedera account is an EVM alias address. |
 | DOT, Asset Hub assets | 1Click does not list Polkadot. Kyro's DOT lives on Asset Hub, and Exolix's `DOT` network checks relay-chain addresses, so delivery to Asset Hub is not confirmed. |

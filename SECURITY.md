@@ -263,7 +263,7 @@ Details: [docs/IPC.md §2.9](docs/IPC.md). All accounts come from **your** recov
 
 Technical details: [docs/IPC.md §2.8](docs/IPC.md). As with payments, **Kyro builds each operation itself**, Rust **decodes** it (wallet-core) and **re-reads the account state live** before the **native window**; a closed list of operations is accepted, always with **your** key as the only authority, and everything else is **refused** (not merely flagged). No hardware wallet for staking. **None of these operations entrusts your funds to anyone**: the validator, pool or SPO can neither spend nor lock them.
 
-**No staking** for Bitcoin, Litecoin, Dogecoin, Zcash, XRP Ledger and Stellar: these protocols have none. **Cosmos Hub: not offered** (the protocol has it, Kyro refuses to sign `MsgDelegate`). **Ethereum (and EVM): not offered.** Native staking requires 32 ETH and a validator that is permanently online (and which can be *slashed*); "liquid" staking (Lido, Rocket Pool…) means entrusting your ETH to a third party's contract, which Kyro cannot decode (contract risk, governance risk and risk of the received token de-pegging).
+**No staking** for Bitcoin, Litecoin, Dogecoin, Zcash, XRP Ledger and Stellar: these protocols have none. **Cosmos Hub: not offered** (the protocol has it, Kyro refuses to sign `MsgDelegate`). **Ethereum (and EVM):** native staking (32 ETH and a validator that is always online) is not offered. Since 1.0.5 the Earn page offers ETH liquid staking with Lido and lending on Aave v3, through pinned contracts that Kyro decodes and shows before signing. These carry contract, governance and de-peg risk.
 
 ### Solana (Stake program)
 
@@ -300,7 +300,7 @@ Technical details: [docs/IPC.md §2.8](docs/IPC.md). As with payments, **Kyro bu
 
 ## Hardware wallets (Ledger, Trezor)
 
-Technical details: [docs/IPC.md §2.3](docs/IPC.md). **Status: never run against a real device or an emulator**; tested on APDU exchanges recorded by Ledger and a simulated Trezor firmware (Trezor Safe 7: against Trezor's device-side THP implementation, see below). Supported chains (the same list as the app and README.md):
+Technical details: [docs/IPC.md §2.3](docs/IPC.md). **Status: checked on a real Ledger Nano X (`docs/LEDGER_CHECK.md`) for addresses on Bitcoin, Ethereum, Solana, Litecoin, XRP, NEAR and TON and test signatures on Bitcoin, Ethereum and Solana, nothing broadcast; everything else is only** tested on APDU exchanges recorded by Ledger and a simulated Trezor firmware (Trezor Safe 7: against Trezor's device-side THP implementation, see below). Supported chains (the same list as the app and README.md):
 
 | Device | Chains |
 |---|---|
