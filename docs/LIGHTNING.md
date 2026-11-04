@@ -2,6 +2,53 @@
 
 Kyro pays a BOLT11 invoice from a Bitcoin account through a **submarine swap**: an on-chain payment to a script the provider can only claim by paying the invoice. No channels, nothing to receive. Boltz itself is gone (see "Boltz, 2026-11-04" below), but other operators run the same open backend.
 
+## How a payment works
+
+1. You paste an invoice in Send on a Bitcoin account, or tick Lightning. Rust decodes it with `lightning-invoice` (checksum, node signature, amount, expiry, network, payment hash). No amount, expired or another network: refused. Under one hour left: refused.
+2. Kyro reads each provider's limits and fees and takes the cheapest that accepts the amount. If it refuses the invoice, the next one is tried.
+3. Rust gives a fresh refund key, `m/9735'/0'/0'/i'` from your seed, and the provider answers with its lockup terms.
+4. Rust checks those terms (`ln_check_swap`) and rebuilds the address. See below. The terms are then saved encrypted, before anything is signed.
+5. The review shows the invoice, the provider's fee, Kyro's fee, the network fees and the total. The deposit is an ordinary Bitcoin send at the Fast fee, and the native window names it as a Lightning payment, with the provider and the refund block.
+6. The provider pays the invoice after one confirmation and claims the deposit. History follows `GET /v2/swap/{id}`: waiting, paid, failed, refunded.
+
+### What Rust checks before a deposit
+
+| Check | Refused if |
+|---|---|
+| Claim leaf | It is not exactly `HASH160 <ripemd160(payment hash)> EQUALVERIFY <claim key> CHECKSIG`, so it cannot be claimed without this invoice's preimage |
+| Refund leaf | It is not exactly `<our key> CHECKSIGVERIFY <timeout> CLTV` |
+| Key path | The internal key must be the MuSig2 aggregate of the provider's key and ours (the `musig2` crate, claim key first): the provider cannot spend alone. Kyro never signs a MuSig2 session |
+| Address | The taproot address rebuilt from all of the above differs from the one the provider gave |
+| Timeout | Under 144 or over 1,440 blocks from the tip |
+| Amount | Not above the invoice, or a fee over 3% + 3,000 sat. The interface also refuses any fee other than the one announced with the pair |
+| Invoice | Under one hour left, or already sent from this wallet |
+
+### Is it atomic?
+
+Yes, unlike an order on an exchange. The provider can only take the bitcoin by revealing the invoice's preimage, which it only learns by paying. It cannot take the coins and not pay. What it can do is fail or refuse to pay. Then your coins stay locked until the timeout, about 7 days, and you take them back alone.
+
+### When a payment fails
+
+Send › Lightning lists your payments. From the timeout block, *Get my bitcoin back* spends the refund leaf to the account's first address. Rust reads the coins, derives the destination and shows the native window. No provider is needed. The refund fee rate is the half-hour estimate, at most 500 sat/vB.
+
+Kyro does not do the cooperative refund, which would return coins early: it needs a MuSig2 signing session. A failed payment therefore always waits for the timeout.
+
+The swap terms live in `<vault>.lnswaps`, XChaCha20-Poly1305 under a key derived from the seed (`m/9735'/0'/1'`). **The recovery phrase alone cannot refund a swap**: without this file Kyro no longer knows the provider's key or the timeout. Do not delete the app folder while a payment is open. It is not part of Settings › Backup.
+
+### Limits
+
+- Mainnet only. The providers have no test network here.
+- 25,000 to 5,000,000 sat, depending on the provider (Coinos up to 600,000).
+- Amountless invoices are refused: Kyro has no way to pick an amount for you. Lightning addresses and LNURL are not supported.
+- An invoice needs at least an hour left. Many wallets and shops issue shorter ones, and these cannot be paid.
+- If the deposit does not confirm before the invoice expires, the payment fails and the coins wait for the timeout. Kyro uses the Fast fee for this reason, but a block can take over an hour.
+- Hardware accounts are refused: the refund key comes from the seed, which a hardware account does not use. The screen says so.
+- Kyro's fee is a second transfer, as on Exolix routes, with at least 546 sat so it can relay. See [SWAP_FEES.md](SWAP_FEES.md).
+
+### Not tested with real funds
+
+No deposit has been made. Swap creation, Rust's checks with a seed-derived key and status reads were run live over Tor (`live_smoke_lightning_tor`). The refund transaction is checked in tests (control block against the lockup output, signature against the script-path sighash), but has never been broadcast. A provider's real payment, failure statuses and time to pay have not been observed. The status names come from Boltz's API as Kyro knew it, and only `invoice.set` was seen live.
+
 ## Provider check, 2026-11-04
 
 Every request below went through Kyro's own client (`NetClient::fetch`, embedded Arti, default settings, Tor on), with the hosts allowed for that run. No funds were sent. Orders that were created were left to expire: nothing can happen to them without a deposit.

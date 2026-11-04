@@ -15,6 +15,14 @@ const COMMANDS: &[&str] = &[
     "vault_backup_verify",
     "session_touch",
     "alert_notify",
+    // Lightning payments (docs/LIGHTNING.md).
+    "ln_invoice_decode",
+    "ln_swap_key",
+    "ln_swap_accept",
+    "ln_swaps",
+    "ln_swap_deposited",
+    "ln_refund",
+    "ln_refund_broadcast",
     // Encrypted backup of contacts and settings (docs/IPC.md).
     "backup_export",
     "backup_pick",

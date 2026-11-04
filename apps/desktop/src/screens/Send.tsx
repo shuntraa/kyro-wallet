@@ -89,6 +89,8 @@ import { useTorBlocked } from '../components/Tor';
 import { NetworkDownLine, ServerDownLine, ServerMissingLine, networkDown, serverDown, serverMissing, useCustomServer } from '../components/ServerDown';
 import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, pickDevice, withDevice } from '../state/hw';
+import { looksLikeInvoice } from '@kyro/swap';
+import { PayLightning } from './PayLightning';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { TronEstimateView } from '../components/TronEstimateView';
@@ -181,6 +183,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const nativePrice = nativeAsset ? pf.price(nativeAsset.coingeckoId)?.price ?? null : null;
 
   const [to, setTo] = useState(initialTo ?? '');
+  const [lightning, setLightning] = useState(false);
   // An address handed over by the search palette: its origin is unknown (typed or pasted there), never « pasted here ».
   const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
   const toRef = useRef<HTMLInputElement>(null);
@@ -661,6 +664,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     );
   }
 
+  // Bitcoin on mainnet: a pasted invoice, or the Lightning box, opens the invoice view.
+  const lightningOk = asset.family === 'btc' && network === 'mainnet';
+  if (lightningOk && (lightning || looksLikeInvoice(to))) {
+    return (
+      <PayLightning
+        asset={asset}
+        adapter={adapter}
+        initial={looksLikeInvoice(to) ? to.trim() : ''}
+        onExit={() => {
+          setLightning(false);
+          if (looksLikeInvoice(to)) setTo('');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4">
@@ -715,9 +734,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
 
           <div className="flex flex-col gap-2">
-            <label htmlFor="dest" className="eyebrow">
-              {t('send.to')}
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="dest" className="eyebrow">
+                {t('send.to')}
+              </label>
+              {lightningOk && (
+                <label className="inline-flex items-center gap-2 text-[12.5px] text-mute">
+                  <input type="checkbox" checked={lightning} onChange={(e) => setLightning(e.target.checked)} />
+                  {t('ln.tick')}
+                </label>
+              )}
+            </div>
             <div className={cn('overflow-hidden rounded-box border bg-bg transition-[border-color,box-shadow] duration-200 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
               <div className={cn('flex h-12 items-center gap-2.5 pr-2 pl-4', addrValid && 'border-b border-control-2')}>
                 <input

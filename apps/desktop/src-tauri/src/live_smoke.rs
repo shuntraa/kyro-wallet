@@ -968,3 +968,96 @@ fn live_smoke_exolix_tor() {
         }
     });
 }
+
+/// Lightning providers over Tor: pairs of each, through the host rewrite (SATS Routing goes to its
+/// onion). With `KYRO_LN_INVOICES` (two throwaway invoices, comma-separated), also creates a swap at
+/// each with a real refund key and runs Rust's checks on the answer. Nothing is ever deposited.
+#[test]
+#[ignore]
+fn live_smoke_lightning_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-ln-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let seed = wallet_core::Mnemonic::generate(wallet_core::WordCount::W12)
+        .unwrap()
+        .to_seed("");
+    let invoices = std::env::var("KYRO_LN_INVOICES").unwrap_or_default();
+    let mut invoices = invoices.split(',').filter(|s| !s.is_empty());
+    let tip: u64 = std::env::var("KYRO_LN_TIP")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    tauri::async_runtime::block_on(async {
+        state.net.tor.start();
+        for (i, base) in ["https://swap.coinos.io", "https://satsrouting.exchange"]
+            .iter()
+            .enumerate()
+        {
+            let req = |url: String, method: &str, body: Option<String>| FetchRequest {
+                url,
+                method: method.into(),
+                headers: [("content-type".to_owned(), "application/json".to_owned())].into(),
+                body,
+            };
+            let url = format!("{base}/v2/swap/submarine");
+            let mut pairs = None;
+            for _ in 0..3 {
+                let r = state
+                    .net
+                    .fetch(
+                        req(url.clone(), "GET", None),
+                        &state.settings(),
+                        &state.env_keys,
+                        state.network,
+                    )
+                    .await;
+                if let Ok(r) = r {
+                    pairs = Some(r);
+                    break;
+                }
+            }
+            let pairs = pairs.expect("pairs");
+            eprintln!("PAIRS {base} HTTP {} {}", pairs.status, pairs.body);
+            let Some(text) = invoices.next() else {
+                continue;
+            };
+            let v: Value = serde_json::from_str(&pairs.body).unwrap();
+            let hash = v["BTC"]["BTC"]["hash"].as_str().unwrap();
+            let index = u32::try_from(i).unwrap();
+            let public = wallet_core::ln_refund_public_key(&seed, Network::Mainnet, index).unwrap();
+            let body = json!({ "from": "BTC", "to": "BTC", "invoice": text, "refundPublicKey": public, "pairHash": hash });
+            let r = state
+                .net
+                .fetch(
+                    req(url, "POST", Some(body.to_string())),
+                    &state.settings(),
+                    &state.env_keys,
+                    state.network,
+                )
+                .await
+                .unwrap();
+            eprintln!("CREATE {base} HTTP {} {}", r.status, r.body);
+            let a: Value = serde_json::from_str(&r.body).unwrap();
+            let s = |x: &Value| x.as_str().unwrap().to_owned();
+            let terms = wallet_core::LnSwapTerms {
+                id: s(&a["id"]),
+                address: s(&a["address"]),
+                expected_amount: a["expectedAmount"].as_u64().unwrap(),
+                claim_public_key: s(&a["claimPublicKey"]),
+                claim_leaf: s(&a["swapTree"]["claimLeaf"]["output"]),
+                refund_leaf: s(&a["swapTree"]["refundLeaf"]["output"]),
+                timeout_block_height: a["timeoutBlockHeight"].as_u64().unwrap(),
+            };
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let inv = wallet_core::ln_decode_invoice(text, Network::Mainnet, now).unwrap();
+            let checked =
+                wallet_core::ln_check_swap(&inv, &terms, &public, Network::Mainnet, tip, now)
+                    .unwrap();
+            eprintln!("CHECKED {checked:?}");
+        }
+    });
+}

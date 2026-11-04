@@ -6,7 +6,7 @@
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
-import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, EXOLIX_ONLY, exolixFeeRecipients, exolixRoute, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
+import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, EXOLIX_ONLY, exolixFeeRecipients, exolixRoute, lnProviderOfBridge, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
@@ -227,7 +227,10 @@ export function swapRate(sellAmount: bigint, sellDecimals: number, buyAmount: bi
 }
 
 /** History label of a cross-chain transfer (li.quest `/v1/status`, or 1Click's own status). */
-export function crossStatusLabel(status: string | undefined, toChainLabel: string): string {
+export function crossStatusLabel(status: string | undefined, toChainLabel: string, bridge?: string): string {
+  if (bridge && lnProviderOfBridge(bridge)) {
+    return status === 'SUCCESS' ? t('ln.statusPaid') : status === 'FAILED' ? t('ln.statusFailed') : status === 'REFUNDED' ? t('ln.statusRefunded') : t('ln.statusWaiting');
+  }
   switch (status) {
     case 'DONE':
     case 'SUCCESS':
@@ -442,7 +445,7 @@ async function buildPlainTransfer(sell: AssetDef, adapters: DepositAdapters, pla
     const dest = await adapters.xrp.destinationInfo(plan.depositAddress);
     if (dest.requireDestTag) throw stop(t('swap.depXrpTagRequired'));
   }
-  const fee = (await ad.estimateFees()).options.normal.params;
+  const fee = (await ad.estimateFees()).options[plan.feeLevel ?? 'normal'].params;
   const unsigned = (await (ad as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset: sell, to: plan.depositAddress, amount: plan.amountIn, fee })) as AnyUnsigned;
   const decoded: DepositDecoded = {};
   const evmAd = unsigned.family === 'evm' ? adapters.evm.get(sell.chainKey) : undefined;

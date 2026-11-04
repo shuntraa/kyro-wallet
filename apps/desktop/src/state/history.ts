@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
 import { netFetch } from '@kyro/shared';
-import { exolixOrderStatus, lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
+import { exolixOrderStatus, lifiTransferStatus, lnProviderOfBridge, lnSwapStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
 import { reconcileReplaced } from '../lib/replaced';
@@ -40,7 +40,7 @@ function fromLocal(t: LocalTx, network: LocalTx['network']): HistoryItem & { lab
   if (t.fee) item.fee = BigInt(t.fee);
   if (t.counterparty) item.counterparty = t.counterparty;
   if (t.label) item.label = t.label;
-  if (t.cross && t.label) item.label = `${t.label} · ${crossStatusLabel(t.cross.status, findChain(network, t.cross.toChainKey)?.label ?? t.cross.toChainKey)}`;
+  if (t.cross && t.label) item.label = `${t.label} · ${crossStatusLabel(t.cross.status, findChain(network, t.cross.toChainKey)?.label ?? t.cross.toChainKey, t.cross.bridge)}`;
   return item;
 }
 
@@ -289,7 +289,10 @@ export function useHistory(): AsyncState<HistoryData> {
         const c = t.cross;
         if (!c) return;
         try {
-          const st = c.bridge === 'exolix' && c.orderId
+          const ln = lnProviderOfBridge(c.bridge);
+          const st = ln && c.orderId
+            ? await lnSwapStatus(netFetch, ln, c.orderId)
+            : c.bridge === 'exolix' && c.orderId
             ? await exolixOrderStatus(netFetch, c.orderId).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
             : c.bridge === '1click' && c.depositAddress
             ? await nearDepositStatus(netFetch, c.depositAddress).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))

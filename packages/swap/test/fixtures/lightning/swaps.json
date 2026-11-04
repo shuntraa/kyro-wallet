@@ -1,0 +1,54 @@
+{
+ "note": "Real answers of POST /v2/swap/submarine over Tor, 2026-11-04, tip height 974568. Throwaway invoices nobody can settle; nothing was deposited.",
+ "tipHeight": 974568,
+ "swaps": [
+  {
+   "provider": "coinos",
+   "invoice": "lnbc1m1p4whqltdqudduhymeqvehhymtpwss8qun0vfjspp54tgslf7a7jywt4j2y9nrdpxef8fpe33al8hqlkkqfht09l4pq0jssp5w37zhv84mh3r3a5sxtarr8ey8hac7f76l03ydm25qz20ushnj00q9qrsgqcqzysxqrrssrzjq2jnl8t07hr04ezylschgjceaaces2qzw9526xy5d8zd9d48ukx35rdm5qqqqqgqqqqqqqqqqqqqqqqqjqxwq9q4mpe7awlpmufl0gj5s9vvknaweaj957t8jq7qe9uxw2ypzjkewx7q9zg27qh9ggt3t430pa3clz8nayrzmhq2qd8325kkckemsqzg4sk7",
+   "refundPublicKey": "02a5a096374a3a827ff54fa379b3aeaf59a10c227deca4339d492e306f740f792d",
+   "response": {
+    "bip21": "bitcoin:bc1psfrgqy6j7znkxwr2u94h7p63xum35tsr7nvhl5tye7urwqag02zq4xrljv?amount=0.00100402&label=Send%20to%20BTC%20lightning",
+    "acceptZeroConf": false,
+    "expectedAmount": 100402,
+    "id": "uZuPsEfHXCvB",
+    "address": "bc1psfrgqy6j7znkxwr2u94h7p63xum35tsr7nvhl5tye7urwqag02zq4xrljv",
+    "swapTree": {
+     "claimLeaf": {
+      "version": 192,
+      "output": "a914cfd94bd6489d34df3319df9fd45bbfab58835227882095478b9c9bb3e9261f8424fce3b2d82fc3f6304727afa0ae9049f06cec7d4e42ac"
+     },
+     "refundLeaf": {
+      "version": 192,
+      "output": "20a5a096374a3a827ff54fa379b3aeaf59a10c227deca4339d492e306f740f792dad03d8e20eb1"
+     }
+    },
+    "claimPublicKey": "0295478b9c9bb3e9261f8424fce3b2d82fc3f6304727afa0ae9049f06cec7d4e42",
+    "timeoutBlockHeight": 975576
+   }
+  },
+  {
+   "provider": "satsrouting",
+   "invoice": "lnbc1m1p4whqltdqudduhymeqvehhymtpwss8qun0vfjspp589uy9nhdprxca0uhmxxtm6uq5dkq5hs6e2v3ph9398vyv553f4yssp5jgwrd7ltymw8p2jhw8zcel7c3ven9r7wzt502ettujh85e67f32q9qrsgqcqzysxqrrssrzjqvxlc5mpc7kn2uunukugmzpktv0hmjvyxl2gts4drmfm3krxk4z7srdm5qqqqqgqqqqqqqqqqqqqqqqqjqat83av7mlclzchcvkgckugnxph4zluavf29lxqr90fvqnn2v38mpq6f2rkz6fwvu8vl0tqu84v65933d6gtvj7mmdkfs87f9mv2383cqt8le0y",
+   "refundPublicKey": "02a5a096374a3a827ff54fa379b3aeaf59a10c227deca4339d492e306f740f792d",
+   "response": {
+    "bip21": "bitcoin:bc1p4st8cl6hcxd5ylp5mt7hna7j26qtuqjwkwnw8c5eeuqu3j3p9u8q0xhq9h?amount=0.00100667&label=Send%20to%20BTC%20lightning",
+    "acceptZeroConf": false,
+    "expectedAmount": 100667,
+    "id": "CpWPK4U9nMAg",
+    "address": "bc1p4st8cl6hcxd5ylp5mt7hna7j26qtuqjwkwnw8c5eeuqu3j3p9u8q0xhq9h",
+    "swapTree": {
+     "claimLeaf": {
+      "version": 192,
+      "output": "a9140663bcaa31b92fb2030c5642f8344d61a3331a218820f262d8b4fff52a6bc311b3348348e5a77a505d2b543eaae0f35769a88d415475ac"
+     },
+     "refundLeaf": {
+      "version": 192,
+      "output": "20a5a096374a3a827ff54fa379b3aeaf59a10c227deca4339d492e306f740f792dad03d8e20eb1"
+     }
+    },
+    "claimPublicKey": "02f262d8b4fff52a6bc311b3348348e5a77a505d2b543eaae0f35769a88d415475",
+    "timeoutBlockHeight": 975576
+   }
+  }
+ ]
+}

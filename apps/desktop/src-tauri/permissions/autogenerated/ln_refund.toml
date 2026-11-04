@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ln-refund"
+description = "Enables the ln_refund command without any pre-configured scope."
+commands.allow = ["ln_refund"]
+
+[[permission]]
+identifier = "deny-ln-refund"
+description = "Denies the ln_refund command without any pre-configured scope."
+commands.deny = ["ln_refund"]

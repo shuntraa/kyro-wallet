@@ -103,7 +103,7 @@ export interface LocalCross {
   status?: string;
   receivingTxHash?: string;
   depositAddress?: string;
-  /** Exolix order id (`bridge` `exolix`): status from `/api/v2/transactions/{id}`. */
+  /** Exolix order id (`bridge` `exolix`, status from `/api/v2/transactions/{id}`), or a Lightning swap id (`bridge` `lncoinos`…). */
   orderId?: string;
 }
 

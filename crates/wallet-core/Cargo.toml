@@ -94,6 +94,11 @@ hex = { version = "=0.4.3" }
 data-encoding = { version = "=2.11.1" }
 thiserror = { version = "=2.0.18" }
 
+# Lightning invoices (LDK's parser: checksum, signature, fields) and BIP327 key aggregation for the
+# submarine swap's lockup address, which Kyro rebuilds itself. No MuSig2 signing session.
+lightning-invoice = { version = "=0.34.1", default-features = false, features = ["std"] }
+musig2 = { version = "=0.4.1", default-features = false, features = ["secp256k1"] }
+
 [dev-dependencies]
 # Differential tests only: decode the same devnet messages with Anza's reference crate.
 solana-message = { version = "=5.1.0", default-features = false, features = ["wincode"] }

@@ -30,6 +30,7 @@ mod commands_hw_stake;
 mod commands_hw_sui;
 mod commands_hw_ton;
 mod commands_kaspa;
+mod commands_ln;
 mod commands_near;
 mod commands_servers;
 mod commands_stellar;
@@ -519,6 +520,13 @@ pub fn run() {
             commands_hw::hw_thp_forget,
             updater::update_status,
             alerts::alert_notify,
+            commands_ln::ln_invoice_decode,
+            commands_ln::ln_swap_key,
+            commands_ln::ln_swap_accept,
+            commands_ln::ln_swaps,
+            commands_ln::ln_swap_deposited,
+            commands_ln::ln_refund,
+            commands_ln::ln_refund_broadcast,
             backup::backup_export,
             backup::backup_pick,
             backup::backup_open,

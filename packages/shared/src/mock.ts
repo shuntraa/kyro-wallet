@@ -1029,6 +1029,24 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     btc_address_txs: (a) => servers.btc.addressTxs(a.address),
     btc_fee_rates: () => servers.btc.feeRates(),
     btc_tip_height: () => servers.btc.tipHeight(),
+    // Demo: no Lightning, as in a release on testnet.
+    ln_invoice_decode: () => {
+      throw new Error('Lightning payments work on mainnet only');
+    },
+    ln_swap_key: () => {
+      throw new Error('Lightning payments work on mainnet only');
+    },
+    ln_swap_accept: () => {
+      throw new Error('Lightning payments work on mainnet only');
+    },
+    ln_swaps: () => [],
+    ln_swap_deposited: () => null,
+    ln_refund: () => {
+      throw new Error('Lightning payments work on mainnet only');
+    },
+    ln_refund_broadcast: () => {
+      throw new Error('Lightning payments work on mainnet only');
+    },
     btc_broadcast: (a) => servers.btc.broadcast(a.hex),
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     ...tronChain.handlers,

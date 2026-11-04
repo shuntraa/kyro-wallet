@@ -318,6 +318,62 @@ export interface EsploraTx {
   vin: Array<{ txid: string; vout: number; prevout: EsploraTxOut | null }>;
   vout: EsploraTxOut[];
 }
+/** A Lightning invoice as Rust read it (signature checked). */
+export interface LnInvoice {
+  invoice: string;
+  amountMsat: number;
+  amountSat: number;
+  paymentHash: string;
+  payee: string;
+  description: string | null;
+  createdAt: number;
+  expiresAt: number;
+}
+
+/** A provider's swap, in the shape Rust checks and keeps. */
+export interface LnSwapTermsIpc {
+  id: string;
+  address: string;
+  expectedAmount: number;
+  claimPublicKey: string;
+  claimLeaf: string;
+  refundLeaf: string;
+  timeoutBlockHeight: number;
+}
+
+/** What Rust established about a swap. */
+export interface LnSwapChecked {
+  address: string;
+  expectedAmount: number;
+  invoiceSat: number;
+  providerFeeSat: number;
+  timeoutBlockHeight: number;
+  expiresAt: number;
+}
+
+export interface LnSwapRecord {
+  terms: LnSwapTermsIpc;
+  provider: string;
+  invoice: string;
+  paymentHash: string;
+  invoiceSat: number;
+  expiresAt: number;
+  keyIndex: number;
+  account: number;
+  createdAt: number;
+  depositTxid?: string | null;
+  refundTxid?: string | null;
+}
+
+export interface LnRefund {
+  hex: string;
+  txid: string;
+  destination: string;
+  amountSat: number;
+  feeSat: number;
+  vsize: number;
+}
+
 export interface BtcFeeRates {
   fastestFee: number;
   halfHourFee: number;
@@ -2410,6 +2466,15 @@ export interface Commands {
   btc_address_txs: { args: { address: string }; ret: EsploraTx[] };
   btc_fee_rates: { args: undefined; ret: BtcFeeRates };
   btc_tip_height: { args: undefined; ret: number };
+  /** Lightning payments (docs/LIGHTNING.md): decoded and checked by Rust. */
+  ln_invoice_decode: { args: { invoice: string }; ret: LnInvoice };
+  ln_swap_key: { args: undefined; ret: { index: number; publicKey: string } };
+  ln_swap_accept: { args: { request: { invoice: string; terms: LnSwapTermsIpc; keyIndex: number; provider: string; account?: number } }; ret: LnSwapChecked };
+  ln_swaps: { args: undefined; ret: LnSwapRecord[] };
+  ln_swap_deposited: { args: { id: string; txid: string }; ret: null };
+  /** Native window, then the signed refund to the account's own first address. */
+  ln_refund: { args: { id: string; feeRate: number; password: string }; ret: LnRefund };
+  ln_refund_broadcast: { args: { id: string; hex: string }; ret: string };
   /** Returns the txid; Rust checks it matches the transaction. */
   btc_broadcast: { args: { hex: string }; ret: string };
   /** Raw previous transaction (e.g. `non_witness_utxo` of a SegWit v0 input on a hardware wallet); Rust checks its txid. */

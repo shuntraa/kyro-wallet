@@ -31,6 +31,7 @@ import { sui } from './en/sui';
 import { kas } from './en/kas';
 import { update } from './en/update';
 import { multinet } from './en/multinet';
+import { ln } from './en/ln';
 
 export const en: Record<keyof typeof fr, string> = {
   ...common,
@@ -62,6 +63,7 @@ export const en: Record<keyof typeof fr, string> = {
   ...kas,
   ...update,
   ...multinet,
+  ...ln,
 };
 
-export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet } as const;
+export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet, ln } as const;

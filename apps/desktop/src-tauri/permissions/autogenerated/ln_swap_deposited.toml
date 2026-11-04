@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ln-swap-deposited"
+description = "Enables the ln_swap_deposited command without any pre-configured scope."
+commands.allow = ["ln_swap_deposited"]
+
+[[permission]]
+identifier = "deny-ln-swap-deposited"
+description = "Denies the ln_swap_deposited command without any pre-configured scope."
+commands.deny = ["ln_swap_deposited"]

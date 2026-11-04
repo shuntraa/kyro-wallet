@@ -125,6 +125,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "1click.chaindefuser.com",
     // Exolix public API v2 (no key): Monero swaps (`/api/v2/rate`, `/api/v2/transactions`).
     "exolix.com",
+    // Lightning payments (Boltz API v2 backends, no key): `/v2/swap/submarine`, `/v2/swap/{id}`.
+    // SATS Routing goes to its onion in Tor mode.
+    "swap.coinos.io",
+    "satsrouting.exchange",
     // Lido API (keyless): stETH APR (7-day average) for the Earn screen; Tor family `market`.
     "eth-api.lido.fi",
     // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages) and
@@ -185,12 +189,19 @@ pub fn electrum_default_allowed(host: &str, port: u16, family: Family) -> bool {
 /// served by https://mempool.space/ (checked 2026-10-30), see docs/NETWORK.md.
 pub const MEMPOOL_ONION: &str = "mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion";
 
+/// SATS Routing's onion service (the same swap pairs as its clearnet host, checked 2026-11-04).
+pub const SATS_ROUTING_ONION: &str =
+    "w2mqd2fcbgiop7oyxoes2ozmdnvgon22oipj7vzh2rquepf7cxauauad.onion";
+
 /// Onion services we may reach — ONLY over Tor, and only these.
-pub const ONION_HOSTS: &[&str] = &[MEMPOOL_ONION];
+pub const ONION_HOSTS: &[&str] = &[MEMPOOL_ONION, SATS_ROUTING_ONION];
 
 /// Clearnet hosts that, in Tor mode, are transparently replaced by their onion service
 /// (same scheme-less path and query), so no exit relay is involved at all.
-const ONION_REWRITES: &[(&str, &str)] = &[("mempool.space", MEMPOOL_ONION)];
+const ONION_REWRITES: &[(&str, &str)] = &[
+    ("mempool.space", MEMPOOL_ONION),
+    ("satsrouting.exchange", SATS_ROUTING_ONION),
+];
 
 const ALLOWED_HEADERS: &[&str] = &["accept", "content-type", "0x-version"];
 
@@ -540,7 +551,14 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Market
     } else if matches!(
         host,
-        "api.0x.org" | "li.quest" | "lite-api.jup.ag" | "1click.chaindefuser.com" | "exolix.com"
+        "api.0x.org"
+            | "li.quest"
+            | "lite-api.jup.ag"
+            | "1click.chaindefuser.com"
+            | "exolix.com"
+            | "swap.coinos.io"
+            | "satsrouting.exchange"
+            | SATS_ROUTING_ONION
     ) {
         Family::Swap
     } else {
@@ -1349,6 +1367,9 @@ mod tests {
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("1click.chaindefuser.com", &c), Family::Swap);
         assert_eq!(family_for("exolix.com", &c), Family::Swap);
+        assert_eq!(family_for("swap.coinos.io", &c), Family::Swap);
+        assert_eq!(family_for("satsrouting.exchange", &c), Family::Swap);
+        assert_eq!(family_for(SATS_ROUTING_ONION, &c), Family::Swap);
         assert_eq!(family_for("eth-api.lido.fi", &c), Family::Market);
         assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
         assert_eq!(family_for("nile.trongrid.io", &c), Family::Tron);

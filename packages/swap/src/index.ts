@@ -13,4 +13,5 @@ export { LifiProvider, LIFI_CHAINS, LIFI_CROSS_BRIDGES, lifiFeeEchoed, lifiTrans
 export { JupiterProvider } from './providers/jupiter';
 export { NearIntentsProvider, NEAR_MIN_TIME_LEFT_MS, checkOneClickQuote, nearDepositStatus, oneClickAsset, type OneClickQuoteAnswer, type NearFee } from './providers/near';
 export { ExolixProvider, EXOLIX_ARRIVAL_ONLY, EXOLIX_ASSETS, EXOLIX_CHAINS, EXOLIX_HOST, EXOLIX_ONLY, exolixRoute, checkExolixTx, exolixAsset, exolixFeeSplit, exolixOrderStatus, fromDecimal, parseExolixRate, toDecimal, validChainAddress, type ExolixAsset, type ExolixTx, type ExolixRate } from './providers/exolix';
+export * from './lightning';
 export { createProviders, evmSwapSupported, fetchQuotes } from './aggregate';

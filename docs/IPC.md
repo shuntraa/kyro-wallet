@@ -1741,6 +1741,22 @@ Before the native window, wallet-core checks the transaction to sign against the
 
 The window then starts with the action, the id replaced and the fees (`describe_utxo_replacement`, `describe_evm_replacement`). The interface builds the transaction with `planReplacement` (`BitcoinAdapter`, `UtxoAdapter` for Litecoin, `EvmAdapter`), which refuses early with `ReplaceRefused` (`confirmed`, `notReplaceable`, `notOurs`, `unknown`, `hasChild`, `noChange`, `tooSmall`, `unsupported`), and calls it again just before signing. Reads use the existing commands (`*_tx_hex`, `*_address_txs`, `net_fetch`): no new host.
 
+### 2.13 Lightning payments
+
+See [LIGHTNING.md](LIGHTNING.md). Mainnet only. The interface talks to the provider through `net_fetch`; the checks are Rust's.
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `ln_invoice_decode` | `{ invoice }` | `LnInvoice` | Refuses a bad checksum or signature, no amount, expired, another network. |
+| `ln_swap_key` | none | `{ index, publicKey }` | Next refund key. Needs an unlocked session. A number is never reused. |
+| `ln_swap_accept` | `{ request: { invoice, terms, keyIndex, provider, account? } }` | `LnSwapChecked` | Reads the tip, runs `ln_check_swap` and saves the terms, encrypted. Refuses an invoice already deposited. Must succeed before the deposit. |
+| `ln_swaps` | none | `LnSwapRecord[]` | Reads the encrypted swap file. |
+| `ln_swap_deposited` | `{ id, txid }` | `null` | Marks the deposit, so the same invoice is never sent twice. |
+| `ln_refund` | `{ id, feeRate, password }` | `LnRefund` | Password, then Rust reads the coins, derives the account's first address, shows the native window and signs the refund leaf. Refused before the timeout. |
+| `ln_refund_broadcast` | `{ id, hex }` | txid | Broadcasts and remembers the refund. |
+
+`btc_sign_psbt` also adds the payment's lines at the top of the native window when an output pays a known lockup address.
+
 ## 3. Network allowlist (`net_fetch`)
 
 | Host | Use |
@@ -1776,6 +1792,7 @@ The window then starts with the action, the id replaced and the fees (`describe_
 | `1click.chaindefuser.com` | NEAR Intents 1Click (public, keyless): `/v0/status?depositAddress=` and `/v0/tokens`, confirmation of a cross-chain swap deposit before signing; `POST /v0/quote` (JSON) for direct swaps (BTC / LTC / DOGE / TRON / XRP / Cardano as source, LTC / DOGE / TRON / XRP / Cardano as destination); Tor family `swap` |
 | `eth-api.lido.fi` | Lido API (keyless): `GET /v1/protocol/steth/apr/sma`, stETH APR shown as an estimate on the Earn screen; Tor family `market` |
 | `exolix.com` | Exolix public API v2 (keyless): `GET /api/v2/rate`, `POST /api/v2/transactions` (JSON), `GET /api/v2/transactions/{id}`; Monero swaps; Tor family `swap` |
+| `swap.coinos.io`, `satsrouting.exchange` (rewritten to `w2mqd2fc…auad.onion` in Tor mode) | Lightning payments, Boltz API v2 (keyless): `GET` and `POST /v2/swap/submarine`, `GET /v2/swap/{id}`; Tor family `swap` |
 | + hosts of custom HTTP servers (`servers.bitcoin.*` of type `esplora`, `servers.evm.*`, `servers.solana.*`) | allowed **only for their family** (the family's Tor circuits); the replaced default server is refused (`DEFAULT_SERVER_DISABLED`) |
 | Electrum and Bitcoin Core | **not** reachable through `net_fetch`: only via the `btc_*` commands (Rust) |
 | `bch.imaginary.cash:50002`, `bch.loping.net:50002`, `cashnode.bch.ninja:50002`, `chipnet.imaginary.cash:50002`, `chipnet.bch.ninja:50002` (public Fulcrum, Bitcoin Cash mainnet / chipnet default) ; `dash.electrum1.cipig.net:20061`, `dash.electrum2.cipig.net:20061` (Komodo's ElectrumX, Dash mainnet default) ; `net::ELECTRUM_HOSTS` | **not** reachable through `net_fetch` (raw TLS sockets): only via `bch_*` / `dash_*` (Rust), Tor circuits of the `bitcoincash` / `dash` families, host **and** port allowlisted |

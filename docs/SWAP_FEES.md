@@ -172,6 +172,12 @@ Limits of the NEAR Intents routes:
 
 Exolix (public API v2, no key, no affiliate program) has no integrator fee. Kyro takes its fee on the **source** side: the amount swapped is reduced by the Kyro rate (same curve), and the fee goes in a **second ordinary transfer** of the sold coin to Kyro's fee address on that chain (`recipients.bitcoin`, `litecoin`, `dogecoin`, `tron`, `evm`, `solana`, `monero`, `kaspa`, `algorand`, `near`), checked like the deposit and sent right after it. One transaction with an extra output (BTC / LTC / XMR / KAS) is planned; today it is two transfers. Fee addresses are checked with their real checksum before use (Monero base58 + Keccak-256, Kaspa cashaddr polymod, Algorand base32 + SHA-512/256, NEAR implicit = 64 lowercase hex): an invalid one closes the routes from that chain, never fee-free. Fixed rate when Exolix offers one (the received amount is then the minimum), else floating (minimum = quote minus your slippage, not guaranteed by Exolix).
 
+## Lightning payments
+
+Paying an invoice (Send › Lightning, [LIGHTNING.md](LIGHTNING.md)) carries the same Kyro rate, on the amount deposited, at the swap's dollar value. Coinos and SATS Routing have no integrator fee, so it works as on Exolix: a **second ordinary transfer** of BTC to `recipients.bitcoin`, right after the deposit, on top of the invoice. It is rounded up, with a floor of 546 sat so it can relay: under about $25 the rate is higher than the curve. The review shows it. No fee address, no payment.
+
+The providers' own fees, read over Tor on 2026-11-04: Coinos 0.1% + 302 sat, SATS Routing 0.5% + 167 sat. A failed payment does not return Kyro's fee or either network fee.
+
 ## 1inch: removed
 
 1inch only pays partner fees on a **paid plan**: on the free plan, it receives `fee` and `referrer` but ignores them without error, so the swap would go through with no commission. Since there is no other official mechanism, and Kyro never adds a transfer itself, 1inch was removed (provider, API key, host `api.1inch.dev` from the allowlist). 0x and LI.FI cover EVM.

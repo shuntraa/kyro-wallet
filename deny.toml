@@ -45,6 +45,9 @@ allow = [
 # Allowed for that crate only.
 exceptions = [
   { name = "async_executors", allow = ["Unlicense"] },
+  # BIP327 key aggregation for the Lightning swap address (conduition/musig2 and its secp wrapper).
+  { name = "musig2", allow = ["Unlicense"] },
+  { name = "secp", allow = ["Unlicense"] },
 ]
 
 [bans]

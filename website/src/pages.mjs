@@ -518,6 +518,7 @@ export function features(chains) {
             <li>The transaction is simulated just before you sign it.</li>
             <li>Maximum slippage of 0.1%, 0.5%, 1% or your own value.</li>
             <li>The provider’s transaction is decoded and checked: recipient, minimum amount and fee.</li>
+            <li>Pay a Lightning invoice from a Bitcoin account. <a href="/swap/#s-lightning">How it works</a>.</li>
           </ul>
           <p><a href="/swap/">Routes and limits</a></p>`, swapWidget())}
     ${row('f-stake', 'Earn', '16 ways <em>to earn</em>', false, html`
@@ -792,7 +793,7 @@ export function fees(curve) {
           <h2 id="fee-how">How the swap fee works</h2>
           <ul class="checks">
             <li>The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote.</li>
-            <li>It is collected by each provider’s official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain.</li>
+            <li>It is collected by each provider’s official integrator fee option. Exolix has none: on Exolix routes (Monero, Kaspa, Algorand and NEAR) the fee is a second transfer on the source chain. Lightning payments work the same way, in BTC.</li>
             <li>Quotes are compared after fees: the best price shown already includes them.</li>
             <li>If a provider cannot apply the fee correctly, its quote is not shown.</li>
             <li>Providers charge their own costs, on top of Kyro’s fee. NEAR Intents takes an amount equal to Kyro’s fee on the routes it serves directly, so those swaps cost about double the Kyro rate (for example 0.8% + 0.8%).</li>

@@ -59,6 +59,8 @@ export interface DepositPlan {
   orderId?: string;
   /** Exolix (no affiliate program): Kyro's fee, a second ordinary transfer of the sold coin to this address. */
   kyroFee?: { recipient: string; amount: bigint };
+  /** Fee speed of the deposit; Lightning asks for `fast`, because the invoice expires. */
+  feeLevel?: 'normal' | 'fast';
 }
 
 export interface SolanaRouteCheck {

@@ -26,6 +26,7 @@ mod hw_keys;
 mod kaspa;
 mod keys;
 mod ledger_cal;
+mod lightning;
 mod mnemonic;
 mod monero;
 mod monero_words;
@@ -154,6 +155,11 @@ pub use kaspa::{
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
     LEDGER_ERC20_SIGNER,
+};
+pub use lightning::{
+    ln_check_swap, ln_decode_invoice, ln_open_state, ln_refund_public_key, ln_refund_tx,
+    ln_seal_state, LnInvoice, LnLockedCoin, LnRefund, LnSwapChecked, LnSwapTerms,
+    LN_MIN_INVOICE_MARGIN_SECS,
 };
 pub use mnemonic::{Mnemonic, Seed, WordCount};
 pub use monero::{
