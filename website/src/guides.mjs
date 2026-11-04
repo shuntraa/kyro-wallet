@@ -312,7 +312,7 @@ const GUIDES = () => [
         'Enter the amount. “You receive” already has Kyro’s fee out.',
         'Choose <b>Review the swap</b>. Kyro creates the order, checks that it pays your own Monero address, and checks the deposit address.',
         'Confirm in the system window. Kyro sends an ordinary transfer, with no contract involved.',
-        'Confirm the second transfer, which is Kyro’s fee in the coin you sold.',
+        'Right after the deposit, Kyro sends a second transfer: its fee, in the coin you sold.',
         'Follow the status in <b>History</b>. The XMR appears when the provider has paid out and your scan reaches it.'
       ])}
       <h2>Why two transfers</h2>

@@ -799,7 +799,7 @@ export function fees(curve) {
         ${head('Exolix routes', 'fee-exolix', 'One route, <em>two transfers</em>', 'Monero, Kaspa, Algorand and NEAR go through Exolix, which has no integrator fee.')}
         ${cards([
           ['Same rate', 'The curve is the same as on every other route, taken from the amount you sell.', 'ic-swap'],
-          ['Second transfer', 'The Kyro fee is a second ordinary transfer of the sold coin to Kyro’s fee address on that chain. You approve it, and it carries its own network fee.', 'ic-send'],
+          ['Second transfer', 'The Kyro fee is a second ordinary transfer of the sold coin to Kyro’s fee address on that chain. It goes right after the deposit and carries its own network fee.', 'ic-send'],
           ['No separate transfer elsewhere', 'On other routes the fee is collected through the provider’s official integrator mechanism.', 'ic-shield']
         ])}`)}
     ${nextLinks('fee-next', [

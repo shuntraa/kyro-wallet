@@ -185,7 +185,7 @@ function swap(chains) {
     name: 'Crypto swaps in Kyro',
     crumb: 'Swap',
     title: 'Swap crypto privately, any coin to any coin | Kyro Wallet',
-    description: `Swap across ${n} blockchains from your own wallet, with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.`,
+    description: `Swap across ${n} blockchains with no account. Kyro compares providers, decodes every transaction and includes its fee, from 0.7%, in the rate. Monero included.`,
     hero: {
       eyebrow: 'Swap',
       h1: 'Any coin <em>to any coin</em>',

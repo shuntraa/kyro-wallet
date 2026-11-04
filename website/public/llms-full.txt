@@ -296,7 +296,7 @@ The curve is the same as on every other route, taken from the amount you sell.
 
 ### Second transfer
 
-The Kyro fee is a second ordinary transfer of the sold coin to Kyro's fee address on that chain. You approve it, and it carries its own network fee.
+The Kyro fee is a second ordinary transfer of the sold coin to Kyro's fee address on that chain. It goes right after the deposit and carries its own network fee.
 
 ### No separate transfer elsewhere
 
@@ -7126,7 +7126,7 @@ Kyro over Tor
 
 - Servers see the IP of a Tor exit relay, not yours.
 
-- Each blockchain has its own circuit, so the circuit does not link your lookups.
+- Bitcoin, Ethereum and Solana never share a circuit, so the circuit does not link your lookups.
 
 - Your internet provider sees only that you use Tor.
 
@@ -7292,7 +7292,7 @@ These reach XMR through Exolix: BTC, LTC, DOGE, TRX, USDT on TRON, ETH on Ethere
 
 - Confirm in the system window. Kyro sends an ordinary transfer, with no contract involved.
 
-- Confirm the second transfer, which is Kyro's fee in the coin you sold.
+- Right after the deposit, Kyro sends a second transfer: its fee, in the coin you sold.
 
 - Follow the status in History. The XMR appears when the provider has paid out and your scan reaches it.
 
