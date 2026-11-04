@@ -18,7 +18,7 @@
     '#else',
     'precision mediump float;',
     '#endif',
-    'uniform vec2 R;uniform float T;uniform vec2 M;uniform float S;uniform float A;',
+    'uniform vec2 R;uniform float T;uniform vec2 M;uniform float S;uniform float A;uniform float B;uniform float E;',
     // Sine domain warp: each pass folds the cloth over itself.
     'float cloth(vec2 q){',
     '  for(int i=1;i<5;i++){float f=float(i);',
@@ -50,7 +50,8 @@
     '  c=mix(c,vec3(.42,.72,1.),smoothstep(.6,1.,v)*.8);',
     // Interleaved gradient noise, one 8-bit step: keeps the long dark ramps free of banding.
     '  float g=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));',
-    '  gl_FragColor=vec4(c*A+vec3(.0157,.0235,.039)+(g-.5)/170.,1.);',
+    '  float rich=1.-smoothstep(E-.34,E+.03,1.-uv.y);',
+    '  gl_FragColor=vec4(c*mix(B,A,rich)+vec3(.0157,.0235,.039)+(g-.5)/170.,1.);',
     '}'
   ].join('\n');
 
@@ -78,7 +79,7 @@
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   var U = {};
-  ['R', 'T', 'M', 'S', 'A'].forEach(function (n) {
+  ['R', 'T', 'M', 'S', 'A', 'B', 'E'].forEach(function (n) {
     U[n] = gl.getUniformLocation(prog, n);
   });
 
@@ -96,14 +97,18 @@
     gl.viewport(0, 0, canvas.width, canvas.height);
   }
 
-  // Full in the hero, quiet behind the content, up again where the wordmark cuts through the footer.
+  // Full inside the hero, down to its real bottom edge. Quiet behind the content, and up again where
+  // the wordmark cuts through the footer.
   var word = document.querySelector('.foot-word');
+  var top = document.querySelector('.hero, .page-hero, .notfound');
   var HERO = document.querySelector('.hero') ? 1 : 0.72, REST = 0.2, FOOT = 0.8;
-  var wordTop = 1e9, wordH = 1;
+  var wordTop = 1e9, wordH = 1, heroEnd = 0;
   function measure() {
+    var y = window.scrollY;
+    if (top) heroEnd = top.getBoundingClientRect().bottom + y;
     if (!word) return;
     var b = word.getBoundingClientRect();
-    wordTop = b.top + window.scrollY;
+    wordTop = b.top + y;
     wordH = b.height || 1;
   }
   function onResize() {
@@ -119,9 +124,8 @@
     t = t < 0 ? 0 : t > 1 ? 1 : t;
     return t * t * (3 - 2 * t);
   }
-  function toneAt(y) {
-    var hero = REST + (HERO - REST) * (1 - ease(y / (K.vh * 0.62)));
-    return hero + (FOOT - REST) * ease((y + K.vh - wordTop) / wordH);
+  function restAt(y) {
+    return REST + (FOOT - REST) * ease((y + K.vh - wordTop) / wordH);
   }
 
   var mx = 0.68, my = 0.62, tx = mx, ty = my;
@@ -173,7 +177,9 @@
     gl.uniform1f(U.T, ((now - t0) / 1000) * 0.6);
     gl.uniform2f(U.M, mx, my);
     gl.uniform1f(U.S, (y / K.vh) * 0.3);
-    gl.uniform1f(U.A, toneAt(y));
+    gl.uniform1f(U.A, HERO);
+    gl.uniform1f(U.B, restAt(y));
+    gl.uniform1f(U.E, (heroEnd - window.scrollY) / canvas.clientHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   });
 

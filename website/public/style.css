@@ -148,7 +148,7 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
 
 /* ---------- hero: copy on the silk, the Kyro window in depth */
 .hero { position: relative; padding: 112px 0 36px; overflow: clip; }
-.hero::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom, rgba(4, 6, 10, .62), rgba(4, 6, 10, .62) 52%, rgba(4, 6, 10, .9) 100%); }
+.hero::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom, rgba(4, 6, 10, .62), rgba(4, 6, 10, .62) 52%, transparent); }
 .hero-copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .badge { display: inline-flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border: 1px solid var(--line-2); border-radius: 999px; background: rgba(8, 14, 22, .55); color: var(--text-2); font-size: 13.5px; transition: border-color .25s, color .25s; }
 .badge:hover { color: #fff; border-color: rgba(124, 196, 255, .5); }
@@ -194,7 +194,7 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
 /* Wide screens: copy left, the window large, leaning in from the right edge. */
 @media (min-width: 1100px) and (min-height: 640px) {
   .hero { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; padding: 96px 0 40px; }
-  .hero::before { background: linear-gradient(90deg, rgba(4, 6, 10, .78), rgba(4, 6, 10, .5) 44%, transparent 68%), linear-gradient(to bottom, transparent 62%, rgba(4, 6, 10, .86)); }
+  .hero::before { background: linear-gradient(90deg, rgba(4, 6, 10, .78), rgba(4, 6, 10, .5) 44%, transparent 68%); -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }
   .hero-copy.wrap { align-items: flex-start; text-align: left; width: 45vw; max-width: 700px; margin: 0 0 0 7vw; padding: 0; }
   .hero-copy .hero-cta, .hero .stats { justify-content: flex-start; }
   #hero-title { font-size: clamp(60px, min(6.6vw, 12.4vh), 116px); white-space: nowrap; }
@@ -398,10 +398,6 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
 
 /* ---------- coin marquee */
 .coins { overflow: hidden; }
-/* Carries the hero's dark edge into the page, so the silk never shows a line. */
-.coins::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 260px; pointer-events: none; background: linear-gradient(to bottom, rgba(4, 6, 10, .86), transparent); }
-@media (max-width: 1099px), (max-height: 639px) { .coins::before { background: linear-gradient(to bottom, rgba(4, 6, 10, .9), transparent); } }
-.coins > * { position: relative; }
 .mq { display: flex; flex-direction: column; gap: 14px; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .mq-row { display: flex; gap: 14px; width: max-content; padding: 6px 0; }
 .js .mq-a { animation: mq 70s linear infinite; }
@@ -549,8 +545,8 @@ html:not(.js) .mq { overflow-x: auto; -webkit-mask-image: none; mask-image: none
 
 /* ---------- inner pages */
 .page-hero { position: relative; display: flex; align-items: center; min-height: min(72vh, 680px); padding: 128px 0 clamp(36px, 6vw, 72px); overflow: hidden; }
-.page-hero::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(4, 6, 10, .74), rgba(4, 6, 10, .44) 52%, rgba(4, 6, 10, .12) 82%), linear-gradient(to bottom, transparent 58%, rgba(4, 6, 10, .8)); }
-@media (max-width: 899px) { .page-hero::before { background: linear-gradient(to bottom, rgba(4, 6, 10, .62), rgba(4, 6, 10, .62) 60%, rgba(4, 6, 10, .86)); } }
+.page-hero::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(4, 6, 10, .74), rgba(4, 6, 10, .44) 52%, rgba(4, 6, 10, .12) 82%); -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
+@media (max-width: 899px) { .page-hero::before { background: rgba(4, 6, 10, .6); } }
 .page-hero .wrap { position: relative; z-index: 3; }
 .page-hero .lead { color: var(--text); }
 .page-hero h1 { font-size: clamp(38px, 6.4vw, 92px); }
