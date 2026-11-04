@@ -17,7 +17,132 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-8:  active wallets this week96:  downloads in total
+8:  active wallets this week99:  downloads in total
+
+Blockchains
+
+## 36 blockchains. One phrase.
+
+Bitcoin to Zcash, plus 220+ tokens, from the same recovery phrase. No account, no email, nothing to sign up for.
+
+What works on each blockchain
+
+How it works
+
+## Private in three steps
+
+No account to open and nothing to configure. Tor is on before your first balance loads.
+
+### 1Install
+
+One command, or the installer. The script checks the SHA-256 before it runs anything.
+
+### 2Create or import
+
+Make a new phrase, bring your own 12 or 24 words, or plug in a Ledger or Trezor.
+
+### 3You're private
+
+Your keys are encrypted on your computer and your requests leave through Tor.
+
+First steps with Kyro
+
+Privacy
+
+## Everything goes through Tor
+
+Kyro is a Tor wallet from the first launch. Balances, prices, swaps and broadcasts leave through the built-in client, each blockchain gets its own circuit, and if Tor fails, Kyro stops.
+
+- KyroYour computer
+
+- 1Relay 1Sees your address, blind to the rest
+
+- 2Relay 2Sees two other relays
+
+- 3Relay 3Sees the request, never you
+
+- NetworkSees a Tor exit
+
+What servers see
+
+## Your IP stays out of the log
+
+A wallet has to ask servers about your addresses. The question is whether your IP address comes with it.
+
+A direct connection
+
+- Every server sees your IP address.
+
+- One IP asking about three addresses ties them to each other, and to you.
+
+- Your internet provider sees the hosts you reach.
+
+Kyro over Tor
+
+- Servers see the IP of a Tor exit relay, not yours.
+
+- Bitcoin, Ethereum and Solana never share a circuit, so the circuit does not link your lookups.
+
+- Your internet provider sees only that you use Tor.
+
+Tor hides who is asking, not what is asked: the server you query still sees those addresses. Run your own node to avoid that.
+
+How Kyro uses Tor
+
+Swap
+
+## Any coin to any coin
+
+Kyro asks several providers and shows what actually lands in your account, across 33 blockchains.
+
+### Monero included
+
+Swap in and out of XMR without leaving the wallet. Kyro is a full Monero desktop wallet too.
+
+0.7%
+
+### Fee in the rate
+
+From 0.7%, already taken out of the amount you receive. Full swap fee table
+
+Routes, limits and checks
+
+Monero
+
+## Monero, done properly
+
+A full Monero desktop wallet with no light-wallet server. The node sends blocks and your machine scans them, so your view key never leaves it.
+
+- Your addresses and keys are never sent to the node.
+
+- Tor hides your IP from it. Your own node or a .onion works too.
+
+- A 25-word seed restores the wallet in Monero GUI, Feather or Cake Wallet.
+
+The private Monero wallet
+
+Earn
+
+## Earn without an account
+
+Lido, Aave, Solana, Cardano, TRON and NEAR in one list. No sign-up, and your keys stay with you.
+
+Demo numbers. Real rates are estimates, never guaranteed. With a hardware wallet, Earn covers Lido and Aave.
+
+All 14 options and their risks
+
+Hardware wallets
+
+## Ledger and Trezor
+
+- 1Plug it in
+
+- 2Click connect
+
+- 3Confirm on the device
+
+33:  blockchains, Trezor Safe 7 included.
+Which device on which chain
 
 ================================================================
 Features: send, swap, stake and hardware wallets | Kyro Wallet
@@ -337,7 +462,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-8:  active wallets this week96:  downloads in total
+8:  active wallets this week99:  downloads in total
 
 Recommended
 

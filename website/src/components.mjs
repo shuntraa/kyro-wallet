@@ -66,22 +66,13 @@ export const spark = (seed, cls = 'up') => {
   return `<svg class="spark ${cls}" viewBox="0 0 80 24" fill="none" aria-hidden="true"><path pathLength="1" d="${d}"/></svg>`;
 };
 
-function chart() {
-  const { d } = line(23, 52, 800, 150, 0.5);
-  return `<svg class="kw-chart" viewBox="0 0 800 150" preserveAspectRatio="none" fill="none" aria-hidden="true">
-    <defs><linearGradient id="kw-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7cc4ff" stop-opacity=".2"/><stop offset="1" stop-color="#7cc4ff" stop-opacity="0"/></linearGradient></defs>
-    <path class="kw-area" d="${d}L800 150L0 150Z" fill="url(#kw-area)"/>
-    <path class="kw-line" pathLength="1" d="${d}" vector-effect="non-scaling-stroke"/>
-  </svg>`;
-}
-
 const ROWS = [
-  ['btc', 'Bitcoin', 'BTC', '$5,678.90', '0.12345678 BTC', '46%', 'up'],
-  ['eth', 'Ethereum', 'ETH', '$3,456.78', '1.2345 ETH', '28%', 'up'],
-  ['xmr', 'Monero', 'XMR', '$1,234.56', '12.3456 XMR', '10%', 'down'],
-  ['sol', 'Solana', 'SOL', '$987.65', '12.34 SOL', '8%', 'up'],
-  ['ada', 'Cardano', 'ADA', '$654.32', '1,234.5 ADA', '5%', 'down'],
-  ['doge', 'Dogecoin', 'DOGE', '$321.09', '1,234 DOGE', '3%', 'up']
+  ['sol', 'Solana', 'SOL', '$8,954.53', '96.42 SOL', '38%', 'up'],
+  ['btc', 'Bitcoin', 'BTC', '$7,531.59', '0.0962 BTC', '32%', 'up'],
+  ['eth', 'Ethereum', 'ETH', '$5,060.90', '2.184 ETH', '22%', 'up'],
+  ['xmr', 'Monero', 'XMR', '$1,192.33', '1.86 XMR', '5%', 'down'],
+  ['ada', 'Cardano', 'ADA', '$406.05', '2,140 ADA', '2%', 'down'],
+  ['doge', 'Dogecoin', 'DOGE', '$255.69', '3,420 DOGE', '1%', 'up']
 ];
 
 const assetRow = ([f, name, t, val, amt, share, dir]) => `
@@ -91,69 +82,6 @@ const assetRow = ([f, name, t, val, amt, share, dir]) => `
             <span class="kw-val"><b class="vd"><span class="v">${val}</span><span class="d">•••••</span></b><small class="vd"><span class="v">${amt}</span><span class="d">•••••</span></small></span>
             <span class="kw-share">${share}</span>
           </div>`;
-
-const portfolio = () => `
-      <div class="kw-screen is-on" data-screen="0">
-        <div class="kw-top">
-          <div>
-            <p class="kw-label">Total value <i class="kw-eye" data-eye>${svg(EYE)}</i></p>
-            <p class="kw-total vd"><span class="v">$<span data-balance>12,345</span><span class="dim">.67</span></span><span class="d">$•••••</span></p>
-            <p class="kw-delta"><span class="vd kw-up"><span class="v">▲ $123.45 · 1.23%</span><span class="d">▲ ••••• · 1.23%</span></span> today</p>
-          </div>
-          <div class="kw-actions">
-            <div class="kw-seg"><i class="on">1D</i><i>1W</i><i>1M</i><i>1Y</i><i>All</i></div>
-            <div class="kw-btns"><i class="kw-b on">${icon('up')}Send</i><i class="kw-b">${icon('down')}Receive</i><i class="kw-b">${icon('swap')}Swap</i></div>
-          </div>
-        </div>
-        ${chart()}
-        <div class="kw-cols">
-          <div class="kw-panel kw-assets">
-            <div class="kw-tabs"><b>My assets</b><span>Market</span><span>Favorites</span></div>
-            ${ROWS.map(assetRow).join('')}
-          </div>
-          <div class="kw-panel kw-side">
-            <p class="kw-label">Allocation</p>
-            <div class="kw-alloc"><i class="a1"></i><i class="a2"></i><i class="a3"></i><i class="a4"></i><i class="a5"></i></div>
-            <div class="kw-vault">${icon('shield')}<span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
-            <div class="kw-kv"><span>Auto-lock</span><b>14:54</b></div>
-            <div class="kw-bar"><i></i></div>
-            <div class="kw-kv"><span>Hardware wallet</span><b class="ice">Add</b></div>
-            <div class="kw-kv"><span>Unlimited approvals</span><b class="up">None</b></div>
-            <div class="kw-kv"><span>Recovery phrase</span><b class="up">Imported</b></div>
-            <div class="kw-kv"><span>Tor</span><b class="ice">On</b></div>
-          </div>
-        </div>
-      </div>`;
-
-const swapScreen = () => `
-      <div class="kw-screen" data-screen="1">
-        <div class="kw-head"><p class="kw-h">Swap</p><i class="kw-pill">Bitcoin ${icon('chev')}</i><div class="kw-seg kw-slip"><i>0.1%</i><i class="on">0.5%</i><i>1%</i></div></div>
-        <div class="kw-swap-grid">
-          <div class="kw-panel kw-swapcard">
-            <div class="kw-field">
-              <p class="kw-label">You send</p>
-              <div><strong data-sw-from>1.0000</strong><i class="kw-token">${ico('btc')}BTC${icon('chev')}</i></div>
-            </div>
-            <i class="kw-flip">${icon('down')}</i>
-            <div class="kw-field">
-              <p class="kw-label">You receive ≈</p>
-              <div><strong data-sw-to>100.00</strong><i class="kw-token">${ico('xmr')}XMR${icon('chev')}</i></div>
-              <small>Service fee included</small>
-            </div>
-            <i class="kw-review">Review the swap</i>
-          </div>
-          <div class="kw-panel kw-best">
-            <b>Best price</b>
-            <div class="kw-kv"><span>Rate</span><b>1 BTC ≈ 100 XMR</b></div>
-            <div class="kw-kv"><span>You receive</span><b>≈ 100 XMR</b></div>
-            <div class="kw-kv"><span>Network fee</span><b>at confirmation</b></div>
-            <hr>
-            <p class="kw-label">Providers compared</p>
-            <div class="kw-kv"><span>Exolix</span><b>100.00 <em>Best</em></b></div>
-            <div class="kw-kv"><span>Other quote</span><b>99.99</b></div>
-          </div>
-        </div>
-      </div>`;
 
 export const EARN = [
   ['steth', 'Ethereum · Lido', 'Liquid staking', '1.23%', 'stETH swappable', 'None'],
@@ -173,31 +101,14 @@ export const earnRow = ([f, name, type, apy, lock, min]) => `
             <i class="kw-b">Start</i>
           </div>`;
 
-const earnScreen = () => `
-      <div class="kw-screen" data-screen="2">
-        <div class="kw-head"><div><p class="kw-h">Earn</p><p>Rates are estimates, never guaranteed.</p></div><div class="kw-seg"><i class="on">All</i><i>Staking</i><i>Stablecoins</i></div></div>
-        <div class="kw-panel kw-earnlist">${EARN.map(earnRow).join('')}</div>
-      </div>`;
+const heroShot = (name, i) => `
+        <div class="kw-screen${i === 0 ? ' is-on' : ''}" data-screen="${i}"><picture><source media="(max-width: 640px)" srcset="/img/hero-${name}-m.webp" width="1080" height="1440"><img src="/img/hero-${name}.webp" width="1800" height="1125" alt=""${i === 0 ? ' fetchpriority="high"' : ''}></picture></div>`;
 
-const railItem = (k, label, i) => `<i class="kw-rail-i${i === 0 ? ' on' : ''}"${i >= 0 ? ` data-rail="${i}"` : ''}>${icon(k)}<span>${label}</span></i>`;
-
-/** The Kyro window. The text alternative lives on the wrapper; everything inside is decorative. */
+/** The Kyro window: captures of the app itself. The text alternative lives on the wrapper. */
 export const appWindow = () => `
-  <div class="kw" role="img" aria-label="The Kyro app with demo numbers, moving through the Portfolio, Swap and Earn screens.">
+  <div class="kw kw-shot" role="img" aria-label="The Kyro app with sample balances, moving through the Portfolio, Swap and Earn screens.">
     <div class="kw-in" aria-hidden="true">
-      <div class="kw-titlebar">
-        <span class="kw-brand"><img src="/img/kyro-mark-dark.svg" width="16" height="16" alt=""><b>Kyro</b><span>/</span><span>Main account</span>${icon('chev')}</span>
-        <span class="kw-search">${icon('search')}Search for an asset, an address…</span>
-        <span class="kw-demo">DEMO</span>
-        <span class="kw-win"><i></i><i></i><i></i></span>
-      </div>
-      <div class="kw-body">
-        <div class="kw-rail">
-          ${railItem('portfolio', 'Portfolio', 0)}${railItem('assets', 'Assets', -1)}${railItem('swap', 'Swap', 1)}${railItem('earn', 'Earn', 2)}${railItem('history', 'History', -1)}
-          <span class="kw-rail-end">${railItem('settings', 'Settings', -1)}</span>
-        </div>
-        <div class="kw-screens">${portfolio()}${swapScreen()}${earnScreen()}</div>
-      </div>
+      <div class="kw-body"><div class="kw-screens">${['portfolio', 'swap', 'earn'].map(heroShot).join('')}</div></div>
     </div>
   </div>`;
 
