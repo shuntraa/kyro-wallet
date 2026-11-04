@@ -849,6 +849,7 @@ pub fn ton_unsigned_transfer(t: &TonTransfer) -> Result<String> {
 /// Longest comment the Ledger TON app displays (`MAX_MEMO_LEN`, printable ASCII only).
 pub const TON_HW_MAX_COMMENT: usize = 120;
 const HW_HINT_COMMENT: u32 = 0x00;
+const HW_HINT_JETTON: u32 = 0x01;
 
 /// Comment the Ledger TON app can show: printable ASCII, ≤ [`TON_HW_MAX_COMMENT`] bytes.
 pub fn ton_hw_check_comment(text: &str) -> Result<()> {
@@ -861,10 +862,10 @@ pub fn ton_hw_check_comment(text: &str) -> Result<()> {
 }
 
 /// Minimal big-endian amount bytes (app `varuint` / cell `VarUInteger 16`, must be minimal).
-fn varuint(v: u64) -> Vec<u8> {
+fn varuint(v: u128) -> Vec<u8> {
     let b = v.to_be_bytes();
     let skip = b.iter().take_while(|x| **x == 0).count();
-    let mut out = vec![(8 - skip) as u8];
+    let mut out = vec![(16 - skip) as u8];
     out.extend_from_slice(&b[skip..]);
     out
 }
@@ -880,12 +881,7 @@ pub fn ton_hw_request(
     if sig != [0u8; 64] {
         return Err(Error::input("this TON transfer is already signed"));
     }
-    if t.jetton.is_some() {
-        return Err(Error::input(
-            "TON token transfer: not supported on Ledger yet",
-        ));
-    }
-    if t.comment.is_none() && !t.inline_empty_body {
+    if t.comment.is_none() && t.jetton.is_none() && !t.inline_empty_body {
         return Err(Error::input(
             "TON transfer not built for the Ledger (empty body as a reference)",
         ));
@@ -895,25 +891,32 @@ pub fn ton_hw_request(
     r.push(0x01); // include_wallet_op
     r.extend_from_slice(&t.seqno.to_be_bytes());
     r.extend_from_slice(&t.valid_until.to_be_bytes());
-    r.extend_from_slice(&varuint(t.amount));
+    r.extend_from_slice(&varuint(u128::from(t.amount)));
     r.push(t.destination.workchain as u8);
     r.extend_from_slice(&t.destination.hash);
     r.push(u8::from(t.bounce));
     r.push(t.mode);
     r.push(0x00); // no StateInit in the internal message
-    match &t.comment {
-        None => r.extend_from_slice(&[0x00, 0x00]), // no payload, no hints
-        Some(c) => {
-            ton_hw_check_comment(c)?;
-            let cell = comment_cell(c)?;
-            r.push(0x01);
-            r.extend_from_slice(&cell.repr_depth().to_be_bytes());
-            r.extend_from_slice(&cell.repr_hash().0);
-            r.push(0x01);
-            r.extend_from_slice(&HW_HINT_COMMENT.to_be_bytes());
-            r.extend_from_slice(&(c.len() as u16).to_be_bytes());
-            r.extend_from_slice(c.as_bytes());
+    let mut payload = |cell: Cell, hint: u32, data: &[u8]| {
+        r.push(0x01);
+        r.extend_from_slice(&cell.repr_depth().to_be_bytes());
+        r.extend_from_slice(&cell.repr_hash().0);
+        r.push(0x01);
+        r.extend_from_slice(&hint.to_be_bytes());
+        r.extend_from_slice(&(data.len() as u16).to_be_bytes());
+        r.extend_from_slice(data);
+    };
+    match (&t.jetton, &t.comment) {
+        (Some(j), _) => {
+            let wallet = ton_wallet_address(public_key, t.wallet_id)?;
+            let hint = j.ledger_hint(&t.destination, &wallet, testnet)?;
+            payload(j.cell()?, HW_HINT_JETTON, &hint);
         }
+        (None, Some(c)) => {
+            ton_hw_check_comment(c)?;
+            payload(comment_cell(c)?, HW_HINT_COMMENT, c.as_bytes());
+        }
+        (None, None) => r.extend_from_slice(&[0x00, 0x00]), // no payload, no hints
     }
     Ok((r, t.signing_hash()?))
 }
@@ -1066,6 +1069,78 @@ mod tests {
         }
     }
 
+    /// USD₮ transfer: the request carries the body's cell ref and the app's known-jetton hint,
+    /// byte for byte what `src/transaction/transaction_hints.c` reads back.
+    #[test]
+    fn ledger_jetton_request() {
+        let k = key("c38f49de2fb13223a9e7d37d5d0ffbdd89a5eb7c8b0ee4d1c299f2cefe7dc4a0");
+        let pk = k.verifying_key().to_bytes();
+        let me = ton_wallet_address(&pk, TON_WALLET_ID_MAINNET).unwrap();
+        let to = ton_parse_address("EQBm--PFwDv1yCeS-QTJ-L8oiUpqo9IT1BwgVptlSq3ts90Q")
+            .unwrap()
+            .address;
+        let master = ton_known_jettons(false)[0].master;
+        let mut t = transfer(
+            &k,
+            "EQBm--PFwDv1yCeS-QTJ-L8oiUpqo9IT1BwgVptlSq3ts90Q",
+            6,
+            1671132440,
+        );
+        t.destination = ton_jetton_wallet_address(&master, &me, false).unwrap();
+        t.amount = TON_JETTON_ATTACHED_NANOTON;
+        let body = TonJettonBody {
+            query_id: 1671132440,
+            amount: 12_500_000,
+            destination: to,
+            response_destination: me,
+            forward_ton_amount: TON_JETTON_FORWARD_NANOTON,
+            comment: None,
+        };
+        t.jetton = Some(body.clone());
+        let boc = t.encode_unsigned().unwrap();
+        let (req, hash) = ton_hw_request(&boc, &pk, false).unwrap();
+        let cell = body.cell().unwrap();
+        let hint = format!(
+            "03{:016x}0000{}03bebc20{}{}{}{}{}",
+            1671132440u64,
+            "00",
+            format_args!("00{}", hex::encode(to.hash)),
+            format_args!("00{}", hex::encode(me.hash)),
+            "00",
+            "0101",
+            "00",
+        );
+        let tail = format!(
+            "0001{:04x}{}01{:08x}{:04x}{hint}",
+            cell.repr_depth(),
+            hex::encode(cell.repr_hash().0),
+            1,
+            hint.len() / 2,
+        );
+        assert!(hex::encode(&req).ends_with(&tail), "{}", hex::encode(&req));
+        assert_eq!(hash, t.signing_hash().unwrap());
+        // The value of the message is the 0.05 attached to the jetton wallet, not the tokens.
+        assert_eq!(&req[14..19], &[4, 0x02, 0xfa, 0xf0, 0x80]);
+        let s = ton_hw_signed(&boc, &pk, false, &k.sign(&hash).to_bytes(), &hash).unwrap();
+        let j = s.summary.jetton.unwrap();
+        assert_eq!((j.symbol.as_str(), j.amount.as_str()), ("USDT", "12500000"));
+
+        // A comment would be a mere hash on the screen; a foreign contract is no known jetton.
+        let mut c = t.clone();
+        c.jetton = Some(TonJettonBody {
+            comment: Some("hello".into()),
+            ..body.clone()
+        });
+        let e = ton_hw_request(&c.encode_unsigned().unwrap(), &pk, false).unwrap_err();
+        assert!(e.to_string().contains("cannot show"), "{e}");
+        let mut other = t.clone();
+        other.destination = to;
+        assert!(other
+            .encode_unsigned()
+            .and_then(|b| ton_hw_request(&b, &pk, false))
+            .is_err());
+    }
+
     #[test]
     fn ledger_request_and_signature() {
         let k = key("c38f49de2fb13223a9e7d37d5d0ffbdd89a5eb7c8b0ee4d1c299f2cefe7dc4a0");
@@ -1121,6 +1196,7 @@ mod tests {
         t.comment = Some("тест".into());
         assert!(ton_hw_request(&t.encode_unsigned().unwrap(), &pk, false).is_err());
         assert!(ton_hw_check_comment(&"a".repeat(121)).is_err());
+        assert_eq!(varuint(1 << 70), [&[9u8, 0x40][..], &[0; 8]].concat());
         assert_eq!(varuint(0), vec![0]);
         assert_eq!(varuint(0x0100), vec![2, 1, 0]);
     }

@@ -294,6 +294,7 @@
     "allow-hw-near-broadcast",
     "allow-hw-near-tx-status",
     "allow-hw-ton-build-tx",
+    "allow-hw-ton-build-jetton-tx",
     "allow-hw-sign-ton-tx",
     "allow-hw-ton-broadcast",
     "allow-hw-hbar-account",

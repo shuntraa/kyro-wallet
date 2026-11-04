@@ -296,6 +296,7 @@ const COMMANDS: &[&str] = &[
     "hw_near_broadcast",
     "hw_near_tx_status",
     "hw_ton_build_tx",
+    "hw_ton_build_jetton_tx",
     "hw_sign_ton_tx",
     "hw_ton_broadcast",
     "hw_hbar_account",

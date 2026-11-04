@@ -1064,6 +1064,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_near_broadcast: hwKeyDemo,
     hw_near_tx_status: hwKeyDemo,
     hw_ton_build_tx: hwKeyDemo,
+    hw_ton_build_jetton_tx: hwKeyDemo,
     hw_sign_ton_tx: hwKeyDemo,
     hw_ton_broadcast: hwKeyDemo,
     hw_hbar_account: hwKeyDemo,

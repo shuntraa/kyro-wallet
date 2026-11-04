@@ -458,6 +458,11 @@ pub(crate) async fn build_jetton(
     now: u32,
 ) -> AppResult<TonBuilt> {
     let tn = testnet(c.network);
+    if req.hw && req.comment.is_some_and(|t| !t.is_empty()) {
+        return Err(AppError::InvalidInput(
+            "TON token comment on Ledger: the device cannot show it, send without a comment".into(),
+        ));
+    }
     let master = wallet_core::ton_parse_address(master)?.address;
     if wallet_core::ton_known_jetton(&master, tn).is_none() {
         return Err(AppError::InvalidInput("TON token unknown to Kyro".into()));

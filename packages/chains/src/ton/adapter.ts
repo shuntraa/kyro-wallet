@@ -60,13 +60,12 @@ export function rustTonBackend(account = 0): TonBackend {
 
 /** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its own v4R2 wallet, signature on the device (`hw_*` commands). */
 export function rustTonHwBackend(accountId: string): TonBackend {
-  // Jetton sends are vault-only for now (the Ledger request has no jetton payload).
-  const { buildJetton: _vaultOnly, ...base } = rustTonBackend();
   return {
-    ...base,
+    ...rustTonBackend(),
     build: (to, amount, comment, sendAll) => call('hw_ton_build_tx', { accountId, to, amount, ...(comment ? { comment } : {}), ...(sendAll ? { sendAll } : {}) }),
     sign: (boc, id) => call('hw_sign_ton_tx', { id, accountId, boc }),
     broadcast: (boc) => call('hw_ton_broadcast', { accountId, boc }),
+    buildJetton: (master, to, amount) => call('hw_ton_build_jetton_tx', { accountId, master, to, amount }),
   };
 }
 
@@ -192,7 +191,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
 
   /** Jetton transfer: Rust computes our jetton wallet, writes the TEP-74 body, attaches 0.05 TON. */
   private async buildJetton(params: BuildParams, to: string, comment: string): Promise<TonUnsigned> {
-    if (this.hw) throw new Error(l10n('Envoi de jetons TON : pas encore pris en charge sur hardware wallet', 'TON token sends: not yet supported on hardware wallets'));
+    if (this.hw && comment) throw new Error(l10n('Commentaire sur un jeton TON : le Ledger ne peut pas l’afficher, envoyez sans commentaire', 'TON token comment: the Ledger cannot show it, send without a comment'));
     const known = TON_JETTONS[this.chain.network].find((k) => k.contract === params.asset.contract);
     if (!known || known.decimals !== params.asset.decimals || !this.backend.buildJetton) throw new Error(l10n('Jeton TON inconnu', 'Unknown TON token'));
     let amount = params.amount;

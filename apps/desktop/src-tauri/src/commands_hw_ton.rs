@@ -10,8 +10,8 @@ use crate::commands::confirm_native;
 use crate::commands_hw::device_line;
 use crate::commands_hw_keys::{check_device, device_sign, key_array, stored_key};
 use crate::commands_ton::{
-    broadcast_checked, build, ctx, describe_ton, describe_ton_extra, now, prepare_sign, TonBuilt,
-    TonSignedOut, TransferRequest,
+    broadcast_checked, build, build_jetton, ctx, describe_ton, describe_ton_extra, now,
+    prepare_sign, TonBuilt, TonSignedOut, TransferRequest,
 };
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -50,6 +50,28 @@ pub async fn hw_ton_build_tx(
         hw: true,
     };
     build(&ctx(&state), &pk, &me, &req, now()).await
+}
+
+/// Jetton transfer from the Ledger account; the app names the token only if it is in its table
+/// (`wallet_core::ton_hw_request` refuses otherwise), and cannot show a comment.
+#[tauri::command]
+pub async fn hw_ton_build_jetton_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    master: String,
+    to: String,
+    amount: String,
+) -> AppResult<TonBuilt> {
+    let (_, key) = stored_key(&state, &account_id, CHAIN)?;
+    let (pk, me) = wallet_of(&state, &key)?;
+    let req = TransferRequest {
+        to: &to,
+        amount: &amount,
+        comment: None,
+        send_all: false,
+        hw: true,
+    };
+    build_jetton(&ctx(&state), &pk, &me, &master, &req, now()).await
 }
 
 #[tauri::command]

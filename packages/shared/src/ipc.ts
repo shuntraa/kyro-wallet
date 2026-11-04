@@ -2588,6 +2588,7 @@ export interface Commands {
   hw_near_tx_status: { args: { accountId: string; hash: string }; ret: NearTxOutcome };
   /** TON on a Ledger: the account's own v4R2 wallet (`m/44'/607'/0'/0'/account'/0'`); status: `ton_tx_status`. */
   hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
+  hw_ton_build_jetton_tx: { args: { accountId: string; master: string; to: string; amount: string }; ret: TonBuilt };
   hw_sign_ton_tx: { args: { id: string; accountId: string; boc: string }; ret: { boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext } };
   hw_ton_broadcast: { args: { accountId: string; boc: string }; ret: string };
   /** Hedera on a Ledger: ED25519 account found by its key (`address` = DER key); status: `hbar_tx_status`. */

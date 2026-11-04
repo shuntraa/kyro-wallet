@@ -438,6 +438,7 @@ pub fn run() {
             commands_hw_near::hw_near_broadcast,
             commands_hw_near::hw_near_tx_status,
             commands_hw_ton::hw_ton_build_tx,
+            commands_hw_ton::hw_ton_build_jetton_tx,
             commands_hw_ton::hw_sign_ton_tx,
             commands_hw_ton::hw_ton_broadcast,
             commands_hw_hbar::hw_hbar_account,

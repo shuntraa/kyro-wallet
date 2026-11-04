@@ -100,6 +100,7 @@ pub struct App<'a> {
     link: &'a dyn ApduLink,
     ctl: &'a Ctl,
     name: &'static str,
+    version: String,
 }
 
 impl<'a> App<'a> {
@@ -119,7 +120,23 @@ impl<'a> App<'a> {
                 min,
             ));
         }
-        Ok(App { link, ctl, name })
+        Ok(App {
+            link,
+            ctl,
+            name,
+            version,
+        })
+    }
+
+    /// Fails unless the open app is at least `min`, for a feature newer than the app's minimum.
+    pub fn require(&self, min: &str) -> HwResult<()> {
+        if version_at_least(&self.version, min) {
+            return Ok(());
+        }
+        Err(HwError::too_old(
+            format!("{} app {} too old: update it", self.name, self.version),
+            min,
+        ))
     }
 
     /// Exchange + status word check (wrong-app codes completed with the open app's name).

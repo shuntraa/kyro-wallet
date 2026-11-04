@@ -3,7 +3,9 @@
 use serde::{Deserialize, Serialize};
 use tycho_types::cell::{Cell, CellBuilder, CellSlice};
 
-use super::{cell_err, comment_cell, decode_boc_b64, load_addr, slice, store_addr, TonAddress};
+use super::{
+    cell_err, comment_cell, decode_boc_b64, load_addr, slice, store_addr, varuint, TonAddress,
+};
 use crate::error::{Error, Result};
 
 /// `transfer` opcode of a jetton wallet (TEP-74).
@@ -30,6 +32,8 @@ struct JettonDef {
     /// `jetton_wallet_code` of `get_jetton_data` (BOC, base64).
     wallet_code: &'static str,
     layout: WalletLayout,
+    /// Index in the Ledger TON app's table (`src/jetton.c`), which names the token on its screen.
+    ledger_id: Option<u16>,
 }
 
 const JETTONS: &[JettonDef] = &[JettonDef {
@@ -44,6 +48,7 @@ const JETTONS: &[JettonDef] = &[JettonDef {
     decimals: 6,
     wallet_code: "te6cckEBAQEAIwAIQgKPRS16Tf10BmtoI2UXclntBXNENb52tf1L1divK3w9aCBrv3Y=",
     layout: WalletLayout::Stablecoin,
+    ledger_id: Some(0),
 }];
 
 /// A jetton Kyro knows.
@@ -186,6 +191,40 @@ impl TonJettonBody {
         Ok(())
     }
 
+    /// Hint of the Ledger TON app (`doc/MESSAGES.md`, jetton transfer, known jetton): the app
+    /// rebuilds this body, requires its hash to be the payload's, recomputes the owner's jetton
+    /// wallet and shows ticker, amount and recipient. A forward payload is only a hash on its
+    /// screen, so a comment is refused here.
+    pub(super) fn ledger_hint(
+        &self,
+        to: &TonAddress,
+        wallet: &TonAddress,
+        testnet: bool,
+    ) -> Result<Vec<u8>> {
+        if self.comment.is_some() {
+            return Err(Error::input(
+                "TON token comment on Ledger: the device cannot show it, send without a comment",
+            ));
+        }
+        let d = known_of_wallet(to, wallet, testnet)?;
+        let id = d
+            .ledger_id
+            .ok_or_else(|| Error::input("this TON token is not in the Ledger app's list"))?;
+        let mut h = vec![0x03]; // query_id present, known jetton
+        h.extend_from_slice(&self.query_id.to_be_bytes());
+        h.extend_from_slice(&id.to_be_bytes());
+        h.push(wallet.workchain as u8);
+        h.extend_from_slice(&varuint(self.amount));
+        for a in [&self.destination, &self.response_destination] {
+            h.push(a.workchain as u8);
+            h.extend_from_slice(&a.hash);
+        }
+        h.push(0x00); // no custom payload
+        h.extend_from_slice(&varuint(u128::from(self.forward_ton_amount)));
+        h.push(0x00); // no forward payload
+        Ok(h)
+    }
+
     pub(super) fn cell(&self) -> Result<Cell> {
         let mut b = CellBuilder::new();
         b.store_u32(TON_JETTON_TRANSFER_OP).map_err(cell_err)?;
@@ -280,19 +319,27 @@ pub struct TonJettonSummary {
 }
 
 /// The summary of a jetton transfer sent to `to` (must be our jetton wallet of a known jetton).
+fn known_of_wallet(
+    to: &TonAddress,
+    wallet: &TonAddress,
+    testnet: bool,
+) -> Result<&'static JettonDef> {
+    JETTONS
+        .iter()
+        .filter(|d| d.testnet == testnet)
+        .find(|d| ton_jetton_wallet_address(&master_of(d), wallet, testnet).is_ok_and(|w| w == *to))
+        .ok_or_else(|| {
+            Error::input("token transfer to a contract that is not your wallet for a known token")
+        })
+}
+
 pub(super) fn summarize(
     body: &TonJettonBody,
     to: &TonAddress,
     wallet: &TonAddress,
     testnet: bool,
 ) -> Result<TonJettonSummary> {
-    let d = JETTONS
-        .iter()
-        .filter(|d| d.testnet == testnet)
-        .find(|d| ton_jetton_wallet_address(&master_of(d), wallet, testnet).is_ok_and(|w| w == *to))
-        .ok_or_else(|| {
-            Error::input("token transfer to a contract that is not your wallet for a known token")
-        })?;
+    let d = known_of_wallet(to, wallet, testnet)?;
     Ok(TonJettonSummary {
         master: master_of(d).to_friendly(true, testnet),
         symbol: d.symbol.into(),
@@ -341,6 +388,17 @@ mod tests {
         assert!(ton_jetton_wallet_address(&usdt, &raw(wallet_zero()), true).is_err());
         assert_eq!(ton_known_jettons(false).len(), 1);
         assert!(ton_known_jettons(true).is_empty());
+    }
+
+    /// Same library cell as the USDT entry of the Ledger app (`src/jetton.c`).
+    #[test]
+    fn ledger_table_has_the_same_wallet_code() {
+        let (_, code) = decode_boc_b64(JETTONS[0].wallet_code).unwrap();
+        assert_eq!(
+            hex::encode(code.repr_hash().0),
+            "89468f02c78e570802e39979c8516fc38df07ea76a48357e0536f2ba7b3ee37b"
+        );
+        assert_eq!(JETTONS[0].ledger_id, Some(0));
     }
 
     fn wallet_zero() -> &'static str {
