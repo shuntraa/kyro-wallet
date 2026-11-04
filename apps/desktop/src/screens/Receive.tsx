@@ -571,7 +571,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               {xlmAccount.data?.exists && <span className="mt-1 block text-text2">{t('receive.xlmExists', { reserve: fmtCrypto(BigInt(xlmAccount.data.reserve), 7, 'XLM', 7) })}</span>}
             </Notice>
           )}
-          {family === 'xlm' && adapters.stellar && !activeHw && <StellarTrustPanel adapter={adapters.stellar} hidden={hideBalances} />}
+          {family === 'xlm' && adapters.stellar && <StellarTrustPanel adapter={adapters.stellar} hidden={hideBalances} />}
           {family === 'near' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.nearNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}

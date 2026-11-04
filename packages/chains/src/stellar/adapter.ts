@@ -61,13 +61,13 @@ export function rustStellarBackend(account = 0): StellarBackend {
 
 /** Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the account's stored key; signing is `hw_sign_stellar_tx`. */
 export function hwStellarBackend(accountId: string): StellarBackend {
-  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
-  const { buildAsset: _buildAssetVaultOnly, buildTrust: _buildTrustVaultOnly, ...base } = rustStellarBackend(0);
   return {
-    ...base,
+    ...rustStellarBackend(0),
     build: (to, amount, memo) => call('hw_stellar_build_tx', { accountId, to, amount, ...(memo ? { memo } : {}) }),
     sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
     broadcast: (envelope) => call('hw_stellar_broadcast', { accountId, envelope }),
+    buildAsset: (asset, to, amount, memo) => call('hw_stellar_build_asset_tx', { accountId, asset, to, amount, ...(memo ? { memo } : {}) }),
+    buildTrust: (asset, enable) => call('hw_stellar_build_trust_tx', { accountId, asset, enable }),
   };
 }
 
@@ -237,7 +237,6 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
 
   /** Builds the ChangeTrust of a known asset (`enable`: open; else remove at a zero balance). Signed and sent like a payment. */
   async buildTrust(contract: string, enable: boolean): Promise<StellarUnsigned> {
-    if (this.hw) throw new Error(l10n('Jetons Stellar : pas encore pris en charge sur hardware wallet', 'Stellar tokens: not yet supported on hardware wallets'));
     const k = STELLAR_ASSETS[this.chain.network].find((x) => x.contract === contract);
     if (!k || !this.backend.buildTrust) throw new Error(l10n('Actif Stellar inconnu', 'Unknown Stellar asset'));
     const { code, issuer } = splitStellarAsset(k.contract);
@@ -254,7 +253,6 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
 
   /** Payment of a known issued asset; `max` = our whole trustline balance. */
   private async buildAssetPayment(params: BuildParams): Promise<StellarUnsigned> {
-    if (this.hw) throw new Error(l10n('Jetons Stellar : pas encore pris en charge sur hardware wallet', 'Stellar tokens: not yet supported on hardware wallets'));
     const k = STELLAR_ASSETS[this.chain.network].find((x) => x.contract === params.asset.contract);
     if (!k || !this.backend.buildAsset) throw new Error(l10n('Actif Stellar inconnu', 'Unknown Stellar asset'));
     const { code, issuer } = splitStellarAsset(k.contract);

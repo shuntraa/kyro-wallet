@@ -324,6 +324,8 @@ const COMMANDS: &[&str] = &[
     "hw_sign_tron_tx",
     "hw_tron_broadcast",
     "hw_stellar_build_tx",
+    "hw_stellar_build_asset_tx",
+    "hw_stellar_build_trust_tx",
     "hw_sign_stellar_tx",
     "hw_stellar_broadcast",
     "hw_ada_build_tx",

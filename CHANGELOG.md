@@ -16,6 +16,8 @@
   app cannot show it.
 - Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
   enabled or removed there (Receive), each shown in full on the device.
+- Hardware wallets: Stellar USDC can be sent from Ledger and Trezor accounts, and its trustline
+  enabled or removed there (Receive), each shown in full on the device.
 - Earn: stake SUI with a validator (validators, measured yield, rewards, withdraw at any time).
 - Watch addresses: follow any public address or xpub with no key (balance, tokens, history).
   The network is detected from what you paste. Send, Swap and Earn are off for them, and a Watch

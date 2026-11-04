@@ -413,6 +413,43 @@ pub async fn hw_stellar_build_tx(
     .await
 }
 
+/// Payment of a known issued asset (`asset` = `CODE-ISSUER`), as `stellar_build_asset_tx`.
+#[tauri::command]
+pub async fn hw_stellar_build_asset_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset: String,
+    to: String,
+    amount: String,
+    memo: Option<MemoSpec>,
+) -> AppResult<StellarBuilt> {
+    let (acc, _) = account_for(&state, None, &account_id, Chain::Stellar)?;
+    let (me, _) = stellar_key(&acc)?;
+    crate::commands_stellar::build_asset(
+        &crate::commands_stellar::ctx(&state),
+        &me,
+        &to,
+        &asset,
+        &amount,
+        memo.as_ref(),
+    )
+    .await
+}
+
+/// Trustline of a known issued asset, as `stellar_build_trust_tx`.
+#[tauri::command]
+pub async fn hw_stellar_build_trust_tx(
+    state: State<'_, AppState>,
+    account_id: String,
+    asset: String,
+    enable: bool,
+) -> AppResult<StellarBuilt> {
+    let (acc, _) = account_for(&state, None, &account_id, Chain::Stellar)?;
+    let (me, _) = stellar_key(&acc)?;
+    crate::commands_stellar::build_trust(&crate::commands_stellar::ctx(&state), &me, &asset, enable)
+        .await
+}
+
 #[tauri::command]
 pub async fn hw_sign_stellar_tx(
     app: AppHandle,

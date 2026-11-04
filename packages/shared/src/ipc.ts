@@ -2590,6 +2590,8 @@ export interface Commands {
   hw_sign_tron_tx: { args: { id: string; accountId: string; raw: string }; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
   hw_tron_broadcast: { args: { accountId: string; raw: string; signature: string }; ret: string };
   hw_stellar_build_tx: { args: { accountId: string; to: string; amount: string; memo?: StellarMemoSpec }; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  hw_stellar_build_asset_tx: { args: { accountId: string; asset: string; to: string; amount: string; memo?: StellarMemoSpec }; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  hw_stellar_build_trust_tx: { args: { accountId: string; asset: string; enable: boolean }; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   hw_sign_stellar_tx: { args: { id: string; accountId: string; envelope: string }; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
   hw_stellar_broadcast: { args: { accountId: string; envelope: string }; ret: string };
   hw_key_add: { args: { id: string; chain: HwKeyChain; account: number; accountId?: string; label?: string }; ret: WatchOnlyAccount };

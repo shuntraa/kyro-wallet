@@ -322,8 +322,26 @@ pub fn sign_utxo(
     Err(HwError::bad("too many exchanges with the device"))
 }
 
-/// `StellarSignTx` + the operation message of Kyro's envelope (one XLM payment or account
-/// creation, the only transactions Kyro builds and signs).
+fn stellar_asset(a: &wallet_core::StellarAsset) -> protos::StellarAsset {
+    let mut p = protos::StellarAsset::new();
+    match a {
+        wallet_core::StellarAsset::Native => p.set_type(protos::StellarAssetType::NATIVE),
+        wallet_core::StellarAsset::Credit { code, issuer } => {
+            p.set_type(if code.len() <= 4 {
+                protos::StellarAssetType::ALPHANUM4
+            } else {
+                protos::StellarAssetType::ALPHANUM12
+            });
+            p.set_code(code.clone());
+            p.set_issuer(wallet_core::stellar_address_from_key(issuer));
+        }
+    }
+    p
+}
+
+/// `StellarSignTx` + the operation message of Kyro's envelope (one payment, account creation
+/// or trustline, the only transactions Kyro builds and signs). The device rebuilds the XDR from
+/// these fields, so its signature only verifies if they say what the envelope says.
 pub fn stellar_messages(
     path: &[u32],
     net: Network,
@@ -383,14 +401,12 @@ pub fn stellar_messages(
     let op_msg = match &op.body {
         StellarOperation::Payment {
             destination,
-            asset: wallet_core::StellarAsset::Native,
+            asset,
             amount,
         } => {
             let mut p = protos::StellarPaymentOp::new();
             p.set_destination_account(wallet_core::stellar_address_from_key(destination));
-            let mut a = protos::StellarAsset::new();
-            a.set_type(protos::StellarAssetType::NATIVE);
-            p.asset = MessageField::some(a);
+            p.asset = MessageField::some(stellar_asset(asset));
             p.set_amount(*amount);
             (MessageType::MessageType_StellarPaymentOp, encode(&p)?)
         }
@@ -403,10 +419,11 @@ pub fn stellar_messages(
             c.set_starting_balance(*starting_balance);
             (MessageType::MessageType_StellarCreateAccountOp, encode(&c)?)
         }
-        _ => {
-            return Err(HwError::unsupported(
-                "Kyro only signs XLM payments on Trezor",
-            ))
+        StellarOperation::ChangeTrust { asset, limit } => {
+            let mut c = protos::StellarChangeTrustOp::new();
+            c.asset = MessageField::some(stellar_asset(asset));
+            c.set_limit(u64::try_from(*limit).map_err(|_| HwError::bad("negative trust limit"))?);
+            (MessageType::MessageType_StellarChangeTrustOp, encode(&c)?)
         }
     };
     Ok((m, op_msg))
@@ -588,6 +605,62 @@ mod tests {
             wallet_core::stellar_address_from_key(&dest)
         );
         assert_eq!(op.starting_balance(), 20_000_000);
+    }
+
+    /// USDC payment and trustline: the fields the firmware rebuilds its XDR from.
+    #[test]
+    fn stellar_asset_payment_and_trustline_messages() {
+        let usdc = wallet_core::stellar_known_assets(Network::Mainnet)[0].asset();
+        let wallet_core::StellarAsset::Credit { code, issuer } = usdc.clone() else {
+            panic!("credit asset expected");
+        };
+        let path = [44 | crate::hw::H, 148 | crate::hw::H, crate::hw::H];
+        let env = |body| {
+            StellarEnvelope {
+                tx: wallet_core::StellarTransaction {
+                    source: [1; 32],
+                    fee: 100,
+                    sequence: 77,
+                    time_bounds: Some((0, 1_800_000_000)),
+                    memo: StellarMemo::None,
+                    operations: vec![wallet_core::StellarOp { source: None, body }],
+                },
+                signatures: vec![],
+            }
+            .to_base64()
+        };
+        let pay = env(StellarOperation::Payment {
+            destination: [2; 32],
+            asset: usdc.clone(),
+            amount: 12_500_000,
+        });
+        let (_, (t, op)) = stellar_messages(&path, Network::Mainnet, &pay).unwrap();
+        assert_eq!(t, MessageType::MessageType_StellarPaymentOp);
+        let p = protos::StellarPaymentOp::parse_from_bytes(&op).unwrap();
+        assert_eq!(p.amount(), 12_500_000);
+        assert_eq!(p.asset.type_(), protos::StellarAssetType::ALPHANUM4);
+        assert_eq!(p.asset.code(), code);
+        assert_eq!(
+            p.asset.issuer(),
+            wallet_core::stellar_address_from_key(&issuer)
+        );
+        let trust = env(StellarOperation::ChangeTrust {
+            asset: usdc,
+            limit: i64::MAX,
+        });
+        let (_, (t, op)) = stellar_messages(&path, Network::Mainnet, &trust).unwrap();
+        assert_eq!(t, MessageType::MessageType_StellarChangeTrustOp);
+        let c = protos::StellarChangeTrustOp::parse_from_bytes(&op).unwrap();
+        assert_eq!(c.limit(), i64::MAX as u64);
+        assert_eq!(c.asset.code(), code);
+        let long = wallet_core::StellarAsset::Credit {
+            code: "LONGCODE".into(),
+            issuer,
+        };
+        assert_eq!(
+            stellar_asset(&long).type_(),
+            protos::StellarAssetType::ALPHANUM12
+        );
     }
 
     #[test]

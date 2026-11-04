@@ -470,6 +470,8 @@ pub fn run() {
             commands_hw_coins::hw_sign_tron_tx,
             commands_hw_coins::hw_tron_broadcast,
             commands_hw_coins::hw_stellar_build_tx,
+            commands_hw_coins::hw_stellar_build_asset_tx,
+            commands_hw_coins::hw_stellar_build_trust_tx,
             commands_hw_coins::hw_sign_stellar_tx,
             commands_hw_coins::hw_stellar_broadcast,
             commands_hw_ada_zec::hw_ada_build_tx,

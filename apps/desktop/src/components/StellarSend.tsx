@@ -11,6 +11,8 @@ import type { StellarAdapter, StellarUnsigned } from '@kyro/chains';
 import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import { PasswordField } from './kit';
+import { HwWaiting } from './hw';
+import { pickDevice, withDevice } from '../state/hw';
 import { Dialog } from './ui/dialog';
 import { Button, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconWarn } from './icons';
@@ -78,12 +80,21 @@ function StellarTrustDialog({ adapter, contract, symbol, enable, reserve, onClos
   const [wrongPw, setWrongPw] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [device, setDevice] = useState<string | null>(null);
+  const hw = adapter.hw;
   const go = async () => {
     setBusy(true);
     setError(null);
     try {
       const unsigned = await adapter.buildTrust(contract, enable);
-      const signed = await adapter.signTx(unsigned, pw);
+      let signed;
+      if (hw) {
+        const d = await pickDevice(hw.device);
+        setDevice(d.id);
+        signed = await withDevice(d.id, () => adapter.signTxHw(unsigned, d.id));
+      } else {
+        signed = await adapter.signTx(unsigned, pw);
+      }
       await adapter.broadcast(signed);
       onClose(true);
     } catch (e) {
@@ -96,13 +107,14 @@ function StellarTrustDialog({ adapter, contract, symbol, enable, reserve, onClos
   return (
     <Dialog open onOpenChange={() => !busy && onClose(false)} title={enable ? t('stellar.trustEnable', { symbol }) : t('stellar.trustRemove', { symbol })}>
       <p className="m-0 text-[13px] leading-[1.55] text-text2">{enable ? t('stellar.trustEnableExplain', { symbol, reserve: XLM(reserve) }) : t('stellar.trustRemoveExplain', { symbol, reserve: XLM(reserve) })}</p>
-      <PasswordField id="xlm-trust-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void go()} />
+      {!hw && <PasswordField id="xlm-trust-pw" value={pw} onChange={setPw} autoFocus wrong={wrongPw} onEnter={() => pw && !busy && void go()} />}
+      {busy && device && <HwWaiting deviceId={device} />}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={() => onClose(false)} disabled={busy}>
           {t('common.cancel')}
         </Button>
-        <Button variant={enable ? 'primary' : 'danger'} disabled={!pw || busy} onClick={() => void go()}>
+        <Button variant={enable ? 'primary' : 'danger'} disabled={(!hw && !pw) || busy} onClick={() => void go()}>
           {busy && <Spinner />} {enable ? t('stellar.trustEnable', { symbol }) : t('stellar.trustRemove', { symbol })}
         </Button>
       </div>

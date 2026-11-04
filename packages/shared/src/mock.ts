@@ -1090,6 +1090,8 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_ton_build_jetton_tx: hwKeyDemo,
     hw_sign_ton_tx: hwKeyDemo,
     hw_ton_broadcast: hwKeyDemo,
+    hw_stellar_build_asset_tx: hwKeyDemo,
+    hw_stellar_build_trust_tx: hwKeyDemo,
     hw_hbar_account: hwKeyDemo,
     hw_hbar_build_tx: hwKeyDemo,
     hw_sign_hbar_tx: hwKeyDemo,

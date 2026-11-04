@@ -1068,6 +1068,66 @@ mod tests {
 
     /// TRC-20 (USDT) transfer on the Ledger Tron app: replayed APDUs, a device signature that
     /// recovers to the account, and the app's settings refusals mapped to their hints.
+    /// USDC payment, then its trustline: the device signs the signature base of each, and the
+    /// answer must verify against the account's key.
+    #[test]
+    fn ledger_stellar_asset_payment_and_trustline() {
+        let seed = wallet_core::Mnemonic::parse(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+        )
+        .unwrap()
+        .to_seed("");
+        let net = Network::Mainnet;
+        let pk = wallet_core::stellar_public_key(&seed, 0).unwrap();
+        let me = wallet_core::stellar_address(&seed, 0).unwrap();
+        let usdc = wallet_core::stellar_known_assets(net)[0].asset();
+        for body in [
+            wallet_core::StellarOperation::Payment {
+                destination: [2; 32],
+                asset: usdc.clone(),
+                amount: 12_500_000,
+            },
+            wallet_core::StellarOperation::ChangeTrust {
+                asset: usdc.clone(),
+                limit: i64::MAX,
+            },
+        ] {
+            let env = wallet_core::StellarEnvelope {
+                tx: wallet_core::StellarTransaction {
+                    source: pk,
+                    fee: 100,
+                    sequence: 77,
+                    time_bounds: Some((0, 1_800_000_000)),
+                    memo: wallet_core::StellarMemo::None,
+                    operations: vec![wallet_core::StellarOp { source: None, body }],
+                },
+                signatures: vec![],
+            }
+            .to_base64();
+            wallet_core::stellar_decode_tx(&env, &me, net).unwrap();
+            let (signed, hash, _) = wallet_core::stellar_sign(&seed, 0, &env, net).unwrap();
+            let sig = wallet_core::StellarEnvelope::from_base64(&signed)
+                .unwrap()
+                .signatures[0]
+                .signature
+                .clone();
+            let base = wallet_core::stellar_signature_base(&env, net).unwrap();
+            let sign = ledger_coins::stellar_sign(&key_path(Chain::Stellar, 0).unwrap(), &base);
+            let sign = sign.unwrap();
+            let mut ok = sig.clone();
+            ok.extend([0x90, 0x00]);
+            let mut script = vec![app("Stellar", "5.2.1")];
+            for a in &sign[..sign.len() - 1] {
+                script.push((a.clone(), vec![0x90, 0x00]));
+            }
+            script.push((sign[sign.len() - 1].clone(), ok));
+            let mut l = Ledger::with_link(Replay(Mutex::new(script)));
+            let got = sign_stellar(&mut l, &ctl(), net, 0, &env).unwrap();
+            let (assembled, h) = wallet_core::stellar_hw_assemble(&env, net, &pk, &got).unwrap();
+            assert_eq!((assembled, h), (signed, hash));
+        }
+    }
+
     #[test]
     fn ledger_tron_trc20_transfer() {
         let seed = wallet_core::Mnemonic::parse(

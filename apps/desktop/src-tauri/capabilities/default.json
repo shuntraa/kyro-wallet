@@ -322,6 +322,8 @@
     "allow-hw-sign-tron-tx",
     "allow-hw-tron-broadcast",
     "allow-hw-stellar-build-tx",
+    "allow-hw-stellar-build-asset-tx",
+    "allow-hw-stellar-build-trust-tx",
     "allow-hw-sign-stellar-tx",
     "allow-hw-stellar-broadcast",
     "allow-hw-ada-build-tx",
