@@ -9,7 +9,7 @@
 use protobuf::{Message, MessageField};
 use trezor_client::protos::{self, MessageType};
 use trezor_client::TrezorMessage;
-use wallet_core::{CardanoHwDestination, CardanoHwPlan, Network};
+use wallet_core::{CardanoCert, CardanoDrep, CardanoHwDestination, CardanoHwPlan, Network};
 
 use super::ledger_cardano::{account_path, payment_path, protocol_magic, stake_path};
 use super::trezor::{decode, TrezorIo};
@@ -17,6 +17,9 @@ use super::{Ctl, HwError, HwResult, Prompt};
 
 /// Tag-258 sets (Conway), which Kyro's bodies use.
 pub const MIN_FIRMWARE: &str = "2.7.2";
+/// A withdrawal alone is confirmed on the screen since this firmware (`SIMPLE_STAKE_WITHDRAW`);
+/// before, or next to a certificate, it depends on a "show details" choice.
+pub const MIN_FIRMWARE_WITHDRAWAL: &str = "2.8.5";
 
 fn network_id(net: Network) -> u32 {
     match net {
@@ -113,7 +116,8 @@ fn item<M: TrezorMessage>(m: &M) -> HwResult<Item> {
     ))
 }
 
-/// `CardanoSignTxInit` of Kyro's payment (one witness: the payment key).
+/// `CardanoSignTxInit` of Kyro's transaction (witnesses: the payment key, and the stake key of a
+/// staking transaction).
 pub fn sign_init(plan: &CardanoHwPlan, net: Network) -> HwResult<protos::CardanoSignTxInit> {
     let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("too many items"));
     let mut m = protos::CardanoSignTxInit::new();
@@ -129,10 +133,10 @@ pub fn sign_init(plan: &CardanoHwPlan, net: Network) -> HwResult<protos::Cardano
     if let Some(v) = plan.validity_start {
         m.set_validity_interval_start(v);
     }
-    m.set_certificates_count(0);
-    m.set_withdrawals_count(0);
+    m.set_certificates_count(n(plan.staking.certs.len())?);
+    m.set_withdrawals_count(n(plan.staking.withdrawals.len())?);
     m.set_has_auxiliary_data(plan.aux_hash.is_some());
-    m.set_witness_requests_count(1);
+    m.set_witness_requests_count(if plan.staking.is_empty() { 1 } else { 2 });
     m.set_minting_asset_groups_count(0);
     m.derivation_type = Some(icarus());
     m.set_include_network_id(false);
@@ -185,7 +189,56 @@ fn body_items(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<Vec<
             }
         }
     }
+    for c in &plan.staking.certs {
+        out.push(item(&certificate(c, account))?);
+    }
+    for amount in &plan.staking.withdrawals {
+        let mut w = protos::CardanoTxWithdrawal::new();
+        w.path = stake_path(account).to_vec();
+        w.set_amount(*amount);
+        out.push(item(&w)?);
+    }
     Ok(out)
+}
+
+/// `CardanoTxCertificate` as `trezorlib.cardano.parse_certificate` writes it.
+fn certificate(c: &CardanoCert, account: u32) -> protos::CardanoTxCertificate {
+    use protos::CardanoCertificateType as T;
+    let mut m = protos::CardanoTxCertificate::new();
+    m.path = stake_path(account).to_vec();
+    match c {
+        CardanoCert::StakeRegistration { deposit, .. } => {
+            m.set_type(T::STAKE_REGISTRATION_CONWAY);
+            m.set_deposit(*deposit);
+        }
+        CardanoCert::StakeDeregistration { refund, .. } => {
+            m.set_type(T::STAKE_DEREGISTRATION_CONWAY);
+            m.set_deposit(*refund);
+        }
+        CardanoCert::StakeDelegation { pool, .. } => {
+            m.set_type(T::STAKE_DELEGATION);
+            m.set_pool(pool.to_vec());
+        }
+        CardanoCert::VoteDelegation { drep, .. } => {
+            use protos::CardanoDRepType as D;
+            m.set_type(T::VOTE_DELEGATION);
+            let mut d = protos::CardanoDRep::new();
+            match drep {
+                CardanoDrep::Key(h) => {
+                    d.set_type(D::KEY_HASH);
+                    d.set_key_hash(h.to_vec());
+                }
+                CardanoDrep::Script(h) => {
+                    d.set_type(D::SCRIPT_HASH);
+                    d.set_script_hash(h.to_vec());
+                }
+                CardanoDrep::AlwaysAbstain => d.set_type(D::ABSTAIN),
+                CardanoDrep::AlwaysNoConfidence => d.set_type(D::NO_CONFIDENCE),
+            }
+            m.drep = MessageField::some(d);
+        }
+    }
+    m
 }
 
 fn host_ack() -> HwResult<Vec<u8>> {
@@ -193,6 +246,9 @@ fn host_ack() -> HwResult<Vec<u8>> {
         .write_to_bytes()
         .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
+
+/// Signature and public key of a device witness.
+pub type Witness = ([u8; 64], [u8; 32]);
 
 /// The whole flow; returns the firmware's body hash and payment-key signature (unverified,
 /// except that the witness is a Shelley one for the payment key path it was asked for).
@@ -203,6 +259,20 @@ pub fn sign_tx(
     net: Network,
     account: u32,
 ) -> HwResult<([u8; 32], [u8; 64], [u8; 32])> {
+    let (hash, witnesses) = sign_all(io, ctl, plan, net, account)?;
+    let (sig, pk) = witnesses[0];
+    Ok((hash, sig, pk))
+}
+
+/// Same, with every witness in request order: `(signature, key)` of the payment key, then of
+/// the stake key in a staking transaction (unverified).
+pub fn sign_all(
+    io: &mut dyn TrezorIo,
+    ctl: &Ctl,
+    plan: &CardanoHwPlan,
+    net: Network,
+    account: u32,
+) -> HwResult<([u8; 32], Vec<Witness>)> {
     ctl.prompt(Prompt::ConfirmOnDevice);
     let _: protos::CardanoTxItemAck = call(io, ctl, &sign_init(plan, net)?)?;
     for Item(mt, bytes) in body_items(plan, net, account)? {
@@ -218,20 +288,28 @@ pub fn sign_tx(
         let _: protos::CardanoTxItemAck =
             decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
     }
-    let mut w = protos::CardanoTxWitnessRequest::new();
-    w.path = payment_path(account).to_vec();
-    let r: protos::CardanoTxWitnessResponse = call(io, ctl, &w)?;
-    if r.type_() != protos::CardanoTxWitnessType::SHELLEY_WITNESS {
-        return Err(HwError::bad("Cardano witness of an unexpected type"));
+    let mut paths = vec![payment_path(account).to_vec()];
+    if !plan.staking.is_empty() {
+        paths.push(stake_path(account).to_vec());
     }
-    let pk: [u8; 32] = r
-        .pub_key()
-        .try_into()
-        .map_err(|_| HwError::bad("witness key: 32 bytes expected"))?;
-    let sig: [u8; 64] = r
-        .signature()
-        .try_into()
-        .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))?;
+    let mut witnesses = Vec::with_capacity(paths.len());
+    for path in paths {
+        let mut w = protos::CardanoTxWitnessRequest::new();
+        w.path = path;
+        let r: protos::CardanoTxWitnessResponse = call(io, ctl, &w)?;
+        if r.type_() != protos::CardanoTxWitnessType::SHELLEY_WITNESS {
+            return Err(HwError::bad("Cardano witness of an unexpected type"));
+        }
+        let pk: [u8; 32] = r
+            .pub_key()
+            .try_into()
+            .map_err(|_| HwError::bad("witness key: 32 bytes expected"))?;
+        let sig: [u8; 64] = r
+            .signature()
+            .try_into()
+            .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))?;
+        witnesses.push((sig, pk));
+    }
     let h: protos::CardanoTxBodyHash =
         decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
     let hash: [u8; 32] = h
@@ -240,7 +318,7 @@ pub fn sign_tx(
         .map_err(|_| HwError::bad("Cardano body hash: 32 bytes expected"))?;
     let _: protos::CardanoSignTxFinished =
         decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
-    Ok((hash, sig, pk))
+    Ok((hash, witnesses))
 }
 
 #[cfg(test)]
@@ -273,6 +351,109 @@ mod tests {
     }
 
     #[test]
+    fn staking_flow_against_simulated_firmware() {
+        let stake = [0x77; 28];
+        let plan = CardanoHwPlan {
+            inputs: vec![CardanoInput {
+                tx_hash: [0x3b; 32],
+                index: 1,
+            }],
+            outputs: vec![CardanoHwOutput {
+                destination: CardanoHwDestination::Own,
+                coin: 7_120_787,
+                assets: vec![],
+                map_form: false,
+            }],
+            fee: 42,
+            ttl: Some(10),
+            aux_hash: None,
+            validity_start: None,
+            tagged_sets: true,
+            staking: wallet_core::CardanoHwStaking {
+                certs: vec![
+                    CardanoCert::StakeRegistration {
+                        stake,
+                        deposit: 2_000_000,
+                    },
+                    CardanoCert::StakeDelegation {
+                        stake,
+                        pool: [0x88; 28],
+                    },
+                    CardanoCert::VoteDelegation {
+                        stake,
+                        drep: CardanoDrep::AlwaysAbstain,
+                    },
+                ],
+                withdrawals: vec![],
+            },
+            tx_id: [7; 32],
+            summary: wallet_core::CardanoTxSummary {
+                tx_id: String::new(),
+                inputs: vec![],
+                outputs: vec![],
+                fee: "42".into(),
+                ttl: Some(10),
+                valid_from: None,
+                memo: None,
+                warnings: vec![],
+                requires_extra_confirmation: false,
+            },
+        };
+        let ack = || msg(&protos::CardanoTxItemAck::new());
+        let wit = |k: u8| {
+            let mut w = protos::CardanoTxWitnessResponse::new();
+            w.set_type(protos::CardanoTxWitnessType::SHELLEY_WITNESS);
+            w.set_pub_key(vec![k; 32]);
+            w.set_signature(vec![k + 1; 64]);
+            msg(&w)
+        };
+        let mut hash = protos::CardanoTxBodyHash::new();
+        hash.set_tx_hash(vec![7; 32]);
+        let mut fw = Firmware {
+            script: VecDeque::from(vec![
+                ack(), // init
+                ack(), // input
+                ack(), // output
+                ack(), // registration
+                ack(), // delegation
+                ack(), // vote delegation
+                wit(5),
+                wit(9),
+                msg(&hash),
+                msg(&protos::CardanoSignTxFinished::new()),
+            ]),
+            sent: Vec::new(),
+        };
+        let (h, w) = sign_all(&mut fw, &ctl(), &plan, Network::Mainnet, 0).unwrap();
+        assert_eq!(h, [7; 32]);
+        assert_eq!(w, vec![([6; 64], [5; 32]), ([10; 64], [9; 32])]);
+        let init = protos::CardanoSignTxInit::parse_from_bytes(&fw.sent[0].1).unwrap();
+        assert_eq!(init.certificates_count(), 3);
+        assert_eq!(init.withdrawals_count(), 0);
+        assert_eq!(init.witness_requests_count(), 2);
+        let cert = |i: usize| {
+            assert_eq!(fw.sent[i].0, MessageType::MessageType_CardanoTxCertificate);
+            protos::CardanoTxCertificate::parse_from_bytes(&fw.sent[i].1).unwrap()
+        };
+        use protos::CardanoCertificateType as T;
+        let (reg, del, vote) = (cert(3), cert(4), cert(5));
+        assert_eq!(reg.type_(), T::STAKE_REGISTRATION_CONWAY);
+        assert_eq!(reg.deposit(), 2_000_000);
+        assert_eq!(reg.path, stake_path(0).to_vec());
+        assert_eq!(del.type_(), T::STAKE_DELEGATION);
+        assert_eq!(del.pool(), [0x88; 28]);
+        assert_eq!(vote.type_(), T::VOTE_DELEGATION);
+        assert_eq!(vote.drep.type_(), protos::CardanoDRepType::ABSTAIN);
+        let path = |i: usize| {
+            protos::CardanoTxWitnessRequest::parse_from_bytes(&fw.sent[i].1)
+                .unwrap()
+                .path
+        };
+        assert_eq!(path(6), payment_path(0).to_vec());
+        assert_eq!(path(7), stake_path(0).to_vec());
+    }
+
+    #[test]
     fn sign_flow_against_simulated_firmware() {
         let dest = "addr1q84sh2j72ux0l03fxndjnhctdg7hcppsaejafsa84vh7lwgmcs5wgus8qt4atk45lvt4xfxpjtwfhdmvchdf2m3u3hlsd5tq5r";
         let plan = CardanoHwPlan {
@@ -301,6 +482,7 @@ mod tests {
             aux_hash: Some([0xAA; 32]),
             validity_start: None,
             tagged_sets: true,
+            staking: Default::default(),
             tx_id: [7; 32],
             summary: wallet_core::CardanoTxSummary {
                 tx_id: String::new(),

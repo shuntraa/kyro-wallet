@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-ada-stake-sign"
+description = "Enables the hw_ada_stake_sign command without any pre-configured scope."
+commands.allow = ["hw_ada_stake_sign"]
+
+[[permission]]
+identifier = "deny-hw-ada-stake-sign"
+description = "Denies the hw_ada_stake_sign command without any pre-configured scope."
+commands.deny = ["hw_ada_stake_sign"]

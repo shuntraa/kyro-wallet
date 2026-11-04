@@ -2694,6 +2694,11 @@ export interface Commands {
   hw_sol_stake_build: { args: { accountId: string; action: SolStakeRequest }; ret: { message: string; summary: SolTxSummary; stake: SolStakePreview } };
   hw_sol_stake_sign: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary; stake: SolStakePreview } };
   hw_sol_stake_broadcast: { args: { accountId: string; message: string; signature: string }; ret: string };
+  /** Cardano staking on a Ledger or Trezor (§2.8); a withdrawal the device would not show is refused (`HW_UNSUPPORTED`). */
+  hw_ada_stake_overview: { args: { accountId: string }; ret: AdaStakeOverview };
+  hw_ada_stake_build: { args: { accountId: string; action: AdaStakeRequest }; ret: Commands['ada_stake_build']['ret'] };
+  hw_ada_stake_sign: { args: { id: string; accountId: string; tx: string }; ret: Commands['ada_stake_sign']['ret'] };
+  hw_ada_stake_broadcast: { args: { accountId: string; tx: string }; ret: string };
   /** TON on a Ledger: the account's own v4R2 wallet (`m/44'/607'/0'/0'/account'/0'`); status: `ton_tx_status`. */
   hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
   hw_ton_build_jetton_tx: { args: { accountId: string; master: string; to: string; amount: string }; ret: TonBuilt };

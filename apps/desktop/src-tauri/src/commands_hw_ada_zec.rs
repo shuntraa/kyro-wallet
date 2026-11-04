@@ -61,7 +61,7 @@ fn account_for(
     Ok((acc, info))
 }
 
-async fn check_same_device(
+pub(crate) async fn check_same_device(
     app: &AppHandle,
     state: &AppState,
     id: &str,

@@ -883,6 +883,45 @@ pub fn sign_cardano(
     }
 }
 
+/// Cardano staking on the device: `(body hash, payment-key signature, stake-key signature)`,
+/// all to be verified by `wallet_core::cardano_hw_stake_assemble`.
+pub fn sign_cardano_stake(
+    dev: &mut dyn HardwareWallet,
+    ctl: &Ctl,
+    net: Network,
+    account: u32,
+    plan: &CardanoHwPlan,
+) -> HwResult<([u8; 32], [u8; 64], [u8; 64])> {
+    let missing = || HwError::bad("Cardano: no stake-key signature");
+    match dev.raw() {
+        RawDevice::Ledger(link) => {
+            ledger_ensure(link, ctl, Chain::Cardano, net)?;
+            let (_, version) = ledger_open_app(link, ctl)?;
+            ctl.prompt(Prompt::ConfirmOnDevice);
+            let mut call =
+                |cmd: &[u8]| ledger_call(link, ctl, cmd, SwContext::Signing, ledger_cardano::APP);
+            let (hash, sig, stake) =
+                ledger_cardano::sign_all(&mut call, &version, plan, net, account)?;
+            Ok((hash, sig, stake.ok_or_else(missing)?))
+        }
+        RawDevice::Trezor(t) => {
+            t.ensure_chain(Chain::Cardano)?;
+            if !plan.staking.withdrawals.is_empty() {
+                t.ensure_firmware(
+                    trezor_cardano::MIN_FIRMWARE_WITHDRAWAL,
+                    "Cardano rewards withdrawal: this firmware may not show it",
+                )?;
+            }
+            let (hash, witnesses) = trezor_cardano::sign_all(t, ctl, plan, net, account)?;
+            let [(sig, _), (stake, _)] = witnesses[..] else {
+                return Err(missing());
+            };
+            Ok((hash, sig, stake))
+        }
+        RawDevice::None => Err(HwError::unsupported("Cardano")),
+    }
+}
+
 /// Zcash v5 transparent transaction on a Trezor: one DER signature per input (unverified).
 pub fn sign_zec(
     dev: &mut dyn HardwareWallet,

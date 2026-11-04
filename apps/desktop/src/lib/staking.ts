@@ -9,7 +9,7 @@ import { t } from '../i18n';
 export type StakeChain = 'sol' | 'ada' | 'tron' | 'near' | 'sui' | 'apt';
 
 /** Chains Kyro stakes from a hardware account: only what the device shows decoded. */
-export const HW_STAKE: Record<HwDeviceKind, readonly StakeChain[]> = { ledger: ['sol'], trezor: ['sol'] };
+export const HW_STAKE: Record<HwDeviceKind, readonly StakeChain[]> = { ledger: ['sol', 'ada'], trezor: ['sol', 'ada'] };
 
 /** Rust thresholds (reinforced 2nd dialog). */
 export const SOL_HIGH_COMMISSION = 10;

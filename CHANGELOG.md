@@ -18,6 +18,8 @@
   provider fee and estimated time, with other quotes listed below.
 - Staking from hardware wallets: Solana on Ledger and Trezor (create, delegate, deactivate,
   withdraw), decoded on the device.
+- Staking from hardware wallets: Cardano delegation on Ledger and Trezor. Rewards can be
+  withdrawn on a Trezor (firmware 2.8.5 or later), not on a Ledger: its app does not show them.
 - Hardware wallets: TON USD₮ can be sent from Ledger accounts (TON app 2.2.0 or later); the
   device shows the token, the amount and the recipient. No comment on these transfers: the
   app cannot show it.

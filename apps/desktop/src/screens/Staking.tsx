@@ -153,7 +153,7 @@ function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; ha
   const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
   const p = { persist: true };
   const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !refused('sol') && has.sol ? () => (activeHw ? call('hw_sol_stake_overview', { accountId: activeHw.id }) : call('sol_stake_overview', acct('sol'))) : null, [activeHw?.id, has.sol, acct('sol').account], p);
-  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !refused('ada') && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [activeHw?.id, has.ada, acct('ada').account], p);
+  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !refused('ada') && has.ada ? () => (activeHw ? call('hw_ada_stake_overview', { accountId: activeHw.id }) : call('ada_stake_overview', acct('ada'))) : null, [activeHw?.id, has.ada, acct('ada').account], p);
   const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !refused('tron') && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [activeHw?.id, has.tron, acct('tron').account], p);
   const near = useCachedAsync(sk('near_stake_overview', 'near'), !refused('near') && has.near ? () => call('near_stake_overview', acct('near')) : null, [activeHw?.id, has.near, acct('near').account], p);
   const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !refused('sui') && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [activeHw?.id, has.sui, acct('sui').account], p);
@@ -880,9 +880,9 @@ type AdaSigned = Ret<'ada_stake_sign'>;
 type AdaOp = 'delegate' | 'vote' | 'withdraw' | 'deregister';
 
 function AdaStaking() {
-  const { hideBalances, network } = useApp();
+  const { hideBalances, network, activeHw } = useApp();
   const acct = useStakeAccount();
-  const ov = useCachedAsync(useStakeKey()('ada_stake_overview', acct('ada')), () => call('ada_stake_overview', acct('ada')), [acct('ada').account], { intervalMs: 60_000 });
+  const ov = useCachedAsync(useStakeKey()('ada_stake_overview', acct('ada')), () => (activeHw ? call('hw_ada_stake_overview', { accountId: activeHw.id }) : call('ada_stake_overview', acct('ada'))), [activeHw?.id, acct('ada').account], { intervalMs: 60_000 });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<AdaOp | null>(null);
   const { t } = useT();
@@ -892,6 +892,9 @@ function AdaStaking() {
   if (!o) return <Skeleton className="h-64 w-full" />;
   const s = o.stake;
   const rewards = BigInt(s.rewardsAvailable);
+  // What the device would sign without showing it is refused by Rust too (`HW_UNSUPPORTED`).
+  const ledgerNoWithdraw = activeHw?.device === 'ledger';
+  const hwNoStop = !!activeHw && rewards > 0n;
   return (
     <>
       <Card className="flex flex-col gap-4 px-6 py-5">
@@ -947,14 +950,19 @@ function AdaStaking() {
             </button>
           </Notice>
         )}
+        {ledgerNoWithdraw && rewards > 0n && (
+          <Notice tone="warn" className="mx-5 mb-3" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+            {t('staking.adaHwNoWithdraw')}
+          </Notice>
+        )}
         <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">
           <Button size="sm" onClick={() => setOp('vote')}>
             {s.delegatedDrep ? t('staking.changeMyVote') : t('staking.delegateMyVote')}
           </Button>
-          <Button size="sm" variant="ice" disabled={!o.canWithdraw} title={o.canWithdraw ? undefined : rewards === 0n ? t('staking.noRewardToWithdraw') : t('staking.delegateVoteFirst')} onClick={() => setOp('withdraw')}>
+          <Button size="sm" variant="ice" disabled={!o.canWithdraw || ledgerNoWithdraw} title={ledgerNoWithdraw ? t('staking.adaHwNoWithdraw') : o.canWithdraw ? undefined : rewards === 0n ? t('staking.noRewardToWithdraw') : t('staking.delegateVoteFirst')} onClick={() => setOp('withdraw')}>
             {t('staking.withdrawRewards')}
           </Button>
-          <Button size="sm" variant="dangerOutline" disabled={!s.registered} onClick={() => setOp('deregister')}>
+          <Button size="sm" variant="dangerOutline" disabled={!s.registered || hwNoStop} title={hwNoStop ? t(ledgerNoWithdraw ? 'staking.adaHwNoWithdraw' : 'staking.adaHwWithdrawFirst') : undefined} onClick={() => setOp('deregister')}>
             {t('staking.stopStaking')}
           </Button>
         </div>
@@ -965,6 +973,7 @@ function AdaStaking() {
 }
 
 function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOverview; onClose: () => void; onDone: () => void }) {
+  const { activeHw } = useApp();
   const acct = useStakeAccount();
   const current = o.stake.delegatedDrep;
   const [poolId, setPoolId] = useState('');
@@ -1015,7 +1024,7 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('ada_stake_build', { action, ...acct('ada') }),
+    build: () => (activeHw ? call('hw_ada_stake_build', { accountId: activeHw.id, action }) : call('ada_stake_build', { action, ...acct('ada') })),
     enClair: (b) => {
       const s = b.summary;
       const parts: string[] = [];
@@ -1056,7 +1065,8 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
     },
     warnings: (b) => b.context.warnings.map(adaWarningText),
     sign: (b, password) => call('ada_stake_sign', { tx: b.tx, password, ...acct('ada') }),
-    broadcast: (s) => call('ada_stake_broadcast', { tx: s.tx, ...acct('ada') }),
+    signHw: (b, id) => call('hw_ada_stake_sign', { id, accountId: activeHw!.id, tx: b.tx }),
+    broadcast: (s) => (activeHw ? call('hw_ada_stake_broadcast', { accountId: activeHw.id, tx: s.tx }) : call('ada_stake_broadcast', { tx: s.tx, ...acct('ada') })),
     doneText: t('staking.doneAda'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;

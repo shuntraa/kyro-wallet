@@ -38,6 +38,8 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.hwTitle': 'With this hardware wallet: {chains}.',
   'staking.hwBody': 'The active account is “{label}”. The other chains are refused here: Kyro only stakes on a device what it can show decoded.',
   'staking.hwConfirmDetail': 'Check the stake operation, the validator and the amounts on the device. If anything differs, reject it there.',
+  'staking.adaHwNoWithdraw': 'Rewards cannot be withdrawn from a Ledger here: the Cardano app does not show a withdrawal outside expert mode, and Kyro cannot read that mode. They stay on your stake key: use another wallet to withdraw them.',
+  'staking.adaHwWithdrawFirst': 'Withdraw your rewards first: next to this certificate, the Trezor would not always show them.',
   'staking.hwOnly': 'They go through a Kyro vault (recovery phrase): there is none on this computer.',
   'staking.hwSwitch': 'For them, switch to the Kyro vault (account picker, at the top).',
   'staking.homeSolWhat': 'Delegate to a validator.',

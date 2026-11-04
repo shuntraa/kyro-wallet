@@ -8,11 +8,18 @@
 //! | `11` | address | P1 `01` return / `02` show, address parameters | same bytes |
 //! | `21` | sign transaction | one APDU per body item: init `01`, aux data `08`, inputs `02`, outputs `03` (P2 `30` basic, `31` asset group, `32` token, `33` confirm), fee `04`, ttl `05`, validity start `09`, confirm `0A` → body hash, witness `0F` → signature | init `10` (counts + raw length), the body items serialized in one stream, 250-byte chunks `11` / last `12` → body hash, witness `0F` |
 //!
-//! Only what Kyro's Cardano payments contain is encoded: inputs, outputs (ADA and native tokens,
-//! legacy array or Babbage map form, no datum / reference script), fee, ttl, the CIP-20 memo as an
-//! "arbitrary hash" of auxiliary data, validity start, Conway tag-258 sets.
+//! Only what Kyro's Cardano transactions contain is encoded: inputs, outputs (ADA and native
+//! tokens, legacy array or Babbage map form, no datum / reference script), fee, ttl, the CIP-20
+//! memo as an "arbitrary hash" of auxiliary data, validity start, Conway tag-258 sets, and the
+//! staking certificates (`06` in v7, in the stream in v8; stake key by path).
+//!
+//! Withdrawals are not encoded: in an ordinary transaction the app signs them without showing
+//! them outside expert mode (`policyForSignTxWithdrawal`: `SHOW_IF(app_mode_expert()); ALLOW()`),
+//! and the host cannot read that mode. Certificates are always prompted (`PROMPT()`).
 
-use wallet_core::{CardanoHwDestination, CardanoHwOutput, CardanoHwPlan, Network};
+use wallet_core::{
+    CardanoCert, CardanoDrep, CardanoHwDestination, CardanoHwOutput, CardanoHwPlan, Network,
+};
 
 use super::ledger_apdu::{apdu, encode_path};
 use super::{HwError, HwResult, H};
@@ -38,6 +45,19 @@ const STAKING_KEY_PATH: u8 = 0x22;
 const DEST_THIRD_PARTY: u8 = 0x01;
 const DEST_DEVICE_OWNED: u8 = 0x02;
 const AUX_ARBITRARY_HASH: u8 = 0x00;
+// Stake credential "key path": `CredentialType` in v7, `CredentialWireType` in v8.
+const V7_CREDENTIAL_KEY_PATH: u8 = 0x00;
+const V8_CREDENTIAL_KEY_PATH: u8 = 0x02;
+// `CertificateType`.
+const CERT_DELEGATION: u8 = 2;
+const CERT_REGISTRATION: u8 = 7;
+const CERT_DEREGISTRATION: u8 = 8;
+const CERT_VOTE_DELEGATION: u8 = 9;
+// `DRepType`.
+const DREP_KEY_HASH: u8 = 0;
+const DREP_SCRIPT_HASH: u8 = 1;
+const DREP_ABSTAIN: u8 = 2;
+const DREP_NO_CONFIDENCE: u8 = 3;
 
 // v7 stages (P1) and output sub-steps (P2).
 const V7_INIT: u8 = 0x01;
@@ -46,6 +66,7 @@ const V7_INPUTS: u8 = 0x02;
 const V7_OUTPUTS: u8 = 0x03;
 const V7_FEE: u8 = 0x04;
 const V7_TTL: u8 = 0x05;
+const V7_CERTIFICATE: u8 = 0x06;
 const V7_VALIDITY_START: u8 = 0x09;
 const V7_CONFIRM: u8 = 0x0A;
 const V7_OUT_BASIC: u8 = 0x30;
@@ -183,10 +204,69 @@ pub struct SignApdus {
     pub body: Vec<Vec<u8>>,
     /// Witness request for the payment key (answer: 64-byte signature).
     pub witness: Vec<u8>,
+    /// Witness request for the stake key, in a staking transaction.
+    pub stake_witness: Option<Vec<u8>>,
 }
 
 fn witness(account: u32) -> HwResult<Vec<u8>> {
     sign(WITNESS, 0x00, &encode_path(&payment_path(account)))
+}
+
+fn stake_witness(plan: &CardanoHwPlan, account: u32) -> HwResult<Option<Vec<u8>>> {
+    if plan.staking.is_empty() {
+        return Ok(None);
+    }
+    sign(WITNESS, 0x00, &encode_path(&stake_path(account))).map(Some)
+}
+
+fn witness_count(plan: &CardanoHwPlan) -> u16 {
+    if plan.staking.is_empty() {
+        1
+    } else {
+        2
+    }
+}
+
+/// See the module documentation: the app would sign a withdrawal it does not show.
+fn refuse_hidden(plan: &CardanoHwPlan) -> HwResult<()> {
+    if plan.staking.withdrawals.is_empty() {
+        return Ok(());
+    }
+    Err(HwError::unsupported(
+        "Cardano rewards withdrawal: the Ledger app does not show it outside expert mode",
+    ))
+}
+
+/// `serializeTxCertificate` (v7) / `serializeCertificate` (v8), which differ only by the
+/// credential tag.
+fn certificate(c: &CardanoCert, account: u32, key_path_tag: u8) -> Vec<u8> {
+    let credential = [vec![key_path_tag], encode_path(&stake_path(account))].concat();
+    match c {
+        CardanoCert::StakeRegistration { deposit, .. } => [
+            vec![CERT_REGISTRATION],
+            credential,
+            deposit.to_be_bytes().to_vec(),
+        ]
+        .concat(),
+        CardanoCert::StakeDeregistration { refund, .. } => [
+            vec![CERT_DEREGISTRATION],
+            credential,
+            refund.to_be_bytes().to_vec(),
+        ]
+        .concat(),
+        CardanoCert::StakeDelegation { pool, .. } => {
+            [vec![CERT_DELEGATION], credential, pool.to_vec()].concat()
+        }
+        CardanoCert::VoteDelegation { drep, .. } => {
+            let d = match drep {
+                CardanoDrep::Key(h) => [&[DREP_KEY_HASH][..], &h[..]].concat(),
+                CardanoDrep::Script(h) => [&[DREP_SCRIPT_HASH][..], &h[..]].concat(),
+                CardanoDrep::AlwaysAbstain => vec![DREP_ABSTAIN],
+                CardanoDrep::AlwaysNoConfidence => vec![DREP_NO_CONFIDENCE],
+            };
+            [vec![CERT_VOTE_DELEGATION], credential, d].concat()
+        }
+    }
 }
 
 fn v7_init(plan: &CardanoHwPlan, net: Network) -> HwResult<Vec<u8>> {
@@ -202,8 +282,11 @@ fn v7_init(plan: &CardanoHwPlan, net: Network) -> HwResult<Vec<u8>> {
     d.push(SIGNING_MODE_ORDINARY);
     d.extend(u32_be(plan.inputs.len(), "inputs")?);
     d.extend(u32_be(plan.outputs.len(), "outputs")?);
-    d.extend([0u8; 4 * 6]);
-    d.extend(1u32.to_be_bytes());
+    d.extend(u32_be(plan.staking.certs.len(), "certificates")?);
+    d.extend(0u32.to_be_bytes()); // withdrawals
+                                  // collateral inputs, required signers, reference inputs, voting procedures
+    d.extend([0u8; 4 * 4]);
+    d.extend(u32::from(witness_count(plan)).to_be_bytes());
     Ok(d)
 }
 
@@ -242,6 +325,7 @@ fn v7_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<Ve
 
 /// The v7 APDU sequence (`signTransactionV7`, ordinary transaction, Kyro's items only).
 pub fn sign_apdus_v7(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<SignApdus> {
+    refuse_hidden(plan)?;
     let mut body = vec![sign(V7_INIT, 0x00, &v7_init(plan, net)?)?];
     if let Some(h) = plan.aux_hash {
         let mut d = vec![AUX_ARBITRARY_HASH];
@@ -260,6 +344,10 @@ pub fn sign_apdus_v7(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResu
     if let Some(t) = plan.ttl {
         body.push(sign(V7_TTL, 0x00, &t.to_be_bytes())?);
     }
+    for c in &plan.staking.certs {
+        let data = certificate(c, account, V7_CREDENTIAL_KEY_PATH);
+        body.push(sign(V7_CERTIFICATE, 0x00, &data)?);
+    }
     if let Some(v) = plan.validity_start {
         body.push(sign(V7_VALIDITY_START, 0x00, &v.to_be_bytes())?);
     }
@@ -267,6 +355,7 @@ pub fn sign_apdus_v7(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResu
     Ok(SignApdus {
         body,
         witness: witness(account)?,
+        stake_witness: stake_witness(plan, account)?,
     })
 }
 
@@ -319,6 +408,9 @@ pub fn v8_raw_tx(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<V
     if let Some(t) = plan.ttl {
         raw.extend(t.to_be_bytes());
     }
+    for c in &plan.staking.certs {
+        raw.extend(certificate(c, account, V8_CREDENTIAL_KEY_PATH));
+    }
     if let Some(v) = plan.validity_start {
         raw.extend(v.to_be_bytes());
     }
@@ -333,7 +425,8 @@ fn v8_init(plan: &CardanoHwPlan, net: Network, raw_len: usize) -> HwResult<Vec<u
     d.extend(u16_be(plan.inputs.len(), "inputs")?);
     d.extend(u16_be(plan.outputs.len(), "outputs")?);
     d.push(flag(plan.ttl.is_some()));
-    d.extend([0, 0, 0, 0]); // certificates, withdrawals
+    d.extend(u16_be(plan.staking.certs.len(), "certificates")?);
+    d.extend([0, 0]); // withdrawals
     d.push(flag(plan.aux_hash.is_some()));
     if let Some(h) = plan.aux_hash {
         d.push(AUX_ARBITRARY_HASH);
@@ -346,13 +439,14 @@ fn v8_init(plan: &CardanoHwPlan, net: Network, raw_len: usize) -> HwResult<Vec<u
     d.extend([NO, NO, NO]); // network id, collateral output, total collateral
     d.extend([0, 0, 0, 0]); // reference inputs, voters
     d.extend([NO, NO]); // treasury, donation
-    d.extend(1u16.to_be_bytes()); // one witness
+    d.extend(witness_count(plan).to_be_bytes());
     d.extend(u16_be(raw_len, "transaction")?);
     Ok(d)
 }
 
 /// The v8 APDU sequence (`sendSignTx`, ordinary transaction, Kyro's items only).
 pub fn sign_apdus_v8(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<SignApdus> {
+    refuse_hidden(plan)?;
     let raw = v8_raw_tx(plan, net, account)?;
     let mut body = vec![sign(V8_INIT, 0x00, &v8_init(plan, net, raw.len())?)?];
     let chunks: Vec<&[u8]> = raw.chunks(V8_CHUNK_SIZE).collect();
@@ -363,8 +457,12 @@ pub fn sign_apdus_v8(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResu
     Ok(SignApdus {
         body,
         witness: witness(account)?,
+        stake_witness: stake_witness(plan, account)?,
     })
 }
+
+/// Body hash, payment-key signature, stake-key signature of a staking transaction.
+pub type Signatures = ([u8; 32], [u8; 64], Option<[u8; 64]>);
 
 /// Runs a signature through `call` (one APDU → its answer, status already checked):
 /// returns the body hash and the payment-key signature the device produced (unverified).
@@ -375,6 +473,18 @@ pub fn sign_tx(
     net: Network,
     account: u32,
 ) -> HwResult<([u8; 32], [u8; 64])> {
+    let (hash, sig, _) = sign_all(call, version, plan, net, account)?;
+    Ok((hash, sig))
+}
+
+/// Same for a staking transaction, with the stake-key signature (unverified).
+pub fn sign_all(
+    call: &mut dyn FnMut(&[u8]) -> HwResult<Vec<u8>>,
+    version: &str,
+    plan: &CardanoHwPlan,
+    net: Network,
+    account: u32,
+) -> HwResult<Signatures> {
     let apdus = if is_v8(version) {
         sign_apdus_v8(plan, net, account)?
     } else {
@@ -388,11 +498,19 @@ pub fn sign_tx(
         .as_slice()
         .try_into()
         .map_err(|_| HwError::bad("Cardano body hash: 32 bytes expected"))?;
-    let sig: [u8; 64] = call(&apdus.witness)?
-        .as_slice()
-        .try_into()
-        .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))?;
-    Ok((hash, sig))
+    let mut signature = |apdu: &[u8]| -> HwResult<[u8; 64]> {
+        call(apdu)?
+            .as_slice()
+            .try_into()
+            .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))
+    };
+    let sig = signature(&apdus.witness)?;
+    let stake = apdus
+        .stake_witness
+        .as_deref()
+        .map(&mut signature)
+        .transpose()?;
+    Ok((hash, sig, stake))
 }
 
 /// Cardano-specific status words (both protocol generations); `None` for the others.
@@ -438,6 +556,7 @@ mod tests {
             aux_hash: aux,
             validity_start: None,
             tagged_sets: false,
+            staking: Default::default(),
             tx_id: [0; 32],
             summary: wallet_core::CardanoTxSummary {
                 tx_id: String::new(),
@@ -451,6 +570,177 @@ mod tests {
                 requires_extra_confirmation: false,
             },
         }
+    }
+
+    const POOL: [u8; 28] = [0x88; 28];
+    const STAKE_HASH: [u8; 28] = [0x77; 28];
+    /// `m/1852'/1815'/0'/2/0` as `path_to_buf` writes it.
+    const STAKE_PATH: &str = "058000073c80000717800000000000000200000000";
+
+    fn staking_plan(certs: Vec<CardanoCert>) -> CardanoHwPlan {
+        let mut p = plan(
+            vec![CardanoHwOutput {
+                destination: CardanoHwDestination::Own,
+                coin: 7,
+                assets: vec![],
+                map_form: false,
+            }],
+            None,
+        );
+        p.staking.certs = certs;
+        p
+    }
+
+    /// Bytes written by hand from ledgerjs 8.1.0 (`v7/serialization/txCertificate.ts`,
+    /// `v8/serialization/tx.ts`, `credential.ts`), not by this module.
+    #[test]
+    fn certificate_bytes_of_both_protocols() {
+        let pool = hex::encode(POOL);
+        let cases = [
+            (
+                CardanoCert::StakeRegistration {
+                    stake: STAKE_HASH,
+                    deposit: 2_000_000,
+                },
+                "07",
+                "00000000001e8480".to_owned(),
+            ),
+            (
+                CardanoCert::StakeDeregistration {
+                    stake: STAKE_HASH,
+                    refund: 2_000_000,
+                },
+                "08",
+                "00000000001e8480".to_owned(),
+            ),
+            (
+                CardanoCert::StakeDelegation {
+                    stake: STAKE_HASH,
+                    pool: POOL,
+                },
+                "02",
+                pool,
+            ),
+            (
+                CardanoCert::VoteDelegation {
+                    stake: STAKE_HASH,
+                    drep: CardanoDrep::AlwaysAbstain,
+                },
+                "09",
+                "02".to_owned(),
+            ),
+            (
+                CardanoCert::VoteDelegation {
+                    stake: STAKE_HASH,
+                    drep: CardanoDrep::AlwaysNoConfidence,
+                },
+                "09",
+                "03".to_owned(),
+            ),
+            (
+                CardanoCert::VoteDelegation {
+                    stake: STAKE_HASH,
+                    drep: CardanoDrep::Key([0x66; 28]),
+                },
+                "09",
+                format!("00{}", "66".repeat(28)),
+            ),
+            (
+                CardanoCert::VoteDelegation {
+                    stake: STAKE_HASH,
+                    drep: CardanoDrep::Script([0x55; 28]),
+                },
+                "09",
+                format!("01{}", "55".repeat(28)),
+            ),
+        ];
+        for (c, kind, tail) in cases {
+            assert_eq!(
+                hex::encode(certificate(&c, 0, V7_CREDENTIAL_KEY_PATH)),
+                format!("{kind}00{STAKE_PATH}{tail}")
+            );
+            assert_eq!(
+                hex::encode(certificate(&c, 0, V8_CREDENTIAL_KEY_PATH)),
+                format!("{kind}02{STAKE_PATH}{tail}")
+            );
+        }
+    }
+
+    #[test]
+    fn staking_sequence_v7_and_v8() {
+        let net = Network::Mainnet;
+        let p = staking_plan(vec![
+            CardanoCert::StakeRegistration {
+                stake: STAKE_HASH,
+                deposit: 2_000_000,
+            },
+            CardanoCert::StakeDelegation {
+                stake: STAKE_HASH,
+                pool: POOL,
+            },
+        ]);
+        let stake_witness = format!("d7210f00{:02x}{STAKE_PATH}", STAKE_PATH.len() / 2);
+
+        let v7 = sign_apdus_v7(&p, net, 0).unwrap();
+        let init = &v7.body[0][5..];
+        // inputs, outputs, certificates, withdrawals, four empty lists, witnesses
+        let counts: Vec<u32> = init[init.len() - 36..]
+            .chunks(4)
+            .map(|c| u32::from_be_bytes(c.try_into().unwrap()))
+            .collect();
+        assert_eq!(counts, vec![1, 1, 2, 0, 0, 0, 0, 0, 2]);
+        let certs: Vec<_> = v7.body.iter().filter(|a| a[2] == V7_CERTIFICATE).collect();
+        assert_eq!(certs.len(), 2);
+        // Order of `signTransactionV7`: ttl (05), certificates (06), then confirm (0A).
+        let stages: Vec<u8> = v7.body.iter().map(|a| a[2]).collect();
+        assert_eq!(&stages[stages.len() - 5..], &[0x04, 0x05, 0x06, 0x06, 0x0A]);
+        assert_eq!(
+            hex::encode(v7.stake_witness.as_ref().unwrap()),
+            stake_witness
+        );
+
+        let v8 = sign_apdus_v8(&p, net, 0).unwrap();
+        let raw = v8_raw_tx(&p, net, 0).unwrap();
+        let certs = [
+            certificate(&p.staking.certs[0], 0, V8_CREDENTIAL_KEY_PATH),
+            certificate(&p.staking.certs[1], 0, V8_CREDENTIAL_KEY_PATH),
+        ]
+        .concat();
+        // fee, ttl, then the certificates end the stream.
+        assert!(hex::encode(&raw).ends_with(&format!(
+            "000000000000002a000000000000000a{}",
+            hex::encode(certs)
+        )));
+        let init = v8_init(&p, net, raw.len()).unwrap();
+        assert_eq!(&init[init.len() - 4..init.len() - 2], &[0, 2]);
+        assert_eq!(hex::encode(v8.stake_witness.unwrap()), stake_witness);
+
+        let (mut hash_seen, mut witnesses) = (0, 0);
+        let mut call = |apdu: &[u8]| -> HwResult<Vec<u8>> {
+            if apdu[2] == WITNESS {
+                witnesses += 1;
+                return Ok(vec![witnesses; 64]);
+            }
+            hash_seen += 1;
+            Ok(vec![9; 32])
+        };
+        let (hash, pay, stake) = sign_all(&mut call, "8.0.0", &p, net, 0).unwrap();
+        assert_eq!((hash, pay, stake), ([9; 32], [1; 64], Some([2; 64])));
+        assert!(hash_seen > 0);
+    }
+
+    #[test]
+    fn a_withdrawal_never_reaches_the_app() {
+        let mut p = staking_plan(vec![]);
+        p.staking.withdrawals = vec![5];
+        for r in [
+            sign_apdus_v7(&p, Network::Mainnet, 0),
+            sign_apdus_v8(&p, Network::Mainnet, 0),
+        ] {
+            assert!(matches!(r, Err(HwError::Unsupported { .. })));
+        }
+        let mut call = |_: &[u8]| -> HwResult<Vec<u8>> { panic!("sent to the device") };
+        assert!(sign_all(&mut call, "8.0.0", &p, Network::Mainnet, 0).is_err());
     }
 
     const EXT_ADDR: &str = "017cb05fce110fb999f01abb4f62bc455e217d4a51fde909fa9aea545443ac53c046cf6a42095e3c60310fa802771d0672f8fe2d1861138b09";

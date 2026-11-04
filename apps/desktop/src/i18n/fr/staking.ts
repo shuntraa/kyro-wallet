@@ -40,6 +40,8 @@ export const staking = {
   'staking.hwTitle': 'Avec ce hardware wallet : {chains}.',
   'staking.hwBody': 'Le compte actif est « {label} ». Les autres chaînes sont refusées ici : Kyro ne stake sur un appareil que ce qu’il peut afficher décodé.',
   'staking.hwConfirmDetail': 'Vérifie l’opération de staking, le validateur et les montants sur l’appareil. Si quelque chose diffère, refuse sur l’appareil.',
+  'staking.adaHwNoWithdraw': 'Les récompenses ne peuvent pas être retirées depuis un Ledger ici : l’app Cardano n’affiche pas un retrait hors du mode expert, et Kyro ne peut pas lire ce mode. Elles restent sur ta clé de staking : utilise un autre wallet pour les retirer.',
+  'staking.adaHwWithdrawFirst': 'Retire d’abord tes récompenses : à côté de ce certificat, le Trezor ne les afficherait pas toujours.',
   'staking.hwOnly': 'Elles passent par un coffre Kyro (phrase de récupération) : il n’y en a pas sur cet ordinateur.',
   'staking.hwSwitch': 'Pour elles, passe sur le coffre Kyro (sélecteur de compte, en haut).',
   'staking.homeSolWhat': 'Délégation à un validateur.',

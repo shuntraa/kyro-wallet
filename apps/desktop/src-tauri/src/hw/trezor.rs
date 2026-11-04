@@ -274,11 +274,23 @@ pub trait TrezorIo {
 /// A connected Trezor as the per-chain device code (`hw/chains.rs`) sees it.
 pub trait TrezorDevice: TrezorIo + Send {
     fn ensure_chain(&self, chain: Chain) -> HwResult<()>;
+    /// Refuses a firmware older than `min` for `what`.
+    fn ensure_firmware(&self, min: &str, what: &str) -> HwResult<()>;
 }
 
 impl<W: Wire> TrezorDevice for Trezor<W> {
     fn ensure_chain(&self, chain: Chain) -> HwResult<()> {
         self.ensure(chain)
+    }
+
+    fn ensure_firmware(&self, min: &str, what: &str) -> HwResult<()> {
+        if super::version_at_least(&self.firmware()?, min) {
+            return Ok(());
+        }
+        Err(HwError::Unsupported {
+            what: what.to_owned(),
+            min: Some(min.to_owned()),
+        })
     }
 }
 

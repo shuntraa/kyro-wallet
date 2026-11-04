@@ -1908,7 +1908,23 @@ pub struct CardanoHwOutput {
     pub map_form: bool,
 }
 
-/// Body fields (in order) a hardware wallet needs to rebuild, hash and sign a payment.
+/// Staking items of a device plan (empty for a payment).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardanoHwStaking {
+    /// Certificates, in body order.
+    pub certs: Vec<CardanoCert>,
+    /// Lovelace of each withdrawal (the reward account is ours: `check_stake`).
+    pub withdrawals: Vec<u64>,
+}
+
+impl CardanoHwStaking {
+    /// A payment: nothing for the stake key to witness.
+    pub fn is_empty(&self) -> bool {
+        self.certs.is_empty() && self.withdrawals.is_empty()
+    }
+}
+
+/// Body fields (in order) a hardware wallet needs to rebuild, hash and sign a transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardanoHwPlan {
     /// Inputs, in body order.
@@ -1925,6 +1941,8 @@ pub struct CardanoHwPlan {
     pub validity_start: Option<u64>,
     /// Sets encoded with CBOR tag 258 (Conway).
     pub tagged_sets: bool,
+    /// Certificates and withdrawals (staking only).
+    pub staking: CardanoHwStaking,
     /// Transaction id Kyro computed (blake2b-256 of its body encoding).
     pub tx_id: [u8; 32],
     /// The summary shown in the native dialog.
@@ -1937,7 +1955,28 @@ pub fn cardano_hw_plan(
     ctx: &CardanoContext<'_>,
     own_address: &[u8],
 ) -> Result<CardanoHwPlan> {
-    let d = decode_full(raw_hex, ctx, None)?;
+    Ok(hw_plan_of(&decode_full(raw_hex, ctx, None)?, own_address))
+}
+
+/// Decodes an unsigned **staking** transaction and lists its fields for a device.
+pub fn cardano_hw_stake_plan(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    own_address: &[u8],
+    stake_pk: &[u8; 32],
+    key_deposit: u64,
+) -> Result<CardanoHwPlan> {
+    let mode = StakeMode {
+        stake_hash: blake2b224(stake_pk),
+        key_deposit,
+    };
+    Ok(hw_plan_of(
+        &decode_full(raw_hex, ctx, Some(&mode))?,
+        own_address,
+    ))
+}
+
+fn hw_plan_of(d: &Decoded, own_address: &[u8]) -> CardanoHwPlan {
     let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
     let outputs = d
         .body
@@ -1954,7 +1993,7 @@ pub fn cardano_hw_plan(
             map_form: o.map_form,
         })
         .collect();
-    Ok(CardanoHwPlan {
+    CardanoHwPlan {
         inputs: d.body.inputs.clone(),
         outputs,
         fee: d.body.fee,
@@ -1962,9 +2001,13 @@ pub fn cardano_hw_plan(
         aux_hash: d.body.aux_hash,
         validity_start: d.body.validity_start,
         tagged_sets: d.body.tagged_sets,
+        staking: CardanoHwStaking {
+            certs: d.body.certs.clone(),
+            withdrawals: d.body.withdrawals.iter().map(|(_, c)| *c).collect(),
+        },
         tx_id,
-        summary: d.summary,
-    })
+        summary: d.summary.clone(),
+    }
 }
 
 /// Attaches a device witness after checking its body hash is our tx id and sig verifies.
@@ -2003,6 +2046,57 @@ pub fn cardano_hw_assemble(
         d.aux.as_ref(),
     );
     Ok((hex::encode(signed), hex::encode(tx_id), d.summary))
+}
+
+/// Attaches the two device witnesses of a staking transaction, after checking that the body
+/// hash is our tx id and that each signature verifies with the stored key.
+#[allow(clippy::too_many_arguments)]
+pub fn cardano_hw_stake_assemble(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    payment_pk: &[u8; 32],
+    stake_pk: &[u8; 32],
+    key_deposit: u64,
+    device_tx_hash: &[u8],
+    payment_sig: &[u8],
+    stake_sig: &[u8],
+) -> Result<(String, String, CardanoStakeSummary)> {
+    let mode = StakeMode {
+        stake_hash: blake2b224(stake_pk),
+        key_deposit,
+    };
+    let d = decode_full(raw_hex, ctx, Some(&mode))?;
+    let summary = stake_summary(&d, ctx.net, stake_pk)?;
+    let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
+    if device_tx_hash != tx_id {
+        return Err(Error::crypto(
+            "the device signed a different transaction body than Kyro's",
+        ));
+    }
+    let mut wits = Vec::with_capacity(2);
+    for (pk, sig) in [(payment_pk, payment_sig), (stake_pk, stake_sig)] {
+        let key = VerifyingKey::from_bytes(pk).map_err(|_| Error::input("invalid public key"))?;
+        let s = Signature::from_slice(sig).map_err(|_| Error::input("signature: 64 bytes"))?;
+        key.verify_strict(&tx_id, &s).map_err(|_| {
+            Error::crypto("the device's signature does not verify with the account key")
+        })?;
+        wits.push(Cbor::Array(vec![
+            Cbor::Bytes(pk.to_vec()),
+            Cbor::Bytes(sig.to_vec()),
+        ]));
+    }
+    let list = Cbor::Array(wits);
+    let set = if d.body.tagged_sets {
+        Cbor::Tag(258, Box::new(list))
+    } else {
+        list
+    };
+    let signed = tx_cbor(
+        &d.body_cbor,
+        Cbor::Map(vec![(Cbor::Uint(0), set)]),
+        d.aux.as_ref(),
+    );
+    Ok((hex::encode(signed), hex::encode(tx_id), summary))
 }
 
 #[cfg(test)]

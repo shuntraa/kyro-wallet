@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-ada-stake-overview"
+description = "Enables the hw_ada_stake_overview command without any pre-configured scope."
+commands.allow = ["hw_ada_stake_overview"]
+
+[[permission]]
+identifier = "deny-hw-ada-stake-overview"
+description = "Denies the hw_ada_stake_overview command without any pre-configured scope."
+commands.deny = ["hw_ada_stake_overview"]

@@ -92,8 +92,9 @@ pub use cardano::{
     CardanoTokenView, CardanoTxSummary, CardanoWarning,
 };
 pub use cardano::{
-    cardano_address_from_xpub, cardano_hw_assemble, cardano_hw_plan, cardano_xpub_child,
-    CardanoHwDestination, CardanoHwOutput, CardanoHwPlan,
+    cardano_address_from_xpub, cardano_hw_assemble, cardano_hw_plan, cardano_hw_stake_assemble,
+    cardano_hw_stake_plan, cardano_xpub_child, CardanoHwDestination, CardanoHwOutput,
+    CardanoHwPlan, CardanoHwStaking,
 };
 pub use cardano::{
     cardano_blake2b224, cardano_decode_stake_tx, cardano_drep_id, cardano_drep_parse,

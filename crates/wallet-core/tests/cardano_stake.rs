@@ -3,10 +3,11 @@
 use wallet_core::{
     cardano_address_bytes, cardano_blake2b224, cardano_blake2b256, cardano_cip20_aux,
     cardano_decode_stake_tx, cardano_decode_tx, cardano_drep_id, cardano_drep_parse,
-    cardano_pool_bech32, cardano_pool_id, cardano_reward_address_bytes, cardano_sign_stake,
-    cardano_signed_witnesses, cardano_stake_address, cardano_stake_public_key, cardano_unsigned_tx,
-    CardanoBody, CardanoCert, CardanoCertView, CardanoContext, CardanoDrep, CardanoDrepView,
-    CardanoInput, CardanoOutput, CardanoRoot, Mnemonic, Network,
+    cardano_hw_stake_assemble, cardano_hw_stake_plan, cardano_pool_bech32, cardano_pool_id,
+    cardano_reward_address_bytes, cardano_sign_stake, cardano_signed_witnesses,
+    cardano_stake_address, cardano_stake_public_key, cardano_unsigned_tx, CardanoBody, CardanoCert,
+    CardanoCertView, CardanoContext, CardanoDrep, CardanoDrepView, CardanoInput, CardanoOutput,
+    CardanoRoot, Mnemonic, Network,
 };
 
 const ALL: &str = "all all all all all all all all all all all all";
@@ -95,6 +96,25 @@ fn check(
         cardano_decode_stake_tx(&unsigned, &ctx(), &stake_pk, DEPOSIT).unwrap(),
         s
     );
+    // The same recorded firmware witnesses, through the hardware path.
+    let pay_pk: [u8; 32] = hex::decode(PAY_PK).unwrap().try_into().unwrap();
+    let me = cardano_address_bytes(TZ_DEST, Network::Mainnet).unwrap();
+    let plan = cardano_hw_stake_plan(&unsigned, &ctx(), &me, &stake_pk, DEPOSIT).unwrap();
+    assert_eq!(hex::encode(plan.tx_id), tx_hash);
+    let (hash, pay, stake) = (
+        hex::decode(tx_hash).unwrap(),
+        hex::decode(pay_sig).unwrap(),
+        hex::decode(stake_sig).unwrap(),
+    );
+    let assemble = |h: &[u8], p: &[u8], k: &[u8]| {
+        cardano_hw_stake_assemble(&unsigned, &ctx(), &pay_pk, &stake_pk, DEPOSIT, h, p, k)
+    };
+    assert_eq!(
+        assemble(&hash, &pay, &stake).unwrap(),
+        (signed.clone(), id.clone(), s.clone())
+    );
+    assert!(assemble(&[0; 32], &pay, &stake).is_err(), "other body");
+    assert!(assemble(&hash, &stake, &pay).is_err(), "swapped witnesses");
     let e = cardano_decode_tx(&unsigned, &ctx())
         .unwrap_err()
         .to_string();

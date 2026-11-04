@@ -5,19 +5,26 @@
 //!
 //! Only what the device shows decoded gets here. Solana: the four Kyro messages are in the
 //! closed list of `stake_sol::classify`, and both firmwares parse them (Ledger app `libsol`
-//! briefs, Trezor `programs.json`). TRON and the other staking chains have no command here.
+//! briefs, Trezor `programs.json`). Cardano: certificates are always shown; a withdrawal is not
+//! on every device, so `ada_hidden` refuses those transactions (`HW_UNSUPPORTED`). TRON and the
+//! other staking chains have no command here.
 
 use base64::Engine as _;
 use tauri::{AppHandle, State};
-use wallet_core::WatchOnlyAccount;
+use wallet_core::{CardanoContext, CardanoHwPlan, HwDeviceKind, WatchOnlyAccount};
 
 use crate::commands::confirm_native;
+use crate::commands_cardano::ctx as ada_ctx;
 use crate::commands_hw::{
     check_brand, device_line, guard, load_account, prompt_fn, same_device, T_CONFIRM, T_READ,
 };
+use crate::commands_hw_ada_zec::check_same_device;
 use crate::error::{AppError, AppResult};
 use crate::hw::Chain;
 use crate::solana;
+use crate::stake_ada::{
+    self, AdaStakeBuilt, AdaStakeKeys, AdaStakeOverview, AdaStakeRequest, AdaStakeSigned,
+};
 use crate::stake_sol::{self, SolStakeBuilt, SolStakeOverview, SolStakeRequest, SolStakeSigned};
 use crate::state::AppState;
 
@@ -128,8 +135,187 @@ pub async fn hw_sol_stake_broadcast(
     stake_sol::broadcast(&state, &me, &bytes, &sig).await
 }
 
+fn ada_account(state: &AppState, account_id: &str) -> AppResult<(WatchOnlyAccount, AdaStakeKeys)> {
+    guard(state)?;
+    let acc = load_account(state, account_id)?;
+    let k = acc
+        .cardano
+        .as_ref()
+        .ok_or_else(|| AppError::InvalidInput("this account has no Cardano key".into()))?;
+    let keys = AdaStakeKeys {
+        address: k.address.clone(),
+        account: acc.account,
+        payment_pk: wallet_core::cardano_xpub_child(&k.pubkey, 0, 0)?,
+        stake_pk: wallet_core::cardano_xpub_child(&k.pubkey, 2, 0)?,
+        stake_account: acc.account,
+    };
+    Ok((acc, keys))
+}
+
+/// A transaction the device would sign without showing all of it: on a Ledger any withdrawal
+/// (hidden outside expert mode, which the host cannot read), on a Trezor a withdrawal next to a
+/// certificate (behind a "show details" choice). A withdrawal alone is shown by a Trezor.
+fn ada_hidden(device: HwDeviceKind, plan: &CardanoHwPlan) -> Option<&'static str> {
+    if plan.staking.withdrawals.is_empty() {
+        return None;
+    }
+    match device {
+        HwDeviceKind::Ledger => Some(
+            "Cardano rewards withdrawal: the Ledger app does not show it outside expert mode, \
+             Kyro does not sign it (withdraw from another wallet)",
+        ),
+        HwDeviceKind::Trezor if !plan.staking.certs.is_empty() => Some(
+            "Cardano: the Trezor may not show a withdrawal next to a certificate: withdraw your \
+             rewards first, then deregister",
+        ),
+        HwDeviceKind::Trezor => None,
+    }
+}
+
+fn ada_plan(
+    state: &AppState,
+    device: HwDeviceKind,
+    keys: &AdaStakeKeys,
+    tx: &str,
+    coins_per_byte: u64,
+    key_deposit: u64,
+) -> AppResult<CardanoHwPlan> {
+    let net = state.network;
+    let own = [keys.address.clone()];
+    let dctx = ada_decode_ctx(net, &own, coins_per_byte);
+    let me = wallet_core::cardano_address_bytes(&keys.address, net)?;
+    let plan = wallet_core::cardano_hw_stake_plan(tx, &dctx, &me, &keys.stake_pk, key_deposit)?;
+    if let Some(what) = ada_hidden(device, &plan) {
+        return Err(AppError::HwUnsupported {
+            what: what.into(),
+            min: None,
+        });
+    }
+    Ok(plan)
+}
+
+fn ada_decode_ctx<'a>(
+    net: wallet_core::Network,
+    own: &'a [String],
+    coins_per_byte: u64,
+) -> CardanoContext<'a> {
+    CardanoContext {
+        net,
+        own,
+        verified_tokens: &[],
+        coins_per_byte,
+    }
+}
+
+#[tauri::command]
+pub async fn hw_ada_stake_overview(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> AppResult<AdaStakeOverview> {
+    let (_, keys) = ada_account(&state, &account_id)?;
+    stake_ada::overview(&ada_ctx(&state), &keys).await
+}
+
+#[tauri::command]
+pub async fn hw_ada_stake_build(
+    state: State<'_, AppState>,
+    account_id: String,
+    action: AdaStakeRequest,
+) -> AppResult<AdaStakeBuilt> {
+    let (acc, keys) = ada_account(&state, &account_id)?;
+    let built = stake_ada::build(&ada_ctx(&state), &keys, &action).await?;
+    let kd = built.context.key_deposit.parse().unwrap_or(0);
+    let cpb = built.context.params.coins_per_byte;
+    ada_plan(&state, acc.device, &keys, &built.tx, cpb, kd)?;
+    Ok(built)
+}
+
+#[tauri::command]
+pub async fn hw_ada_stake_sign(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    account_id: String,
+    tx: String,
+) -> AppResult<AdaStakeSigned> {
+    let (acc, keys) = ada_account(&state, &account_id)?;
+    let info = state.hw.info(&id)?;
+    check_brand(&info, &acc)?;
+    let net = state.network;
+    let c = ada_ctx(&state);
+    let (summary, context) = stake_ada::prepare_sign(&c, &keys, &tx).await?;
+    let kd: u64 = context.key_deposit.parse().unwrap_or(0);
+    let cpb = context.params.coins_per_byte;
+    let plan = ada_plan(&state, acc.device, &keys, &tx, cpb, kd)?;
+    check_same_device(&app, &state, &id, &acc, Chain::Cardano).await?;
+    let lang = crate::i18n::current();
+    confirm_native(
+        &app,
+        lang.pick(
+            "Confirmer l'opération de staking Cardano (hardware wallet)",
+            "Confirm the Cardano staking operation (hardware wallet)",
+        ),
+        stake_ada::describe(lang, &summary, &context, net) + &device_line(lang, &info),
+    )
+    .await?;
+    if context.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            lang.pick(
+                "Attention : pool ou DRep à vérifier",
+                "Warning: pool or DRep to check",
+            ),
+            stake_ada::describe_extra(lang, &context),
+        )
+        .await?;
+    }
+    let account = acc.account;
+    let (hash, pay_sig, stake_sig) = state
+        .hw
+        .run(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
+            crate::hw::chains::sign_cardano_stake(dev, ctl, net, account, &plan)
+        })
+        .await?;
+    let own = [keys.address.clone()];
+    let dctx = ada_decode_ctx(net, &own, cpb);
+    let (signed, tx_id, again) = wallet_core::cardano_hw_stake_assemble(
+        &tx,
+        &dctx,
+        &keys.payment_pk,
+        &keys.stake_pk,
+        kd,
+        &hash,
+        &pay_sig,
+        &stake_sig,
+    )
+    .map_err(|e| AppError::HwBadResponse(e.to_string()))?;
+    if again != summary {
+        return Err(AppError::Internal(
+            "summary differs between the preview and the signature".into(),
+        ));
+    }
+    state.touch();
+    Ok(AdaStakeSigned {
+        tx: signed,
+        tx_id,
+        summary,
+        context,
+    })
+}
+
+#[tauri::command]
+pub async fn hw_ada_stake_broadcast(
+    state: State<'_, AppState>,
+    account_id: String,
+    tx: String,
+) -> AppResult<String> {
+    let (_, keys) = ada_account(&state, &account_id)?;
+    stake_ada::broadcast_checked(&ada_ctx(&state), &keys, &tx).await
+}
+
 #[cfg(test)]
 mod tests {
+    use super::ada_hidden;
     use crate::hw::ledger::Ledger;
     use crate::hw::ledger_apdu as apdu;
     use crate::hw::ledger_apps::replay::*;
@@ -137,7 +323,10 @@ mod tests {
     use crate::stake_sol::classify;
     use protobuf::Message;
     use trezor_client::protos;
-    use wallet_core::{Mnemonic, SolStakeOp};
+    use wallet_core::{
+        CardanoCert, CardanoHwPlan, CardanoHwStaking, CardanoTxSummary, HwDeviceKind, Mnemonic,
+        SolStakeOp,
+    };
 
     const ABANDON: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -218,6 +407,51 @@ mod tests {
             let summary = wallet_core::sol_decode_message(&m, &[], &me).unwrap();
             assert_eq!(&classify(&summary, &me).unwrap(), op);
         }
+    }
+
+    fn ada_plan_with(certs: Vec<CardanoCert>, withdrawals: Vec<u64>) -> CardanoHwPlan {
+        CardanoHwPlan {
+            inputs: vec![],
+            outputs: vec![],
+            fee: 0,
+            ttl: None,
+            aux_hash: None,
+            validity_start: None,
+            tagged_sets: true,
+            staking: CardanoHwStaking { certs, withdrawals },
+            tx_id: [0; 32],
+            summary: CardanoTxSummary {
+                tx_id: String::new(),
+                inputs: vec![],
+                outputs: vec![],
+                fee: "0".into(),
+                ttl: None,
+                valid_from: None,
+                memo: None,
+                warnings: vec![],
+                requires_extra_confirmation: false,
+            },
+        }
+    }
+
+    /// A device must show all of what it signs: certificates are always prompted, a withdrawal
+    /// only by a Trezor and only alone.
+    #[test]
+    fn cardano_hidden_withdrawals_are_refused() {
+        let dereg = CardanoCert::StakeDeregistration {
+            stake: [7; 28],
+            refund: 2_000_000,
+        };
+        let (l, t) = (HwDeviceKind::Ledger, HwDeviceKind::Trezor);
+        let certs = ada_plan_with(vec![dereg.clone()], vec![]);
+        assert_eq!(ada_hidden(l, &certs), None);
+        assert_eq!(ada_hidden(t, &certs), None);
+        let alone = ada_plan_with(vec![], vec![5]);
+        assert!(ada_hidden(l, &alone).is_some_and(|m| m.contains("expert mode")));
+        assert_eq!(ada_hidden(t, &alone), None);
+        let both = ada_plan_with(vec![dereg], vec![5]);
+        assert!(ada_hidden(l, &both).is_some());
+        assert!(ada_hidden(t, &both).is_some_and(|m| m.contains("first")));
     }
 
     /// Scripted Ledger exchange and Trezor request for each message; the "device" signature is
