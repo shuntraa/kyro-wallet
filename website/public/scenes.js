@@ -52,7 +52,7 @@
     var screens = el.querySelectorAll('[data-screen]');
     var rails = el.querySelectorAll('[data-rail]');
     var tabs = el.querySelectorAll('[data-go]');
-    var current = 0, timer = 0;
+    var current = 0, next = 0;
     var EVERY = 6500;
 
     function show(i) {
@@ -69,14 +69,10 @@
       });
     }
     function stop() {
-      window.clearInterval(timer);
-      timer = 0;
+      next = 0;
     }
     function start() {
-      if (timer || !K.motion) return;
-      timer = window.setInterval(function () {
-        show((current + 1) % screens.length);
-      }, EVERY);
+      if (!next && K.motion) next = performance.now() + EVERY;
     }
     each(tabs, function (b, i) {
       b.addEventListener('click', function () {
@@ -86,6 +82,11 @@
       });
     });
     if (!K.motion) return;
+    K.frame(function (now) {
+      if (!next || now < next) return;
+      next = now + EVERY;
+      show((current + 1) % screens.length);
+    });
 
     el.querySelector('.kw-in').classList.add('draw');
     new IntersectionObserver(function (e) {

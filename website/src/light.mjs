@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Bakes the two still images of the Kyro blue light: the soft one that stands in for the live silk
-// (no WebGL, reduced motion, Data Saver, weak GPUs) and the strip that lights the footer wordmark. Run by hand when the look changes (needs ffmpeg):
+// Bakes the two still images of the Kyro blue light: the first frame of the live satin, which stands in
+// for it (no WebGL, reduced motion, Data Saver), and the strip that lights the footer wordmark. Run by hand when the look changes (needs ffmpeg):
 //   node website/src/light.mjs
 import { writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -58,14 +58,54 @@ function render({ w, h, T, zoom, gain, spec, ramp, aspect, top = 1, bottom = 0 }
   return buf;
 }
 
-function bake(name, opts, filter, quality) {
+const unit = (a) => {
+  const l = Math.hypot(...a);
+  return a.map((x) => x / l);
+};
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/** The height of the satin, as in silk.js. */
+function fold(x, y, T) {
+  for (let f = 1; f <= 3; f++) {
+    x += (0.62 / f) * Math.sin(f * 1.55 * y + T * 0.42 + f * 1.3);
+    y += (0.62 / f) * Math.cos(f * 1.55 * x - T * 0.33 + f * 2.1);
+  }
+  return Math.sin(x * 1.4 + y * 0.8) + 0.04 * Math.sin(x * 4.7 - y * 3.1);
+}
+
+/** The frame of silk.js at time T. One knee all over: a phone crops this image to any part of it. */
+function satin({ w, h, T }) {
+  const buf = Buffer.alloc(w * h * 3);
+  const key = unit([-0.62, 0.72, 0.6]), half = unit([key[0], key[1], key[2] + 1]), side = [0.56, -0.34, 0.76];
+  const stops = [[0.008, 0.016, 0.045], [0.012, 0.075, 0.235], [0.085, 0.29, 0.72], [0.49, 0.77, 1]];
+  const e = 0.012, knee = 0.42;
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      const u = (px + 0.5) / w, t = 1 - (py + 0.5) / h;
+      const x = (u - 0.5) * (w / h) * 3.8 + 0.4, y = (t - 0.5) * 3.8 + 0.2;
+      const c0 = fold(x, y, T), gx = (fold(x + e, y, T) - c0) / e, gy = (fold(x, y + e, T) - c0) / e;
+      const n = unit([-gx * 0.2, -gy * 0.2, 1]);
+      const d = Math.max(dot(n, key), 0), nm = Math.max(dot(n, half), 0), th = dot(unit([-gy, gx, 0.5]), half);
+      let v = (0.03 + 0.46 * d * d + 0.05 * Math.max(dot(n, side), 0)) * (0.84 + 0.16 * c0) + 0.08 * nm ** 16 + 0.03 * Math.max(1 - th * th, 0) ** 18 + 0.13 * nm ** 60;
+      v *= mix(1, 0.5, step(0.3, 0.95, Math.hypot(u - 0.56, (t - 0.56) * 1.1)));
+      const over = Math.max(v - knee, 0);
+      v = Math.min(v, knee) + over / (1 + over * 9);
+      let c = stops[0];
+      for (const [i, a, b] of [[1, 0.02, 0.28], [2, 0.22, 0.56], [3, 0.52, 0.84]]) c = c.map((k, j) => mix(k, stops[i][j], step(a, b, v)));
+      for (let j = 0; j < 3; j++) buf[(py * w + px) * 3 + j] = Math.min(255, c[j] * 255);
+    }
+  }
+  return buf;
+}
+
+function bake(name, opts, filter, quality, draw = render) {
   const raw = join(tmpdir(), `kyro-${name}.rgb`);
-  writeFileSync(raw, render(opts));
+  writeFileSync(raw, draw(opts));
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${opts.w}x${opts.h}`, '-i', raw, '-vf', filter, '-c:v', 'libwebp', '-quality', String(quality), join(OUT, `${name}.webp`)]);
   rmSync(raw);
 }
 
-// Hero: wide soft folds, blurred until only the light is left, and never brighter than a mid blue.
-bake('light-hero', { w: 1440, h: 900, T: 7.5, zoom: 1.5, gain: 0.9, spec: 0.2, ramp: 0.62 }, 'gblur=sigma=30,noise=alls=2:allf=t', 88);
+// Hero: the live shader's first frame (T = 18), so the canvas fades in over the same folds.
+bake('light-hero', { w: 1440, h: 900, T: 18 }, 'gblur=sigma=2,noise=alls=2:allf=t', 80, satin);
 // Footer: the sharper silk, seen only through the letters: the bottom third of a screen-sized cloth.
 bake('light-foot', { w: 1848, h: 356, T: 14, zoom: 2.1, gain: 1, spec: 0.72, ramp: 0.55, aspect: 1.6, top: 0.31, bottom: 0 }, 'null', 80);
