@@ -885,7 +885,6 @@ pub async fn stellar_sign_tx(
         signer.body(lang, &describe_stellar(lang, &summary, &context)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -894,6 +893,12 @@ pub async fn stellar_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::stellar(state.network, &summary),
+    )
+    .await?;
     let net = c.network;
     let e = envelope.clone();
     let (signed, hash, again) =

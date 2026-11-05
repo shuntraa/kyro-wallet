@@ -400,7 +400,6 @@ pub async fn cosmos_sign_tx(
         signer.body(lang, &describe_cosmos(lang, &summary, &context, net)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -409,6 +408,7 @@ pub async fn cosmos_sign_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::cosmos(&summary)).await?;
     let d = sign_doc.clone();
     let (tx, hash, again) =
         blocking(move || Ok(wallet_core::cosmos_sign(&seed, a, &d, net)?)).await?;

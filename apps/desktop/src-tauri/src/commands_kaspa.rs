@@ -484,7 +484,6 @@ pub async fn kas_sign_tx(
         signer.body(lang, &describe_kaspa(lang, &summary, net)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -493,6 +492,7 @@ pub async fn kas_sign_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::kaspa(&summary)).await?;
     let (signed, again) =
         blocking(move || Ok(wallet_core::kaspa_sign(&seed, net, a, &unsigned, &entries)?)).await?;
     if again != summary {

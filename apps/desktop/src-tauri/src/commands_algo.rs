@@ -626,7 +626,6 @@ pub async fn algo_sign_tx(
         signer.body(lang, &describe_algo(lang, &summary, &context, net)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -638,6 +637,7 @@ pub async fn algo_sign_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::algo(&summary)).await?;
     let b = blob.clone();
     let (signed, txid, again) =
         blocking(move || Ok(wallet_core::algo_sign(&seed, a, net, &b)?)).await?;

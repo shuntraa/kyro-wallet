@@ -672,7 +672,6 @@ pub async fn ton_sign_tx(
         signer.body(lang, &describe_ton(lang, &summary, &context, net, now())),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -684,6 +683,12 @@ pub async fn ton_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::ton(state.network, &summary),
+    )
+    .await?;
     let b = boc.clone();
     let signed = blocking(move || Ok(wallet_core::ton_sign(&seed, a, &b, testnet(net))?)).await?;
     if signed.summary != summary {

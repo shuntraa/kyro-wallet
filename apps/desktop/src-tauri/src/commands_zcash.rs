@@ -383,7 +383,6 @@ pub async fn zec_sign(
         signer.body(lang, &describe_zec(lang, &summary, net)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -392,6 +391,7 @@ pub async fn zec_sign(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::zec(&summary)).await?;
     let (hex, again) = blocking(move || Ok(wallet_core::zec_sign(&seed, net, a, &req)?)).await?;
     if again != summary {
         return Err(AppError::Internal(

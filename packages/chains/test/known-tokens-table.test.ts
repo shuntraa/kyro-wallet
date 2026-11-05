@@ -18,6 +18,7 @@ interface FixtureChain {
   chainId: number;
   name: string;
   nativeSymbol: string;
+  coingeckoId: string;
   /** Default RPC host: the shell checks it against EVM_DEFAULTS and the net_fetch allowlist. */
   rpcHost: string;
 }
@@ -29,17 +30,18 @@ interface FixtureToken {
   symbol: string;
   name: string;
   decimals: number;
+  coingeckoId: string;
 }
 type Fixture = { evmChains: FixtureChain[]; tokens: FixtureToken[] };
 
 export function knownTokensFixture(): Fixture {
   const chains: FixtureChain[] = [];
   const tokens: FixtureToken[] = [];
-  const tok = (network: Net, chain: string, t: { contract: string; symbol: string; name: string; decimals: number }) =>
-    tokens.push({ network, chain, contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals });
+  const tok = (network: Net, chain: string, t: { contract: string; symbol: string; name: string; decimals: number; coingeckoId: string }) =>
+    tokens.push({ network, chain, contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId });
   for (const network of NETWORKS) {
     for (const c of evmChains(network)) {
-      chains.push({ network, chainId: c.chainId, name: c.name, nativeSymbol: c.nativeSymbol, rpcHost: new URL(c.rpcUrl).host });
+      chains.push({ network, chainId: c.chainId, name: c.name, nativeSymbol: c.nativeSymbol, coingeckoId: c.coingeckoId, rpcHost: new URL(c.rpcUrl).host });
       for (const t of ERC20_TOKENS[c.key] ?? []) tok(network, `evm:${c.chainId}`, t);
     }
   }
@@ -80,12 +82,12 @@ export function renderRust(f: Fixture): string {
     'use wallet_core::Network::{Mainnet as M, Testnet as N};',
     '',
     'pub(super) const EVM_CHAINS: &[C] = &[',
-    ...f.evmChains.map((c) => `    C { network: ${net(c.network)}, chain_id: ${c.chainId}, name: ${lit(c.name)}, native_symbol: ${lit(c.nativeSymbol)} },`),
+    ...f.evmChains.map((c) => `    C { network: ${net(c.network)}, chain_id: ${c.chainId}, name: ${lit(c.name)}, native_symbol: ${lit(c.nativeSymbol)}, coingecko: ${lit(c.coingeckoId)} },`),
     '];',
     '',
     'pub(super) const TOKENS: &[E] = &[',
     ...f.tokens.map(
-      (t) => `    E { network: ${net(t.network)}, chain: ${chain(t.chain)}, contract: ${lit(t.contract)}, token: K { symbol: ${lit(t.symbol)}, name: ${lit(t.name)}, decimals: ${t.decimals} } },`,
+      (t) => `    E { network: ${net(t.network)}, chain: ${chain(t.chain)}, contract: ${lit(t.contract)}, token: K { symbol: ${lit(t.symbol)}, name: ${lit(t.name)}, decimals: ${t.decimals}, coingecko: ${lit(t.coingeckoId)} } },`,
     ),
     '];',
     '',

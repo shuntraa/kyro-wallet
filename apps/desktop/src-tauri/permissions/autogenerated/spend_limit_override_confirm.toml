@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-spend-limit-override-confirm"
+description = "Enables the spend_limit_override_confirm command without any pre-configured scope."
+commands.allow = ["spend_limit_override_confirm"]
+
+[[permission]]
+identifier = "deny-spend-limit-override-confirm"
+description = "Denies the spend_limit_override_confirm command without any pre-configured scope."
+commands.deny = ["spend_limit_override_confirm"]

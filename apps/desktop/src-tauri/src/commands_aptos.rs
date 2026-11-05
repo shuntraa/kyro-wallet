@@ -584,7 +584,6 @@ pub async fn aptos_sign_tx(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -596,6 +595,12 @@ pub async fn aptos_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::aptos(state.network, &summary),
+    )
+    .await?;
     let r = raw.clone();
     let (signed, hash, again) =
         blocking(move || Ok(wallet_core::aptos_sign(&seed, a, &r)?)).await?;

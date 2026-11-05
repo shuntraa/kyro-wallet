@@ -436,7 +436,6 @@ pub async fn xmr_send_tx(
         signer.body(lang, &describe_xmr(lang, &summary, &node_label(&state))),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -448,6 +447,7 @@ pub async fn xmr_send_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::xmr(&summary)).await?;
     let unsigned = pending.unsigned;
     let signed = blocking(move || Ok(wallet_core::xmr_sign(&seed, a, unsigned)?)).await?;
     if signed.summary != summary {

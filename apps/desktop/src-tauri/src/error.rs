@@ -8,6 +8,9 @@ use serde::{Serialize, Serializer};
 pub enum AppError {
     #[error("Wrong password.")]
     WrongPassword,
+    /// Over the daily spending limit (`spend_limit.rs`); the screen reads `data`.
+    #[error("Over your daily spending limit.")]
+    SpendLimit(crate::spend_limit::Exceeded),
     #[error("The vault is locked.")]
     Locked,
     #[error("Too many attempts. Try again in {0} s.")]
@@ -84,6 +87,7 @@ impl AppError {
     fn code(&self) -> &'static str {
         match self {
             AppError::WrongPassword => "WRONG_PASSWORD",
+            AppError::SpendLimit(_) => "SPEND_LIMIT",
             AppError::Locked => "LOCKED",
             AppError::RateLimited(_) => "RATE_LIMITED",
             AppError::UserRejected => "USER_REJECTED",
@@ -125,6 +129,7 @@ impl AppError {
         let detail = |d: &str| crate::i18n::detail_fr(d);
         match self {
             AppError::WrongPassword => "Mot de passe incorrect.".into(),
+            AppError::SpendLimit(_) => "Au-dessus de ta limite quotidienne.".into(),
             AppError::Locked => "Le coffre est verrouillé.".into(),
             AppError::RateLimited(s) => format!("Trop de tentatives. Réessaie dans {s} s."),
             AppError::UserRejected => "Action annulée.".into(),
@@ -182,6 +187,7 @@ impl AppError {
 
     fn data(&self) -> Option<serde_json::Value> {
         match self {
+            AppError::SpendLimit(e) => serde_json::to_value(e).ok(),
             AppError::HwWrongApp { expected, open } => {
                 Some(serde_json::json!({ "expected": expected, "open": open }))
             }

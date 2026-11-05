@@ -329,7 +329,6 @@ async fn sign(
         signer.body(lang, &(head + &describe_utxo(lang, &summary, net))),
     )
     .await?;
-    confirm_signer(app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             app,
@@ -338,6 +337,7 @@ async fn sign(
         )
         .await?;
     }
+    confirm_signer(app, &signer, crate::spend_value::utxo(&summary)).await?;
     let (signed, again) =
         blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, a, &psbt)?)).await?;
     if again != summary {
