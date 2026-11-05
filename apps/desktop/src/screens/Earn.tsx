@@ -13,6 +13,7 @@ import { useOnTorReady } from '../state/tor';
 import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
 import { HW_STAKE } from '../lib/staking';
 import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
+import { MissingFee, useSwapFee } from '../components/MissingFee';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
@@ -266,6 +267,8 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
   const fn = mode === 'claim' ? 'claimWithdrawal' : isLido ? (mode === 'in' ? 'submit' : 'requestWithdrawals') : mode === 'in' ? 'supply' : 'withdraw';
   const asset: AssetDef = { id: isLido ? 'evm:1' : `erc20:${chainId}:${reserve!.asset}`, chainKey: reserve?.chainKey ?? 'ethereum', family: 'evm', kind: isLido ? 'native' : 'erc20', symbol: opt.symbol, name: opt.name, decimals: opt.decimals, ...(isLido ? {} : { contract: reserve!.asset }) } as AssetDef;
 
+  const earnFee = useSwapFee(asset);
+
   // Before the password: what the next signature would do. An approval still to sign goes first,
   // and the call behind it cannot run until then.
   const pinned = isLido ? [LIDO_STETH, LIDO_QUEUE] : [pool, reserve!.asset];
@@ -374,6 +377,7 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
           </div>
           <div className="text-[12.5px] text-mute">{t('earn.available', { amount: balance.data === undefined ? '—' : unit(balance.data) })}</div>
           {over && <div className="text-[12.5px] text-warn">{t('earn.over')}</div>}
+          {!isLido && mode === 'in' && amount !== null && amount > 0n && !over && earnFee !== null && <MissingFee chainKey={asset.chainKey} need={earnFee} returnTo={{ name: 'staking' }} />}
           <Button disabled={!action || over} onClick={() => setPhase('review')}>
             {t('earn.next')}
           </Button>

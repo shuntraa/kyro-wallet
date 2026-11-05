@@ -73,7 +73,7 @@ import {
   aptosAddressProblem,
   zecAddressProblem,
 } from '@kyro/chains';
-import { useApp, useVault } from '../state/app';
+import { useApp, useVault, type Route } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { decimalSep, fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
@@ -113,6 +113,8 @@ import { XmrDestinationLine, XmrLockedNote, XmrSendNotes, XmrSummaryView, XmrSyn
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
 import { AccountPicker, useCreateAccounts } from '../components/AccountPicker';
+import { MissingFee } from '../components/MissingFee';
+import { swapFeeOn } from '../lib/topUp';
 import { ACCOUNT_CHAIN_LABEL, accountAddress, defaultAccountName, otherOwnAccounts, ownAccountLabel, ownAccountOf, planNewAccounts } from '../lib/accounts';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
@@ -154,7 +156,7 @@ const LEVELS: Array<{ level: FeeLevel; label: 'send.feeSlow' | 'send.feeNormal' 
   { level: 'fast', label: 'send.feeFast' },
 ];
 
-export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string }) {
+export function Send({ assetId, to: initialTo, amount: initialAmount, memo: initialMemo }: { assetId?: string; to?: string; amount?: string; memo?: string }) {
   const { t } = useT();
   const { back, settings, navigate, hideBalances, accountSources, accountName, selectedAccounts, vaultLists } = useApp();
   const { adapters, accounts, activeHw } = useVault();
@@ -284,7 +286,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => setPoisonAck(false), [toTrim, asset?.id]);
   const poisonBlocked = !!poisoning.lookalike && !poisonAck;
 
-  const [amountStr, setAmountStr] = useState('');
+  const [amountStr, setAmountStr] = useState(initialAmount ?? '');
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
   // Dust protection (UTXO chains): tiny coins from strangers stay out of sends unless included.
@@ -354,7 +356,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const adaMe = useAsync(adaAdapter ? () => adaAdapter.account() : null, [adaAdapter], { intervalMs: 30_000 });
   const [tokenSel, setTokenSel] = useState('');
   const [tokenQty, setTokenQty] = useState('');
-  const [memo, setMemo] = useState('');
+  const [memo, setMemo] = useState(initialMemo ?? '');
   const adaToken = isAda ? adaMe.data?.tokens.find((t) => tokenKey(t) === tokenSel) : undefined;
   const adaTokenMode = !!adaToken;
   const adaTokenQty = adaToken && /^\d+$/.test(tokenQty) ? BigInt(tokenQty) : null;
@@ -552,6 +554,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const rentFiat = rent > 0n && nativeAsset && nativePrice !== null ? unitsToNumber(rent, nativeAsset.decimals) * nativePrice : 0;
   const amountFiat = sendAmount !== null && price !== null ? unitsToNumber(sendAmount, decimals) * price : null;
   const after = sendAmount !== null ? balance - sendAmount - (asset?.kind === 'native' && maxFee !== null ? maxFee : 0n) : null;
+
+  // A token's fee is paid in the chain's coin, which the amount above says nothing about. The real
+  // fee once built, else (the build may refuse for this very reason) the usual cost of a transfer.
+  const tokenFee = !asset || !nativeAsset || asset.kind === 'native' ? null : built?.unsigned.family === 'tron' ? BigInt(built.unsigned.estimate.totalBurn) : maxFee !== null ? maxFee + rent : addrValid && !building && amountBase !== null && amountBase > 0n ? swapFeeOn(nativeAsset, { token: true, plain: true, estimates: fees.data, nativePrice }) : null;
+  const sendBack: Route | undefined = asset ? { name: 'send', assetId: asset.id, ...(toTrim ? { to: toTrim } : {}), ...(amountBase ? { amount: toInputDecimal(amountBase, decimals) } : {}), ...(memo ? { memo } : {}) } : undefined;
 
   const [password, setPassword] = useState('');
   const [signing, setSigning] = useState(false);
@@ -1266,6 +1273,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <Spinner /> {t('send.preparing')}
             </span>
           )}
+          {asset.kind !== 'native' && tokenFee !== null && <MissingFee chainKey={asset.chainKey} need={tokenFee} {...(sendBack ? { returnTo: sendBack } : {})} />}
           {buildError && (serverMissing(buildError) && !isZec ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError, customServer(asset?.chainKey)) ? <ServerDownLine /> : networkDown(buildError, customServer(asset?.chainKey)) ? <NetworkDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
