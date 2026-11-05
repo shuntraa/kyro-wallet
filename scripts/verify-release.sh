@@ -39,7 +39,8 @@ case "$(uname -s)" in
 esac
 
 sha() {
-  if command -v sha256sum > /dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+  # From stdin: sha256sum puts a backslash before the hash of a path with backslashes.
+  if command -v sha256sum > /dev/null; then sha256sum < "$1" | cut -d' ' -f1; else shasum -b -a 256 < "$1" | cut -d' ' -f1; fi
 }
 
 mkdir -p "$work"
@@ -98,7 +99,7 @@ check_packaged() { # check_packaged <marker> <extracted binary>
 }
 fetch() { # fetch <asset>: get it and check it against SHA256SUMS
   get "$1"
-  [ "$(sha "$work/$1")" = "$(awk -v f="$1" '$2 == f { print $1 }' "$work/SHA256SUMS")" ] ||
+  [ "$(sha "$work/$1")" = "$(awk -v f="$1" '{ sub(/^\*/, "", $2) } $2 == f { print $1 }' "$work/SHA256SUMS")" ] ||
     { echo "$1 does not match SHA256SUMS" >&2; exit 1; }
 }
 

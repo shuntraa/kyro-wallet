@@ -112,8 +112,7 @@ jobs:
           mkdir compare
           cp "$FIRST" compare/first.bin
           cp "$SECOND" compare/second.bin
-          sha256sum compare/first.bin compare/second.bin 2>/dev/null ||
-            shasum -a 256 compare/first.bin compare/second.bin
+          shasum -b -a 256 compare/first.bin compare/second.bin
           if ! cmp compare/first.bin compare/second.bin; then
             echo "::error::${{ matrix.id }}: the two builds differ (binaries attached to this run)"
             exit 1
@@ -140,7 +139,7 @@ jobs:
           done
           first=("$TARGETS"/target-first/release/bundle/nsis/*-setup.exe)
           second=("$TARGETS"/target-second/release/bundle/nsis/*-setup.exe)
-          shasum -a 256 "${first[0]}" "${second[0]}"
+          shasum -b -a 256 "${first[0]}" "${second[0]}"
           cmp "${first[0]}" "${second[0]}" || echo "::warning::the two NSIS installers differ"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -151,7 +151,7 @@ jobs:
         run: |
           set -euo pipefail
           hash() { # hash <file> <name in SHA256SUMS-binaries>
-            printf '%s  %s\n' "$(shasum -a 256 "$1" | cut -d' ' -f1)" "$2"
+            printf '%s  %s\n' "$(shasum -b -a 256 < "$1" | cut -d' ' -f1)" "$2"
           }
           packaged() { # packaged <raw binary> <marker> <name>
             node scripts/patch-bundle-type.mjs "$1" "$2" "$RUNNER_TEMP/packaged"
