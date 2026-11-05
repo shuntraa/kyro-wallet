@@ -706,6 +706,10 @@ Reference TypeScript types: `packages/shared/src/ipc.ts`. Names in `snake_case`,
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage, tray, autostart }` | `tray`: the tray options are offered (Windows only, and `false` in the demo); `autostart`: *Start with Windows* is offered (Windows outside the Store). `systemLanguage`: `'fr' \| 'en'`, the computer's language (what `settings.language = 'auto'` uses); never the keys themselves; each `hasXKey` = environment variable **or** key saved in the settings (e.g. TronGrid: `KYRO_TRONGRID_API_KEY` or `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | network choice from within the application, applied by **restarting** the app: see §2.10 |
 | `vault_change_password` | `{ current, next }` | `void` | unlocked session, wallet in use. Rate-limited like any password. Same KDF and strength rule; the vault is re-encrypted to `<vault>.new`, read back and opened, then renamed over the old file. Ends the session |
+| `duress_status` | — | `{ enabled }` | second password (§2.9c); unlocked session. `false` during a session of its own wallet |
+| `duress_enable` | `{ current, password }` | `void` | checks `current` (rate-limited), the strength rule, that `password` opens no real wallet; writes a new vault with a fresh 12-word phrase, then shows the phrase in the phrase window |
+| `duress_show_phrase` | `{ password }` | `void` | the second password (rate-limited), native confirmation, phrase window, like `vault_reveal_mnemonic` |
+| `duress_disable` | `{ password }` | `string` | password of the wallet in use, native warning, then deletes `profile-<network>/`. Returns the store scope the interface clears (`""`: none) |
 | `wallets_get` | — | `{ active, wallets: { id, name }[] }` | the wallets of this device (§2.9b); works locked: names are plain text and opening one still takes its password |
 | `wallet_switch` | `{ id }` | `WalletsInfo` | ends the session, the next `vault_unlock` goes to `id`; refused while a native window is open |
 | `wallet_new` | `{ name }` | `void` | unlocked session. Ends it and points `vault_create` / `vault_import` at a new vault file; `vault_status.creating` holds the name until the vault is written |
@@ -1433,6 +1437,37 @@ A wallet is a recovery phrase with its own password. The first one stays in `cof
 - An unlock begun before a switch cannot open a session (`wallet_epoch`).
 - Per wallet: password attempts (`<id>.attempts`), account lists (`settings.json` `walletAccounts`), and in the webview transactions, approvals, backup state, account choice and balance cache (key suffix `@<id>`). Monero caches and Bitcoin Core wallets were already keyed by the keys.
 - Shared by the device: settings, servers, contacts, hardware-wallet accounts and watch addresses.
+
+### 2.9c Second password
+
+Optional, off by default (`duress.rs`). Typed on the normal unlock screen of any wallet, it opens a separate wallet with its own fresh phrase. In this file and in the code it is the duress password and its wallet the decoy; nothing the session shows uses those words, in any language.
+
+- **Files**: `profile-<network>/` holds `vault.kyrovault` (written by the same `wallet_core::seal_secret`, same format, not in `wallets-<network>.json`) and the stores below. One per network.
+- **`vault_unlock`** tries the active wallet's vault, then, on `WRONG_PASSWORD` only, the decoy vault. Same return, same error. A wrong password is one failed attempt on the active wallet's counter, and costs two KDF runs while the feature is on. A success on the decoy vault puts the counter back as it was: not a failure, and earlier failures are not cleared, so the second password cannot be used to reset the delay.
+- **During that session** `AppState` swaps the active vault, the attempts file, the settings and the store paths, so every command works on the decoy's side without knowing it; the real side has no path a command could reach. `lock_session` (lock, auto-lock, sleep, password change, switch) puts everything back. `vault_status.walletId` and `wallets_get` answer `main`, a single wallet, with the default name.
+- **`vault_status.storeScope`**: `null`, or during that session `p-<network>`. The interface then keeps all of `localStorage` under the prefix `kyro@<scope>.` instead of `kyro.`. When the scope differs from the page's, the page reloads (going in and coming out): memory caches and loads still running die with it, so nothing crosses over in either direction.
+- **Refusals that protect the feature**: `vault_change_password`, `vault_create` and `vault_import` refuse the second password in a real session (the real wallet would win at unlock and hide the decoy). `duress_enable` refuses a password of another wallet for the same reason. Inside the session this check is not made: it would prove a real side exists.
+- **Inside the session the feature looks off**: `duress_status` says `false`. `duress_enable` checks the password and shows a new phrase, keeps it in memory only and writes nothing; all of it goes at the lock. `duress_disable` follows the same pretence. It cannot touch the real files.
+
+| Store | During the session |
+|---|---|
+| `wallets-<network>.json` and added vaults | `profile-<network>/wallets.json`: one wallet. `wallet_switch` to a real id: `unknown wallet`. `wallet_new`: refused with a plain error, it would change the real list |
+| `coffre-*.attempts`, `<id>.attempts` | `profile-<network>/vault.attempts` |
+| `settings.json` | a copy in memory, gone at the lock. Servers, Tor, bridges and API keys stay in force on purpose: dropping them would leak the requests of a user who needs them. Tor changes are undone at the lock. No write to the Run key or the tray |
+| Account lists (`accounts`, `walletAccounts`) | `profile-<network>/accounts.json`; `walletAccounts` is emptied in the copy |
+| `hw-accounts-*.json`, `watch-addresses-*.json` | `profile-<network>/hw-accounts.json`, `watch-addresses.json`, empty at first |
+| `trezor-thp.json` | `hw_thp_pairings` empty, `hw_thp_forget` does nothing. A new pairing made there stays device-wide |
+| `*.lnswaps` | `profile-<network>/vault.lnswaps` |
+| `cbf/` | `profile-<network>/cbf/` |
+| `monero/` | already named after the keys |
+| `network.json`, `other_vault_exists` | `network_get.otherVaultExists` is `false`. `network_set` works as usual: the network is a device choice, and the app restarts locked |
+| `weekly-count`, `update/` | shared, they hold nothing about a wallet |
+| `localStorage` (contacts, favorites, alerts, transactions, approvals, balance, history, chart and market caches, account choice, backup state) | the `kyro@<scope>.` prefix. `storage.ts` is the only file that touches `localStorage` (a test checks it) |
+| Backup (`backup_export`, `backup_apply`) | reads and writes the session's own stores above |
+| Diagnostics, toasts, memory caches | gone with the reload |
+| Tray, logs | the tray has fixed texts; no command writes a log about a session |
+
+Wallet names stay on the lock screen, as in §2.9b, before any password is typed.
 
 ### 2.10 Network choice (mainnet / testnet)
 
