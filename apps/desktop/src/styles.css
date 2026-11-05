@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-@import 'tailwindcss';
+/* Explicit sources: the automatic scan reads the whole folder, so the CSS would depend on what else
+   is on disk (docs/REPRODUCIBLE.md). */
+@import 'tailwindcss' source('.');
+@source '../index.html';
 
 /* Design tokens — docs/DESIGN.md. */
 @theme {
