@@ -663,6 +663,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     if (!unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
   };
 
+  let secondPassword: string | null = null;
   const checkPassword = (password: unknown) => {
     if (!vault) throw new IpcError('LOCKED', l10n('Aucun coffre sur cet appareil.', 'No vault on this device.'));
     if (now() < blockedUntil) {
@@ -684,7 +685,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const status = (): VaultStatus => {
     lockIfExpired();
     const left = Math.max(0, Math.ceil((lastTouch + settings.autoLockSecs * 1000 - now()) / 1000));
-    return { exists: vault !== null, unlocked, autoLockSecs: settings.autoLockSecs, lockInSecs: unlocked ? left : null, walletId, creating: creating?.name ?? null };
+    return { exists: vault !== null, unlocked, autoLockSecs: settings.autoLockSecs, lockInSecs: unlocked ? left : null, walletId, creating: creating?.name ?? null, storeScope: null };
   };
 
   const decodeEvm = (tx: EvmTxRequest): EvmTxSummary => {
@@ -1085,6 +1086,28 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       if (password === a.current) throw new IpcError('INVALID_INPUT', 'the new password is the same as the current one');
       if (vault) vault = { ...vault, password };
       unlocked = false;
+    },
+    duress_status: () => {
+      requireUnlocked();
+      return { enabled: secondPassword !== null };
+    },
+    duress_enable: (a) => {
+      requireUnlocked();
+      checkPassword(a.current);
+      const password = validPassword(a.password);
+      if (password === a.current) throw new IpcError('INVALID_INPUT', 'the second password must differ from the wallet\'s password');
+      if (secondPassword !== null) throw new IpcError('INVALID_INPUT', 'the second password is already on');
+      secondPassword = password;
+    },
+    duress_show_phrase: (a) => {
+      requireUnlocked();
+      if (a.password !== secondPassword) throw new IpcError('WRONG_PASSWORD', l10n('Mot de passe incorrect.', 'Wrong password.'));
+    },
+    duress_disable: (a) => {
+      requireUnlocked();
+      checkPassword(a.password);
+      secondPassword = null;
+      return '';
     },
     wallets_get: () => walletsInfo(),
     wallet_switch: (a) => {
