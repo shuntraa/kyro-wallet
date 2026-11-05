@@ -134,7 +134,7 @@ pub(crate) fn account_path(net: Network, kind: BtcKind, account: u32) -> Result<
     ])
 }
 
-fn account_xpub(
+pub(crate) fn account_xpub(
     secp: &Secp256k1<All>,
     seed: &Seed,
     net: Network,

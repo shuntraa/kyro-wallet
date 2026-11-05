@@ -2125,6 +2125,64 @@ export type BtcWarning =
   /** Our key beyond MAX_CHANGE_INDEX (1000): counted as a payment, not change. */
   | { kind: 'changeIndexOutOfRange'; output: number };
 
+/** Everything public about one time lock. */
+export interface BtcLockInfo {
+  t: number;
+  day: number;
+  account: number;
+  path: string;
+  pubkey: string;
+  witnessScript: string;
+  scriptPubkey: string;
+  address: string;
+  descriptor: string;
+}
+
+export type BtcLockStatus = 'confirming' | 'locked' | 'ready' | 'withdrawn' | 'notFound' | 'unknown';
+
+export interface BtcLockView {
+  t: number;
+  day: number;
+  account: number;
+  address: string;
+  amountSats: number;
+  status: BtcLockStatus;
+  coins: number;
+  /** Until the network's own clock (median time past) reaches the date. */
+  secsLeft: number;
+}
+
+export interface BtcLocksStatus {
+  locks: BtcLockView[];
+  /** Locked or ready, never part of the spendable balance. */
+  lockedSats: number;
+  stale: boolean;
+  damaged: boolean;
+}
+
+export interface BtcLockScanStep {
+  nextDay: number | null;
+  firstDay: number;
+  lastDay: number;
+  found: number;
+}
+
+export interface BtcLockWithdrawPreview {
+  amountSats: number;
+  feeSats: number;
+  vsize: number;
+  destination: string;
+  inputs: number;
+  leftOut: number;
+}
+
+export interface BtcLockWithdrawn {
+  txid: string;
+  amountSats: number;
+  feeSats: number;
+  destination: string;
+}
+
 export interface BtcTxSummary {
   outputs: BtcSummaryOutput[];
   feeSats: number;
@@ -2786,6 +2844,17 @@ export interface Commands {
   duress_show_phrase: { args: { password: string }; ret: void };
   /** Returns the store scope to clear (`""`: nothing). */
   duress_disable: { args: { password: string }; ret: string };
+  /** Bitcoin time lock (docs/IPC.md §2.14). Checks the date against both clocks; the address is for the screen, the signature derives it again. */
+  btc_lock_preview: { args: { t: number } & WithAccount; ret: BtcLockInfo };
+  /** Only way to fund a lock: the PSBT must pay exactly the script Rust derives for `t`. `confirmWord`: `BLOQUER` or `LOCK`. */
+  btc_lock_sign_funding_tx: { args: { psbt: string; password: string; t: number; amountSats: number; confirmWord: string } & WithAccount; ret: { psbt: string; summary: BtcTxSummary } };
+  btc_locks_status: { args: undefined; ret: BtcLocksStatus };
+  btc_lock_details: { args: { t: number } & WithAccount; ret: BtcLockInfo };
+  /** One stretch of the day grid. `fromDay: null` starts over; go on with `nextDay` until it is `null`. */
+  btc_locks_scan: { args: { fromDay: number | null } & WithAccount; ret: BtcLockScanStep };
+  btc_lock_withdraw_preview: { args: { t: number; satPerVb: number } & WithAccount; ret: BtcLockWithdrawPreview };
+  /** Rust builds, signs and sends. There is no destination argument: it is the wallet's own next address. */
+  btc_lock_withdraw: { args: { t: number; satPerVb: number; password: string } & WithAccount; ret: BtcLockWithdrawn };
   spend_limit_status: { args: undefined; ret: SpendLimitStatus };
   /** Turning on or tightening applies now; anything else starts the wait. */
   spend_limit_set: { args: { enabled: boolean; amount: number; currency: Currency; waitSecs: number; password: string }; ret: SpendLimitStatus };

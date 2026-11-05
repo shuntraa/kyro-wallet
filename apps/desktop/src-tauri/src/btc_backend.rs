@@ -669,6 +669,224 @@ pub async fn tip_height(ctx: &Ctx<'_>) -> AppResult<u64> {
     Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
+/// The chain tip's times. A server can lie about these; nothing rests on it, because the network
+/// itself enforces a lock and the key and address depend only on the date.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tip {
+    pub height: u64,
+    /// Block header time.
+    pub time: u64,
+    /// Median of the last 11 block times: what `nLockTime` is compared to.
+    pub mtp: u64,
+}
+
+/// BIP113: the middle of the last 11 block times, as Bitcoin Core picks it.
+pub fn median_time(mut times: Vec<u64>) -> Option<u64> {
+    if times.is_empty() {
+        return None;
+    }
+    times.sort_unstable();
+    times.get(times.len() / 2).copied()
+}
+
+/// Block times out of concatenated 80-byte headers.
+fn header_times(hex_headers: &str) -> Option<Vec<u64>> {
+    if hex_headers.is_empty() || hex_headers.len() % 160 != 0 {
+        return None;
+    }
+    hex_headers
+        .as_bytes()
+        .chunks(160)
+        .map(|h| header_time(std::str::from_utf8(h).ok()?))
+        .collect()
+}
+
+pub async fn tip_info(ctx: &Ctx<'_>) -> AppResult<Tip> {
+    if let Some(base) = esplora_base(ctx)? {
+        let hash = esplora_get(ctx, &base, "/blocks/tip/hash").await?;
+        let hash = String::from_utf8_lossy(&hash).trim().to_owned();
+        check_txid(&hash)?;
+        let b = esplora_json(ctx, &base, &format!("/block/{hash}")).await?;
+        let field = |k: &str| {
+            b.get(k)
+                .and_then(Value::as_u64)
+                .ok_or_else(|| bad(format!("Esplora: block without \"{k}\"")))
+        };
+        return Ok(Tip {
+            height: field("height")?,
+            time: field("timestamp")?,
+            mtp: field("mediantime")?,
+        });
+    }
+    if let Some(t) = electrum_target(&ctx.server)? {
+        let mut conn = electrum::connect(ctx.net_client, &t, ctx.tor).await?;
+        let r = conn.call("blockchain.headers.subscribe", json!([])).await?;
+        let height = u64_field(&r, "height")?;
+        let time = header_time(str_field(&r, "hex")?).ok_or_else(|| bad("Electrum: bad header"))?;
+        let first = height.saturating_sub(10);
+        let h = conn
+            .call("blockchain.block.headers", json!([first, height - first + 1]))
+            .await?;
+        let mtp = header_times(str_field(&h, "hex")?)
+            .and_then(median_time)
+            .ok_or_else(|| bad("Electrum: bad headers"))?;
+        return Ok(Tip { height, time, mtp });
+    }
+    if let Some((c, _)) = core_client(ctx)? {
+        let best = c
+            .call(None, "getbestblockhash", json!([]), false)
+            .await
+            .map_err(AppError::from)?;
+        let h = c
+            .call(None, "getblockheader", json!([best]), false)
+            .await
+            .map_err(AppError::from)?;
+        return Ok(Tip {
+            height: u64_field(&h, "height")?,
+            time: u64_field(&h, "time")?,
+            mtp: u64_field(&h, "mediantime")?,
+        });
+    }
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
+}
+
+/// Pause between attempts at one address of a long scan: public servers answer a burst with 429.
+const SCAN_RETRIES: [u64; 4] = [1, 3, 8, 20];
+const SCAN_PARALLEL: usize = 4;
+
+async fn esplora_used_retrying(ctx: &Ctx<'_>, address: &str) -> AppResult<bool> {
+    let mut waits = SCAN_RETRIES.iter();
+    loop {
+        match address_info(ctx, address).await {
+            Ok(v) => {
+                let count = |k: &str| v[k]["tx_count"].as_u64().unwrap_or(0);
+                return Ok(count("chain_stats") + count("mempool_stats") > 0);
+            }
+            Err(e) => match waits.next() {
+                Some(secs) => tokio::time::sleep(std::time::Duration::from_secs(*secs)).await,
+                None => return Err(e),
+            },
+        }
+    }
+}
+
+/// Which of these addresses has ever been used. Any failure fails the whole call: an unanswered
+/// address must never read as an empty one. Not for Bitcoin Core, see [`core_lock_scan`].
+pub async fn addresses_used(ctx: &Ctx<'_>, addresses: &[String]) -> AppResult<Vec<bool>> {
+    if esplora_base(ctx)?.is_some() {
+        let mut out = Vec::with_capacity(addresses.len());
+        for group in addresses.chunks(SCAN_PARALLEL) {
+            let answers = futures_util::future::join_all(
+                group.iter().map(|a| esplora_used_retrying(ctx, a)),
+            )
+            .await;
+            for a in answers {
+                out.push(a?);
+            }
+        }
+        return Ok(out);
+    }
+    if let Some(t) = electrum_target(&ctx.server)? {
+        let mut conn = electrum::connect(ctx.net_client, &t, ctx.tor).await?;
+        let mut out = Vec::with_capacity(addresses.len());
+        for group in addresses.chunks(50) {
+            let mut calls = Vec::with_capacity(group.len());
+            for a in group {
+                let sh = wallet_core::btc_scripthash(a, ctx.network)?;
+                calls.push(("blockchain.scripthash.get_history", json!([sh])));
+            }
+            for h in conn.batch(&calls).await? {
+                let list = h
+                    .as_array()
+                    .ok_or_else(|| bad("Electrum: history is not a list"))?;
+                out.push(!list.is_empty());
+            }
+        }
+        return Ok(out);
+    }
+    Err(AppError::Internal("not for this Bitcoin backend".into()))
+}
+
+/// Where the coins of one script sit, from `scantxoutset`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoreFound {
+    pub script_pubkey: String,
+    pub height: u64,
+}
+
+/// Reads the node's whole UTXO set once for all these scripts (minutes on mainnet). It sees
+/// unspent coins only, which is what a recovery needs. `raw()` keeps it independent of the address
+/// format.
+pub async fn core_lock_scan(c: &CoreClient<'_>, scripts: &[String]) -> AppResult<Vec<CoreFound>> {
+    let descs: Vec<String> = scripts.iter().map(|s| format!("raw({s})")).collect();
+    let r = c
+        .call(None, "scantxoutset", json!(["start", descs]), true)
+        .await
+        .map_err(AppError::from)?;
+    if r.get("success").and_then(Value::as_bool) != Some(true) {
+        return Err(bad("scantxoutset: incomplete"));
+    }
+    let mut found = Vec::new();
+    for u in r["unspents"].as_array().into_iter().flatten() {
+        found.push(CoreFound {
+            script_pubkey: str_field(u, "scriptPubKey")?.to_owned(),
+            height: u64_field(u, "height")?,
+        });
+    }
+    Ok(found)
+}
+
+/// Adds one lock script to the watch-only wallet, or `listunspent` would never show its coins.
+/// `height`: rescan from that block; `None`: from now on (the funding is not sent yet).
+pub async fn core_lock_watch(
+    c: &CoreClient<'_>,
+    wallet: &str,
+    script: &str,
+    height: Option<u64>,
+) -> AppResult<()> {
+    let timestamp = match height {
+        None => json!("now"),
+        Some(h) => {
+            let hash = c
+                .call(None, "getblockhash", json!([h]), false)
+                .await
+                .map_err(AppError::from)?;
+            let header = c
+                .call(None, "getblockheader", json!([hash]), false)
+                .await
+                .map_err(AppError::from)?;
+            json!(u64_field(&header, "time")?.saturating_sub(2 * 3_600))
+        }
+    };
+    let info = c
+        .call(None, "getdescriptorinfo", json!([format!("raw({script})")]), false)
+        .await
+        .map_err(AppError::from)?;
+    let desc = format!("raw({script})#{}", str_field(&info, "checksum")?);
+    let req = json!([[{ "desc": desc, "timestamp": timestamp }]]);
+    let res = c
+        .call(Some(wallet), "importdescriptors", req, true)
+        .await
+        .map_err(AppError::from)?;
+    if res[0]["success"].as_bool() != Some(true) {
+        return Err(AppError::InvalidInput(format!(
+            "importdescriptors: {}",
+            res[0]["error"]
+        )));
+    }
+    Ok(())
+}
+
+/// The client and watch-only wallet when the server is the user's Bitcoin Core node.
+pub async fn core_for_locks<'a>(ctx: &'a Ctx<'_>) -> AppResult<Option<(CoreClient<'a>, String)>> {
+    let Some((c, w)) = core_client(ctx)? else {
+        return Ok(None);
+    };
+    core_wallet(&c, &w).await?;
+    Ok(Some((c, w)))
+}
+
 fn check_txid(txid: &str) -> AppResult<String> {
     let t = txid.trim().to_ascii_lowercase();
     if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_hexdigit()) {

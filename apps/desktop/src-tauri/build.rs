@@ -235,6 +235,13 @@ const COMMANDS: &[&str] = &[
     "wallets_get",
     "wallet_switch",
     // Daily spending limit (docs/IPC.md §2.13).
+    "btc_lock_preview",
+    "btc_lock_sign_funding_tx",
+    "btc_locks_status",
+    "btc_lock_details",
+    "btc_locks_scan",
+    "btc_lock_withdraw_preview",
+    "btc_lock_withdraw",
     "spend_limit_status",
     "spend_limit_set",
     "spend_limit_apply",

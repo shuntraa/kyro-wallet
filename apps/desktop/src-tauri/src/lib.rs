@@ -7,6 +7,9 @@ mod algo_backend;
 mod aptos_backend;
 mod backup;
 mod btc_backend;
+mod btc_lock;
+#[cfg(test)]
+mod btc_lock_regtest;
 mod cardano_backend;
 #[cfg(feature = "cbf")]
 mod cbf;
@@ -418,6 +421,13 @@ pub fn run() {
             duress::duress_show_phrase,
             duress::duress_disable,
             wallets::wallet_switch,
+            btc_lock::btc_lock_preview,
+            btc_lock::btc_lock_sign_funding_tx,
+            btc_lock::btc_locks_status,
+            btc_lock::btc_lock_details,
+            btc_lock::btc_locks_scan,
+            btc_lock::btc_lock_withdraw_preview,
+            btc_lock::btc_lock_withdraw,
             spend_limit::spend_limit_status,
             spend_limit::spend_limit_set,
             spend_limit::spend_limit_apply,

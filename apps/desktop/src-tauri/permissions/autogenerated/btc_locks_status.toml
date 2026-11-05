@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-btc-locks-status"
+description = "Enables the btc_locks_status command without any pre-configured scope."
+commands.allow = ["btc_locks_status"]
+
+[[permission]]
+identifier = "deny-btc-locks-status"
+description = "Denies the btc_locks_status command without any pre-configured scope."
+commands.deny = ["btc_locks_status"]

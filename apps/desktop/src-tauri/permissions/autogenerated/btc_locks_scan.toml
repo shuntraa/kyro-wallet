@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-btc-locks-scan"
+description = "Enables the btc_locks_scan command without any pre-configured scope."
+commands.allow = ["btc_locks_scan"]
+
+[[permission]]
+identifier = "deny-btc-locks-scan"
+description = "Denies the btc_locks_scan command without any pre-configured scope."
+commands.deny = ["btc_locks_scan"]

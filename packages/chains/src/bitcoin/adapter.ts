@@ -400,11 +400,27 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
 
   async signTx(unsigned: BtcUnsigned, password: string, replaces?: UtxoReplaceRequest): Promise<BtcSigned> {
     const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password, ...accountArg(this.account), ...(replaces ? { replaces } : {}) });
-    const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
+    return this.extractSigned(res.psbt);
+  }
+
+  private extractSigned(signed: string): BtcSigned {
+    const psbt = bitcoin.Psbt.fromBase64(signed, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
     const tx = psbt.extractTransaction();
     return { family: 'btc', hex: tx.toHex(), txid: tx.getId() };
+  }
+
+  /** Time locks are for software wallets only (docs/BTC_TIMELOCK.md): a hardware or watch account has no key Kyro could lock with. */
+  get canLock(): boolean {
+    return !this.hw && !this.watch;
+  }
+
+  /** Signs the funding of the lock ending at `t`. Rust derives the address again and checks the transaction pays exactly that script: `unsigned` proves nothing by itself. */
+  async signLockFunding(unsigned: BtcUnsigned, password: string, t: number, confirmWord: string): Promise<BtcSigned> {
+    if (!this.canLock) throw new Error(l10n('Le blocage n’est possible qu’avec un portefeuille logiciel.', 'Locks work with software wallets only.'));
+    const res = await call('btc_lock_sign_funding_tx', { psbt: unsigned.psbt, password, ...accountArg(this.account), t, amountSats: Number(unsigned.amount), confirmWord });
+    return this.extractSigned(res.psbt);
   }
 
   /** Signs on the hardware wallet `deviceId` (no password: native dialog + device screen). */
