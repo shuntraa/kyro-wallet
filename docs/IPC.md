@@ -1808,6 +1808,7 @@ A wait that is over lapses after 24 hours if nobody confirms it. Passwords are r
 - Trustlines, opt-ins, token association, revokes, a zero-value cancel: nothing leaves.
 - An ERC-20 approval to the pinned swap contracts: they only pull from their caller, inside a call that goes through this check.
 - The refund of a Lightning swap (`ln_refund`): it pays the wallet's own address.
+- The withdrawal of a Bitcoin time lock (`btc_lock_withdraw`): it pays the wallet's own address. Funding a lock does count.
 - Hardware accounts: the device confirms each send physically, so they never reach this check.
 
 **Fail closed.** These are over the limit whatever the amount, with the same override path: no price (network, Tor, rate limit), an asset with no price id (Algorand, Hedera, Polkadot and Cardano tokens, XRP issued currencies, any unlisted token), a "send all" whose amount the summary does not give (Sui, TON), an unlimited approval to any other spender, a contract call Rust cannot read, a Solana instruction it does not know. Sent through an override, such a send counts as the whole limit. An unreadable file reads as a limit of zero; a record that cannot be written refuses the send.
@@ -1817,6 +1818,28 @@ A wait that is over lapses after 24 hours if nobody confirms it. Passwords are r
 **State.** `<vault>.spendlimit` next to the vault of the wallet in use, written with `settings::write_atomic`: one file per wallet and per network, so another wallet starts with no limit, whatever opened it. It is outside `settings.json`, so `settings_set` and a backup cannot touch it.
 
 **Time.** Waits and the 24 hours run on a counter stored in that file. It adds what the wall clock gained since the last reading and nothing when it went back, so moving the date back cannot end a wait or empty the total. Moving it forward does shorten both: that takes administrator rights and is not defended.
+
+### 2.14 Bitcoin time lock
+
+How it works and what it refuses: [BTC_TIMELOCK.md](BTC_TIMELOCK.md). State: `<vault>.btclocks`,
+beside the vault of the wallet in use. All amounts are sats, `t` is Unix seconds at 00:00 UTC.
+
+| Command | Does |
+|---|---|
+| `btc_lock_preview(t, account?)` | Checks `t` against the local clock and the tip's time, returns `BtcLockInfo`. The address is for the screen only. |
+| `btc_lock_sign_funding_tx(psbt, password, account?, t, amountSats, confirmWord)` | Derives the address again from the seed, refuses a PSBT that does not pay exactly `amountSats` to that script with only this wallet's coins and change, shows the native dialog, goes through `confirm_signer`, signs, and writes the list before returning. `confirmWord`: `BLOQUER` or `LOCK`. |
+| `btc_locks_status()` | `BtcLocksStatus`. Works without a server: `stale` is true and amounts are the last ones seen. |
+| `btc_lock_details(t, account?)` | Descriptor, path, `t`, address. |
+| `btc_locks_scan(fromDay, account?)` | One stretch of the day grid. Call again with `nextDay` until it is `null`. Any server failure is an error, never "nothing found". |
+| `btc_lock_withdraw_preview(t, account?, satPerVb)` | What a withdrawal would do. Refused until the tip's median time past is above `t`. |
+| `btc_lock_withdraw(t, account?, satPerVb, password)` | Builds, signs and sends. There is no destination argument: Rust derives the first unused receive address of the account. |
+
+Funding counts against the daily limit (§2.13) as a send. A withdrawal does not: the coins come back
+to the wallet's own address.
+
+Hardware and watch accounts: the adapter refuses them (`BitcoinAdapter.canLock`). These commands
+only ever sign with the vault's seed. With the compact filter backend they fail with
+`INVALID_INPUT`.
 
 ## 3. Network allowlist (`net_fetch`)
 
