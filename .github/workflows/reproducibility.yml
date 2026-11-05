@@ -1,0 +1,126 @@
+name: Reproducibility
+
+# Builds the raw app binary twice per platform, from two different directories with two different
+# target directories, and fails when the two hashes differ (docs/REPRODUCIBLE.md). Linux also runs
+# the second build in the pinned container of scripts/repro-linux.Dockerfile, which is the one
+# verifiers use. Separate from release.yml on purpose: a failure here never blocks a release.
+# Runs on every tag, and by hand from the Actions tab once the workflow is on the default branch.
+# No secret: packaging and update signing are not involved.
+#
+# Third-party actions are pinned to commit SHAs (version in the comment).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reproducibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  twice:
+    name: Build twice (${{ matrix.id }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: windows
+            os: windows-2022
+            binary: release/kyro-desktop.exe
+          - id: macos
+            os: macos-15-intel
+            binary: universal-apple-darwin/release/kyro-desktop
+          - id: linux
+            os: ubuntu-22.04
+            binary: release/kyro-desktop
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      NODE_VERSION: 22.23.4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: first/kyro
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: second/some/other/place/kyro
+
+      - name: Linux system dependencies (Tauri + USB for Ledger / Trezor)
+        if: matrix.id == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential file patchelf libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev \
+            libudev-dev libusb-1.0-0-dev pkg-config
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: first/kyro/package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Rust toolchain (pinned by rust-toolchain.toml)
+        shell: bash
+        working-directory: first/kyro
+        run: |
+          set -euo pipefail
+          channel="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"
+          rustup toolchain install "$channel" --profile minimal
+          if [ "${{ matrix.id }}" = "macos" ]; then
+            rustup target add --toolchain "$channel" aarch64-apple-darwin x86_64-apple-darwin
+          fi
+          scripts/build-info.sh
+
+      - name: First build
+        shell: bash
+        working-directory: first/kyro
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/target-first
+        run: scripts/build-binary.sh
+
+      - name: Second build (on the runner)
+        if: matrix.id != 'linux'
+        shell: bash
+        working-directory: second/some/other/place/kyro
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/target-second
+        run: scripts/build-binary.sh
+
+      - name: Second build (pinned container)
+        if: matrix.id == 'linux'
+        working-directory: second/some/other/place/kyro
+        run: |
+          docker build -t kyro-repro -f scripts/repro-linux.Dockerfile scripts
+          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP:/out" -e CARGO_TARGET_DIR=/out/target-second \
+            -w /src kyro-repro bash scripts/build-binary.sh
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/target-second"
+
+      - name: Compare
+        shell: bash
+        env:
+          FIRST: ${{ runner.temp }}/target-first/${{ matrix.binary }}
+          SECOND: ${{ runner.temp }}/target-second/${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          mkdir compare
+          cp "$FIRST" compare/first.bin
+          cp "$SECOND" compare/second.bin
+          sha256sum compare/first.bin compare/second.bin 2>/dev/null ||
+            shasum -a 256 compare/first.bin compare/second.bin
+          if ! cmp compare/first.bin compare/second.bin; then
+            echo "::error::${{ matrix.id }}: the two builds differ (binaries attached to this run)"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: differing-${{ matrix.id }}
+          path: compare/*
+          if-no-files-found: ignore
