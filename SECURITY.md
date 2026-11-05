@@ -282,6 +282,19 @@ Before the password on a swap or an Earn call, Kyro asks your RPC node what the 
 
 Details: [docs/IPC.md §2.9b](docs/IPC.md). Each added wallet is a separate vault file in the same format, with its own password and its own attempt counter; the first vault file is never rewritten, so no migration exists to go wrong. Only one wallet is open at a time: switching ends the session and asks for the password, so a single seed at most is in memory. An unlock started before a switch is refused, and switching does not clear the delay after wrong passwords. **Limits**: wallet names, and the fact that several wallets exist, are plain text on disk and shown on the lock screen. Removing a wallet takes it off the list but leaves its encrypted file on the disk (`.kyrovault.removed`): a weak password stays attackable until you delete that file yourself. Settings, servers, contacts, hardware-wallet accounts and watch addresses are shared by all wallets, and the same servers see the requests of each wallet you open (Tor hides your IP, not that one app asked). Compact filters (`cbf`, off by default) keep one state per network: use them with the first wallet only.
 
+## Daily spending limit
+
+Details: [docs/IPC.md §2.13](docs/IPC.md). Optional. It slows down someone using an unlocked computer, or someone pressing the user to send quickly: above the chosen amount per 24 hours, a send needs a wait of 1 or 24 hours and then the password. Raising or turning off the limit goes through the same wait. It is enforced in Rust, in `confirm_signer`, before the key signs.
+
+What it does not do:
+
+- It does not protect against someone who has the recovery phrase. Anyone with the password can display the phrase and use it elsewhere.
+- It does not protect against someone who can edit the files of this Windows account: deleting `<vault>.spendlimit` turns the limit off, and that file is not signed. They still need the password to sign.
+- Moving the system clock forward (administrator rights) shortens waits. Moving it back does not.
+- Hardware accounts are not counted: the device confirms each send.
+- The amount of an aggregator swap (0x, LI.FI, Jupiter) comes from the interface, because Rust cannot read that calldata. A compromised interface could under-declare it. Everything else is read in Rust.
+- Limits are valued at the price of the moment of the send. A wrong price from CoinGecko gives a wrong total.
+
 ## Watch addresses
 
 A watch address is a public address or xpub followed with no key. Kyro stores it in plain text next to the vault, like hardware-wallet accounts: anyone who reads your disk sees which addresses you follow. Rust refuses private keys and recovery phrases when adding one and when loading the file. Nothing can be signed: Send, Swap and Earn stop on a clear screen, and every build, sign and broadcast method of its adapters refuses. **Limits**: reading an xpub asks servers about each derived address, so a server can link them, as with your own accounts (Tor hides your IP, not that link). A Watch address proves nothing about ownership. Monero cannot be watched: a balance needs a private view key.
