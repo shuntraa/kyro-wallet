@@ -15,6 +15,20 @@ export function projectedGain(amount: number, ratePct: number, months: number, a
   return apr ? amount * rate * years : amount * (Math.pow(1 + rate, years) - 1);
 }
 
+export interface CurvePoint {
+  months: number;
+  value: number;
+}
+
+/** Amount plus gain along the period, for the curve: by day over a month, else by month. */
+export function gainCurve(amount: number, ratePct: number, months: CalcMonths, apr: boolean): CurvePoint[] {
+  const steps = months === 1 ? 30 : months;
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const at = (months * i) / steps;
+    return { months: at, value: amount + projectedGain(amount, ratePct, at, apr) };
+  });
+}
+
 export interface CalcPick {
   option: EarnOption;
   rate: number;

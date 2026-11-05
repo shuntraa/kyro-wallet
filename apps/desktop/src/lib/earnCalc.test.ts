@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { assetsFor } from '@kyro/chains';
 import { EARN_OPTIONS } from './earn';
-import { bestByRisk, earnAsset, projectedGain } from './earnCalc';
+import { bestByRisk, earnAsset, gainCurve, projectedGain } from './earnCalc';
 
 const of = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
 
@@ -21,6 +21,24 @@ describe('projected gain', () => {
     expect(projectedGain(Number.NaN, 5, 12, false)).toBe(0);
     expect(projectedGain(1000, Number.NaN, 12, false)).toBe(0);
     expect(projectedGain(1000, 0, 12, false)).toBe(0);
+  });
+});
+
+describe('the curve', () => {
+  it('starts at the amount and ends at amount plus gain', () => {
+    for (const months of [1, 12, 60] as const) {
+      const c = gainCurve(1000, 5, months, false);
+      expect(c[0]).toEqual({ months: 0, value: 1000 });
+      expect(c.at(-1)?.months).toBeCloseTo(months, 6);
+      expect(c.at(-1)?.value).toBeCloseTo(1000 + projectedGain(1000, 5, months, false), 6);
+    }
+  });
+
+  it('one point a day over a month, one a month otherwise, always rising', () => {
+    expect(gainCurve(1000, 5, 1, false)).toHaveLength(31);
+    expect(gainCurve(1000, 5, 60, true)).toHaveLength(61);
+    const c = gainCurve(1000, 5, 12, false);
+    for (let i = 1; i < c.length; i++) expect(c[i]!.value).toBeGreaterThan(c[i - 1]!.value);
   });
 });
 
