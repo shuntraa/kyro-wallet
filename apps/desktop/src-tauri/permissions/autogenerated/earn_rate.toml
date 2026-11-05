@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-earn-rate"
+description = "Enables the earn_rate command without any pre-configured scope."
+commands.allow = ["earn_rate"]
+
+[[permission]]
+identifier = "deny-earn-rate"
+description = "Denies the earn_rate command without any pre-configured scope."
+commands.deny = ["earn_rate"]

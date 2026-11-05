@@ -290,7 +290,7 @@
     "allow-near-stake-validators",
     "allow-near-stake-build",
     "allow-earn-evm-build",
-    "allow-earn-staking-rates",
+    "allow-earn-rate",
     "allow-near-stake-sign",
     "allow-near-stake-broadcast",
     "allow-sui-stake-overview",

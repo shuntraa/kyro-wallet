@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { HW_STAKE } from './staking';
-import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, filterOptions, parseReserveData } from './earn';
+import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, keepRate, parseReserveData, rateIsOld, rateLabelKey } from './earn';
 
 describe('earn', () => {
   it('Aave APY from the ray liquidity rate (compounded per second)', () => {
@@ -76,5 +76,62 @@ describe('earn routing', () => {
     const trezor = (c: string) => (HW_STAKE.trezor as readonly string[]).includes(c);
     expect(earnBlock(by('near'), { hw: true, hwStake: trezor, hasAccount: all, hasEvm: true })).toBe('hw');
     expect(earnBlock(by('trx'), { hw: true, hwStake, hasAccount: all, hasEvm: true })).toBe('hw');
+  });
+});
+
+describe('risk levels', () => {
+  const of = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
+
+  it('the network staking is low, a contract on Ethereum medium, on another network high', () => {
+    for (const id of ['sol', 'ada', 'trx', 'near', 'sui', 'apt']) expect(earnRisk(of(id))).toBe('low');
+    for (const id of ['eth-lido', 'usdt-aave', 'usdc-aave', 'dai-aave', 'weth-aave']) expect(earnRisk(of(id))).toBe('medium');
+    for (const id of ['usdt-aave-arb', 'usdc-aave-arb', 'usdc-aave-base', 'usdt-aave-pol', 'usdc-aave-pol']) expect(earnRisk(of(id))).toBe('high');
+  });
+
+  it('every option says what can go wrong', () => {
+    for (const o of EARN_OPTIONS) expect(earnRiskKeys(o).length).toBeGreaterThan(1);
+    expect(earnRiskKeys(of('usdc-aave-base'))).toContain('earn.rfBase');
+    expect(earnRiskKeys(of('usdc-aave'))).toEqual(expect.arrayContaining(['earn.rfContract', 'earn.rfLiquidity', 'earn.rfPeg', 'earn.rfIssuer']));
+    expect(earnRiskKeys(of('dai-aave'))).toContain('earn.rfPeg');
+    expect(earnRiskKeys(of('dai-aave'))).not.toContain('earn.rfIssuer');
+    expect(earnRiskKeys(of('weth-aave'))).not.toContain('earn.rfPeg');
+  });
+
+  it('the low risk filter keeps only the network staking', () => {
+    expect(filterOptions(EARN_OPTIONS, 'low').map((o) => o.id)).toEqual(['sol', 'ada', 'trx', 'near', 'sui', 'apt']);
+  });
+
+  it('says which rates are before commission, and which are not compounded', () => {
+    expect(rateLabelKey(of('sol'))).toBe('earn.estGross');
+    expect(rateLabelKey(of('trx'))).toBe('earn.estAprGross');
+    expect(rateLabelKey(of('sui'))).toBe('earn.est');
+    expect(rateLabelKey(of('eth-lido'))).toBe('earn.estApr');
+    expect(rateLabelKey(of('usdc-aave'))).toBe('earn.est');
+  });
+});
+
+describe('row names', () => {
+  it('the network of an Aave market moves to its badge', () => {
+    const of = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
+    expect(earnRowName(of('usdt-aave-arb'))).toEqual({ name: 'Tether · Aave', network: 'Arbitrum' });
+    expect(earnRowName(of('usdc-aave-base'))).toEqual({ name: 'USD Coin · Aave', network: 'Base' });
+    expect(earnRowName(of('usdc-aave'))).toEqual({ name: 'USD Coin · Aave', network: null });
+    expect(earnRowName(of('sol'))).toEqual({ name: 'Solana', network: null });
+  });
+});
+
+describe('last known rate', () => {
+  it('a failed read keeps the last rate, a new one replaces it', () => {
+    const s = keepRate({}, 'sol', 5.2, 1000);
+    expect(s).toEqual({ sol: { value: 5.2, at: 1000 } });
+    expect(keepRate(s, 'sol', null, 2000)).toBe(s);
+    expect(keepRate(s, 'sol', Number.NaN, 2000)).toBe(s);
+    expect(keepRate(s, 'sol', 5.3, 2000)).toEqual({ sol: { value: 5.3, at: 2000 } });
+    expect(keepRate(s, 'ada', 2, 2000).sol).toEqual(s.sol);
+  });
+
+  it('a rate over an hour old says so', () => {
+    expect(rateIsOld({ value: 1, at: 0 }, 3_600_000)).toBe(false);
+    expect(rateIsOld({ value: 1, at: 0 }, 3_600_001)).toBe(true);
   });
 });

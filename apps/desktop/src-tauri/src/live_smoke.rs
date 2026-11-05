@@ -481,6 +481,35 @@ fn live_smoke_new_reads_tor() {
     });
 }
 
+/// How long each Earn rate takes over Tor, nothing signed.
+/// `cargo test -p kyro-desktop live_smoke_earn_rates -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn live_smoke_earn_rates_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let dir = std::env::temp_dir().join(format!("kyro-smoke-earn-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    tauri::async_runtime::block_on(async {
+        state.net.tor.start();
+        while state.net.tor.status().state != TorState::Ready {
+            assert_ne!(state.net.tor.status().state, TorState::Error);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        for round in 1..=2 {
+            let t = std::time::Instant::now();
+            let (sol, ada, trx, apt) = futures_util::future::join4(
+                async { (crate::earn_rates::sol(&state).await, t.elapsed()) },
+                async { (crate::earn_rates::ada(&state).await, t.elapsed()) },
+                async { (crate::earn_rates::trx(&state).await, t.elapsed()) },
+                async { (crate::earn_rates::apt(&state).await, t.elapsed()) },
+            )
+            .await;
+            eprintln!("round {round}\n sol {sol:?}\n ada {ada:?}\n trx {trx:?}\n apt {apt:?}");
+        }
+    });
+}
+
 #[test]
 #[ignore]
 fn live_smoke_all_chains_mainnet() {

@@ -120,7 +120,7 @@ fn u128_of(v: &Value) -> Option<u128> {
     v.as_str()?.parse().ok()
 }
 
-async fn gross_apy(c: &AptosCtx<'_>) -> Option<f64> {
+pub(crate) async fn gross_apy(c: &AptosCtx<'_>) -> Option<f64> {
     let rewards =
         aptos_backend::resource(c, "0x1", "0x1::staking_config::StakingRewardsConfig").await;
     let config = aptos_backend::resource(c, "0x1", "0x1::staking_config::StakingConfig").await;

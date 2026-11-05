@@ -3,16 +3,18 @@
 // TRON, NEAR, Sui and Aptos open their staking tab; Lido and Aave v3 (Ethereum) run a short flow here:
 // amount → review → confirm. Rust builds the call (`earn_evm_build`) and names it in the native window.
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call, toIpcError, type EarnEvmAction, type HwDeviceKind } from '@kyro/shared';
 import { signAndBroadcastHw, tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import { buildApproval, buildRevoke, requiresZeroAllowanceFirst } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
-import { useAsync, useCachedAsync } from '../lib/useAsync';
+import { useAsync, useCachedAsync, useNow } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
-import { fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
-import { HW_STAKE } from '../lib/staking';
-import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, filterOptions, lidoAprPercent, parseReserveData, parseUint, type EarnFilter, type EarnOption } from '../lib/earn';
+import { fmtAgo, fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
+import { HW_STAKE, type StakeChain } from '../lib/staking';
+import { readJson, writeJson } from '../lib/storage';
+import { useStakeOverviews } from '../lib/stakeOverviews';
+import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, keepRate, lidoAprPercent, parseReserveData, parseUint, rateIsOld, rateLabelKey, type EarnFilter, type EarnOption, type EarnRisk, type RateStore } from '../lib/earn';
 import { MissingFee, useSwapFee } from '../components/MissingFee';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
@@ -24,61 +26,74 @@ import { useT } from '../i18n';
 import { BRAND, hwErrorView, pickDevice, withDevice } from '../state/hw';
 
 type Hex = `0x${string}`;
-type Rates = Record<string, number | null>;
 type Positions = Record<string, bigint>;
 
 type EvmGet = (chainKey: string) => EvmAdapter | undefined;
 
-/** A rate that is not in after this long shows « — » (demo, testnet, a slow or failed read). */
-const RATE_TIMEOUT_MS = 6_000;
+/** Reads go through Tor and some servers answer in tens of seconds: past this, the read counts as failed. */
+const RATE_TIMEOUT_MS = 90_000;
+const RATE_REFRESH_MS = 300_000;
 
-function settle(job: Promise<void>): Promise<void> {
-  return Promise.race([job, new Promise<void>((r) => window.setTimeout(r, RATE_TIMEOUT_MS))]);
-}
-
-async function readRates(evm: EvmGet): Promise<Rates> {
-  const out: Rates = {};
-  const jobs: Promise<void>[] = [
-    lidoAprPercent().then(
-      (v) => void (out['eth-lido'] = v),
-      () => void (out['eth-lido'] = null),
-    ),
-    call('near_stake_validators').then(
-      (v) => void (out.near = v.grossApy),
-      () => void (out.near = null),
-    ),
-    call('sui_stake_validators').then(
-      (v) => void (out.sui = v.networkApy),
-      () => void (out.sui = null),
-    ),
-    call('aptos_stake_pools').then(
-      (v) => void (out.apt = v.grossApy),
-      () => void (out.apt = null),
-    ),
-    call('earn_staking_rates').then(
-      (v) => void Object.assign(out, { sol: v.sol, ada: v.ada, trx: v.trx }),
-      () => undefined,
-    ),
-  ];
+function rateReaders(evm: EvmGet): Record<string, () => Promise<number | null>> {
+  const onChain = (chain: 'sol' | 'ada' | 'trx' | 'apt') => () => call('earn_rate', { chain });
+  const out: Record<string, () => Promise<number | null>> = {
+    'eth-lido': lidoAprPercent,
+    near: () => call('near_stake_validators').then((v) => v.grossApy),
+    sui: () => call('sui_stake_validators').then((v) => v.networkApy),
+    sol: onChain('sol'),
+    ada: onChain('ada'),
+    trx: onChain('trx'),
+    apt: onChain('apt'),
+  };
   for (const [id, m] of Object.entries(AAVE_MARKETS)) {
     const a = evm(m.chainKey);
     if (!a) continue;
-    jobs.push(
-      a.client
-        .call({ to: m.pool as Hex, data: `${SEL_GET_RESERVE_DATA}${addrArg(m.asset)}` as Hex })
-        .then(({ data }) => {
-          const d = parseReserveData(data ?? '0x');
-          // Pinning check: the pool must report the aToken Kyro expects.
-          out[id] = d.aToken === m.aToken ? aaveApyPercent(d.liquidityRate) : null;
-        })
-        .catch(() => void (out[id] = null)),
-    );
+    out[id] = async () => {
+      const { data } = await a.client.call({ to: m.pool as Hex, data: `${SEL_GET_RESERVE_DATA}${addrArg(m.asset)}` as Hex });
+      const d = parseReserveData(data ?? '0x');
+      // Pinning check: the pool must report the aToken Kyro expects.
+      return d.aToken === m.aToken ? aaveApyPercent(d.liquidityRate) : null;
+    };
   }
-  await Promise.all(jobs.map(settle));
-  // Every option gets an answer: a missing rate is « — », never an endless spinner.
-  const done: Rates = {};
-  for (const o of EARN_OPTIONS) done[o.id] = out[o.id] ?? null;
-  return done;
+  return out;
+}
+
+const orNull = (job: Promise<number | null>): Promise<number | null> =>
+  Promise.race([job.catch(() => null), new Promise<null>((r) => window.setTimeout(() => r(null), RATE_TIMEOUT_MS))]);
+
+/** Each rate shows as soon as it is in. The last one read stays on screen, across launches too. */
+function useRates(network: string, evm: EvmGet) {
+  const key = `earn.rates.${network}`;
+  const [store, setStore] = useState<RateStore>(() => readJson<RateStore>(key, {}));
+  const [waiting, setWaiting] = useState<ReadonlySet<string>>(() => new Set(EARN_OPTIONS.map((o) => o.id)));
+  const latest = useRef(evm);
+  latest.current = evm;
+  const alive = useRef(true);
+  const reload = useCallback(() => {
+    const readers = Object.entries(rateReaders(latest.current));
+    setWaiting(new Set(readers.map(([id]) => id)));
+    for (const [id, read] of readers) {
+      void orNull(read()).then((value) => {
+        if (!alive.current) return;
+        setStore((s) => {
+          const next = keepRate(s, id, value, Date.now());
+          if (next !== s) writeJson(key, next);
+          return next;
+        });
+        setWaiting((w) => new Set([...w].filter((x) => x !== id)));
+      });
+    }
+  }, [key]);
+  useEffect(() => {
+    alive.current = true;
+    reload();
+    const id = window.setInterval(reload, RATE_REFRESH_MS);
+    return () => {
+      alive.current = false;
+      window.clearInterval(id);
+    };
+  }, [reload]);
+  return { store, waiting, reload };
 }
 
 async function tokenBalance(eth: EvmAdapter, token: string): Promise<bigint> {
@@ -97,7 +112,8 @@ async function readLidoRequests(eth: EvmAdapter): Promise<WithdrawalStatus[]> {
 async function readPositions(evm: EvmGet): Promise<Positions> {
   const out: Positions = {};
   const eth = evm('ethereum');
-  const jobs: Promise<unknown>[] = eth ? [tokenBalance(eth, LIDO_STETH).then((v) => (out['eth-lido'] = v))] : [];
+  // One failed read costs that row, not the whole list.
+  const jobs: Promise<unknown>[] = eth ? [tokenBalance(eth, LIDO_STETH).then((v) => (out['eth-lido'] = v), () => undefined)] : [];
   for (const [id, m] of Object.entries(AAVE_MARKETS)) {
     const a = evm(m.chainKey);
     if (a) jobs.push(tokenBalance(a, m.aToken).then((v) => (out[id] = v), () => undefined));
@@ -112,10 +128,12 @@ export function Earn() {
   const { t } = useT();
   const [filter, setFilter] = useState<EarnFilter>('all');
   const [flow, setFlow] = useState<{ opt: EarnOption; mode: Mode } | null>(null);
+  const [riskOf, setRiskOf] = useState<EarnOption | null>(null);
   const evm: EvmGet = (k) => (network === 'mainnet' ? adapters.evm.get(k) : undefined);
   const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
-  const rates = useCachedAsync<Rates>(`earn.rates.${network}`, () => readRates(evm), [network, !!eth], { intervalMs: 300_000 });
+  const rates = useRates(network, evm);
+  const now = useNow(60_000);
   const pos = useCachedAsync<Positions>(eth ? `earn.pos.${ethKey}` : null, eth ? () => readPositions(evm) : null, [ethKey]);
   const lidoReq = useCachedAsync<WithdrawalStatus[]>(eth ? `earn.lidoq.${ethKey}` : null, eth ? () => readLidoRequests(eth) : null, [ethKey]);
   const claimable = (lidoReq.data ?? []).filter((r) => r.isFinalized);
@@ -125,13 +143,24 @@ export function Earn() {
     pos.reload();
     lidoReq.reload();
   });
-  const has: Record<string, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui, apt: !!accounts.aptos };
+  const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui, apt: !!accounts.aptos };
+  const hwChains: readonly string[] | null = activeHw ? HW_STAKE[activeHw.device] : null;
+  const stakes = useStakeOverviews((c) => !!hwChains && !hwChains.includes(c), has);
+  const stakedOf = (o: EarnOption): string | null => {
+    if (o.target.kind !== 'tab') return null;
+    if (o.id === 'ada') {
+      const s = stakes.ada.data;
+      return s?.stake.registered && s.stake.delegatedPool ? (s.pool?.ticker ?? t('earn.delegated')) : null;
+    }
+    const v = o.id === 'trx' ? stakes.staked.tron : stakes.staked[o.id as 'sol' | 'near' | 'sui' | 'apt'];
+    return v !== undefined && v > 0n ? (hideBalances ? HIDDEN : fmtCrypto(v, o.decimals, o.symbol, 4)) : null;
+  };
   const typeLabel = { staking: t('earn.typeStaking'), liquid: t('earn.typeLiquid'), lending: t('earn.typeLending') } as const;
   const list = filterOptions(EARN_OPTIONS, filter);
 
   const adapterFor = (o: EarnOption): EvmAdapter | undefined => (o.target.kind === 'aave' ? evm(AAVE_MARKETS[o.target.market]!.chainKey) : o.target.kind === 'lido' ? eth : undefined);
   const unavailable = (o: EarnOption): string | null => {
-    const b = earnBlock(o, { hw: !!activeHw, hwStake: (c) => !!activeHw && (HW_STAKE[activeHw.device] as readonly string[]).includes(c), hasAccount: (c) => !!has[c], hasEvm: !!adapterFor(o) });
+    const b = earnBlock(o, { hw: !!activeHw, hwStake: (c) => !!hwChains?.includes(c), hasAccount: (c) => !!has[c as StakeChain], hasEvm: !!adapterFor(o) });
     return b ? t(`earn.${b}` as const) : null;
   };
 
@@ -150,6 +179,7 @@ export function Earn() {
             { value: 'all', label: t('earn.filterAll') },
             { value: 'staking', label: t('earn.filterStaking') },
             { value: 'stable', label: t('earn.filterStable') },
+            { value: 'low', label: t('earn.filterLow') },
           ]}
         />
       </header>
@@ -157,33 +187,42 @@ export function Earn() {
       <div className="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-card">
         {list.map((o, i) => {
           const why = unavailable(o);
-          const apy = rates.data?.[o.id];
+          const rate = rates.store[o.id];
           const p = pos.data?.[o.id];
-          const position = p !== undefined && p > 0n ? (hideBalances ? HIDDEN : fmtCrypto(p, o.decimals, o.target.kind === 'lido' ? 'stETH' : o.symbol, 6)) : null;
+          const position = stakedOf(o) ?? (p !== undefined && p > 0n ? (hideBalances ? HIDDEN : fmtCrypto(p, o.decimals, o.target.kind === 'lido' ? 'stETH' : o.symbol, 6)) : null);
+          const risk = earnRisk(o);
+          const row = earnRowName(o);
           const start = () => (o.target.kind === 'tab' ? navigate({ name: 'staking', chain: o.target.chain }) : setFlow({ opt: o, mode: 'in' }));
           return (
-            <div key={o.id} className="rise grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-4 px-5 py-3.5" style={idx(i)}>
+            <div key={o.id} className="rise grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.65fr)_auto] items-center gap-4 px-5 py-3.5" style={idx(i)}>
               <div className="flex min-w-0 items-center gap-3">
                 <CoinIcon symbol={o.symbol} size={34} />
                 <div className="min-w-0">
-                  <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">{o.name}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[12px] text-mute">
+                  <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">{row.name}</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-mute">
                     <Badge>{typeLabel[o.type]}</Badge>
-                    {position && (
-                      <span className="truncate text-text2">
-                        {t('earn.position')} · <strong className="font-semibold text-text">{position}</strong>
-                      </span>
-                    )}
+                    {row.network && <Badge>{row.network}</Badge>}
                   </div>
+                  {position && (
+                    <div className="mt-1 truncate text-[12px] text-text2">
+                      {t('earn.position')} · <strong className="font-semibold text-text">{position}</strong>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
-                <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{apy === undefined && !rates.error ? <Spinner /> : fmtPct(apy, { decimals: 2, sign: false })}</div>
-                <div className="text-[11.5px] text-mute">{t('earn.est')}</div>
+                <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{rate ? fmtPct(rate.value, { decimals: 2, sign: false }) : rates.waiting.has(o.id) ? <Spinner /> : '—'}</div>
+                <div className="text-[11.5px] text-mute">{rate && rateIsOld(rate, now) ? t('earn.rateOld', { ago: fmtAgo(rate.at, now) }) : t(rateLabelKey(o))}</div>
               </div>
               <div className="text-[13px]">
                 <div className="text-mute text-[11.5px]">{t('earn.lock')}</div>
                 {t(o.lockKey)}
+              </div>
+              <div className="text-[13px]">
+                <div className="text-mute text-[11.5px]">{t('earn.risk')}</div>
+                <button type="button" className="cursor-pointer rounded-full" title={t('earn.riskWhy')} onClick={() => setRiskOf(o)}>
+                  <Badge tone={RISK_TONE[risk]}>{t(RISK_LABEL[risk])}</Badge>
+                </button>
               </div>
               <div className="text-[13px]">
                 <div className="text-mute text-[11.5px]">{t('earn.min')}</div>
@@ -211,15 +250,16 @@ export function Earn() {
       {pending > 0n && <p className="m-0 px-1 text-[12.5px] text-mute">{t('earn.pending', { amount: fmtCrypto(pending, 18, 'stETH', 4) })} · {t('earn.queueNote')}</p>}
       <p className="m-0 flex items-start gap-2.5 px-1 text-[13px] leading-[1.55] text-mute">
         <IconShield size={16} className="mt-0.5 shrink-0 text-ice" />
-        <span>{t('earn.risk')}</span>
+        <span>{t('earn.riskFooter')}</span>
       </p>
+      {riskOf && <RiskDialog opt={riskOf} onClose={() => setRiskOf(null)} />}
       {flow && adapterFor(flow.opt) && (
         <EvmEarnDialog
           opt={flow.opt}
           mode={flow.mode}
           eth={adapterFor(flow.opt)!}
           hw={activeHw?.device ?? null}
-          apy={rates.data?.[flow.opt.id] ?? null}
+          apy={rates.store[flow.opt.id]?.value ?? null}
           position={pos.data?.[flow.opt.id] ?? 0n}
           onClose={() => setFlow(null)}
           claims={claimable}
@@ -230,6 +270,41 @@ export function Earn() {
         />
       )}
     </div>
+  );
+}
+
+const RISK_TONE = { low: 'up', medium: 'warn', high: 'down' } as const satisfies Record<EarnRisk, unknown>;
+const RISK_LABEL = { low: 'earn.riskLow', medium: 'earn.riskMedium', high: 'earn.riskHigh' } as const satisfies Record<EarnRisk, unknown>;
+const RISK_BODY = { low: 'earn.riskLowBody', medium: 'earn.riskMediumBody', high: 'earn.riskHighBody' } as const satisfies Record<EarnRisk, unknown>;
+
+function RiskList({ opt }: { opt: EarnOption }) {
+  const { t } = useT();
+  return (
+    <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-[13px] leading-[1.5] text-text2">
+      {earnRiskKeys(opt).map((k) => (
+        <li key={k}>{t(k)}</li>
+      ))}
+    </ul>
+  );
+}
+
+function RiskDialog({ opt, onClose }: { opt: EarnOption; onClose: () => void }) {
+  const { t } = useT();
+  const risk = earnRisk(opt);
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()} title={opt.name}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-[13px] text-text2">
+          <Badge tone={RISK_TONE[risk]}>{t(RISK_LABEL[risk])}</Badge>
+          <span>{t(RISK_BODY[risk])}</span>
+        </div>
+        <RiskList opt={opt} />
+        <p className="m-0 text-[12.5px] leading-[1.5] text-mute">{t('earn.riskNote')}</p>
+        <div className="flex justify-end">
+          <Button onClick={onClose}>{t('earn.close')}</Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -257,7 +332,6 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
   [opt.id, mode]);
   const claimTotal = claims.reduce((a, r) => a + r.amountOfStETH, 0n);
   const amount = useMemo(() => (mode === 'claim' ? claimTotal : all ? position : tryParseUnits(input, opt.decimals)), [mode, claimTotal, all, input, opt.decimals, position]);
-  const over = amount !== null && balance.data !== undefined && amount > balance.data;
   const unit = (v: bigint) => fmtCrypto(v, opt.decimals, opt.symbol, opt.decimals);
   const action: EarnEvmAction | null =
     amount === null || amount <= 0n ? null : mode === 'claim' ? { kind: 'lidoClaim', requestId: '0' } : isLido ? (mode === 'in' ? { kind: 'lidoStake', amount: amount.toString() } : { kind: 'lidoRequestWithdrawal', amount: amount.toString() }) : mode === 'in' ? { kind: 'aaveSupply', asset: aave!, amount: amount.toString(), chainId } : all ? { kind: 'aaveWithdraw', asset: aave!, chainId } : { kind: 'aaveWithdraw', asset: aave!, amount: amount.toString(), chainId };
@@ -268,6 +342,8 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
   const asset: AssetDef = { id: isLido ? 'evm:1' : `erc20:${chainId}:${reserve!.asset}`, chainKey: reserve?.chainKey ?? 'ethereum', family: 'evm', kind: isLido ? 'native' : 'erc20', symbol: opt.symbol, name: opt.name, decimals: opt.decimals, ...(isLido ? {} : { contract: reserve!.asset }) } as AssetDef;
 
   const earnFee = useSwapFee(asset);
+  // Staking ETH pays its fee from the same coin: the whole balance cannot go in.
+  const over = amount !== null && balance.data !== undefined && amount + (isLido && mode === 'in' ? earnFee ?? 0n : 0n) > balance.data;
 
   // Before the password: what the next signature would do. An approval still to sign goes first,
   // and the call behind it cannot run until then.
@@ -412,9 +488,16 @@ function EvmEarnDialog({ opt, mode, eth, hw, apy, position, claims, onClose, onD
             )}
           </dl>
           <SimulationPanel report={review.data?.report} loading={review.loading} {...(review.data?.approval ? { note: t('sim.nextCall') } : {})} />
-          <Notice tone="info" icon={<IconShield size={15} className="mt-0.5 shrink-0 text-ice" />}>
-            {t('earn.risk')}
-          </Notice>
+          {mode === 'in' && (
+            <Notice tone="info" icon={<IconShield size={15} className="mt-0.5 shrink-0 text-ice" />}>
+              <div className="flex flex-col gap-2">
+                <span className="flex items-center gap-2">
+                  <Badge tone={RISK_TONE[earnRisk(opt)]}>{t(RISK_LABEL[earnRisk(opt)])}</Badge> {t(RISK_BODY[earnRisk(opt)])}
+                </span>
+                <RiskList opt={opt} />
+              </div>
+            </Notice>
+          )}
           {hw ? (
             <p className="m-0 text-[12.5px] text-mute">{t('earn.hwSign', { device: BRAND[hw] })}</p>
           ) : (

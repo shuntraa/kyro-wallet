@@ -2752,7 +2752,8 @@ export interface Commands {
   /** Earn on Ethereum mainnet (Lido, Aave v3): Rust builds the call to a pinned contract (docs/IPC.md). */
   earn_evm_build: { args: { action: EarnEvmAction } & WithAccount; ret: { to: string; data: string; valueWei: string } };
   /** Estimated staking rates in percent a year, before commission; null = not readable. */
-  earn_staking_rates: { args: undefined; ret: { sol: number | null; ada: number | null; trx: number | null } };
+  /** Percent a year, one chain per call. `null`: no plausible rate. */
+  earn_rate: { args: { chain: 'sol' | 'ada' | 'trx' | 'apt' }; ret: number | null };
   /** Native file picker for Bitcoin Core's `.cookie` (checked: name, no symlink, <= 256 bytes,
    * `__cookie__:<64 hex>`). The only new cookie path `settings_set` / `server_test` accept.
    * `path: null` = cancelled. */

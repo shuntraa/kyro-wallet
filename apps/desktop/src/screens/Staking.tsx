@@ -28,7 +28,7 @@ import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtNumber, fmtWhen, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { useCachedAsync, useNow } from '../lib/useAsync';
-import { fingerprint } from '../lib/balanceCache';
+import { useStakeAccount, useStakeKey, useStakeOverviews } from '../lib/stakeOverviews';
 import {
   adaPoolBadges,
   adaWarningText,
@@ -73,20 +73,6 @@ import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { pickDevice, withDevice } from '../state/hw';
 import { getLanguage, t as tNow, useT } from '../i18n';
 import { rt } from '../i18n/rich';
-
-function useStakeAccount(): (chain: StakeChain) => { account?: number } {
-  const { selectedAccounts } = useApp();
-  return (chain) => (selectedAccounts[chain] ? { account: selectedAccounts[chain] } : {});
-}
-
-/**
- * Cache key of a staking read (network, command, account): the screen shows the last answer at
- * once and refreshes in the background (`useCachedAsync`).
- */
-function useStakeKey(): (cmd: string, args?: { account?: number }) => string {
-  const { network, activeHw } = useApp();
-  return (cmd, args) => `stake.${network}.${cmd}.${activeHw?.id ?? args?.account ?? 0}`;
-}
 
 type Ret<K extends keyof Commands> = Commands[K]['ret'];
 
@@ -142,35 +128,10 @@ export function Staking({ chain }: { chain?: StakeChain }) {
 }
 
 function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; has: Record<StakeChain, boolean> }) {
-  const { navigate, network, hideBalances, activeHw } = useApp();
-  const acct = useStakeAccount();
+  const { navigate, network, hideBalances } = useApp();
   const { t, tp } = useT();
-  // Persisted per wallet (address fingerprint): the cards render from the last launch's answer
-  // at once, then refresh in the background.
-  const stakeKey = useStakeKey();
-  const { accounts } = useVault();
-  const addr: Partial<Record<StakeChain, string>> = { sol: accounts.sol?.address ?? '', ada: accounts.cardano?.address ?? '', tron: accounts.tron?.address ?? '', near: accounts.near?.address ?? '', sui: accounts.sui?.address ?? '', apt: accounts.aptos?.address ?? '' };
-  const sk = (cmd: string, c: StakeChain) => `${stakeKey(cmd, acct(c))}.${fingerprint(addr[c] ?? '')}`;
-  const p = { persist: true };
-  const sol = useCachedAsync(sk('sol_stake_overview', 'sol'), !refused('sol') && has.sol ? () => (activeHw ? call('hw_sol_stake_overview', { accountId: activeHw.id }) : call('sol_stake_overview', acct('sol'))) : null, [activeHw?.id, has.sol, acct('sol').account], p);
-  const ada = useCachedAsync(sk('ada_stake_overview', 'ada'), !refused('ada') && has.ada ? () => (activeHw ? call('hw_ada_stake_overview', { accountId: activeHw.id }) : call('ada_stake_overview', acct('ada'))) : null, [activeHw?.id, has.ada, acct('ada').account], p);
-  const tron = useCachedAsync(sk('tron_stake_overview', 'tron'), !refused('tron') && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [activeHw?.id, has.tron, acct('tron').account], p);
-  const near = useCachedAsync(sk('near_stake_overview', 'near'), !refused('near') && has.near ? () => (activeHw ? call('hw_near_stake_overview', { accountId: activeHw.id }) : call('near_stake_overview', acct('near'))) : null, [activeHw?.id, has.near, acct('near').account], p);
-  const sui = useCachedAsync(sk('sui_stake_overview', 'sui'), !refused('sui') && has.sui ? () => call('sui_stake_overview', acct('sui')) : null, [activeHw?.id, has.sui, acct('sui').account], p);
-  const aptos = useCachedAsync(sk('aptos_stake_overview', 'apt'), !refused('apt') && has.apt ? () => call('aptos_stake_overview', acct('apt')) : null, [activeHw?.id, has.apt, acct('apt').account], p);
-  useOnTorReady(() => {
-    sol.reload();
-    ada.reload();
-    tron.reload();
-    near.reload();
-    sui.reload();
-    aptos.reload();
-  });
-  const nearStaked = near.data?.positions.reduce((s, p) => s + BigInt(p.staked), 0n);
-  const suiStaked = sui.data?.positions.reduce((s, p) => s + BigInt(p.principal), 0n);
-  const aptStaked = aptos.data?.positions.reduce((s, p) => s + BigInt(p.active), 0n);
-  const solStaked = sol.data?.accounts.reduce((s, a) => s + BigInt(a.lamports), 0n);
-  const tronStaked = tron.data ? BigInt(tron.data.stakedBandwidth) + BigInt(tron.data.stakedEnergy) : undefined;
+  const { sol, ada, tron, near, sui, aptos, staked } = useStakeOverviews(refused, has);
+  const { sol: solStaked, near: nearStaked, sui: suiStaked, apt: aptStaked, tron: tronStaked } = staked;
   const hide = (s: string) => (hideBalances ? HIDDEN : s);
   const cards: { chain: StakeChain; name: string; glyph: string; color: string; what: string; line: ReactNode; error: Error | null }[] = [
     {

@@ -467,7 +467,7 @@ pub fn run() {
             stake_near::near_stake_validators,
             stake_near::near_stake_build,
             earn_evm::earn_evm_build,
-            earn_rates::earn_staking_rates,
+            earn_rates::earn_rate,
             stake_near::near_stake_sign,
             stake_near::near_stake_broadcast,
             stake_sui::sui_stake_overview,

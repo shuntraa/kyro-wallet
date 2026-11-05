@@ -5,7 +5,8 @@
 import { netFetch, type EarnEvmAction } from '@kyro/shared';
 
 export type EarnType = 'staking' | 'liquid' | 'lending';
-export type EarnFilter = 'all' | 'staking' | 'stable';
+export type EarnFilter = 'all' | 'staking' | 'stable' | 'low';
+export type EarnRisk = 'low' | 'medium' | 'high';
 export type AaveAsset = Extract<EarnEvmAction, { kind: 'aaveSupply' }>['asset'];
 
 export interface EarnOption {
@@ -18,7 +19,7 @@ export interface EarnOption {
   target: { kind: 'tab'; chain: 'sol' | 'ada' | 'tron' | 'near' | 'sui' | 'apt' } | { kind: 'lido' } | { kind: 'aave'; market: string };
   decimals: number;
   /** i18n key of the lock / unbond time. */
-  lockKey: 'earn.lockNone' | 'earn.lockLido' | 'earn.lockSol' | 'earn.lockTron' | 'earn.lockNear' | 'earn.lockApt';
+  lockKey: 'earn.lockNone' | 'earn.lockLido' | 'earn.lockSol' | 'earn.lockTron' | 'earn.lockNear' | 'earn.lockApt' | 'earn.lockSui';
   /** Minimum, human text (symbol included), or null when there is none. */
   min: string | null;
 }
@@ -66,15 +67,83 @@ export const EARN_OPTIONS: EarnOption[] = [
   { id: 'ada', symbol: 'ADA', name: 'Cardano', type: 'staking', stable: false, target: { kind: 'tab', chain: 'ada' }, decimals: 6, lockKey: 'earn.lockNone', min: '2 ADA' },
   { id: 'trx', symbol: 'TRX', name: 'TRON', type: 'staking', stable: false, target: { kind: 'tab', chain: 'tron' }, decimals: 6, lockKey: 'earn.lockTron', min: '1 TRX' },
   { id: 'near', symbol: 'NEAR', name: 'NEAR', type: 'staking', stable: false, target: { kind: 'tab', chain: 'near' }, decimals: 24, lockKey: 'earn.lockNear', min: null },
-  { id: 'sui', symbol: 'SUI', name: 'Sui', type: 'staking', stable: false, target: { kind: 'tab', chain: 'sui' }, decimals: 9, lockKey: 'earn.lockNone', min: '1 SUI' },
+  { id: 'sui', symbol: 'SUI', name: 'Sui', type: 'staking', stable: false, target: { kind: 'tab', chain: 'sui' }, decimals: 9, lockKey: 'earn.lockSui', min: '1 SUI' },
   { id: 'apt', symbol: 'APT', name: 'Aptos', type: 'staking', stable: false, target: { kind: 'tab', chain: 'apt' }, decimals: 8, lockKey: 'earn.lockApt', min: '11 APT' },
 ];
 
 export function filterOptions(opts: EarnOption[], f: EarnFilter): EarnOption[] {
   if (f === 'stable') return opts.filter((o) => o.stable);
   if (f === 'staking') return opts.filter((o) => o.type !== 'lending');
+  if (f === 'low') return opts.filter((o) => earnRisk(o) === 'low');
   return opts;
 }
+
+/**
+ * Kyro's own scale, by what stands between the user and the funds. Low: the network's own staking,
+ * no third-party contract. Medium: a third-party contract on Ethereum. High: the same, on a network
+ * that adds its own failure modes. It says nothing about the price of the coin.
+ */
+export function earnRisk(o: EarnOption): EarnRisk {
+  if (o.target.kind === 'tab') return 'low';
+  if (o.target.kind === 'lido') return 'medium';
+  return AAVE_MARKETS[o.target.market]?.chainKey === 'ethereum' ? 'medium' : 'high';
+}
+
+const TAB_RISKS = {
+  sol: ['earn.rfValidator', 'earn.rfSol'],
+  ada: ['earn.rfAda', 'earn.rfValidator'],
+  tron: ['earn.rfTron', 'earn.rfValidator'],
+  near: ['earn.rfNear', 'earn.rfValidator'],
+  sui: ['earn.rfSui', 'earn.rfValidator'],
+  apt: ['earn.rfApt', 'earn.rfValidator'],
+} as const;
+const CHAIN_RISK = { arbitrum: 'earn.rfArbitrum', base: 'earn.rfBase', polygon: 'earn.rfPolygon' } as const;
+
+type RiskKey = (typeof TAB_RISKS)[keyof typeof TAB_RISKS][number] | (typeof CHAIN_RISK)[keyof typeof CHAIN_RISK] | 'earn.rfContract' | 'earn.rfLidoSlash' | 'earn.rfLidoPeg' | 'earn.rfLidoQueue' | 'earn.rfLiquidity' | 'earn.rfRate' | 'earn.rfPeg' | 'earn.rfIssuer';
+
+/** What can go wrong with this option, most serious first. */
+export function earnRiskKeys(o: EarnOption): RiskKey[] {
+  if (o.target.kind === 'tab') return [...TAB_RISKS[o.target.chain]];
+  if (o.target.kind === 'lido') return ['earn.rfContract', 'earn.rfLidoSlash', 'earn.rfLidoPeg', 'earn.rfLidoQueue'];
+  const m = AAVE_MARKETS[o.target.market];
+  const chain = m && m.chainKey !== 'ethereum' ? CHAIN_RISK[m.chainKey] : null;
+  return ['earn.rfContract', ...(chain ? [chain] : []), 'earn.rfLiquidity', ...(o.stable ? (['earn.rfPeg'] as const) : []), ...(o.symbol === 'USDT' || o.symbol === 'USDC' ? (['earn.rfIssuer'] as const) : []), 'earn.rfRate'];
+}
+
+const NETWORK_LABEL = { arbitrum: 'Arbitrum', base: 'Base', polygon: 'Polygon' } as const;
+
+/** The name without its network, and that network when it is not Ethereum (shown as a badge). */
+export function earnRowName(o: EarnOption): { name: string; network: string | null } {
+  const key = o.target.kind === 'aave' ? AAVE_MARKETS[o.target.market]?.chainKey : undefined;
+  const network = key && key !== 'ethereum' ? NETWORK_LABEL[key] : null;
+  return { name: network ? o.name.replace(` · ${network}`, '') : o.name, network };
+}
+
+/** Lido and TRON publish a yearly rate without compounding. */
+export const rateIsApr = (o: EarnOption): boolean => o.id === 'eth-lido' || o.id === 'trx';
+
+/** Network-wide figures: the validator's commission comes off. Sui's is already after it. */
+export const rateIsGross = (o: EarnOption): boolean => o.target.kind === 'tab' && o.id !== 'sui';
+
+export function rateLabelKey(o: EarnOption): 'earn.est' | 'earn.estApr' | 'earn.estGross' | 'earn.estAprGross' {
+  if (rateIsGross(o)) return rateIsApr(o) ? 'earn.estAprGross' : 'earn.estGross';
+  return rateIsApr(o) ? 'earn.estApr' : 'earn.est';
+}
+
+export interface RateEntry {
+  value: number;
+  /** When it was read. */
+  at: number;
+}
+export type RateStore = Record<string, RateEntry>;
+
+/** A failed read keeps the last rate: « — » is only for a rate never read on this device. */
+export function keepRate(store: RateStore, id: string, value: number | null, now: number): RateStore {
+  return value === null || !Number.isFinite(value) ? store : { ...store, [id]: { value, at: now } };
+}
+
+const RATE_FRESH_MS = 3_600_000;
+export const rateIsOld = (e: RateEntry, now: number): boolean => now - e.at > RATE_FRESH_MS;
 
 const RAY = 10n ** 27n;
 const SECONDS_PER_YEAR = 31_536_000;

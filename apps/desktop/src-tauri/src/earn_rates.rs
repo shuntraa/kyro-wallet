@@ -1,24 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Earn screen: estimated staking rates for Solana, Cardano and TRON (docs/IPC.md §2.8).
-//! Read only, through each chain's existing server (Solana RPC, Koios, TronGrid): no new host.
+//! Earn screen: estimated staking rates for Solana, Cardano, TRON and Aptos (docs/IPC.md §2.8).
+//! Read only, through each chain's existing server (Solana RPC, Koios, TronGrid, Aptos): no new
+//! host. One chain per call: a slow server must not hold back the others.
 //! Each rate is a network-wide estimate BEFORE the validator / pool / SR commission; `None` when
 //! a read fails or the answer is implausible.
 
-use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::State;
 
 use crate::cardano_backend::{call, first, num};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::{stake_sol, stake_tron, tron_backend};
-
-#[derive(Debug, Clone, Default, Serialize, PartialEq)]
-pub struct StakingRates {
-    pub sol: Option<f64>,
-    pub ada: Option<f64>,
-    pub trx: Option<f64>,
-}
 
 fn plausible(p: f64) -> Option<f64> {
     (p.is_finite() && p > 0.0 && p < 50.0).then_some(p)
@@ -123,14 +116,21 @@ pub(crate) async fn trx(state: &AppState) -> AppResult<Option<f64>> {
     Ok(pay.and_then(|p| trx_apr(p, votes)))
 }
 
+/// Aptos: three small reads. The pool list (indexer) is not needed for the network rate.
+pub(crate) async fn apt(state: &AppState) -> AppResult<Option<f64>> {
+    Ok(crate::stake_aptos::gross_apy(&crate::commands_aptos::ctx(state)).await)
+}
+
+/// `None`: the server answered, but not with a plausible rate.
 #[tauri::command]
-pub async fn earn_staking_rates(state: State<'_, AppState>) -> AppResult<StakingRates> {
-    let (s, a, t) = futures_util::future::join3(sol(&state), ada(&state), trx(&state)).await;
-    Ok(StakingRates {
-        sol: s.ok().flatten(),
-        ada: a.ok().flatten(),
-        trx: t.ok().flatten(),
-    })
+pub async fn earn_rate(state: State<'_, AppState>, chain: String) -> AppResult<Option<f64>> {
+    match chain.as_str() {
+        "sol" => sol(&state).await,
+        "ada" => ada(&state).await,
+        "trx" => trx(&state).await,
+        "apt" => apt(&state).await,
+        _ => Err(AppError::InvalidInput("unknown chain".into())),
+    }
 }
 
 #[cfg(test)]
