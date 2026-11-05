@@ -37,6 +37,7 @@ export type Route =
   | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' }
   | { name: 'swap'; sellAssetId?: string; buyAssetId?: string; amount?: string; returnTo?: Route }
   | { name: 'tidy' }
+  | { name: 'btcLocks' }
   | { name: 'history' }
   | { name: 'staking'; chain?: StakeChain }
   | { name: 'settings'; section?: SettingsSection; family?: AccountChain };

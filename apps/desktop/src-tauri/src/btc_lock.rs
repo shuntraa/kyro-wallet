@@ -63,8 +63,6 @@ pub struct Record {
     pub last_sats: u64,
     /// When Kyro signed the withdrawal.
     pub withdraw_txid: Option<String>,
-    /// Added locally. False for what the scan found.
-    pub funded_here: bool,
     /// Wallet where it was made, to tell records from another seed apart in a backup.
     pub address: String,
 }
@@ -115,15 +113,14 @@ fn update<T>(path: &Path, f: impl FnOnce(&mut Store) -> T) -> AppResult<T> {
 }
 
 /// One date is one address: a second lock on the same date joins the same record.
-fn upsert(store: &mut Store, info: &BtcLockInfo, sats: u64, funded_here: bool) {
+fn upsert(store: &mut Store, info: &BtcLockInfo, sats: u64) {
     let found = store
         .locks
         .iter_mut()
         .find(|r| r.account == info.account && r.t == info.t);
     match found {
         Some(r) => {
-            r.last_sats = r.last_sats.saturating_add(if funded_here { sats } else { 0 });
-            r.funded_here |= funded_here;
+            r.last_sats = r.last_sats.saturating_add(sats);
             r.address.clone_from(&info.address);
         }
         None => store.locks.push(Record {
@@ -131,7 +128,6 @@ fn upsert(store: &mut Store, info: &BtcLockInfo, sats: u64, funded_here: bool) {
             t: info.t,
             last_sats: sats,
             withdraw_txid: None,
-            funded_here,
             address: info.address.clone(),
         }),
     }
@@ -415,7 +411,9 @@ pub async fn scan_step<C: LockChain>(
     let first_day = BTC_LOCK_FIRST_DAY;
     let last_day = btc_lock_last_day(clock);
     let from = from_day.unwrap_or(first_day).max(first_day);
-    let to = from.saturating_add(chain.chunk_days().saturating_sub(1)).min(last_day);
+    let to = from
+        .saturating_add(chain.chunk_days().saturating_sub(1))
+        .min(last_day);
     let grid = btc_lock_addresses(seed, net, account, from, to)?;
     let used = chain.grid_used(&grid).await?;
     if used.len() != grid.len() {
@@ -427,7 +425,7 @@ pub async fn scan_step<C: LockChain>(
             let t = wallet_core::btc_lock_time_of_day(g.day)
                 .ok_or_else(|| AppError::Internal("day out of range".into()))?;
             let info = btc_lock_info(seed, net, account, t)?;
-            update(path, |s| upsert(s, &info, 0, false))?;
+            update(path, |s| upsert(s, &info, 0))?;
             found += 1;
         }
     }
@@ -630,7 +628,7 @@ pub async fn btc_lock_sign_funding_tx(
     }
     // Written before the interface can broadcast: no coins without their line in the list.
     update(&file_of(&state), |store| {
-        upsert(store, &info, amount_sats, true);
+        upsert(store, &info, amount_sats);
     })?;
     state.touch();
     Ok(LockSigned {
@@ -650,10 +648,7 @@ pub async fn btc_locks_status(state: State<'_, AppState>) -> AppResult<LocksStat
     };
     let list = state.with_seed(|seed| infos(seed, net, &records.locks))?;
     let settings = state.settings();
-    if matches!(
-        settings.servers.bitcoin_for(net),
-        BtcServer::Cbf { .. }
-    ) {
+    if matches!(settings.servers.bitcoin_for(net), BtcServer::Cbf { .. }) {
         return read_status(&Offline, &path, &list, damaged).await;
     }
     read_status(&Backend(ctx(&state, &settings)?), &path, &list, damaged).await
@@ -776,6 +771,7 @@ pub async fn btc_lock_withdraw(
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let settings = state.settings();
     let chain = Backend(ctx(&state, &settings)?);
+    // Signed in memory only: nothing leaves Rust or reaches the network before the dialogs below.
     let spend = plan_withdraw(&chain, &seed, net, a, t, sat_per_vb).await?;
     let info = btc_lock_info(&seed, net, a, t)?;
     let lang = crate::i18n::current();
@@ -837,7 +833,7 @@ pub fn merge_records(state: &AppState, incoming: &[Record]) -> AppResult<usize> 
     let count = kept.len();
     update(&file_of(state), |store| {
         for (info, r) in &kept {
-            upsert(store, info, 0, false);
+            upsert(store, info, 0);
             if let Some(mine) = store
                 .locks
                 .iter_mut()
@@ -924,7 +920,7 @@ mod tests {
                 .push((grid[0].day, grid.last().unwrap().day));
             Ok(grid
                 .iter()
-                .map(|g| self.used.iter().any(|u| *u == g.address))
+                .map(|g| self.used.contains(&g.address))
                 .collect())
         }
         async fn broadcast(&self, _: &str) -> AppResult<String> {
@@ -950,7 +946,10 @@ mod tests {
         assert_eq!(status_of(&confirmed, T, t - 1, None), Status::Locked);
         assert_eq!(status_of(&confirmed, T, t, None), Status::Locked, "MTP = T");
         assert_eq!(status_of(&confirmed, T, past, None), Status::Ready);
-        assert_eq!(status_of(&view(vec![], 2), T, past, None), Status::Withdrawn);
+        assert_eq!(
+            status_of(&view(vec![], 2), T, past, None),
+            Status::Withdrawn
+        );
         assert_eq!(
             status_of(&view(vec![], 0), T, past, Some("x")),
             Status::Withdrawn
@@ -967,14 +966,14 @@ mod tests {
     #[test]
     fn two_locks_on_one_date_are_one_line() {
         let path = dir("same-date");
-        update(&path, |s| upsert(s, &info(0, T), 100_000, true)).unwrap();
-        update(&path, |s| upsert(s, &info(0, T), 60_000, true)).unwrap();
-        update(&path, |s| upsert(s, &info(1, T), 70_000, true)).unwrap();
+        update(&path, |s| upsert(s, &info(0, T), 100_000)).unwrap();
+        update(&path, |s| upsert(s, &info(0, T), 60_000)).unwrap();
+        update(&path, |s| upsert(s, &info(1, T), 70_000)).unwrap();
         let store = load(&path).0;
         assert_eq!(store.locks.len(), 2, "one per date and account");
         assert_eq!(store.locks[0].last_sats, 160_000);
         // The scan finding it again changes nothing.
-        update(&path, |s| upsert(s, &info(0, T), 0, false)).unwrap();
+        update(&path, |s| upsert(s, &info(0, T), 0)).unwrap();
         assert_eq!(load(&path).0.locks[0].last_sats, 160_000);
     }
 
@@ -995,12 +994,12 @@ mod tests {
     fn locked_coins_show_even_when_the_server_is_down() {
         let path = dir("offline");
         let i = info(0, T);
-        update(&path, |s| upsert(s, &i, 100_000, true)).unwrap();
+        update(&path, |s| upsert(s, &i, 100_000)).unwrap();
         let fake = Fake {
             fail_tip: true,
             ..Fake::default()
         };
-        let st = run(read_status(&fake, &path, &[i.clone()], false)).unwrap();
+        let st = run(read_status(&fake, &path, std::slice::from_ref(&i), false)).unwrap();
         assert!(st.stale);
         assert_eq!(st.locked_sats, 100_000);
         assert_eq!(st.locks[0].status, Status::Unknown);
@@ -1023,7 +1022,7 @@ mod tests {
     fn what_never_arrived_is_not_counted() {
         let path = dir("notfound");
         let i = info(0, T);
-        update(&path, |s| upsert(s, &i, 100_000, true)).unwrap();
+        update(&path, |s| upsert(s, &i, 100_000)).unwrap();
         let fake = Fake::default();
         let st = run(read_status(&fake, &path, &[i], false)).unwrap();
         assert_eq!(st.locks[0].status, Status::NotFound);

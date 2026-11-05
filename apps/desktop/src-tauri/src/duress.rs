@@ -646,6 +646,11 @@ mod tests {
             state.ln_store_path(),
             state.vault_path.with_extension("lnswaps")
         );
+        assert_ne!(
+            crate::btc_lock::file_of(&state),
+            state.vault_path.with_extension("btclocks"),
+            "time locks follow the active vault"
+        );
         assert_ne!(state.side_dir(), state.data_dir());
         assert!(
             crate::commands_watch::load(&state.watch_path(), state.network)

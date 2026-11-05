@@ -87,8 +87,9 @@ pub use btc_lock::{
     btc_lock_is_open, btc_lock_last_day, btc_lock_sign_funding, btc_lock_spend_unchecked,
     btc_lock_time_of_day, btc_lock_utc_date, btc_lock_withdraw_tx, BtcLockAddress, BtcLockInfo,
     BtcLockSpend, BtcLockUtxo, BTC_LOCK_BRANCH, BTC_LOCK_DAY_SECS, BTC_LOCK_FIRST_DAY,
-    BTC_LOCK_LAST_DESCRIBABLE_DAY, BTC_LOCK_MAX_CLOCK_GAP_SECS, BTC_LOCK_MAX_DAYS_AHEAD, BTC_LOCK_MAX_FEE_RATE,
-    BTC_LOCK_MAX_INPUTS, BTC_LOCK_MIN_OUTPUT_SATS, BTC_LOCK_MIN_SATS, BTC_LOCK_SEQUENCE,
+    BTC_LOCK_LAST_DESCRIBABLE_DAY, BTC_LOCK_MAX_CLOCK_GAP_SECS, BTC_LOCK_MAX_DAYS_AHEAD,
+    BTC_LOCK_MAX_FEE_RATE, BTC_LOCK_MAX_INPUTS, BTC_LOCK_MIN_OUTPUT_SATS, BTC_LOCK_MIN_SATS,
+    BTC_LOCK_SEQUENCE,
 };
 pub use btc_watch::{
     btc_address_from_xpub, btc_address_of_script, btc_decode_raw_tx, btc_descriptors,

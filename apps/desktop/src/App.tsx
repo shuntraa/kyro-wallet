@@ -18,6 +18,7 @@ import { Send } from './screens/Send';
 import { Receive } from './screens/Receive';
 import { Swap } from './screens/Swap';
 import { Tidy } from './screens/Tidy';
+import { BtcLocks } from './screens/BtcLocks';
 import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
 import { useLongHistoryWarmup } from './state/charts';
@@ -117,6 +118,8 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
       return ['Swap'];
     case 'tidy':
       return [t('shell.assets'), t('tidy.title')];
+    case 'btcLocks':
+      return [t('shell.assets'), t('lock.title')];
     case 'history':
       return [t('common.history')];
     case 'staking':
@@ -193,6 +196,8 @@ function Unlocked() {
         return <Swap {...(route.sellAssetId ? { sellAssetId: route.sellAssetId } : {})} {...(route.buyAssetId ? { buyAssetId: route.buyAssetId } : {})} {...(route.amount ? { amount: route.amount } : {})} {...(route.returnTo ? { returnTo: route.returnTo } : {})} />;
       case 'tidy':
         return <Tidy />;
+      case 'btcLocks':
+        return <BtcLocks />;
       case 'history':
         return <History />;
       case 'staking':

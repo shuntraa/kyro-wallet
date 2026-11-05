@@ -44,7 +44,8 @@ use crate::error::{AppError, AppResult};
 use crate::net::NetClient;
 use crate::servers::{BtcServer, CoreAuth};
 
-const PHRASE: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+const PHRASE: &str =
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 const NET: Network = Network::Testnet;
 const RPC: u16 = 28_443;
 
@@ -105,7 +106,10 @@ impl Node {
         };
         let start = Instant::now();
         while node.cli(&["getblockcount"]).is_err() {
-            assert!(start.elapsed() < Duration::from_secs(120), "node did not start");
+            assert!(
+                start.elapsed() < Duration::from_secs(120),
+                "node did not start"
+            );
             std::thread::sleep(Duration::from_millis(300));
         }
         node
@@ -146,7 +150,9 @@ impl Node {
     }
 
     fn mtp(&self) -> u64 {
-        self.json(&["getblockchaininfo"])["mediantime"].as_u64().unwrap()
+        self.json(&["getblockchaininfo"])["mediantime"]
+            .as_u64()
+            .unwrap()
     }
 
     /// Mines blocks stamped `time` until the median time past is exactly there.
@@ -184,7 +190,9 @@ impl Drop for Node {
 
 fn regtest_address(spk_hex: &str) -> String {
     let spk = ScriptBuf::from_hex(spk_hex).unwrap();
-    Address::from_script(&spk, BtcNet::Regtest).unwrap().to_string()
+    Address::from_script(&spk, BtcNet::Regtest)
+        .unwrap()
+        .to_string()
 }
 
 /// The master key from the phrase, by a script that shares no code with Kyro.
@@ -482,7 +490,8 @@ fn btc_lock_regtest() {
     {
         let main = Node::start("main", RPC + 1);
         let test = Node::start("testnet4", RPC + 2);
-        for (node, coin, net, root) in [(&main, 0, Network::Mainnet, &xprv), (&test, 1, NET, &tprv)] {
+        for (node, coin, net, root) in [(&main, 0, Network::Mainnet, &xprv), (&test, 1, NET, &tprv)]
+        {
             let kyro = btc_lock_info(&seed(), net, 0, t).unwrap();
             let d = node.json(&["getdescriptorinfo", &kyro.descriptor]);
             assert_eq!(
@@ -563,7 +572,13 @@ fn btc_lock_regtest() {
     // The Core backend's watch wallet: the app imports the script before funding.
     let watch = "kyro-watch-73c5da0a";
     run(chain.client.create_watch_wallet(watch)).unwrap();
-    run(btc_backend::core_lock_watch(&chain.client, watch, &lock.script_pubkey, None)).unwrap();
+    run(btc_backend::core_lock_watch(
+        &chain.client,
+        watch,
+        &lock.script_pubkey,
+        None,
+    ))
+    .unwrap();
 
     // ---- 2. Funding by the real code path, and 8a: a second lock on the same date
     println!("RESULT 2: funding with the app's TypeScript and Rust");
@@ -580,7 +595,15 @@ fn btc_lock_regtest() {
     let total: u64 = view.coins.iter().map(|c| c.utxo.value).sum();
     assert_eq!(total, 160_000);
     let reg_lock = regtest_address(&lock.script_pubkey);
-    let seen = node.wallet(watch, &["listunspent", "0", "9999999", &json!([reg_lock]).to_string()]);
+    let seen = node.wallet(
+        watch,
+        &[
+            "listunspent",
+            "0",
+            "9999999",
+            &json!([reg_lock]).to_string(),
+        ],
+    );
     let seen: Value = serde_json::from_str(&seen).unwrap();
     println!(
         "  the Core backend's watch wallet sees {} coins at the lock",
@@ -631,7 +654,9 @@ fn btc_lock_regtest() {
     }
     // The same hand-built transaction with the right fields passes: the refusals were about them.
     let control = hand_spend(&lock, &coins, t, 0xFFFF_FFFD, &right, &dest);
-    let test: Value = serde_json::from_str(&node.ok(&["testmempoolaccept", &json!([control]).to_string()])).unwrap();
+    let test: Value =
+        serde_json::from_str(&node.ok(&["testmempoolaccept", &json!([control]).to_string()]))
+            .unwrap();
     println!("  control, right fields: allowed = {}", test[0]["allowed"]);
     assert_eq!(test[0]["allowed"], true);
 
@@ -674,7 +699,10 @@ fn btc_lock_regtest() {
     let desc = with_checksum(&node, &private_descriptor(&tprv, 1, &lock2));
     let import = json!([{ "desc": desc, "timestamp": 0 }]).to_string();
     let imported = node.wallet("alone", &["importdescriptors", &import]);
-    println!("  importdescriptors: {}", imported.split_whitespace().collect::<String>());
+    println!(
+        "  importdescriptors: {}",
+        imported.split_whitespace().collect::<String>()
+    );
     let list: Value = serde_json::from_str(&node.wallet("alone", &["listunspent"])).unwrap();
     println!(
         "  listunspent: {} BTC, solvable {}, spendable {}",
@@ -693,7 +721,11 @@ fn btc_lock_regtest() {
             &format!("options={opts}"),
         ],
     );
-    println!("  sendall: {:?}", sent.as_ref().map(|s| s.split_whitespace().collect::<String>()));
+    println!(
+        "  sendall: {:?}",
+        sent.as_ref()
+            .map(|s| s.split_whitespace().collect::<String>())
+    );
     let sent: Value = serde_json::from_str(&sent.unwrap()).unwrap();
     let core_txid = sent["txid"].as_str().unwrap();
     node.mine();
@@ -735,7 +767,10 @@ fn btc_lock_regtest() {
     ))
     .unwrap();
     let reg3 = regtest_address(&lock3.script_pubkey);
-    let seen = node.wallet(watch, &["listunspent", "0", "9999999", &json!([reg3]).to_string()]);
+    let seen = node.wallet(
+        watch,
+        &["listunspent", "0", "9999999", &json!([reg3]).to_string()],
+    );
     let seen: Value = serde_json::from_str(&seen).unwrap();
     println!(
         "  watch wallet after the rescan from its height: {} coin",
@@ -784,4 +819,3 @@ fn btc_lock_regtest() {
     let _ = std::fs::remove_dir_all(&work);
     println!("ALL RESULTS PASSED");
 }
-

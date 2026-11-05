@@ -726,7 +726,10 @@ pub async fn tip_info(ctx: &Ctx<'_>) -> AppResult<Tip> {
         let time = header_time(str_field(&r, "hex")?).ok_or_else(|| bad("Electrum: bad header"))?;
         let first = height.saturating_sub(10);
         let h = conn
-            .call("blockchain.block.headers", json!([first, height - first + 1]))
+            .call(
+                "blockchain.block.headers",
+                json!([first, height - first + 1]),
+            )
             .await?;
         let mtp = header_times(str_field(&h, "hex")?)
             .and_then(median_time)
@@ -777,10 +780,9 @@ pub async fn addresses_used(ctx: &Ctx<'_>, addresses: &[String]) -> AppResult<Ve
     if esplora_base(ctx)?.is_some() {
         let mut out = Vec::with_capacity(addresses.len());
         for group in addresses.chunks(SCAN_PARALLEL) {
-            let answers = futures_util::future::join_all(
-                group.iter().map(|a| esplora_used_retrying(ctx, a)),
-            )
-            .await;
+            let answers =
+                futures_util::future::join_all(group.iter().map(|a| esplora_used_retrying(ctx, a)))
+                    .await;
             for a in answers {
                 out.push(a?);
             }
@@ -860,7 +862,12 @@ pub async fn core_lock_watch(
         }
     };
     let info = c
-        .call(None, "getdescriptorinfo", json!([format!("raw({script})")]), false)
+        .call(
+            None,
+            "getdescriptorinfo",
+            json!([format!("raw({script})")]),
+            false,
+        )
         .await
         .map_err(AppError::from)?;
     let desc = format!("raw({script})#{}", str_field(&info, "checksum")?);
@@ -1332,6 +1339,30 @@ mod tests {
         assert!(txs[1].get("fee").is_none());
         assert_eq!(txs[1]["status"]["block_time"], 1_793_333_429);
         assert_eq!(txs[1]["status"]["block_height"], 100);
+    }
+
+    #[test]
+    fn median_time_is_the_middle_block_as_in_bitcoin_core() {
+        // Out of order on purpose: block times may go back a little.
+        let times = vec![10, 30, 20, 50, 40, 60, 70, 90, 80, 110, 100];
+        assert_eq!(median_time(times), Some(60));
+        assert_eq!(median_time(vec![5]), Some(5));
+        // Near the genesis block: fewer than 11, Core takes `size / 2` of the sorted list.
+        assert_eq!(median_time(vec![1, 2, 3, 4]), Some(3));
+        assert_eq!(median_time(Vec::new()), None);
+    }
+
+    #[test]
+    fn block_times_are_read_out_of_concatenated_headers() {
+        let header = |t: u32| {
+            let mut h = vec![0u8; 80];
+            h[68..72].copy_from_slice(&t.to_le_bytes());
+            hex::encode(h)
+        };
+        let two = header(1_793_908_154) + &header(1_793_911_704);
+        assert_eq!(header_times(&two), Some(vec![1_793_908_154, 1_793_911_704]));
+        assert_eq!(header_times(""), None);
+        assert_eq!(header_times(&two[..200]), None, "a cut header");
     }
 
     #[test]

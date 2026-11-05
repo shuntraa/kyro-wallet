@@ -751,7 +751,6 @@ mod tests {
             t,
             last_sats: 100_000,
             withdraw_txid: None,
-            funded_here: true,
             address: BTC.into(),
         }
     }

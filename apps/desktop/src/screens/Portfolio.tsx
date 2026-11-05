@@ -9,6 +9,7 @@ import { AllocationBar, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
 import { GainsCard } from '../components/Gains';
 import { VaultCard } from '../components/VaultCard';
+import { LockedLine } from './BtcLocks';
 import { Button, Segmented } from '../components/ui/primitives';
 import { useOnTorReady } from '../state/tor';
 import { idx, useMedia } from '../components/motion';
@@ -65,6 +66,7 @@ export function Portfolio() {
               ) : (
                 <span className="text-mute">{pf.balancesLoaded && pf.total === 0 ? t('portfolio.noFundsYet') : ''}</span>
               )}
+              <LockedLine className="ml-2 border-l border-line pl-4" />
             </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-5">

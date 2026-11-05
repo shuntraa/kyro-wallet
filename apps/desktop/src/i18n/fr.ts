@@ -17,6 +17,7 @@ import { hw } from './fr/hw';
 import { watch } from './fr/watch';
 import { wallets } from './fr/wallets';
 import { limit } from './fr/limit';
+import { lock } from './fr/lock';
 import { sim } from './fr/sim';
 import { stellar } from './fr/stellar';
 import { near } from './fr/near';
@@ -52,6 +53,7 @@ export const fr = {
   ...watch,
   ...wallets,
   ...limit,
+  ...lock,
   ...sim,
   ...stellar,
   ...near,
@@ -72,4 +74,4 @@ export const fr = {
 } as const;
 
 /** Area modules, for the catalog tests (keys must start with `<area>.`). */
-export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, limit, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet, ln, topup, tidy } as const;
+export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, limit, lock, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet, ln, topup, tidy } as const;

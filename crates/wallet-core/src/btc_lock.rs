@@ -139,7 +139,9 @@ pub struct BtcLockSpend {
 /// Checks the form of `t` and returns its day: 00:00 UTC, and a time, never a block height.
 pub fn btc_lock_day(t: u32) -> Result<u32> {
     if t < LOCKTIME_THRESHOLD {
-        return Err(Error::input("lock date: below 500000000 it would be a height"));
+        return Err(Error::input(
+            "lock date: below 500000000 it would be a height",
+        ));
     }
     if t % BTC_LOCK_DAY_SECS != 0 {
         return Err(Error::input("lock date: must be 00:00 UTC"));
@@ -233,7 +235,12 @@ fn lock_path(net: Network, account: u32, day: u32) -> Result<Vec<ChildNumber>> {
     Ok(path)
 }
 
-fn lock_key(seed: &Seed, secp: &Secp256k1<All>, net: Network, path: &[ChildNumber]) -> Result<XprivGuard> {
+fn lock_key(
+    seed: &Seed,
+    secp: &Secp256k1<All>,
+    net: Network,
+    path: &[ChildNumber],
+) -> Result<XprivGuard> {
     XprivGuard::master(seed, net.btc_kind())?.derive(secp, path)
 }
 
@@ -472,7 +479,14 @@ pub fn btc_lock_spend_unchecked(
     let pubkey = sk.public_key(&secp);
     let script = witness_script(pubkey, t);
 
-    let destination = btc_address(seed, net, BtcKind::Segwit, account, false, destination_index)?;
+    let destination = btc_address(
+        seed,
+        net,
+        BtcKind::Segwit,
+        account,
+        false,
+        destination_index,
+    )?;
     let destination_script = btc_script_pubkey(&destination, net)?;
 
     let mut total = 0u64;
@@ -517,12 +531,7 @@ pub fn btc_lock_spend_unchecked(
         let mut cache = SighashCache::new(&tx);
         for (i, c) in coins.iter().enumerate() {
             let sighash = cache
-                .p2wsh_signature_hash(
-                    i,
-                    &script,
-                    Amount::from_sat(c.value),
-                    EcdsaSighashType::All,
-                )
+                .p2wsh_signature_hash(i, &script, Amount::from_sat(c.value), EcdsaSighashType::All)
                 .map_err(|_| Error::crypto("sighash failed"))?;
             let msg = Message::from_digest(sighash.to_byte_array());
             let signature = secp.sign_ecdsa(&msg, &sk);
@@ -581,21 +590,42 @@ mod tests {
         let main = btc_lock_info(&seed(), Network::Mainnet, 0, T).unwrap();
         assert_eq!(main.day, 20_891);
         assert_eq!(main.path, "m/84'/0'/0'/2/20891");
-        assert_eq!(main.pubkey, "02b0c411138f37419cab5225f3f4735a9127e648b683c12846fc4d0de2d5002594");
-        assert_eq!(main.witness_script, "2102b0c411138f37419cab5225f3f4735a9127e648b683c12846fc4d0de2d5002594ad0480d8956bb1");
-        assert_eq!(main.address, "bc1qjv373cp7excz626d8s4p74yq6v2mydk4pe9a37ddn3l8g6xsngrq3x2nf8");
+        assert_eq!(
+            main.pubkey,
+            "02b0c411138f37419cab5225f3f4735a9127e648b683c12846fc4d0de2d5002594"
+        );
+        assert_eq!(
+            main.witness_script,
+            "2102b0c411138f37419cab5225f3f4735a9127e648b683c12846fc4d0de2d5002594ad0480d8956bb1"
+        );
+        assert_eq!(
+            main.address,
+            "bc1qjv373cp7excz626d8s4p74yq6v2mydk4pe9a37ddn3l8g6xsngrq3x2nf8"
+        );
         assert_eq!(main.descriptor, "wsh(and_v(v:pk([73c5da0a/84'/0'/0'/2/20891]02b0c411138f37419cab5225f3f4735a9127e648b683c12846fc4d0de2d5002594),after(1804982400)))#4vdnvyex");
 
         let test = btc_lock_info(&seed(), Network::Testnet, 0, T).unwrap();
         assert_eq!(test.path, "m/84'/1'/0'/2/20891");
-        assert_eq!(test.pubkey, "02c83056a1c512181e6ce924bef1d772502d13d2f4a80a28a26f5f7a237ee87bae");
-        assert_eq!(test.witness_script, "2102c83056a1c512181e6ce924bef1d772502d13d2f4a80a28a26f5f7a237ee87baead0480d8956bb1");
-        assert_eq!(test.address, "tb1qufl0wuef6a7duuv3a4rvad6ynz0ungyp7fg0mdl2w7wz4hthsvsqdv4n3d");
+        assert_eq!(
+            test.pubkey,
+            "02c83056a1c512181e6ce924bef1d772502d13d2f4a80a28a26f5f7a237ee87bae"
+        );
+        assert_eq!(
+            test.witness_script,
+            "2102c83056a1c512181e6ce924bef1d772502d13d2f4a80a28a26f5f7a237ee87baead0480d8956bb1"
+        );
+        assert_eq!(
+            test.address,
+            "tb1qufl0wuef6a7duuv3a4rvad6ynz0ungyp7fg0mdl2w7wz4hthsvsqdv4n3d"
+        );
         assert_eq!(test.descriptor, "wsh(and_v(v:pk([73c5da0a/84'/1'/0'/2/20891]02c83056a1c512181e6ce924bef1d772502d13d2f4a80a28a26f5f7a237ee87bae),after(1804982400)))#48p4cp33");
 
         let acct1 = btc_lock_info(&seed(), Network::Mainnet, 1, T).unwrap();
         assert_eq!(acct1.path, "m/84'/0'/1'/2/20891");
-        assert_eq!(acct1.address, "bc1qwndkjetplqyfqy4t4au220z5lsjvwh0anremetapyrtae2jdxq9ssde79t");
+        assert_eq!(
+            acct1.address,
+            "bc1qwndkjetplqyfqy4t4au220z5lsjvwh0anremetapyrtae2jdxq9ssde79t"
+        );
 
         assert_eq!(BTC_LOCK_FIRST_DAY, 20_762);
         assert_eq!(BTC_LOCK_BRANCH, 2);
@@ -626,25 +656,39 @@ mod tests {
 
     #[test]
     fn time_is_pushed_as_a_minimal_script_number() {
-        let key = btc_lock_info(&seed(), Network::Testnet, 0, T).unwrap().pubkey;
+        let key = btc_lock_info(&seed(), Network::Testnet, 0, T)
+            .unwrap()
+            .pubkey;
         let k = PublicKey::from_str(&key).unwrap();
         let tail = |t: u32| hex::encode(&witness_script(k, t).as_bytes()[35..]);
         // Top bit clear: 4 bytes.
         assert_eq!(tail(T), format!("04{}b1", hex::encode(T.to_le_bytes())));
         // 2^31 and up: the top bit would read as a sign, so a fifth byte (CLTV reads up to five).
         let past = 2_147_558_400u32;
-        assert_eq!(tail(past), format!("05{}00b1", hex::encode(past.to_le_bytes())));
+        assert_eq!(
+            tail(past),
+            format!("05{}00b1", hex::encode(past.to_le_bytes()))
+        );
         let last = btc_lock_time_of_day(u32::MAX / BTC_LOCK_DAY_SECS).unwrap();
         assert_eq!(last, 4_294_944_000);
-        assert_eq!(tail(last), format!("05{}00b1", hex::encode(last.to_le_bytes())));
+        assert_eq!(
+            tail(last),
+            format!("05{}00b1", hex::encode(last.to_le_bytes()))
+        );
     }
 
     #[test]
     fn dates_that_are_not_a_day_or_not_a_time_are_refused() {
         assert_eq!(btc_lock_day(T).unwrap(), 20_891);
         assert!(btc_lock_day(T + 1).is_err());
-        assert!(btc_lock_day(T - 3_600).is_err(), "local midnight is not UTC");
-        assert!(btc_lock_day(499_996_800).is_err(), "a midnight, but a height");
+        assert!(
+            btc_lock_day(T - 3_600).is_err(),
+            "local midnight is not UTC"
+        );
+        assert!(
+            btc_lock_day(499_996_800).is_err(),
+            "a midnight, but a height"
+        );
         assert!(btc_lock_day(0).is_err());
         assert!(btc_lock_info(&seed(), Network::Mainnet, 0, 86_400).is_err());
         assert_eq!(btc_lock_day(500_083_200).unwrap(), 5_788);
@@ -665,7 +709,10 @@ mod tests {
         let day = |d: u32| d * BTC_LOCK_DAY_SECS;
         let today = 20_762;
         assert_eq!(u64::from(day(today)), NOW);
-        assert!(btc_lock_check_window(day(today), NOW, NOW).is_err(), "today");
+        assert!(
+            btc_lock_check_window(day(today), NOW, NOW).is_err(),
+            "today"
+        );
         assert!(btc_lock_check_window(day(today + 1), NOW, NOW).is_ok());
         // One second before midnight UTC, tomorrow is one second away and still allowed.
         assert!(btc_lock_check_window(day(today + 1), NOW + 86_399, NOW + 86_399).is_ok());
@@ -699,14 +746,8 @@ mod tests {
         // Today nothing changes.
         assert_eq!(btc_lock_last_day(NOW), 20_762 + 3_653 + 2);
         let psbt = funding(vec![(lock_spk(), 100_000, false)]);
-        let refused = btc_lock_check_funding(
-            &seed(),
-            Network::Testnet,
-            0,
-            day(last + 1),
-            100_000,
-            &psbt,
-        );
+        let refused =
+            btc_lock_check_funding(&seed(), Network::Testnet, 0, day(last + 1), 100_000, &psbt);
         assert_eq!(
             refused.unwrap_err(),
             Error::input("lock date: at most 2038-01-19")
@@ -716,7 +757,10 @@ mod tests {
     #[test]
     fn open_only_strictly_past_the_date() {
         assert!(!btc_lock_is_open(T, u64::from(T) - 1));
-        assert!(!btc_lock_is_open(T, u64::from(T)), "the network needs MTP above T");
+        assert!(
+            !btc_lock_is_open(T, u64::from(T)),
+            "the network needs MTP above T"
+        );
         assert!(btc_lock_is_open(T, u64::from(T) + 1));
     }
 
@@ -726,7 +770,10 @@ mod tests {
         assert_eq!(btc_lock_utc_date(0), "1970-01-01");
         assert_eq!(btc_lock_utc_date(951_782_400), "2000-02-29");
         assert_eq!(btc_lock_utc_date(2_147_558_400), "2038-01-20");
-        assert_eq!(btc_lock_utc_date(BTC_LOCK_FIRST_DAY * BTC_LOCK_DAY_SECS), "2026-11-05");
+        assert_eq!(
+            btc_lock_utc_date(BTC_LOCK_FIRST_DAY * BTC_LOCK_DAY_SECS),
+            "2026-11-05"
+        );
     }
 
     #[test]
@@ -815,7 +862,9 @@ mod tests {
             value: Amount::from_sat(1_000_000),
             script_pubkey: p2wpkh(key),
         });
-        psbt.inputs[0].bip32_derivation.insert(key, (origin(), path));
+        psbt.inputs[0]
+            .bip32_derivation
+            .insert(key, (origin(), path));
         for (i, (_, _, change)) in outs.iter().enumerate() {
             if *change {
                 let (k, p) = own_key(1, 0);
@@ -830,7 +879,11 @@ mod tests {
     }
 
     fn lock_spk() -> ScriptBuf {
-        spk_of(&btc_lock_info(&seed(), Network::Testnet, 0, T).unwrap().address)
+        spk_of(
+            &btc_lock_info(&seed(), Network::Testnet, 0, T)
+                .unwrap()
+                .address,
+        )
     }
 
     fn check(psbt: &str, amount: u64) -> Result<BtcTxSummary> {
@@ -855,8 +908,12 @@ mod tests {
         // Another date's address, another account's, or a stranger's.
         let t2 = T + BTC_LOCK_DAY_SECS;
         for wrong in [
-            btc_lock_info(&seed(), Network::Testnet, 0, t2).unwrap().address,
-            btc_lock_info(&seed(), Network::Testnet, 1, T).unwrap().address,
+            btc_lock_info(&seed(), Network::Testnet, 0, t2)
+                .unwrap()
+                .address,
+            btc_lock_info(&seed(), Network::Testnet, 1, T)
+                .unwrap()
+                .address,
             STRANGER.to_owned(),
         ] {
             let psbt = funding(vec![
@@ -922,7 +979,11 @@ mod tests {
             assert!(i.script_sig.is_empty());
             assert_eq!(i.witness.len(), 2);
             assert_eq!(hex::encode(i.witness.nth(1).unwrap()), info.witness_script);
-            assert_eq!(*i.witness.nth(0).unwrap().last().unwrap(), 0x01, "SIGHASH_ALL");
+            assert_eq!(
+                *i.witness.nth(0).unwrap().last().unwrap(),
+                0x01,
+                "SIGHASH_ALL"
+            );
         }
         assert_eq!(tx.output.len(), 1, "no second destination");
         assert_eq!(
@@ -931,7 +992,10 @@ mod tests {
         );
         assert_eq!(tx.output[0].value.to_sat(), s.amount_sats);
         assert_eq!(s.amount_sats + s.fee_sats, 160_000);
-        assert!(s.vsize >= tx.vsize() as u64, "the fee never falls under the rate");
+        assert!(
+            s.vsize >= tx.vsize() as u64,
+            "the fee never falls under the rate"
+        );
         assert!(s.vsize <= tx.vsize() as u64 + 2);
         assert_eq!(s.fee_sats, s.vsize * 5);
         assert_eq!(s.txid, tx.compute_txid().to_string());

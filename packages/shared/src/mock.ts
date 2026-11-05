@@ -18,6 +18,8 @@ import {
   type AppConfig,
   type UpdateStatus,
   type BtcKind,
+  type BtcLockInfo,
+  type BtcLockView,
   type BtcTxSummary,
   type Commands,
   type EvmTxRequest,
@@ -740,6 +742,32 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     return { psbt: psbt.toBase64(), summary: { outputs, feeSats, ...btcWarnings({ outputs, feeSats, vsize }) } };
   };
 
+  const demoLockInfo = (t: number, account: number): BtcLockInfo => {
+    const coin = network === 'testnet' ? 1 : 0;
+    const day = t / 86_400;
+    const hash = sha256(new TextEncoder().encode(`demo-lock:${account}:${t}`));
+    const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+    const address = bitcoin.address.fromOutputScript(Uint8Array.from([0, 32, ...hash]), net);
+    const pubkey = `02${bytesToHex(sha256(hash))}`;
+    return {
+      t,
+      day,
+      account,
+      path: `m/84'/${coin}'/${account}'/2/${day}`,
+      pubkey,
+      witnessScript: '',
+      scriptPubkey: `0020${bytesToHex(hash)}`,
+      address,
+      descriptor: `wsh(and_v(v:pk([00000000/84'/${coin}'/${account}'/2/${day}]${pubkey}),after(${t})))`,
+    };
+  };
+  const dayStart = (offset: number) => (Math.floor(now() / 86_400_000) + offset) * 86_400;
+  /** One lock running and one ready, so that the demo shows both. */
+  const demoLocks: BtcLockView[] = [
+    { t: dayStart(90), day: dayStart(90) / 86_400, account: 0, address: demoLockInfo(dayStart(90), 0).address, amountSats: 2_500_000, status: 'locked', coins: 1, secsLeft: 90 * 86_400 - 5_000 },
+    { t: dayStart(-1), day: dayStart(-1) / 86_400, account: 0, address: demoLockInfo(dayStart(-1), 0).address, amountSats: 400_000, status: 'ready', coins: 2, secsLeft: 0 },
+  ];
+
   let watchList: WatchAddress[] = [];
   // Several wallets: each its own password; the demo keys stay the same for all of them.
   let walletId = 'main';
@@ -1111,6 +1139,69 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       checkPassword(a.password);
       secondPassword = null;
       return '';
+    },
+    // Demo: lock addresses are not derived from anything, no key exists. The real rules live in Rust.
+    btc_lock_preview: (a) => {
+      requireUnlocked();
+      if (Number(a.t) % 86_400 !== 0) throw new IpcError('INVALID_INPUT', 'lock date: must be 00:00 UTC');
+      return demoLockInfo(Number(a.t), accts.arg(a.account));
+    },
+    btc_lock_details: (a) => {
+      requireUnlocked();
+      return demoLockInfo(Number(a.t), accts.arg(a.account));
+    },
+    btc_lock_sign_funding_tx: (a) => {
+      requireUnlocked();
+      const account = accts.arg(a.account);
+      checkPassword(a.password);
+      if (a.confirmWord !== 'BLOQUER' && a.confirmWord !== 'LOCK') throw new IpcError('INVALID_INPUT', 'confirmation word expected');
+      const info = demoLockInfo(Number(a.t), account);
+      const out = signPsbt(String(a.psbt ?? ''), account);
+      if (!out.summary.outputs.some(([addr, v]) => addr === info.address && v === Number(a.amountSats))) throw new IpcError('INVALID_INPUT', 'lock funding: must pay the lock address once');
+      if (!confirmFn(l10n(`Bloquer ${Number(a.amountSats)} sats jusqu'au ${new Date(Number(a.t) * 1000).toISOString().slice(0, 10)} à 00:00 UTC ?\nPersonne ne peut annuler ni raccourcir ce blocage.`, `Lock ${Number(a.amountSats)} sats until ${new Date(Number(a.t) * 1000).toISOString().slice(0, 10)} at 00:00 UTC?\nNobody can cancel or shorten this lock.`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      const held = demoLocks.find((l) => l.t === Number(a.t) && l.account === account);
+      if (held) {
+        held.amountSats += Number(a.amountSats);
+        held.coins += 1;
+      } else {
+        demoLocks.push({ t: Number(a.t), day: Number(a.t) / 86_400, account, address: info.address, amountSats: Number(a.amountSats), status: 'confirming', coins: 1, secsLeft: Math.max(0, Number(a.t) - now() / 1000) });
+      }
+      return out;
+    },
+    btc_locks_status: () => {
+      requireUnlocked();
+      const held = demoLocks.filter((l) => l.status !== 'withdrawn');
+      return { locks: [...demoLocks].sort((x, y) => x.t - y.t), lockedSats: held.reduce((s, l) => s + l.amountSats, 0), stale: false, damaged: false };
+    },
+    btc_locks_scan: (a) => {
+      requireUnlocked();
+      const firstDay = 20_762;
+      const lastDay = Math.floor(now() / 86_400_000) + 3_655;
+      const from = typeof a.fromDay === 'number' ? a.fromDay : firstDay;
+      const to = Math.min(from + 919, lastDay);
+      return { nextDay: to < lastDay ? to + 1 : null, firstDay, lastDay, found: 0 };
+    },
+    btc_lock_withdraw_preview: (a) => {
+      requireUnlocked();
+      const l = demoLocks.find((x) => x.t === Number(a.t) && x.account === accts.arg(a.account));
+      if (!l || l.status !== 'ready') throw new IpcError('INVALID_INPUT', 'still locked: the network would refuse it');
+      const vsize = 40 + 70 * l.coins;
+      return { amountSats: l.amountSats - vsize * Number(a.satPerVb), feeSats: vsize * Number(a.satPerVb), vsize, destination: accts.get(l.account).btc.segwit.address, inputs: l.coins, leftOut: 0 };
+    },
+    btc_lock_withdraw: (a) => {
+      requireUnlocked();
+      checkPassword(a.password);
+      const l = demoLocks.find((x) => x.t === Number(a.t) && x.account === accts.arg(a.account));
+      if (!l || l.status !== 'ready') throw new IpcError('INVALID_INPUT', 'still locked: the network would refuse it');
+      const vsize = 40 + 70 * l.coins;
+      const feeSats = vsize * Number(a.satPerVb);
+      const amountSats = l.amountSats - feeSats;
+      const destination = accts.get(l.account).btc.segwit.address;
+      if (!confirmFn(l10n(`Retirer ${amountSats} sats vers ${destination} ? Frais : ${feeSats} sats`, `Withdraw ${amountSats} sats to ${destination}? Fee: ${feeSats} sats`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      l.status = 'withdrawn';
+      l.amountSats = 0;
+      l.coins = 0;
+      return { txid: bytesToHex(sha256(new TextEncoder().encode(`withdraw:${Number(a.t)}`))), amountSats, feeSats, destination };
     },
     // Demo: the limit is kept for the session, waits are over at once (nothing is signed for real).
     spend_limit_status: () => spendLimit,

@@ -18,11 +18,12 @@ import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
 import { AssetGains } from '../components/Gains';
+import { LockedLine } from './BtcLocks';
 import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
 import { Badge, Button, IconButton, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
-import { IconBack, IconDown, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
+import { IconBack, IconDown, IconLock, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
 
@@ -140,6 +141,11 @@ export function AssetDetail({ id }: { id: string }) {
             >
               <IconSwap size={16} sw={2.2} /> Swap
             </Button>
+            {supported.family === 'btc' && supported.kind === 'native' && (
+              <Button size="lg" onClick={() => navigate({ name: 'btcLocks' })}>
+                <IconLock size={16} /> {t('lock.title')}
+              </Button>
+            )}
             {supported.kind === 'native' && stakeChain && (
               <Button
                 size="lg"
@@ -213,6 +219,7 @@ export function AssetDetail({ id }: { id: string }) {
               <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
                 <div className="h-full origin-left rounded-full bg-ice transition-[width] duration-500" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
               </div>
+              {supported.family === 'btc' && supported.kind === 'native' && <LockedLine className="border-t border-line pt-3" />}
               <AssetGains gains={gains.byAsset.get(supported.id)} symbol={supported.symbol} />
               {accountRows.length > 1 && (
                 <div className="mt-2 flex flex-col">
