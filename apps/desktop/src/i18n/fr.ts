@@ -31,6 +31,8 @@ import { kas } from './fr/kas';
 import { update } from './fr/update';
 import { multinet } from './fr/multinet';
 import { ln } from './fr/ln';
+import { topup } from './fr/topup';
+import { tidy } from './fr/tidy';
 
 export const fr = {
   ...common,
@@ -63,7 +65,9 @@ export const fr = {
   ...update,
   ...multinet,
   ...ln,
+  ...topup,
+  ...tidy,
 } as const;
 
 /** Area modules, for the catalog tests (keys must start with `<area>.`). */
-export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet, ln } as const;
+export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, earn, settings, servers, hw, watch, wallets, sim, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update, multinet, ln, topup, tidy } as const;

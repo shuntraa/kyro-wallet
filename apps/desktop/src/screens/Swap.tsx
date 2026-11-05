@@ -24,14 +24,13 @@ import {
   type Quote,
   type QuoteParams,
   type QuoteResult,
-  type SwapToken,
 } from '@kyro/swap';
-import { useApp, useVault } from '../state/app';
+import { useApp, useVault, type Route } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, fmtNumber, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
-import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, pickSend, sendChoices, swapChainOf, swapRate, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
+import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, pickSend, sendChoices, swapQuoteParams, swapRate, swapTokenAddress, tokenOf, usdRate, type PreparedDeposit } from '../lib/crossSwap';
 import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
@@ -41,6 +40,7 @@ import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { AccountPicker } from '../components/AccountPicker';
 import { BestPrice } from '../components/BestPrice';
+import { BackLine, MissingFee, useSwapFee } from '../components/MissingFee';
 import { Dialog } from '../components/ui/dialog';
 import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
@@ -51,12 +51,6 @@ type Slip = 10 | 50 | 100 | 'custom';
 type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'checking' | 'swapping' | 'done';
 
 const MAX_SLIPPAGE_BPS = 1_500;
-
-function tokenOf(a: AssetDef, price?: number): SwapToken {
-  const t: SwapToken = { address: swapTokenAddress(a), symbol: a.symbol, decimals: a.decimals };
-  if (price !== undefined) t.priceFiat = price;
-  return t;
-}
 
 async function simulateSwap(ad: EvmAdapter, tx: { to: string; data: `0x${string}`; value: bigint } | null, buy: AssetDef | null): Promise<{ ok: true; received: bigint | null } | { ok: false; reason: string }> {
   if (!tx) return { ok: false, reason: tr('swap.simNoTx') };
@@ -71,7 +65,7 @@ async function simulateSwap(ad: EvmAdapter, tx: { to: string; data: `0x${string}
 const accountChainOf = (c: Chain | undefined): AccountChain => (c ? c.family : 'evm');
 
 /** Swaps sign through the vault only for now: a hardware-wallet account gets a clear note. */
-export function Swap({ sellAssetId }: { sellAssetId?: string }) {
+export function Swap({ sellAssetId, buyAssetId, amount, returnTo }: { sellAssetId?: string; buyAssetId?: string; amount?: string; returnTo?: Route }) {
   const { activeHw, navigate } = useApp();
   const { t } = useT();
   if (activeHw) {
@@ -90,10 +84,14 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
       </div>
     );
   }
-  return <SwapVault {...(sellAssetId ? { sellAssetId } : {})} />;
+  return <SwapVault {...(sellAssetId ? { sellAssetId } : {})} {...(buyAssetId ? { buyAssetId } : {})} {...(amount ? { amount } : {})} {...(returnTo ? { returnTo } : {})} />;
 }
 
-function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
+/** What became of a swap started from another screen. */
+export type SwapOutcome = { status: 'done'; id: string } | { status: 'failed'; reason: string } | { status: 'cancelled' };
+
+/** The swap flow. Prefilled values are only a starting point: review, simulation and signature stay the same. */
+export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome }: { sellAssetId?: string; buyAssetId?: string; amount?: string; returnTo?: Route; onOutcome?: (o: SwapOutcome) => void }) {
   const { settings, network, swapProviders, navigate, vaultLists } = useApp();
   const { t } = useT();
   const { adapters, accounts } = useVault();
@@ -111,16 +109,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [chainKey, setChainKey] = useState(initialSell && chains.some((c) => c.key === initialSell.chainKey) ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
   const tokens = useMemo(() => assetsFor(network).filter((a) => a.chainKey === chainKey), [network, chainKey]);
   const [sellId, setSellId] = useState(initialSell?.id ?? tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
-  const [buyId, setBuyId] = useState(tokens.find((t) => t.id !== (initialSell?.id ?? sellId))?.id ?? '');
+  const [buyId, setBuyId] = useState(buyAssetId ?? tokens.find((t) => t.id !== (initialSell?.id ?? sellId))?.id ?? '');
   const sell = tokens.find((t) => t.id === sellId) ?? tokens[0];
   const groups = useMemo(() => buyGroups(network, allChains(network), assetsFor(network), sell), [network, sell]);
   const buyOptions = useMemo(() => groups.flatMap((g) => g.assets), [groups]);
   const buy = buyOptions.find((t) => t.id === buyId) ?? buyOptions.find((t) => t.chainKey === chainKey) ?? buyOptions[0];
   const buyChain = buy ? findChain(network, buy.chainKey) : undefined;
   const cross = !!buy && buy.chainKey !== chainKey;
-  const toChain = swapChainOf(buyChain);
   const recipient = cross ? ownAddressOn(accounts, buyChain) : null;
-  const [amountStr, setAmountStr] = useState('');
+  const [amountStr, setAmountStr] = useState(amount ?? '');
   const [slip, setSlip] = useState<Slip>(50);
   const [slipCustom, setSlipCustom] = useState('2');
   const slippageBps = slip === 'custom' ? Math.round(Number(slipCustom.replace(',', '.')) * 100) : slip;
@@ -154,22 +151,9 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [deposit, setDeposit] = useState<PreparedDeposit | null>(null);
 
   const params: QuoteParams | null = useMemo(() => {
-    const from = swapChainOf(chain);
-    if (!sell || !buy || !chain || from === null || !taker || !sellAmount || sellAmount <= 0n || !slipValid) return null;
-    if (cross && (toChain === null || !recipient)) return null;
-    const p: QuoteParams = {
-      chain: from,
-      ...(cross && toChain !== null && recipient ? { toChain, recipient } : {}),
-      sell: tokenOf(sell, sellPrice),
-      buy: tokenOf(buy, buyPrice),
-      sellAmount,
-      taker,
-      slippageBps,
-      usdToFiat: cur === 'USD' ? 1 : (pf.price('usd-coin')?.price ?? pf.price('tether')?.price ?? 0.92),
-    };
-    if (nativePrice !== undefined) p.nativePriceFiat = nativePrice;
-    return p;
-  }, [sell, buy, chain, sellAmount, slipValid, sellPrice, buyPrice, taker, slippageBps, cur, pf, nativePrice, cross, toChain, recipient]);
+    if (!sell || !buy || !chain || !sellAmount || !slipValid) return null;
+    return swapQuoteParams({ sell, buy, sellChain: chain, buyChain, sellAmount, taker, recipient, slippageBps, usdToFiat: usdRate(cur, pf.price('usd-coin')?.price ?? pf.price('tether')?.price), sellPrice, buyPrice, nativePrice });
+  }, [sell, buy, chain, buyChain, sellAmount, slipValid, sellPrice, buyPrice, taker, slippageBps, cur, pf, nativePrice, recipient]);
   const debouncedKey = useDebounced(params ? JSON.stringify({ ...params, sellAmount: params.sellAmount.toString() }) : null, 600);
 
   const quotes = useAsync<{ quotes: Quote[]; results: QuoteResult[] }>(params && debouncedKey ? () => fetchQuotes(swapProviders, params) : null, [debouncedKey], { intervalMs: 30_000 });
@@ -403,8 +387,31 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       else setExecError(err.code === 'USER_REJECTED' ? t('swap.signCancelled') : err.message);
       setPhase('idle');
       allowance.reload();
+      if (err.code !== 'WRONG_PASSWORD') onOutcome?.(err.code === 'USER_REJECTED' ? { status: 'cancelled' } : { status: 'failed', reason: err.message });
     }
   };
+
+  // Started from another screen: it hears when this swap is sent, or when no provider quotes it.
+  useEffect(() => {
+    if (phase === 'done' && doneId) onOutcome?.({ status: 'done', id: doneId });
+  }, [phase, doneId]);
+  const noQuote = amountStr === amount && !!params && !!debouncedKey && !quotes.loading && !quotesTorBlocked && (!!quotes.error || (!!quotes.data && list.length === 0));
+  useEffect(() => {
+    if (noQuote) onOutcome?.({ status: 'failed', reason: t('swap.noPrice') });
+  }, [noQuote]);
+
+  // Getting a coin for something else: back there once it has arrived.
+  const held = buy ? pf.balances.get(buy.id) ?? 0n : 0n;
+  const [heldAtSwap, setHeldAtSwap] = useState<bigint | null>(null);
+  const waitingArrival = !!returnTo && phase === 'done' && (heldAtSwap === null || held <= heldAtSwap);
+  useEffect(() => {
+    if (returnTo && phase === 'done') setHeldAtSwap((v) => v ?? held);
+  }, [returnTo, phase, held]);
+  useEffect(() => {
+    if (!waitingArrival) return;
+    const id = window.setInterval(() => pf.refresh(), 20_000);
+    return () => window.clearInterval(id);
+  }, [waitingArrival, pf.refresh]);
 
   function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}, depositAddress?: string, orderId?: string) {
     if (!sell || !buy || !sellAmount) return;
@@ -424,6 +431,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge, ...(depositAddress ? { depositAddress } : {}), ...(orderId ? { orderId } : {}) } } : {}),
     });
   }
+
+  const sellFee = useSwapFee(sell, chosen?.tx.kind === 'deposit');
 
   const ctaLabel = needsApproval ? t('swap.ctaApproveThenSwap') : t('swap.ctaSwap');
   const phaseLabel: Record<Phase, string> = { idle: '', approving: t('swap.phaseApproving'), waiting: t('swap.phaseWaiting'), simulating: t('swap.phaseSimulating'), checking: t('swap.phaseChecking'), swapping: t('swap.phaseSwapping'), done: '' };
@@ -573,6 +582,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             </div>
           )}
 
+          {chosen && sell.kind !== 'native' && sellFee !== null && <MissingFee chainKey={chainKey} need={sellFee} />}
           <div className="flex-1" />
           {chosen && chosen.tx.kind === 'evm' && (
             <div className="flex items-center gap-2 text-[13px]">
@@ -597,6 +607,9 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             </span>
           )}
           {execError && <Notice tone="error">{execError}</Notice>}
+          {returnTo && (
+            <BackLine returnTo={returnTo} symbol={buy.symbol} state={phase !== 'done' ? 'before' : waitingArrival ? 'waiting' : 'arrived'} />
+          )}
           {phase === 'done' && doneId && (
             <Notice tone="success">
               {rt('swap.broadcast', {}, { id: <span className="font-mono">{shortAddress(doneId, 10, 8)}</span> })}{' '}
@@ -832,7 +845,7 @@ function TokenPanel({ label, right, amount, sub, note, token }: { label: string;
   );
 }
 
-function TokenButton({ title, asset, items, onSelect }: { title: string; asset: AssetDef; items: TokenPickerItem[]; onSelect: (id: string) => void }) {
+export function TokenButton({ title, asset, items, onSelect }: { title: string; asset: AssetDef; items: TokenPickerItem[]; onSelect: (id: string) => void }) {
   return (
     <TokenPicker
       title={title}

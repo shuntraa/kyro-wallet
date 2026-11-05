@@ -6,7 +6,7 @@
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
-import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, EXOLIX_ONLY, exolixFeeRecipients, exolixRoute, lnProviderOfBridge, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
+import { evmSwapSupported, EXOLIX_ARRIVAL_ONLY, EXOLIX_CHAINS, EXOLIX_ONLY, exolixFeeRecipients, exolixRoute, lnProviderOfBridge, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type QuoteParams, type SwapChain, type SwapToken } from '@kyro/swap';
 import { t } from '../i18n';
 
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
@@ -146,6 +146,52 @@ export function swapTokenAddress(a: AssetDef): string {
     return String(NEAR_ONLY[a.family] ?? a.family);
   }
   return a.contract ?? '';
+}
+
+/** An asset as the swap providers take it. */
+export function tokenOf(a: AssetDef, price?: number): SwapToken {
+  const t: SwapToken = { address: swapTokenAddress(a), symbol: a.symbol, decimals: a.decimals };
+  if (price !== undefined) t.priceFiat = price;
+  return t;
+}
+
+/** USD → display currency, from the stablecoin prices already loaded. */
+export function usdRate(currency: string, stablePrice: number | undefined): number {
+  return currency === 'USD' ? 1 : (stablePrice ?? 0.92);
+}
+
+/** Quote request for a swap of `sell` to `buy`; null when a chain has no swap id or no account of yours. */
+export function swapQuoteParams(p: {
+  sell: AssetDef;
+  buy: AssetDef;
+  sellChain: Chain | undefined;
+  buyChain: Chain | undefined;
+  sellAmount: bigint;
+  taker: string | null;
+  recipient: string | null;
+  slippageBps: number;
+  usdToFiat: number;
+  sellPrice?: number | undefined;
+  buyPrice?: number | undefined;
+  nativePrice?: number | undefined;
+}): QuoteParams | null {
+  const from = swapChainOf(p.sellChain);
+  const to = swapChainOf(p.buyChain);
+  const cross = p.buy.chainKey !== p.sell.chainKey;
+  if (from === null || !p.taker || p.sellAmount <= 0n) return null;
+  if (cross && (to === null || !p.recipient)) return null;
+  const q: QuoteParams = {
+    chain: from,
+    ...(cross && to !== null && p.recipient ? { toChain: to, recipient: p.recipient } : {}),
+    sell: tokenOf(p.sell, p.sellPrice),
+    buy: tokenOf(p.buy, p.buyPrice),
+    sellAmount: p.sellAmount,
+    taker: p.taker,
+    slippageBps: p.slippageBps,
+    usdToFiat: p.usdToFiat,
+  };
+  if (p.nativePrice !== undefined) q.nativePriceFiat = p.nativePrice;
+  return q;
 }
 
 export interface BuyGroup {

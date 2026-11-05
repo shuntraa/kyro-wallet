@@ -16,6 +16,7 @@ import { AssetDetail } from './screens/AssetDetail';
 import { Send } from './screens/Send';
 import { Receive } from './screens/Receive';
 import { Swap } from './screens/Swap';
+import { Tidy } from './screens/Tidy';
 import { History } from './screens/History';
 import { useHistoryWarmup } from './state/history';
 import { useLongHistoryWarmup } from './state/charts';
@@ -110,6 +111,8 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
       return [t('common.receive')];
     case 'swap':
       return ['Swap'];
+    case 'tidy':
+      return [t('shell.assets'), t('tidy.title')];
     case 'history':
       return [t('common.history')];
     case 'staking':
@@ -168,6 +171,7 @@ function Unlocked() {
   );
 
   const screen = useMemo(() => {
+    if (activeWatch && route.name === 'tidy') return <WatchOnlyScreen watch={activeWatch} what="swap" />;
     if (activeWatch && (route.name === 'send' || route.name === 'swap' || route.name === 'staking' || route.name === 'receive')) return <WatchOnlyScreen watch={activeWatch} what={route.name} />;
     switch (route.name) {
       case 'portfolio':
@@ -177,11 +181,13 @@ function Unlocked() {
       case 'asset':
         return <AssetDetail id={route.id} />;
       case 'send':
-        return <Send {...(route.assetId ? { assetId: route.assetId } : {})} {...(route.to ? { to: route.to } : {})} />;
+        return <Send {...(route.assetId ? { assetId: route.assetId } : {})} {...(route.to ? { to: route.to } : {})} {...(route.amount ? { amount: route.amount } : {})} {...(route.memo ? { memo: route.memo } : {})} />;
       case 'receive':
         return <Receive {...(route.family ? { family: route.family } : {})} />;
       case 'swap':
-        return <Swap {...(route.sellAssetId ? { sellAssetId: route.sellAssetId } : {})} />;
+        return <Swap {...(route.sellAssetId ? { sellAssetId: route.sellAssetId } : {})} {...(route.buyAssetId ? { buyAssetId: route.buyAssetId } : {})} {...(route.amount ? { amount: route.amount } : {})} {...(route.returnTo ? { returnTo: route.returnTo } : {})} />;
+      case 'tidy':
+        return <Tidy />;
       case 'history':
         return <History />;
       case 'staking':
