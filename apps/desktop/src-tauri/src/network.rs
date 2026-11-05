@@ -133,6 +133,11 @@ pub fn watch_addresses_file(dir: &Path, n: Network) -> PathBuf {
     dir.join(format!("watch-addresses-{}.json", name(n)))
 }
 
+/// Files of the second password's wallet of `n` in `dir` (`duress.rs`).
+pub fn profile_dir(dir: &Path, n: Network) -> PathBuf {
+    dir.join(format!("profile-{}", name(n)))
+}
+
 /// List of the added wallets of `n` in `dir`; they live in the directory of the same name.
 pub fn wallets_file(dir: &Path, n: Network) -> PathBuf {
     dir.join(format!("wallets-{}.json", name(n)))
@@ -181,7 +186,7 @@ pub struct NetworkInfo {
     other_vault_exists: bool,
 }
 
-fn info(state: &AppState) -> NetworkInfo {
+pub(crate) fn info(state: &AppState) -> NetworkInfo {
     let dir = state.data_dir();
     NetworkInfo {
         network: name(state.network),
@@ -189,7 +194,7 @@ fn info(state: &AppState) -> NetworkInfo {
         saved: load_saved(&dir).map(name),
         default: name(build_default()),
         can_switch: state.network_source != Source::Env,
-        other_vault_exists: vault_file(&dir, other(state.network)).exists(),
+        other_vault_exists: !state.in_decoy() && vault_file(&dir, other(state.network)).exists(),
     }
 }
 

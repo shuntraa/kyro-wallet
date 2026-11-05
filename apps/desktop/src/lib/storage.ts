@@ -18,9 +18,77 @@ export function scoped(key: string): string {
   return walletScope ? `${key}@${walletScope}` : key;
 }
 
+/**
+ * The session of the second password keeps every record apart: `vault_status.storeScope` moves the
+ * whole store to another prefix, so no key can be forgotten. `''` = the historical keys. Set once
+ * per page: a session on the other side reloads the page, which also drops all that is in memory
+ * and every load still running, so nothing crosses over (docs/IPC.md §2.9c).
+ */
+let storeScope = '';
+let scopeKnown = false;
+const prefixOf = (scope: string) => `kyro@${scope}.`;
+const fullKey = (key: string) => (storeScope ? prefixOf(storeScope) : P) + key;
+
+/** Takes the session's scope. True when the page must reload to serve it. */
+export function applyStoreScope(scope: string | null): boolean {
+  const next = scope ?? '';
+  if (!scopeKnown) {
+    scopeKnown = true;
+    storeScope = next;
+  }
+  return next !== storeScope;
+}
+
+/** Deletes every record of `scope`. */
+export function purgeStoreScope(scope: string): void {
+  if (!scope) return;
+  try {
+    const s = window.localStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < s.length; i++) {
+      const k = s.key(i);
+      if (k?.startsWith(prefixOf(scope))) keys.push(k);
+    }
+    keys.forEach((k) => s.removeItem(k));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** The local store of the session, for code that brings its own keys (the market cache). */
+export const scopedStorage = {
+  rawKey: (k: string) => (storeScope ? prefixOf(storeScope) + k : k),
+  own(): string[] {
+    const s = window.localStorage;
+    const out: string[] = [];
+    for (let i = 0; i < s.length; i++) {
+      const k = s.key(i);
+      if (k === null) continue;
+      if (!storeScope) out.push(k);
+      else if (k.startsWith(prefixOf(storeScope))) out.push(k.slice(prefixOf(storeScope).length));
+    }
+    return out;
+  },
+  getItem(k: string): string | null {
+    return window.localStorage.getItem(this.rawKey(k));
+  },
+  setItem(k: string, v: string): void {
+    window.localStorage.setItem(this.rawKey(k), v);
+  },
+  removeItem(k: string): void {
+    window.localStorage.removeItem(this.rawKey(k));
+  },
+  get length(): number {
+    return this.own().length;
+  },
+  key(i: number): string | null {
+    return this.own()[i] ?? null;
+  },
+};
+
 export function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = window.localStorage.getItem(P + key);
+    const raw = window.localStorage.getItem(fullKey(key));
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -29,9 +97,17 @@ export function readJson<T>(key: string, fallback: T): T {
 
 export function writeJson(key: string, value: unknown): void {
   try {
-    window.localStorage.setItem(P + key, JSON.stringify(value));
+    window.localStorage.setItem(fullKey(key), JSON.stringify(value));
   } catch {
     /* storage unavailable: keep in memory only */
+  }
+}
+
+export function removeJson(key: string): void {
+  try {
+    window.localStorage.removeItem(fullKey(key));
+  } catch {
+    /* storage unavailable */
   }
 }
 

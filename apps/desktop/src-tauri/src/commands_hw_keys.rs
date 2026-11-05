@@ -117,7 +117,7 @@ pub async fn hw_key_add(
         .await?;
     let key = HwWatchKey::new(chain, account, net, &pk)?;
     let _write = hw::lock(&state.hw_store_lock);
-    let mut s = store::load(&state.hw_accounts_path, state.network)?;
+    let mut s = store::load(&state.hw_accounts_path(), state.network)?;
     let mut acc = match &account_id {
         Some(aid) => {
             let acc = store::find(&s, aid)?;
@@ -162,7 +162,7 @@ pub async fn hw_key_add(
     acc.validate()?;
     s.accounts.retain(|a| a.id != acc.id);
     s.accounts.push(acc.clone());
-    store::save(&state.hw_accounts_path, &s, state.network)?;
+    store::save(&state.hw_accounts_path(), &s, state.network)?;
     Ok(acc)
 }
 

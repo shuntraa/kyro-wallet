@@ -57,7 +57,7 @@ struct LnStore {
 }
 
 fn store_path(state: &AppState) -> PathBuf {
-    state.vault_path.with_extension("lnswaps")
+    state.ln_store_path()
 }
 
 fn read_store(state: &AppState, seed: &Seed) -> AppResult<LnStore> {

@@ -26,7 +26,7 @@ pub struct Session {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-struct Guard {
+pub(crate) struct Guard {
     failures: u32,
     retry_after: Option<u64>,
 }
@@ -50,8 +50,8 @@ pub struct AppState {
     pub dialogs: crate::network::DialogCounter,
     /// The first wallet's vault file (also locates the data directory).
     pub vault_path: PathBuf,
-    /// List of the added wallets (`wallets.rs`).
-    pub wallets_path: PathBuf,
+    /// List of the added wallets (`wallets.rs`). Read it through [`AppState::wallets_path`].
+    wallets_path: PathBuf,
     /// The wallet in use: which vault file every password and signature goes to.
     active: Mutex<ActiveVault>,
     /// Changes with the active wallet: an unlock begun on another wallet cannot open a session.
@@ -62,12 +62,14 @@ pub struct AppState {
     pub env_keys: EnvKeys,
     /// Hardware wallets seen in this session (one lock per device).
     pub hw: HwManager,
-    /// Watch-only hardware-wallet accounts (public keys only), next to the vault.
-    pub hw_accounts_path: PathBuf,
+    /// Watch-only hardware-wallet accounts (public keys only), next to the vault. Read it through
+    /// [`AppState::hw_accounts_path`].
+    hw_accounts_path: PathBuf,
     /// Serialises read-modify-write of `hw_accounts_path`.
     pub hw_store_lock: Mutex<()>,
-    /// Watch addresses (public data only), next to the vault.
-    pub watch_path: PathBuf,
+    /// Watch addresses (public data only), next to the vault. Read it through
+    /// [`AppState::watch_path`].
+    watch_path: PathBuf,
     /// Serialises read-modify-write of `watch_path`.
     pub watch_store_lock: Mutex<()>,
     /// Held from the "no vault yet" check until the new vault is written and the session
@@ -82,6 +84,19 @@ pub struct AppState {
     approved_hosts: Mutex<BTreeSet<String>>,
     picked_cookie: Mutex<Option<String>>,
     pending_backup: Mutex<Option<PendingBackup>>,
+    /// Files of the second password's wallet (`duress.rs`).
+    decoy_dir: PathBuf,
+    /// Set while that wallet is open. Lock order: `settings`, then this one, never the reverse:
+    /// who holds `settings` knows which side its write belongs to.
+    decoy: Mutex<Option<DecoySession>>,
+    /// `duress.rs`: what the Settings section shows if it is used during such a session.
+    pretended: Mutex<Option<crate::duress::Pretended>>,
+}
+
+/// What a session on the second password's wallet set aside, put back when it ends.
+struct DecoySession {
+    real: ActiveVault,
+    settings: Settings,
 }
 
 /// The wallet in use.
@@ -107,8 +122,21 @@ impl ActiveVault {
             creating: None,
         }
     }
+
+    /// The second password's wallet: it answers as the first wallet, on its own files.
+    fn decoy(dir: &Path) -> ActiveVault {
+        let path = dir.join(DECOY_VAULT);
+        ActiveVault {
+            id: crate::wallets::MAIN.to_owned(),
+            attempts_path: path.with_extension("attempts"),
+            path,
+            creating: None,
+        }
+    }
 }
 
+const DECOY_VAULT: &str = "vault.kyrovault";
+const DECOY_ACCOUNTS: &str = "accounts.json";
 const FREE_ATTEMPTS: u32 = 5;
 const MAX_DELAY: Duration = Duration::from_secs(15 * 60);
 const REVEAL_COOLDOWN: Duration = Duration::from_secs(10);
@@ -181,6 +209,9 @@ impl AppState {
             approved_hosts: Mutex::new(BTreeSet::new()),
             picked_cookie: Mutex::new(None),
             pending_backup: Mutex::new(None),
+            decoy_dir: crate::network::profile_dir(&data_dir, network),
+            decoy: Mutex::new(None),
+            pretended: Mutex::new(None),
         })
     }
 
@@ -191,6 +222,60 @@ impl AppState {
             .parent()
             .map(PathBuf::from)
             .unwrap_or_default()
+    }
+
+    /// True while the second password's wallet is open.
+    pub fn in_decoy(&self) -> bool {
+        lock(&self.decoy).is_some()
+    }
+
+    /// Directory of the files of the second password's wallet.
+    pub fn decoy_dir(&self) -> &Path {
+        &self.decoy_dir
+    }
+
+    /// The vault file of the second password's wallet, whether it exists or not.
+    pub fn decoy_vault_path(&self) -> PathBuf {
+        self.decoy_dir.join(DECOY_VAULT)
+    }
+
+    fn side(&self, real: &Path, decoy_file: &str) -> PathBuf {
+        if self.in_decoy() {
+            self.decoy_dir.join(decoy_file)
+        } else {
+            real.to_path_buf()
+        }
+    }
+
+    /// List of the wallets the open session can see.
+    pub fn wallets_path(&self) -> PathBuf {
+        self.side(&self.wallets_path, "wallets.json")
+    }
+
+    /// Hardware-wallet accounts of the open session.
+    pub fn hw_accounts_path(&self) -> PathBuf {
+        self.side(&self.hw_accounts_path, "hw-accounts.json")
+    }
+
+    /// Watch addresses of the open session.
+    pub fn watch_path(&self) -> PathBuf {
+        self.side(&self.watch_path, "watch-addresses.json")
+    }
+
+    /// Lightning swap records of the open session.
+    #[cfg_attr(not(feature = "lightning"), allow(dead_code))]
+    pub fn ln_store_path(&self) -> PathBuf {
+        self.side(&self.vault_path.with_extension("lnswaps"), "vault.lnswaps")
+    }
+
+    /// Where the open session keeps what is not named after its keys (compact filters).
+    #[cfg_attr(not(feature = "cbf"), allow(dead_code))]
+    pub fn side_dir(&self) -> PathBuf {
+        if self.in_decoy() {
+            self.decoy_dir.clone()
+        } else {
+            self.data_dir()
+        }
     }
 
     /// True when the active wallet has its vault file.
@@ -324,11 +409,78 @@ impl AppState {
         Ok(())
     }
 
+    /// Opens a session on the second password's wallet: until it ends, the active vault, the
+    /// attempts, the settings and every per-device store are that wallet's own. The settings start
+    /// as a copy of the device's (servers, Tor, display) and stay in memory.
+    pub fn start_decoy_session(
+        &self,
+        epoch: u64,
+        seed: Seed,
+        cardano: CardanoRoot,
+        polkadot: PolkadotRoot,
+    ) -> AppResult<()> {
+        if self.wallet_epoch() != epoch {
+            return Err(AppError::InvalidInput(
+                "the wallet changed: unlock it again".into(),
+            ));
+        }
+        self.lock_session();
+        self.xmr.forget_progress();
+        let next = ActiveVault::decoy(&self.decoy_dir);
+        let accounts = fs::read(self.decoy_dir.join(DECOY_ACCOUNTS))
+            .ok()
+            .and_then(|raw| serde_json::from_slice(&raw).ok())
+            .unwrap_or_default();
+        {
+            let mut current = lock(&self.settings);
+            let mut own = current.clone();
+            own.accounts = accounts;
+            own.wallet_accounts.clear();
+            let settings = std::mem::replace(&mut *current, own);
+            *lock(&self.guard) = Guard::load(&next.attempts_path);
+            let real = std::mem::replace(&mut *lock(&self.active), next);
+            *lock(&self.decoy) = Some(DecoySession { real, settings });
+        }
+        self.wallet_epoch.fetch_add(1, Ordering::SeqCst);
+        self.start_session(seed, cardano, polkadot);
+        Ok(())
+    }
+
     pub fn lock_session(&self) {
         *lock(&self.session) = None;
         *lock(&self.pending_backup) = None;
+        *lock(&self.pretended) = None;
         // Scan tasks stop at their next step (they need the seed); unsigned transfers go.
         self.xmr.on_lock();
+        self.end_decoy();
+    }
+
+    /// Puts back what [`AppState::start_decoy_session`] set aside. No effect on any other session.
+    fn end_decoy(&self) {
+        let (own_tor, real_tor) = {
+            let mut current = lock(&self.settings);
+            let Some(ended) = lock(&self.decoy).take() else {
+                return;
+            };
+            let own = std::mem::replace(&mut *current, ended.settings);
+            crate::i18n::apply(current.language);
+            *lock(&self.guard) = Guard::load(&ended.real.attempts_path);
+            *lock(&self.active) = ended.real;
+            (own.tor, current.tor.clone())
+        };
+        self.wallet_epoch.fetch_add(1, Ordering::SeqCst);
+        self.xmr.forget_progress();
+        // Tor is one service for the whole app: what that session changed stops with it.
+        let bridges_changed = own_tor.bridges != real_tor.bridges;
+        if bridges_changed {
+            self.net.tor.set_bridges(real_tor.bridges);
+        }
+        match (own_tor.enabled, real_tor.enabled) {
+            (false, true) => self.net.tor.start(),
+            (true, false) => self.net.tor.stop(),
+            (true, true) if bridges_changed => self.net.tor.reconnect(),
+            _ => {}
+        }
     }
 
     pub fn is_unlocked(&self) -> bool {
@@ -397,6 +549,18 @@ impl AppState {
         Ok(())
     }
 
+    /// The attempts counter as it stands, for [`AppState::restore_attempts`].
+    pub(crate) fn attempts(&self) -> Guard {
+        lock(&self.guard).clone()
+    }
+
+    /// Puts the counter back as it was before the attempt in progress.
+    pub(crate) fn restore_attempts(&self, before: Guard) {
+        let mut g = lock(&self.guard);
+        *g = before;
+        self.save_guard(&g);
+    }
+
     pub fn attempt_succeeded(&self) {
         let mut g = lock(&self.guard);
         if *g != Guard::default() {
@@ -445,6 +609,15 @@ impl AppState {
         f(&mut g)
     }
 
+    pub fn set_pretended(&self, p: Option<crate::duress::Pretended>) {
+        *lock(&self.pretended) = p;
+    }
+
+    /// Runs `f` on what the Settings section pretends during this session.
+    pub fn with_pretended<T>(&self, f: impl FnOnce(Option<&crate::duress::Pretended>) -> T) -> T {
+        f(lock(&self.pretended).as_ref())
+    }
+
     pub fn approved_hosts(&self) -> BTreeSet<String> {
         lock(&self.approved_hosts).clone()
     }
@@ -472,7 +645,10 @@ impl AppState {
         let mut current = lock(&self.settings);
         new.accounts = current.accounts.clone();
         new.wallet_accounts = current.wallet_accounts.clone();
-        new.save(&self.settings_path)?;
+        // That session's settings live in memory: nothing it changes reaches the real file.
+        if !self.in_decoy() {
+            new.save(&self.settings_path)?;
+        }
         crate::i18n::apply(new.language);
         *current = new.clone();
         Ok(new)
@@ -494,7 +670,12 @@ impl AppState {
         let mut next = current.clone();
         let id = self.active_wallet();
         let out = f(next.accounts_mut(&id))?;
-        next.save(&self.settings_path)?;
+        if self.in_decoy() {
+            let raw = serde_json::to_vec(&next.accounts)?;
+            crate::settings::write_atomic(&self.decoy_dir.join(DECOY_ACCOUNTS), &raw)?;
+        } else {
+            next.save(&self.settings_path)?;
+        }
         *current = next;
         Ok(out)
     }

@@ -17,6 +17,8 @@ export interface VaultStatus {
   walletId: string;
   /** Name of the wallet being added: its vault does not exist yet. */
   creating: string | null;
+  /** Set when this session's local records live apart (docs/IPC.md §2.9c). */
+  storeScope: string | null;
 }
 
 /** A wallet of this device: one recovery phrase, one vault file, its own password (docs/IPC.md §2.9b). */
@@ -2776,6 +2778,13 @@ export interface Commands {
   hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
   /** Locks on success: the next unlock takes the new password. */
   vault_change_password: { args: { current: string; next: string }; ret: void };
+  /** Second password (docs/IPC.md §2.9c). */
+  duress_status: { args: undefined; ret: { enabled: boolean } };
+  /** Creates its wallet, then shows the new phrase in the phrase window. */
+  duress_enable: { args: { current: string; password: string }; ret: void };
+  duress_show_phrase: { args: { password: string }; ret: void };
+  /** Returns the store scope to clear (`""`: nothing). */
+  duress_disable: { args: { password: string }; ret: string };
   wallets_get: { args: undefined; ret: WalletsInfo };
   wallet_switch: { args: { id: string }; ret: WalletsInfo };
   wallet_new: { args: { name: string }; ret: void };

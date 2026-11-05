@@ -238,6 +238,11 @@ const COMMANDS: &[&str] = &[
     "wallet_new_cancel",
     "wallet_rename",
     "wallet_remove",
+    // Second password (docs/IPC.md §2.9c).
+    "duress_status",
+    "duress_enable",
+    "duress_show_phrase",
+    "duress_disable",
     "watch_addresses_get",
     "watch_address_add",
     "watch_address_rename",

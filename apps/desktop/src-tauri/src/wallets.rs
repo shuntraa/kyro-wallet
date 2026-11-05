@@ -183,8 +183,8 @@ pub struct WalletsView {
     wallets: Vec<WalletEntry>,
 }
 
-fn view(state: &AppState) -> WalletsView {
-    let list = WalletList::load(&state.wallets_path);
+pub(crate) fn view(state: &AppState) -> WalletsView {
+    let list = WalletList::load(&state.wallets_path());
     let mut wallets = vec![WalletEntry {
         id: MAIN.into(),
         name: list.main_name.clone().unwrap_or_default(),
@@ -217,14 +217,23 @@ pub fn wallets_get(state: State<'_, AppState>) -> WalletsView {
 pub async fn wallet_switch(state: State<'_, AppState>, id: String) -> AppResult<WalletsView> {
     require_idle(&state)?;
     let _creating = state.vault_create_lock.lock().await;
-    let mut list = WalletList::load(&state.wallets_path);
+    switch(&state, id)
+}
+
+pub(crate) fn switch(state: &AppState, id: String) -> AppResult<WalletsView> {
+    let mut list = WalletList::load(&state.wallets_path());
     if !list.knows(&id) {
         return Err(AppError::InvalidInput("unknown wallet".into()));
     }
+    // That session knows its own wallet only, and the real last-opened wallet stays as it is.
+    if state.in_decoy() {
+        state.lock_session();
+        return Ok(view(state));
+    }
     state.activate_wallet(&id);
     list.active = id;
-    list.save(&state.wallets_path)?;
-    Ok(view(&state))
+    list.save(&state.wallets_path())?;
+    Ok(view(state))
 }
 
 /// Starts adding a wallet: the session ends and the usual create or import flow runs on a new
@@ -236,7 +245,13 @@ pub async fn wallet_new(state: State<'_, AppState>, name: String) -> AppResult<(
         return Err(AppError::Locked);
     }
     let _creating = state.vault_create_lock.lock().await;
-    let list = WalletList::load(&state.wallets_path);
+    // A new wallet would join the real list.
+    if state.in_decoy() {
+        return Err(AppError::InvalidInput(
+            "the wallet could not be added, try again later".into(),
+        ));
+    }
+    let list = WalletList::load(&state.wallets_path());
     if list.wallets.len() + 1 >= MAX_WALLETS {
         return Err(AppError::InvalidInput(format!(
             "at most {MAX_WALLETS} wallets"
@@ -244,7 +259,7 @@ pub async fn wallet_new(state: State<'_, AppState>, name: String) -> AppResult<(
     }
     let id = new_id(&list)?;
     let name = list.check_name(&name, &id)?;
-    std::fs::create_dir_all(wallets_dir(&state.wallets_path))
+    std::fs::create_dir_all(wallets_dir(&state.wallets_path()))
         .map_err(|e| AppError::Internal(e.to_string()))?;
     state.begin_new_wallet(&id, name);
     Ok(())
@@ -266,11 +281,15 @@ pub fn wallet_rename(
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let mut list = WalletList::load(&state.wallets_path);
-    let name = list.check_name(&name, &id)?;
-    list.rename(&id, name)?;
-    list.save(&state.wallets_path)?;
-    Ok(view(&state))
+    rename_wallet(&state, &id, &name)
+}
+
+pub(crate) fn rename_wallet(state: &AppState, id: &str, name: &str) -> AppResult<WalletsView> {
+    let mut list = WalletList::load(&state.wallets_path());
+    let name = list.check_name(name, id)?;
+    list.rename(id, name)?;
+    list.save(&state.wallets_path())?;
+    Ok(view(state))
 }
 
 /// Takes an added wallet off the list, behind its own password. The encrypted file is kept
@@ -286,7 +305,7 @@ pub async fn wallet_remove(
         return Err(AppError::Locked);
     }
     let password = Zeroizing::new(password);
-    let mut list = WalletList::load(&state.wallets_path);
+    let mut list = WalletList::load(&state.wallets_path());
     if id == MAIN || !list.knows(&id) {
         return Err(AppError::InvalidInput(
             "only an added wallet can be removed".into(),
@@ -300,11 +319,11 @@ pub async fn wallet_remove(
     // The password of the wallet being removed, under its own attempt counter.
     crate::commands::secret_from_password(&state, password).await?;
     let _creating = state.vault_create_lock.lock().await;
-    let vault = wallet_vault(&state.wallets_path, &id);
+    let vault = wallet_vault(&state.wallets_path(), &id);
     state.activate_wallet(MAIN);
     list.wallets.retain(|w| w.id != id);
     list.active = MAIN.into();
-    list.save(&state.wallets_path)?;
+    list.save(&state.wallets_path())?;
     let renamed = removed_path(&vault);
     blocking(move || {
         std::fs::rename(&vault, &renamed).map_err(|e| AppError::Internal(e.to_string()))

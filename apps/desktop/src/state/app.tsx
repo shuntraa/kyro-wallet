@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WalletsInfo, type WatchAddress, type WatchOnlyAccount } from '@kyro/shared';
 import { HIDDEN_FAMILIES, createAdapters, hwToAccounts, watchToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
 import type { StakeChain } from '../lib/staking';
-import { readJson, scoped, setWalletScope, writeJson } from '../lib/storage';
+import { applyStoreScope, readJson, scoped, scopedStorage, setWalletScope, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, KYRO_SWAP_FEE, type SwapFeeConfig, type SwapProvider } from '@kyro/swap';
@@ -170,7 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const configRef = useRef(config);
   configRef.current = config;
 
-  const market = useMemo(() => new CoinGeckoClient(), []);
+  const market = useMemo(() => new CoinGeckoClient({ storage: scopedStorage }), []);
   const swapProviders = useMemo(
     () =>
       createProviders({
@@ -192,6 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshStatus = useCallback(async () => {
     try {
       const s = await call('vault_status');
+      if (applyStoreScope(s.storeScope)) window.location.reload();
       setStatus(s);
       return s;
     } catch {
@@ -201,6 +202,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const enterVault = useCallback(async () => {
     const s = await call('vault_status');
+    // The other side of the second password: nothing of this page may serve it (storage.ts).
+    if (applyStoreScope(s.storeScope)) {
+      window.location.reload();
+      return;
+    }
     setStatus(s);
     setWalletScope(walletScopeOf(s));
     setWallets(await call('wallets_get').catch(() => null));
@@ -252,6 +258,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSettings(st);
         settingsRef.current = st;
         torStore.setEnabled(st.tor.enabled);
+        // After a reload: a session's own settings end with it, the window follows the real one.
+        void call('set_capture_protection', { enabled: st.captureProtection }).catch(() => undefined);
         await enterVault();
       } catch (e) {
         if (!alive) return;

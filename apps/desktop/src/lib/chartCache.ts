@@ -5,7 +5,7 @@
 // most recently opened coins are kept.
 
 import type { ChartDays, ChartPoint } from '@kyro/market';
-import { readJson, writeJson } from './storage';
+import { readJson, removeJson, writeJson } from './storage';
 
 export type ChartPeriod = '1J' | '1S' | '1M' | '1A' | 'Tout';
 
@@ -105,11 +105,7 @@ export function loadChart(currency: string, coinId: string, period: ChartPeriod)
 }
 
 export function remove(k: string): void {
-  try {
-    window.localStorage.removeItem(`kyro.${k}`);
-  } catch {
-    /* storage unavailable */
-  }
+  removeJson(k);
 }
 
 export function saveChart(currency: string, coinId: string, period: ChartPeriod, points: readonly ChartPoint[]): void {
@@ -129,7 +125,7 @@ export function saveChart(currency: string, coinId: string, period: ChartPeriod,
 }
 
 /**
- * « All » is built from the 1Y series and the long one (`longHistory.ts`) and no longer kept: the
+ * Â« All Â» is built from the 1Y series and the long one (`longHistory.ts`) and no longer kept: the
  * series saved under its name hold a single year, and would be shown as the whole history.
  */
 export function dropSavedAll(): void {

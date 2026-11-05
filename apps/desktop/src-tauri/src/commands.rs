@@ -43,7 +43,15 @@ pub(crate) async fn secret_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<WalletSecret> {
-    let file = state.read_vault()?;
+    open_counted(state, state.read_vault()?, password).await
+}
+
+/// Opens `file`: one attempt, counted before the KDF, cleared if it opens.
+pub(crate) async fn open_counted(
+    state: &AppState,
+    file: wallet_core::VaultFile,
+    password: Zeroizing<String>,
+) -> AppResult<WalletSecret> {
     state.reserve_attempt()?;
     let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
     if result.is_ok() {
@@ -109,7 +117,7 @@ pub(crate) async fn confirm_native_with(
 
 /// Shows the recovery phrase in the phrase window (`phrase_window.rs`). The words never reach the
 /// main webview: a compromised interface cannot read them, even with the password.
-async fn show_words(
+pub(crate) async fn show_words(
     app: &AppHandle,
     words: Zeroizing<Vec<String>>,
     passphrase: crate::phrase_window::Passphrase<'_>,
@@ -146,10 +154,16 @@ pub struct VaultStatus {
     wallet_id: String,
     /// Name of the wallet being added (its vault does not exist yet).
     creating: Option<String>,
+    /// Set when the webview must keep this session's records apart (`duress.rs`).
+    store_scope: Option<String>,
 }
 
 #[tauri::command]
 pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
+    status_of(&state)
+}
+
+pub(crate) fn status_of(state: &AppState) -> VaultStatus {
     VaultStatus {
         exists: state.vault_exists(),
         unlocked: state.is_unlocked(),
@@ -157,6 +171,9 @@ pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
         lock_in_secs: state.lock_in_secs(),
         wallet_id: state.active_wallet(),
         creating: state.creating_wallet(),
+        store_scope: state
+            .in_decoy()
+            .then(|| crate::duress::store_scope(state.network)),
     }
 }
 
@@ -169,6 +186,7 @@ async fn seal_and_start(
     password: Zeroizing<String>,
 ) -> AppResult<()> {
     check_password_strength(&password)?;
+    crate::duress::refuse_its_password(state, &password).await?;
     let _creating = state.vault_create_lock.lock().await;
     if state.vault_exists() {
         return Err(AppError::InvalidInput(
@@ -349,17 +367,7 @@ pub async fn vault_unlock(
     state: State<'_, AppState>,
     password: String,
 ) -> AppResult<()> {
-    let epoch = state.wallet_epoch();
-    let secret = secret_from_password(&state, Zeroizing::new(password)).await?;
-    let (seed, cardano, polkadot) = blocking(move || {
-        Ok((
-            secret.seed(),
-            secret.cardano_root(),
-            secret.polkadot_root()?,
-        ))
-    })
-    .await?;
-    state.start_session_for(epoch, seed, cardano, polkadot)?;
+    crate::duress::unlock(&state, Zeroizing::new(password)).await?;
     crate::weekly_count::after_unlock(&app);
     Ok(())
 }
@@ -395,6 +403,7 @@ pub async fn vault_change_password(
             "the new password is the same as the current one".into(),
         ));
     }
+    crate::duress::refuse_its_password(&state, &next).await?;
     // Held to the end: no switch, no second change, no new vault meanwhile.
     let _creating = state.vault_create_lock.lock().await;
     let secret = secret_from_password(&state, current).await?;

@@ -17,6 +17,7 @@ import { NetDiagnostics } from './settings/Diagnostics';
 import { Devices } from './settings/Devices';
 import { AccountsSection } from './settings/Accounts';
 import { ChangePassword } from './settings/ChangePassword';
+import { SecondPassword } from './settings/SecondPassword';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronRight, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
@@ -220,6 +221,7 @@ function Security({ save }: { save: Save }) {
         )}
       </Panel>
       <RevealPhrase />
+      <SecondPassword />
       <MoneroWallet />
     </>
   );
