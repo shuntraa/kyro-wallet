@@ -15,6 +15,7 @@ import { HW_STAKE, type StakeChain } from '../lib/staking';
 import { useStakeOverviews } from '../lib/stakeOverviews';
 import { refreshRates, useEarnRates, type EvmGet } from '../state/earnRates';
 import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, parseUint, rateIsOld, rateLabelKey, type EarnFilter, type EarnOption, type EarnRisk } from '../lib/earn';
+import { EarnCalculator, useEarnCalc } from '../components/EarnCalculator';
 import { MissingFee, useSwapFee } from '../components/MissingFee';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
@@ -68,6 +69,7 @@ export function Earn() {
   const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
   const rates = useEarnRates(network);
+  const calc = useEarnCalc();
   const refresh = () => refreshRates(network, evm, RATE_REFRESH_MS);
   useEffect(() => {
     refresh();
@@ -125,6 +127,8 @@ export function Earn() {
         />
       </header>
 
+      <EarnCalculator calc={calc.panel} rates={rates.store} onPick={setRiskOf} />
+
       <div className="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-card">
         {list.map((o, i) => {
           const why = unavailable(o);
@@ -133,6 +137,7 @@ export function Earn() {
           const position = stakedOf(o) ?? (p !== undefined && p > 0n ? (hideBalances ? HIDDEN : fmtCrypto(p, o.decimals, o.target.kind === 'lido' ? 'stETH' : o.symbol, 6)) : null);
           const risk = earnRisk(o);
           const row = earnRowName(o);
+          const gain = calc.gainLine(o, rate?.value ?? null);
           const start = () => (o.target.kind === 'tab' ? navigate({ name: 'staking', chain: o.target.chain }) : setFlow({ opt: o, mode: 'in' }));
           return (
             <div key={o.id} className="rise grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.65fr)_auto] items-center gap-4 px-5 py-3.5" style={idx(i)}>
@@ -154,6 +159,7 @@ export function Earn() {
               <div>
                 <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{rate ? fmtPct(rate.value, { decimals: 2, sign: false }) : rates.waiting.has(o.id) ? <Spinner /> : '—'}</div>
                 <div className="text-[11.5px] text-mute">{rate && rateIsOld(rate, now) ? t('earn.rateOld', { ago: fmtAgo(rate.at, now) }) : t(rateLabelKey(o))}</div>
+                {gain && <div className="mt-0.5 text-[12px] font-medium text-text2 tabular-nums">{gain}</div>}
               </div>
               <div className="text-[13px]">
                 <div className="text-mute text-[11.5px]">{t('earn.lock')}</div>
