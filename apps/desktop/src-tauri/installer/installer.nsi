@@ -13,6 +13,9 @@ ManifestDPIAwareness PerMonitorV2
   SetCompressor /SOLID "{{compression}}"
 !endif
 
+; No source file dates in the installer: they change with every checkout (docs/REPRODUCIBLE.md).
+SetDateSave off
+
 ; Keep above !include to stay ahead of any plugin command
 ; see https://github.com/tauri-apps/tauri/pull/15422#discussion_r3289239624
 {{#if signed_plugins_path}}

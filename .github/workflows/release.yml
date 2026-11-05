@@ -12,6 +12,11 @@ name: Release
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS
 #
+# Reproducible builds (docs/REPRODUCIBLE.md): the flags come from scripts/repro-env.sh, and the
+# release also carries SHA256SUMS-binaries (hashes of the unpacked app binaries, the files a rebuild
+# is compared with) and BUILDINFO-<os>.txt (tool versions). Node is pinned to an exact version for
+# the same reason. .github/workflows/reproducibility.yml checks the builds match.
+#
 # Auto-update (apps/desktop/src-tauri/src/updater.rs): the app reads
 # .../releases/latest/download/latest.json, which points (per-version URLs) to
 # Kyro-windows-x64-setup.exe, Kyro-macos.app.tar.gz and Kyro-linux-x86_64.AppImage, each with the
@@ -76,7 +81,7 @@ jobs:
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: pnpm
 
       - name: Rust toolchain (pinned by rust-toolchain.toml)
@@ -89,6 +94,10 @@ jobs:
             rustup target add --toolchain "$channel" aarch64-apple-darwin x86_64-apple-darwin
           fi
           rustc --version
+
+      - name: Reproducible build environment (docs/REPRODUCIBLE.md)
+        shell: bash
+        run: scripts/repro-env.sh >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
 
@@ -134,6 +143,36 @@ jobs:
               one "$b/deb/*.deb" Kyro-linux-amd64.deb ;;
           esac
           ls -l dist-release
+
+      # After bundling, the target directory holds the raw binary again: the bundler patches a
+      # 3-byte package marker into the copy inside each package (scripts/patch-bundle-type.mjs).
+      - name: Hash the app binaries (docs/REPRODUCIBLE.md)
+        shell: bash
+        run: |
+          set -euo pipefail
+          hash() { # hash <file> <name in SHA256SUMS-binaries>
+            printf '%s  %s\n' "$(shasum -b -a 256 < "$1" | cut -d' ' -f1)" "$2"
+          }
+          packaged() { # packaged <raw binary> <marker> <name>
+            node scripts/patch-bundle-type.mjs "$1" "$2" "$RUNNER_TEMP/packaged"
+            hash "$RUNNER_TEMP/packaged" "$3"
+          }
+          out="dist-release/binaries-${{ matrix.id }}.sha256"
+          case "${{ matrix.id }}" in
+            windows)
+              raw=target/release/kyro-desktop.exe
+              hash "$raw" windows/kyro-desktop.exe > "$out"
+              packaged "$raw" NSS windows/nsis/kyro-desktop.exe >> "$out"
+              packaged "$raw" MSI windows/msi/kyro-desktop.exe >> "$out" ;;
+            macos)
+              hash target/universal-apple-darwin/release/kyro-desktop macos/kyro-desktop > "$out" ;;
+            linux)
+              raw=target/release/kyro-desktop
+              hash "$raw" linux/kyro-desktop > "$out"
+              packaged "$raw" DEB linux/deb/kyro-desktop >> "$out" ;;
+          esac
+          cat "$out"
+          scripts/build-info.sh | tee "dist-release/BUILDINFO-${{ matrix.id }}.txt"
 
       # Microsoft Store package from the same release exe (unsigned: Partner Center signs it).
       # Kyro's updater is off when it runs packaged; not part of latest.json.
@@ -254,7 +293,10 @@ jobs:
             test -f "${f##*/}" || { echo "::error::latest.json points to a missing file: $f"; exit 1; }
           done
           cat latest.json
-          sha256sum $(ls Kyro-* | grep -v '\.sig$') latest.json > SHA256SUMS
+          cat binaries-*.sha256 > SHA256SUMS-binaries
+          rm binaries-*.sha256
+          cat SHA256SUMS-binaries
+          sha256sum $(ls Kyro-* | grep -v '\.sig$') latest.json SHA256SUMS-binaries BUILDINFO-*.txt > SHA256SUMS
           cat SHA256SUMS
 
       # Anonymous weekly count (apps/desktop/src-tauri/src/weekly_count.rs, docs/NETWORK.md): the
@@ -302,4 +344,6 @@ jobs:
             dist-release/Kyro-linux-amd64.deb
             dist-release/latest.json
             dist-release/SHA256SUMS
+            dist-release/SHA256SUMS-binaries
+            dist-release/BUILDINFO-*.txt
             dist-release/ping.txt
