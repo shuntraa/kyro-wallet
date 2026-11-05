@@ -3,7 +3,7 @@
 // TRON, NEAR, Sui and Aptos open their staking tab; Lido and Aave v3 (Ethereum) run a short flow here:
 // amount → review → confirm. Rust builds the call (`earn_evm_build`) and names it in the native window.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { call, toIpcError, type EarnEvmAction, type HwDeviceKind } from '@kyro/shared';
 import { signAndBroadcastHw, tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import { buildApproval, buildRevoke, requiresZeroAllowanceFirst } from '@kyro/swap';
@@ -12,9 +12,9 @@ import { useAsync, useCachedAsync, useNow } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
 import { fmtAgo, fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
 import { HW_STAKE, type StakeChain } from '../lib/staking';
-import { readJson, writeJson } from '../lib/storage';
 import { useStakeOverviews } from '../lib/stakeOverviews';
-import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, SEL_GET_RESERVE_DATA, aaveApyPercent, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, keepRate, lidoAprPercent, parseReserveData, parseUint, rateIsOld, rateLabelKey, type EarnFilter, type EarnOption, type EarnRisk, type RateStore } from '../lib/earn';
+import { refreshRates, useEarnRates, type EvmGet } from '../state/earnRates';
+import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, parseUint, rateIsOld, rateLabelKey, type EarnFilter, type EarnOption, type EarnRisk } from '../lib/earn';
 import { MissingFee, useSwapFee } from '../components/MissingFee';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
@@ -28,73 +28,8 @@ import { BRAND, hwErrorView, pickDevice, withDevice } from '../state/hw';
 type Hex = `0x${string}`;
 type Positions = Record<string, bigint>;
 
-type EvmGet = (chainKey: string) => EvmAdapter | undefined;
-
-/** Reads go through Tor and some servers answer in tens of seconds: past this, the read counts as failed. */
-const RATE_TIMEOUT_MS = 90_000;
+/** On this screen a rate is refreshed sooner than in the background. */
 const RATE_REFRESH_MS = 300_000;
-
-function rateReaders(evm: EvmGet): Record<string, () => Promise<number | null>> {
-  const onChain = (chain: 'sol' | 'ada' | 'trx' | 'apt') => () => call('earn_rate', { chain });
-  const out: Record<string, () => Promise<number | null>> = {
-    'eth-lido': lidoAprPercent,
-    near: () => call('near_stake_validators').then((v) => v.grossApy),
-    sui: () => call('sui_stake_validators').then((v) => v.networkApy),
-    sol: onChain('sol'),
-    ada: onChain('ada'),
-    trx: onChain('trx'),
-    apt: onChain('apt'),
-  };
-  for (const [id, m] of Object.entries(AAVE_MARKETS)) {
-    const a = evm(m.chainKey);
-    if (!a) continue;
-    out[id] = async () => {
-      const { data } = await a.client.call({ to: m.pool as Hex, data: `${SEL_GET_RESERVE_DATA}${addrArg(m.asset)}` as Hex });
-      const d = parseReserveData(data ?? '0x');
-      // Pinning check: the pool must report the aToken Kyro expects.
-      return d.aToken === m.aToken ? aaveApyPercent(d.liquidityRate) : null;
-    };
-  }
-  return out;
-}
-
-const orNull = (job: Promise<number | null>): Promise<number | null> =>
-  Promise.race([job.catch(() => null), new Promise<null>((r) => window.setTimeout(() => r(null), RATE_TIMEOUT_MS))]);
-
-/** Each rate shows as soon as it is in. The last one read stays on screen, across launches too. */
-function useRates(network: string, evm: EvmGet) {
-  const key = `earn.rates.${network}`;
-  const [store, setStore] = useState<RateStore>(() => readJson<RateStore>(key, {}));
-  const [waiting, setWaiting] = useState<ReadonlySet<string>>(() => new Set(EARN_OPTIONS.map((o) => o.id)));
-  const latest = useRef(evm);
-  latest.current = evm;
-  const alive = useRef(true);
-  const reload = useCallback(() => {
-    const readers = Object.entries(rateReaders(latest.current));
-    setWaiting(new Set(readers.map(([id]) => id)));
-    for (const [id, read] of readers) {
-      void orNull(read()).then((value) => {
-        if (!alive.current) return;
-        setStore((s) => {
-          const next = keepRate(s, id, value, Date.now());
-          if (next !== s) writeJson(key, next);
-          return next;
-        });
-        setWaiting((w) => new Set([...w].filter((x) => x !== id)));
-      });
-    }
-  }, [key]);
-  useEffect(() => {
-    alive.current = true;
-    reload();
-    const id = window.setInterval(reload, RATE_REFRESH_MS);
-    return () => {
-      alive.current = false;
-      window.clearInterval(id);
-    };
-  }, [reload]);
-  return { store, waiting, reload };
-}
 
 async function tokenBalance(eth: EvmAdapter, token: string): Promise<bigint> {
   const { data } = await eth.client.call({ to: token as Hex, data: `${SEL_BALANCE_OF}${addrArg(eth.getAddress())}` as Hex });
@@ -132,14 +67,20 @@ export function Earn() {
   const evm: EvmGet = (k) => (network === 'mainnet' ? adapters.evm.get(k) : undefined);
   const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
-  const rates = useRates(network, evm);
+  const rates = useEarnRates(network);
+  const refresh = () => refreshRates(network, evm, RATE_REFRESH_MS);
+  useEffect(() => {
+    refresh();
+    const id = window.setInterval(refresh, RATE_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [network, adapters]);
   const now = useNow(60_000);
   const pos = useCachedAsync<Positions>(eth ? `earn.pos.${ethKey}` : null, eth ? () => readPositions(evm) : null, [ethKey]);
   const lidoReq = useCachedAsync<WithdrawalStatus[]>(eth ? `earn.lidoq.${ethKey}` : null, eth ? () => readLidoRequests(eth) : null, [ethKey]);
   const claimable = (lidoReq.data ?? []).filter((r) => r.isFinalized);
   const pending = (lidoReq.data ?? []).filter((r) => !r.isFinalized).reduce((a, r) => a + r.amountOfStETH, 0n);
   useOnTorReady(() => {
-    rates.reload();
+    refresh();
     pos.reload();
     lidoReq.reload();
   });

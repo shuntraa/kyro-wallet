@@ -7,6 +7,7 @@ import { AppProvider, useApp, useVault, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
 import { NavRail } from './shell/NavRail';
+import { useEarnRatesInBackground } from './state/earnRates';
 import { StatusFrame } from './shell/StatusBar';
 import { Welcome } from './screens/Welcome';
 import { Unlock } from './screens/Unlock';
@@ -128,6 +129,7 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
 function Unlocked() {
   const { route, navigate, hideBalances, activeWatch, network } = useApp();
   const { accountSources, isMultiAccount } = useVault();
+  useEarnRatesInBackground();
   const pf = usePortfolio();
   const { lang } = useT();
   useHistoryWarmup();

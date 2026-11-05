@@ -142,6 +142,14 @@ export function keepRate(store: RateStore, id: string, value: number | null, now
   return value === null || !Number.isFinite(value) ? store : { ...store, [id]: { value, at: now } };
 }
 
+/** The rates to read now: not already being read, and never read or older than `maxAgeMs`. */
+export function ratesDue(ids: string[], store: RateStore, waiting: ReadonlySet<string>, now: number, maxAgeMs: number): string[] {
+  return ids.filter((id) => {
+    const e = store[id];
+    return !waiting.has(id) && (!e || now - e.at >= maxAgeMs);
+  });
+}
+
 const RATE_FRESH_MS = 3_600_000;
 export const rateIsOld = (e: RateEntry, now: number): boolean => now - e.at > RATE_FRESH_MS;
 

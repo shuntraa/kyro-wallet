@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { HW_STAKE } from './staking';
-import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, keepRate, parseReserveData, rateIsOld, rateLabelKey } from './earn';
+import { LIDO_QUEUE, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, AAVE_MARKETS, AAVE_POOL, EARN_OPTIONS, LIDO_STETH, aaveApyPercent, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, keepRate, parseReserveData, rateIsOld, rateLabelKey, ratesDue } from './earn';
 
 describe('earn', () => {
   it('Aave APY from the ray liquidity rate (compounded per second)', () => {
@@ -128,6 +128,12 @@ describe('last known rate', () => {
     expect(keepRate(s, 'sol', Number.NaN, 2000)).toBe(s);
     expect(keepRate(s, 'sol', 5.3, 2000)).toEqual({ sol: { value: 5.3, at: 2000 } });
     expect(keepRate(s, 'ada', 2, 2000).sol).toEqual(s.sol);
+  });
+
+  it('reads only what is missing or too old, and never twice at once', () => {
+    const store = { sol: { value: 5, at: 1000 }, ada: { value: 2, at: 0 } };
+    expect(ratesDue(['sol', 'ada', 'trx', 'apt'], store, new Set(['apt']), 1500, 1000)).toEqual(['ada', 'trx']);
+    expect(ratesDue(['sol'], store, new Set(), 2000, 1000)).toEqual(['sol']);
   });
 
   it('a rate over an hour old says so', () => {
