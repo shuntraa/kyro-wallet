@@ -97,8 +97,9 @@ jobs:
         working-directory: second/some/other/place/kyro
         run: |
           docker build -t kyro-repro -f scripts/repro-linux.Dockerfile scripts
+          # The epoch comes from here: inside the container, git refuses a clone owned by another user.
           docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP:/out" -e CARGO_TARGET_DIR=/out/target-second \
-            -w /src kyro-repro bash scripts/build-binary.sh
+            -e SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" -w /src kyro-repro bash scripts/build-binary.sh
           sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/target-second"
 
       - name: Compare
@@ -117,6 +118,30 @@ jobs:
             echo "::error::${{ matrix.id }}: the two builds differ (binaries attached to this run)"
             exit 1
           fi
+
+      # The NSIS installer is also the Windows update package. Warning only: its match depends on
+      # the WebView2 bootstrapper, which Tauri downloads once and both packages reuse here.
+      - name: Compare the NSIS installers (no update signature needed here)
+        if: matrix.id == 'windows'
+        shell: bash
+        env:
+          TARGETS: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          for build in "first/kyro target-first" "second/some/other/place/kyro target-second"; do
+            set -- $build
+            (
+              cd "$1"
+              export CARGO_TARGET_DIR="$TARGETS/$2"
+              eval "$(scripts/repro-env.sh --export)"
+              pnpm --dir apps/desktop tauri bundle --bundles nsis \
+                --config '{"bundle":{"createUpdaterArtifacts":false}}'
+            )
+          done
+          first=("$TARGETS"/target-first/release/bundle/nsis/*-setup.exe)
+          second=("$TARGETS"/target-second/release/bundle/nsis/*-setup.exe)
+          shasum -a 256 "${first[0]}" "${second[0]}"
+          cmp "${first[0]}" "${second[0]}" || echo "::warning::the two NSIS installers differ"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
