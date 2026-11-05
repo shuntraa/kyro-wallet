@@ -3,7 +3,7 @@
 // anything else, so everything here works on `YYYY-MM-DD` strings and `Date.UTC`: no local
 // midnight, so no time zone or daylight saving can move the date (docs/BTC_TIMELOCK.md).
 
-import type { BtcLockStatus, Lang } from '@kyro/shared';
+import type { BtcLockScanStep, BtcLockStatus, Lang } from '@kyro/shared';
 
 export const LOCK_DAY_SECS = 86_400;
 export const LOCK_MIN_SATS = 50_000n;
@@ -68,6 +68,42 @@ export function unlockLocal(t: number, locale: string): string {
 
 export function unlockUtc(t: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(t * 1000));
+}
+
+/** Rust takes whole sat/vB. Fee estimates can have decimals, and the minimum is 1. */
+export const lockFeeRate = (rate: number) => (Number.isFinite(rate) && rate >= 1 ? Math.floor(rate) : 0);
+
+/** How far a "Find my locks" run got. Only `finished` means every date was answered. */
+export interface LockScanProgress {
+  nextDay: number | null;
+  /** Last day fully answered. */
+  reachedDay: number | null;
+  firstDay: number | null;
+  lastDay: number | null;
+  found: number;
+  finished: boolean;
+  error: unknown;
+}
+
+export const lockScanStart: LockScanProgress = { nextDay: null, reachedDay: null, firstDay: null, lastDay: null, found: 0, finished: false, error: null };
+
+/** Runs or resumes the search. A failure keeps the place, and is never a result. */
+export async function runLockScan(step: (fromDay: number | null) => Promise<BtcLockScanStep>, from: LockScanProgress, onStep: (p: LockScanProgress) => void): Promise<LockScanProgress> {
+  let p: LockScanProgress = { ...from, error: null };
+  for (;;) {
+    try {
+      const s = await step(p.nextDay);
+      if (s.lastDay < s.firstDay) throw new Error('empty range');
+      const reachedDay = s.nextDay === null ? s.lastDay : s.nextDay - 1;
+      p = { ...p, nextDay: s.nextDay, reachedDay, firstDay: s.firstDay, lastDay: s.lastDay, found: p.found + s.found, finished: s.nextDay === null };
+      onStep(p);
+      if (p.finished) return p;
+    } catch (error) {
+      p = { ...p, error };
+      onStep(p);
+      return p;
+    }
+  }
 }
 
 export const confirmWord = (lang: Lang) => (lang === 'fr' ? 'BLOQUER' : 'LOCK');

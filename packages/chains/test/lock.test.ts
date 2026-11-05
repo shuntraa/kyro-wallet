@@ -43,6 +43,24 @@ describe('funding a lock', () => {
   });
 });
 
+// Rust sends a withdrawal to an index up to LAST_FRESH_INDEX (btc_lock.rs) because this scan always
+// reaches those, whatever a server said when the withdrawal was built.
+describe('where a withdrawal may land', () => {
+  it('the normal scan reaches receive indexes 0 to 4 on an empty wallet, and no further', async () => {
+    const asked = new Set<string>();
+    setBackend((async (cmd: string, a: { address: string }) => {
+      if (cmd !== 'btc_address_info') throw new Error(cmd);
+      asked.add(a.address);
+      return { address: a.address, chain_stats: { funded_txo_sum: 0, spent_txo_sum: 0, tx_count: 0 }, mempool_stats: { funded_txo_sum: 0, spent_txo_sum: 0, tx_count: 0 } };
+    }) as Parameters<typeof setBackend>[0]);
+    const adapter = new BitcoinAdapter({ chain: btcChain('testnet'), accounts: accounts.btc });
+    const addrs = await adapter.scan(true);
+    const receive = addrs.filter((d) => d.kind === 'segwit' && d.change === 0).map((d) => d.index);
+    expect(receive).toEqual([0, 1, 2, 3, 4]);
+    setBackend(createMockBackend({ network: 'testnet', confirm: () => true, preset: { password: PASSWORD, unlocked: true } }).invoke);
+  });
+});
+
 describe('only software wallets', () => {
   it('refuses a watch or hardware account before asking Rust', async () => {
     const chain = btcChain('testnet');

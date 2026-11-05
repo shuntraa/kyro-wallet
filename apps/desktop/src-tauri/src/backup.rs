@@ -218,7 +218,7 @@ pub struct BackupContent {
     /// The time lock list. Absent from older files, and left out when empty so that an older Kyro
     /// still reads the file. Only an index: the coins are found again from the phrase.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    locks: Vec<crate::btc_lock::Record>,
+    locks: Vec<crate::btc_lock::BackupLock>,
 }
 
 impl BackupContent {
@@ -240,7 +240,7 @@ impl BackupContent {
             account_arg(Some(l.index)).map_err(|_| invalid("invalid account"))?;
             clean_name(&l.name).map_err(|_| invalid("invalid account"))?;
         }
-        let bad_lock = |l: &crate::btc_lock::Record| {
+        let bad_lock = |l: &crate::btc_lock::BackupLock| {
             wallet_core::btc_lock_day(l.t).is_err() || account_arg(Some(l.account)).is_err()
         };
         if c.locks.len() > MAX_LABELS || c.locks.iter().any(bad_lock) {
@@ -506,7 +506,7 @@ pub async fn backup_export(
             .collect(),
         labels: own_labels(&state.vault_accounts(), state.network),
         local,
-        locks: crate::btc_lock::export_records(&state),
+        locks: crate::btc_lock::export_records(&state)?,
     };
     let json = Zeroizing::new(serde_json::to_vec(&content)?);
     let title = crate::i18n::current().pick("Enregistrer la sauvegarde", "Save the backup");
@@ -745,12 +745,12 @@ mod tests {
         }
     }
 
-    fn lock_record(t: u32) -> crate::btc_lock::Record {
-        crate::btc_lock::Record {
+    fn lock_record(t: u32) -> crate::btc_lock::BackupLock {
+        crate::btc_lock::BackupLock {
             account: 0,
             t,
             last_sats: 100_000,
-            withdraw_txid: None,
+            withdrawn: false,
             address: BTC.into(),
         }
     }

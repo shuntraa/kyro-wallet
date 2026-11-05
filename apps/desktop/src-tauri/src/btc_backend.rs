@@ -20,6 +20,9 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use wallet_core::Network;
 
+use wallet_core::BtcLockUtxo;
+
+use crate::btc_lock::{AddrView, Coin};
 use crate::core_rpc::{self, btc_per_kvb_to_sat_per_vb, btc_to_sats, CallError, CoreClient};
 use crate::electrum::{self, TlsMode};
 use crate::error::{AppError, AppResult};
@@ -754,6 +757,20 @@ pub async fn tip_info(ctx: &Ctx<'_>) -> AppResult<Tip> {
     Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
+/// Transactions an address answer counts. An answer without them is a failure, never "unused": a
+/// wrong "empty" would make a scan report that no lock exists.
+pub fn tx_count_of(v: &Value) -> AppResult<u64> {
+    let count = |k: &str| {
+        v.get(k)
+            .and_then(|s| s.get("tx_count"))
+            .and_then(Value::as_u64)
+            .ok_or_else(|| bad(format!("address answer without {k}.tx_count")))
+    };
+    count("chain_stats")?
+        .checked_add(count("mempool_stats")?)
+        .ok_or_else(|| bad("address answer: impossible count"))
+}
+
 /// Pause between attempts at one address of a long scan: public servers answer a burst with 429.
 const SCAN_RETRIES: [u64; 4] = [1, 3, 8, 20];
 const SCAN_PARALLEL: usize = 4;
@@ -762,10 +779,13 @@ async fn esplora_used_retrying(ctx: &Ctx<'_>, address: &str) -> AppResult<bool> 
     let mut waits = SCAN_RETRIES.iter();
     loop {
         match address_info(ctx, address).await {
-            Ok(v) => {
-                let count = |k: &str| v[k]["tx_count"].as_u64().unwrap_or(0);
-                return Ok(count("chain_stats") + count("mempool_stats") > 0);
-            }
+            Ok(v) => match tx_count_of(&v) {
+                Ok(n) => return Ok(n > 0),
+                Err(e) => match waits.next() {
+                    Some(secs) => tokio::time::sleep(std::time::Duration::from_secs(*secs)).await,
+                    None => return Err(e),
+                },
+            },
             Err(e) => match waits.next() {
                 Some(secs) => tokio::time::sleep(std::time::Duration::from_secs(*secs)).await,
                 None => return Err(e),
@@ -810,11 +830,12 @@ pub async fn addresses_used(ctx: &Ctx<'_>, addresses: &[String]) -> AppResult<Ve
     Err(AppError::Internal("not for this Bitcoin backend".into()))
 }
 
-/// Where the coins of one script sit, from `scantxoutset`.
+/// One coin of a script, from `scantxoutset`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreFound {
     pub script_pubkey: String,
     pub height: u64,
+    pub utxo: BtcLockUtxo,
 }
 
 /// Reads the node's whole UTXO set once for all these scripts (minutes on mainnet). It sees
@@ -834,33 +855,23 @@ pub async fn core_lock_scan(c: &CoreClient<'_>, scripts: &[String]) -> AppResult
         found.push(CoreFound {
             script_pubkey: str_field(u, "scriptPubKey")?.to_owned(),
             height: u64_field(u, "height")?,
+            utxo: BtcLockUtxo {
+                txid: str_field(u, "txid")?.to_owned(),
+                vout: u32::try_from(u64_field(u, "vout")?)
+                    .map_err(|_| bad("scantxoutset: vout"))?,
+                value: btc_to_sats(&u["amount"])?,
+            },
         });
     }
     Ok(found)
 }
 
-/// Adds one lock script to the watch-only wallet, or `listunspent` would never show its coins.
-/// `height`: rescan from that block; `None`: from now on (the funding is not sent yet).
-pub async fn core_lock_watch(
+async fn core_import_raw(
     c: &CoreClient<'_>,
     wallet: &str,
     script: &str,
-    height: Option<u64>,
+    timestamp: Value,
 ) -> AppResult<()> {
-    let timestamp = match height {
-        None => json!("now"),
-        Some(h) => {
-            let hash = c
-                .call(None, "getblockhash", json!([h]), false)
-                .await
-                .map_err(AppError::from)?;
-            let header = c
-                .call(None, "getblockheader", json!([hash]), false)
-                .await
-                .map_err(AppError::from)?;
-            json!(u64_field(&header, "time")?.saturating_sub(2 * 3_600))
-        }
-    };
     let info = c
         .call(
             None,
@@ -882,7 +893,153 @@ pub async fn core_lock_watch(
             res[0]["error"]
         )));
     }
+    if res[0]["warnings"].as_array().is_some_and(|w| !w.is_empty()) {
+        return Err(AppError::InvalidInput(format!(
+            "importdescriptors: {}",
+            res[0]["warnings"]
+        )));
+    }
     Ok(())
+}
+
+/// Adds one lock script to the watch-only wallet, or `listunspent` would never show its coins.
+/// `height`: rescan from that block; `None`: from now on (the funding is not sent yet). A node
+/// that cannot rescan that far (pruned) still watches the script from now on: the coins are then
+/// read one by one with `gettxout` (`core_lock_view`).
+pub async fn core_lock_watch(
+    c: &CoreClient<'_>,
+    wallet: &str,
+    script: &str,
+    height: Option<u64>,
+) -> AppResult<()> {
+    let Some(h) = height else {
+        return core_import_raw(c, wallet, script, json!("now")).await;
+    };
+    let hash = c
+        .call(None, "getblockhash", json!([h]), false)
+        .await
+        .map_err(AppError::from)?;
+    let header = c
+        .call(None, "getblockheader", json!([hash]), false)
+        .await
+        .map_err(AppError::from)?;
+    let time = u64_field(&header, "time")?.saturating_sub(2 * 3_600);
+    match core_import_raw(c, wallet, script, json!(time)).await {
+        Ok(()) => Ok(()),
+        Err(_) => core_import_raw(c, wallet, script, json!("now")).await,
+    }
+}
+
+/// The scripts of the watch-only wallet that are lock candidates (`raw(...)` entries).
+async fn core_watched(c: &CoreClient<'_>, wallet: &str) -> AppResult<HashSet<String>> {
+    let r = c
+        .call(Some(wallet), "listdescriptors", json!([]), false)
+        .await
+        .map_err(AppError::from)?;
+    let list = r
+        .get("descriptors")
+        .and_then(Value::as_array)
+        .ok_or_else(|| bad("listdescriptors: no list"))?;
+    Ok(list
+        .iter()
+        .filter_map(|d| d.get("desc").and_then(Value::as_str))
+        .filter_map(|d| d.strip_prefix("raw(")?.split(')').next())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Makes sure the node watches these scripts: a lock made while another server was in use, or
+/// restored from a backup, is unknown to the wallet and `listunspent` would call it empty. One
+/// pass of the UTXO set for all those missing. Returns the coins that pass found, per script.
+pub async fn core_locks_adopt(
+    c: &CoreClient<'_>,
+    wallet: &str,
+    scripts: &[String],
+) -> AppResult<Vec<(String, Vec<BtcLockUtxo>)>> {
+    let watched = core_watched(c, wallet).await?;
+    let missing: Vec<String> = scripts
+        .iter()
+        .filter(|s| !watched.contains(*s))
+        .cloned()
+        .collect();
+    if missing.is_empty() {
+        return Ok(Vec::new());
+    }
+    let found = core_lock_scan(c, &missing).await?;
+    let mut out = Vec::with_capacity(missing.len());
+    for script in missing {
+        let mine: Vec<&CoreFound> = found.iter().filter(|f| f.script_pubkey == script).collect();
+        let height = mine.iter().map(|f| f.height).min();
+        // The UTXO set has answered: failing to watch costs a second pass later, never the coins.
+        let _ = core_lock_watch(c, wallet, &script, height).await;
+        out.push((script, mine.iter().map(|f| f.utxo.clone()).collect()));
+    }
+    Ok(out)
+}
+
+/// What the node says about a lock. `address` is in the node's own network format; `known` holds
+/// the coins read earlier, so that a pruned node that could not rescan them still shows them
+/// (`gettxout` needs no wallet and no block). Receipts count from one confirmation: at zero, Core
+/// counts a funding that was replaced, which would show a cancelled lock as withdrawn.
+pub async fn core_lock_view(
+    c: &CoreClient<'_>,
+    wallet: &str,
+    address: &str,
+    known: &[BtcLockUtxo],
+) -> AppResult<AddrView> {
+    let list = core_call(
+        c,
+        wallet,
+        "listunspent",
+        json!([0, 9_999_999, [address], true]),
+    )
+    .await?;
+    let mut coins = Vec::new();
+    for u in list.as_array().into_iter().flatten() {
+        coins.push(Coin {
+            utxo: BtcLockUtxo {
+                txid: str_field(u, "txid")?.to_owned(),
+                vout: u32::try_from(u64_field(u, "vout")?).map_err(|_| bad("listunspent: vout"))?,
+                value: btc_to_sats(&u["amount"])?,
+            },
+            confirmed: u64_field(u, "confirmations")? > 0,
+        });
+    }
+    for k in known {
+        if coins
+            .iter()
+            .any(|c| c.utxo.txid == k.txid && c.utxo.vout == k.vout)
+        {
+            continue;
+        }
+        let out = c
+            .call(None, "gettxout", json!([k.txid, k.vout, true]), false)
+            .await
+            .map_err(AppError::from)?;
+        if !out.is_null() {
+            coins.push(Coin {
+                utxo: k.clone(),
+                confirmed: u64_field(&out, "confirmations")? > 0,
+            });
+        }
+    }
+    let received = core_call(
+        c,
+        wallet,
+        "listreceivedbyaddress",
+        json!([1, true, true, address]),
+    )
+    .await?;
+    let txs = received
+        .as_array()
+        .and_then(|a| a.first())
+        .and_then(|e| e.get("txids"))
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len) as u64;
+    Ok(AddrView {
+        coins,
+        tx_count: txs.max(known.len() as u64),
+    })
 }
 
 /// The client and watch-only wallet when the server is the user's Bitcoin Core node.
@@ -1363,6 +1520,21 @@ mod tests {
         assert_eq!(header_times(&two), Some(vec![1_793_908_154, 1_793_911_704]));
         assert_eq!(header_times(""), None);
         assert_eq!(header_times(&two[..200]), None, "a cut header");
+    }
+
+    #[test]
+    fn an_address_answer_without_counts_is_a_failure() {
+        let good = stats_json("tb1qx", 1, 0, 2, 1);
+        assert_eq!(tx_count_of(&good).unwrap(), 3);
+        for bad in [
+            json!({}),
+            json!({ "chain_stats": { "tx_count": 1 } }),
+            json!({ "chain_stats": {}, "mempool_stats": {} }),
+            json!({ "chain_stats": { "tx_count": "1" }, "mempool_stats": { "tx_count": 0 } }),
+            json!({ "error": "rate limited" }),
+        ] {
+            assert!(tx_count_of(&bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

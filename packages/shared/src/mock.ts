@@ -764,8 +764,8 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const dayStart = (offset: number) => (Math.floor(now() / 86_400_000) + offset) * 86_400;
   /** One lock running and one ready, so that the demo shows both. */
   const demoLocks: BtcLockView[] = [
-    { t: dayStart(90), day: dayStart(90) / 86_400, account: 0, address: demoLockInfo(dayStart(90), 0).address, amountSats: 2_500_000, status: 'locked', coins: 1, secsLeft: 90 * 86_400 - 5_000 },
-    { t: dayStart(-1), day: dayStart(-1) / 86_400, account: 0, address: demoLockInfo(dayStart(-1), 0).address, amountSats: 400_000, status: 'ready', coins: 2, secsLeft: 0 },
+    { t: dayStart(90), day: dayStart(90) / 86_400, account: 0, address: demoLockInfo(dayStart(90), 0).address, amountSats: 2_500_000, status: 'locked', coins: 1, unconfirmedSats: 0, secsLeft: 90 * 86_400 - 5_000 },
+    { t: dayStart(-1), day: dayStart(-1) / 86_400, account: 0, address: demoLockInfo(dayStart(-1), 0).address, amountSats: 400_000, status: 'ready', coins: 2, unconfirmedSats: 30_000, secsLeft: 0 },
   ];
 
   let watchList: WatchAddress[] = [];
@@ -1164,7 +1164,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
         held.amountSats += Number(a.amountSats);
         held.coins += 1;
       } else {
-        demoLocks.push({ t: Number(a.t), day: Number(a.t) / 86_400, account, address: info.address, amountSats: Number(a.amountSats), status: 'confirming', coins: 1, secsLeft: Math.max(0, Number(a.t) - now() / 1000) });
+        demoLocks.push({ t: Number(a.t), day: Number(a.t) / 86_400, account, address: info.address, amountSats: Number(a.amountSats), status: 'confirming', coins: 1, unconfirmedSats: Number(a.amountSats), secsLeft: Math.max(0, Number(a.t) - now() / 1000) });
       }
       return out;
     },
@@ -1186,7 +1186,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       const l = demoLocks.find((x) => x.t === Number(a.t) && x.account === accts.arg(a.account));
       if (!l || l.status !== 'ready') throw new IpcError('INVALID_INPUT', 'still locked: the network would refuse it');
       const vsize = 40 + 70 * l.coins;
-      return { amountSats: l.amountSats - vsize * Number(a.satPerVb), feeSats: vsize * Number(a.satPerVb), vsize, destination: accts.get(l.account).btc.segwit.address, inputs: l.coins, leftOut: 0 };
+      return { amountSats: l.amountSats - vsize * Number(a.satPerVb), feeSats: vsize * Number(a.satPerVb), vsize, destination: accts.get(l.account).btc.segwit.address, inputs: l.coins, leftOut: 0, leftOutSats: 0, unconfirmedSats: l.unconfirmedSats };
     },
     btc_lock_withdraw: (a) => {
       requireUnlocked();

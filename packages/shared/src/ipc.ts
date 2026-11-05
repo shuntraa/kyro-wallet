@@ -2148,6 +2148,8 @@ export interface BtcLockView {
   amountSats: number;
   status: BtcLockStatus;
   coins: number;
+  /** Part of the amount not confirmed yet: a withdrawal leaves it for later. */
+  unconfirmedSats: number;
   /** Until the network's own clock (median time past) reaches the date. */
   secsLeft: number;
 }
@@ -2173,7 +2175,11 @@ export interface BtcLockWithdrawPreview {
   vsize: number;
   destination: string;
   inputs: number;
+  /** Coins left at the lock: not worth their input at this rate, or over the limit per transaction. */
   leftOut: number;
+  leftOutSats: number;
+  /** Not confirmed yet, so not spent now. */
+  unconfirmedSats: number;
 }
 
 export interface BtcLockWithdrawn {

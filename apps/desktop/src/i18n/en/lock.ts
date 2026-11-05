@@ -30,6 +30,7 @@ export const lock = {
   'lock.account': 'Account {n}',
   'lock.deposits_one': '{count} deposit',
   'lock.deposits_other': '{count} deposits',
+  'lock.unconfirmedNote': 'including {amount} not confirmed yet, for a next withdrawal',
   'lock.details': 'Details',
   'lock.withdraw': 'Withdraw',
   'lock.back': 'Back to locks',
@@ -76,8 +77,9 @@ export const lock = {
   'lock.withdraw.onlyOwn': 'A withdrawal always goes to your own wallet.',
   'lock.withdraw.receive': 'You receive',
   'lock.withdraw.fee': 'Fee',
-  'lock.withdraw.leftOut_one': '{count} small coin stays for a next withdrawal.',
-  'lock.withdraw.leftOut_other': '{count} small coins stay for a next withdrawal.',
+  'lock.withdraw.leftOut_one': '{count} small coin ({amount}) stays at the lock: at this fee it costs more than it brings. It can still be withdrawn later.',
+  'lock.withdraw.leftOut_other': '{count} small coins ({amount}) stay at the lock: at this fee they cost more than they bring. They can still be withdrawn later.',
+  'lock.withdraw.unconfirmed': '{amount} not confirmed yet stays for a next withdrawal.',
   'lock.withdraw.confirm': 'Withdraw',
   'lock.withdraw.done': 'Withdrawal sent. {amount} is on its way to your wallet.',
 
@@ -99,5 +101,7 @@ export const lock = {
   'lock.scan.foundSoFar_other': '{count} locks found',
   'lock.scan.none': 'Search finished, no lock with funds on this account.',
   'lock.scan.failed': 'Search stopped: {error}. This is not a result. Resume it.',
+  'lock.scan.reached': 'Checked up to {date}, out of a range ending {last}.',
+  'lock.scan.notStarted': 'No date was checked.',
   'lock.scan.resume': 'Resume',
 } as const;

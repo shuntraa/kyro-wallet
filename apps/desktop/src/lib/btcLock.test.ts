@@ -1,6 +1,6 @@
 // A lock's date must not move with the computer's time zone: these tests run under several.
 import { afterEach, describe, expect, it } from 'vitest';
-import { addDays, confirmWord, dateOfLockTime, isHeld, localToday, lockDateError, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, shortcutDate, unlockLocal, unlockUtc, utcToday } from './btcLock';
+import { addDays, confirmWord, lockFeeRate, lockScanStart, runLockScan, type LockScanProgress, dateOfLockTime, isHeld, localToday, lockDateError, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, shortcutDate, unlockLocal, unlockUtc, utcToday } from './btcLock';
 
 const ZONES = ['UTC', 'Europe/Paris', 'America/Los_Angeles', 'Asia/Tokyo', 'Pacific/Auckland', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'];
 const original = process.env.TZ;
@@ -108,7 +108,69 @@ describe('what the form offers, against what Rust accepts', () => {
   });
 });
 
+describe('Find my locks', () => {
+  const steps = (answers: Array<{ nextDay: number | null; found?: number } | Error>) => {
+    const asked: Array<number | null> = [];
+    return {
+      asked,
+      step: async (fromDay: number | null) => {
+        asked.push(fromDay);
+        const a = answers.shift();
+        if (!a) throw new Error('no more answers');
+        if (a instanceof Error) throw a;
+        return { nextDay: a.nextDay, firstDay: 100, lastDay: 399, found: a.found ?? 0 };
+      },
+    };
+  };
+
+  it('is finished only when the last stretch answered', async () => {
+    const s = steps([{ nextDay: 200 }, { nextDay: 300, found: 1 }, { nextDay: null }]);
+    const seen: LockScanProgress[] = [];
+    const end = await runLockScan(s.step, lockScanStart, (p) => seen.push(p));
+    expect(s.asked).toEqual([null, 200, 300]);
+    expect(end.finished).toBe(true);
+    expect(end.found).toBe(1);
+    expect(end.reachedDay).toBe(399);
+    expect(seen.slice(0, 2).every((p) => !p.finished)).toBe(true);
+  });
+
+  it('a server failing halfway is no result, says how far it got, and resumes there', async () => {
+    const s = steps([{ nextDay: 200, found: 1 }, new Error('429')]);
+    const stopped = await runLockScan(s.step, lockScanStart, () => undefined);
+    expect(stopped.finished).toBe(false);
+    expect(stopped.error).toBeInstanceOf(Error);
+    expect(stopped.reachedDay).toBe(199);
+    expect(stopped.found).toBe(1);
+    const r = steps([{ nextDay: null, found: 1 }]);
+    const end = await runLockScan(r.step, stopped, () => undefined);
+    expect(r.asked).toEqual([200]);
+    expect(end.finished).toBe(true);
+    expect(end.found).toBe(2);
+    expect(end.error).toBeNull();
+  });
+
+  it('failing at once says that nothing was checked', async () => {
+    const end = await runLockScan(steps([new Error('down')]).step, lockScanStart, () => undefined);
+    expect(end.reachedDay).toBeNull();
+    expect(end.finished).toBe(false);
+  });
+
+  it('an inverted range is an error, not a success', async () => {
+    const end = await runLockScan(async () => ({ nextDay: null, firstDay: 10, lastDay: 5, found: 0 }), lockScanStart, () => undefined);
+    expect(end.finished).toBe(false);
+    expect(end.error).toBeTruthy();
+  });
+});
+
 describe('words and figures', () => {
+  it('sends whole fee rates to Rust', () => {
+    expect(lockFeeRate(3.9)).toBe(3);
+    expect(lockFeeRate(1)).toBe(1);
+    expect(lockFeeRate(1.2)).toBe(1);
+    expect(lockFeeRate(0.5)).toBe(0);
+    expect(lockFeeRate(Number.NaN)).toBe(0);
+  });
+
   it('matches what Rust takes', () => {
     expect(confirmWord('fr')).toBe('BLOQUER');
     expect(confirmWord('en')).toBe('LOCK');

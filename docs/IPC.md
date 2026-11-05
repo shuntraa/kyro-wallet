@@ -1828,11 +1828,11 @@ beside the vault of the wallet in use. All amounts are sats, `t` is Unix seconds
 |---|---|
 | `btc_lock_preview(t, account?)` | Checks `t` against the local clock and the tip's time, returns `BtcLockInfo`. The address is for the screen only. |
 | `btc_lock_sign_funding_tx(psbt, password, account?, t, amountSats, confirmWord)` | Derives the address again from the seed, refuses a PSBT that does not pay exactly `amountSats` to that script with only this wallet's coins and change, shows the native dialog, goes through `confirm_signer`, signs, and writes the list before returning. `confirmWord`: `BLOQUER` or `LOCK`. |
-| `btc_locks_status()` | `BtcLocksStatus`. Works without a server: `stale` is true and amounts are the last ones seen. |
+| `btc_locks_status()` | `BtcLocksStatus`. With no lock it asks nothing and writes nothing. Works without a server: `stale` is true and amounts are the last ones seen. A read that says nothing (`unknown`, `notFound`) never replaces the last amount. With Bitcoin Core, a lock the node does not watch yet is imported here first. |
 | `btc_lock_details(t, account?)` | Descriptor, path, `t`, address. |
-| `btc_locks_scan(fromDay, account?)` | One stretch of the day grid. Call again with `nextDay` until it is `null`. Any server failure is an error, never "nothing found". |
-| `btc_lock_withdraw_preview(t, account?, satPerVb)` | What a withdrawal would do. Refused until the tip's median time past is above `t`. |
-| `btc_lock_withdraw(t, account?, satPerVb, password)` | Builds, signs and sends. There is no destination argument: Rust derives the first unused receive address of the account. |
+| `btc_locks_scan(fromDay, account?)` | One stretch of the day grid, ending at the later of the local clock and the chain tip. Call again with `nextDay` until it is `null`. Any server failure, or an answer without its counts, is an error, never "nothing found"; resume from the last `nextDay`. |
+| `btc_lock_withdraw_preview(t, account?, satPerVb)` | What a withdrawal would do, including what stays behind (`leftOut`, `leftOutSats`, `unconfirmedSats`). Signs nothing. Refused until the tip's median time past is above `t`. |
+| `btc_lock_withdraw(t, account?, satPerVb, password)` | Builds the plan, shows the native dialog, then signs and sends. There is no destination argument: Rust derives the first unused address among the first five receive addresses, the only ones the normal scan always reaches. `satPerVb` is a whole number. |
 
 Funding counts against the daily limit (§2.13) as a send. A withdrawal does not: the coins come back
 to the wallet's own address.

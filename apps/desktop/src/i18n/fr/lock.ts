@@ -30,6 +30,7 @@ export const lock = {
   'lock.account': 'Compte {n}',
   'lock.deposits_one': '{count} dépôt',
   'lock.deposits_other': '{count} dépôts',
+  'lock.unconfirmedNote': 'dont {amount} pas encore confirmés, pour un prochain retrait',
   'lock.details': 'Détails',
   'lock.withdraw': 'Retirer',
   'lock.back': 'Retour aux blocages',
@@ -76,8 +77,9 @@ export const lock = {
   'lock.withdraw.onlyOwn': 'Le retrait va toujours vers ton propre portefeuille.',
   'lock.withdraw.receive': 'Tu reçois',
   'lock.withdraw.fee': 'Frais',
-  'lock.withdraw.leftOut_one': '{count} petite pièce reste pour un prochain retrait.',
-  'lock.withdraw.leftOut_other': '{count} petites pièces restent pour un prochain retrait.',
+  'lock.withdraw.leftOut_one': '{count} petite pièce ({amount}) reste au blocage : à ces frais, elle coûte plus qu’elle ne rapporte. Elle reste retirable plus tard.',
+  'lock.withdraw.leftOut_other': '{count} petites pièces ({amount}) restent au blocage : à ces frais, elles coûtent plus qu’elles ne rapportent. Elles restent retirables plus tard.',
+  'lock.withdraw.unconfirmed': '{amount} pas encore confirmés restent pour un prochain retrait.',
   'lock.withdraw.confirm': 'Retirer',
   'lock.withdraw.done': 'Retrait envoyé. {amount} arrivent sur ton portefeuille.',
 
@@ -99,5 +101,7 @@ export const lock = {
   'lock.scan.foundSoFar_other': '{count} blocages trouvés',
   'lock.scan.none': 'Recherche terminée, aucun blocage avec des fonds sur ce compte.',
   'lock.scan.failed': 'Recherche interrompue : {error}. Ce n’est pas un résultat. Reprends-la.',
+  'lock.scan.reached': 'Vérifié jusqu’au {date}, sur un total allant jusqu’au {last}.',
+  'lock.scan.notStarted': 'Aucune date n’a été vérifiée.',
   'lock.scan.resume': 'Reprendre',
 } as const;

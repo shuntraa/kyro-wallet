@@ -3,11 +3,11 @@
 // Rust decides everything that matters (docs/BTC_TIMELOCK.md); this screen only asks.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { call, intlLocale, toIpcError, type BtcLockInfo, type BtcLockScanStep, type BtcLocksStatus, type BtcLockView, type BtcLockWithdrawPreview } from '@kyro/shared';
+import { call, intlLocale, toIpcError, type BtcLockInfo, type BtcLocksStatus, type BtcLockView, type BtcLockWithdrawPreview } from '@kyro/shared';
 import { assetsFor, parseUnits, type BitcoinAdapter, type FeeEstimates, type FeeLevel } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
-import { confirmWord, dateOfLockTime, isHeld, localToday, LOCK_MIN_SATS, LOCK_SHORTCUTS, lockDateError, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, shortcutDate, unlockLocal, unlockUtc } from '../lib/btcLock';
+import { confirmWord, dateOfLockTime, isHeld, localToday, LOCK_DAY_SECS, LOCK_MIN_SATS, LOCK_SHORTCUTS, lockDateError, lockFeeRate, lockScanStart, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, runLockScan, shortcutDate, unlockLocal, unlockUtc } from '../lib/btcLock';
 import { fmtCrypto, fmtFiat } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 import { AddressBlocks, CopyButton, EmptyState, EnClair, HIDDEN, PasswordField } from '../components/kit';
@@ -52,14 +52,14 @@ function useLockFees(adapter: BitcoinAdapter | null) {
   const [custom, setCustom] = useState('');
   const { t } = useT();
   const option = level === 'custom' ? null : fees.data?.options[level].params;
-  const rate = level === 'custom' ? Math.floor(Number(custom)) : option?.family === 'btc' ? option.satPerVb : 0;
+  const rate = lockFeeRate(level === 'custom' ? Number(custom) : option?.family === 'btc' ? option.satPerVb : 0);
   const levels: Array<{ value: FeeLevel | 'custom'; label: string }> = [
     { value: 'slow', label: t('send.feeSlow') },
     { value: 'normal', label: t('send.feeNormal') },
     { value: 'fast', label: t('send.feeFast') },
     { value: 'custom', label: t('lock.form.customFee') },
   ];
-  return { rate: Number.isFinite(rate) && rate >= 1 ? rate : 0, level, setLevel, custom, setCustom, levels };
+  return { rate, level, setLevel, custom, setCustom, levels };
 }
 
 function FeePicker({ fee, label }: { fee: ReturnType<typeof useLockFees>; label: string }) {
@@ -320,7 +320,8 @@ function Withdraw({ lock, adapter, onClose, onDone }: { lock: BtcLockView; adapt
                 <span className="text-[13.5px] text-mute">{t('lock.withdraw.dest')}</span>
                 <AddressBlocks address={preview.destination} size="sm" />
               </div>
-              {preview.leftOut > 0 ? <span className="pt-2 text-[13px] text-mute">{tp('lock.withdraw.leftOut', preview.leftOut)}</span> : null}
+              {preview.leftOut > 0 ? <span className="pt-2 text-[13px] text-mute">{tp('lock.withdraw.leftOut', preview.leftOut, { amount: btc(preview.leftOutSats) })}</span> : null}
+              {preview.unconfirmedSats > 0 ? <span className="pt-2 text-[13px] text-mute">{t('lock.withdraw.unconfirmed', { amount: btc(preview.unconfirmedSats) })}</span> : null}
             </div>
           ) : null}
           <PasswordField id="lock-withdraw-password" value={password} onChange={setPassword} wrong={wrong} />
@@ -365,47 +366,34 @@ function Details({ lock, onClose }: { lock: BtcLockView; onClose: () => void }) 
 
 function Scan({ account, onClose, onFound }: { account: number; onClose: () => void; onFound: () => void }) {
   const { t, tp } = useT();
-  const [step, setStep] = useState<BtcLockScanStep | null>(null);
-  const [cursor, setCursor] = useState<number | null>(null);
-  const [found, setFound] = useState(0);
+  const locale = intlLocale();
+  const [progress, setProgress] = useState(lockScanStart);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [finished, setFinished] = useState(false);
 
   const start = useCallback(async () => {
     setRunning(true);
-    setError(null);
-    let from = cursor;
-    let total = found;
-    try {
-      for (;;) {
-        const s = await call('btc_locks_scan', { fromDay: from, account });
-        total += s.found;
-        setStep(s);
-        setFound(total);
-        if (s.found > 0) onFound();
-        if (s.nextDay === null) {
-          setFinished(true);
-          break;
-        }
-        from = s.nextDay;
-        setCursor(from);
-      }
-    } catch (e) {
-      setError(toIpcError(e).message);
-    } finally {
-      setRunning(false);
-    }
-  }, [cursor, found, account, onFound]);
+    await runLockScan(
+      (fromDay) => call('btc_locks_scan', { fromDay, account }),
+      progress,
+      (p) => {
+        setProgress(p);
+        if (p.found > 0) onFound();
+      },
+    );
+    setRunning(false);
+  }, [progress, account, onFound]);
 
-  const percent = step ? Math.round(((((step.nextDay ?? step.lastDay + 1) - step.firstDay) / (step.lastDay + 1 - step.firstDay)) * 100)) : 0;
+  const { firstDay, lastDay, reachedDay, found, finished, error } = progress;
+  const span = firstDay !== null && lastDay !== null ? lastDay + 1 - firstDay : null;
+  const percent = span && reachedDay !== null && firstDay !== null ? Math.round(((reachedDay + 1 - firstDay) / span) * 100) : 0;
+  const dayText = (day: number) => unlockUtc(day * LOCK_DAY_SECS, locale);
   return (
     <Dialog open onOpenChange={(v) => !v && !running && onClose()} title={t('lock.scan.title')} description={t('lock.scan.body')}>
       <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-[13.5px] leading-[1.5] text-text2">
-        <li>{t('lock.scan.privacy', { count: step ? step.lastDay + 1 - step.firstDay : 3_660 })}</li>
+        <li>{t('lock.scan.privacy', { count: span ?? 3_660 })}</li>
         <li>{t('lock.scan.account')}</li>
       </ul>
-      {running || step ? (
+      {running || reachedDay !== null ? (
         <div className="flex flex-col gap-2">
           <span className="text-[13.5px] text-text2">{t('lock.scan.running', { percent })}</span>
           <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
@@ -415,7 +403,14 @@ function Scan({ account, onClose, onFound }: { account: number; onClose: () => v
         </div>
       ) : null}
       {finished && found === 0 ? <Notice>{t('lock.scan.none')}</Notice> : null}
-      {error ? <Notice tone="error">{t('lock.scan.failed', { error })}</Notice> : null}
+      {error ? (
+        <Notice tone="error">
+          <span className="flex flex-col gap-1">
+            <span>{t('lock.scan.failed', { error: toIpcError(error).message })}</span>
+            <span>{reachedDay !== null && lastDay !== null ? t('lock.scan.reached', { date: dayText(reachedDay), last: dayText(lastDay) }) : t('lock.scan.notStarted')}</span>
+          </span>
+        </Notice>
+      ) : null}
       {finished ? (
         <Button size="lg" onClick={onClose}>
           {t('lock.back')}
@@ -516,7 +511,10 @@ export function BtcLocks() {
                     <span className="truncate text-text">{unlockUtc(l.t, locale)}</span>
                     <span className="truncate text-[12.5px] text-faint">{l.account > 0 ? `${t('lock.account', { n: l.account + 1 })} · ` : ''}{dateOfLockTime(l.t)} 00:00 UTC</span>
                   </span>
-                  <span className="figure text-right text-[15px]">{hideBalances ? HIDDEN : btc(l.amountSats)}</span>
+                  <span className="flex min-w-0 flex-col items-end">
+                    <span className="figure text-[15px]">{hideBalances ? HIDDEN : btc(l.amountSats)}</span>
+                    {l.unconfirmedSats > 0 && l.status !== 'confirming' ? <span className="text-right text-[12.5px] text-mute">{t('lock.unconfirmedNote', { amount: hideBalances ? HIDDEN : btc(l.unconfirmedSats) })}</span> : null}
+                  </span>
                   <span className="figure text-right text-text2">{l.status === 'locked' || l.status === 'confirming' ? lockTimeLeft(l.secsLeft, units) : '—'}</span>
                   <span className={STATUS_TONE[l.status]}>{t(`lock.status.${l.status}`)}</span>
                   <span className="flex w-[176px] justify-end gap-1.5">

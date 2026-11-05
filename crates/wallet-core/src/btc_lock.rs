@@ -122,18 +122,6 @@ pub struct BtcLockSpend {
     pub hex: String,
     /// Its txid.
     pub txid: String,
-    /// What the destination receives, sats.
-    pub amount_sats: u64,
-    /// Fee, sats.
-    pub fee_sats: u64,
-    /// Virtual size the fee was computed on (never below the real one).
-    pub vsize: u64,
-    /// The wallet's own address.
-    pub destination: String,
-    /// Coins spent.
-    pub inputs: usize,
-    /// Coins left for a later withdrawal (over [`BTC_LOCK_MAX_INPUTS`]).
-    pub left_out: usize,
 }
 
 /// Checks the form of `t` and returns its day: 00:00 UTC, and a time, never a block height.
@@ -425,9 +413,49 @@ fn outpoint(u: &BtcLockUtxo) -> Result<OutPoint> {
     })
 }
 
-/// The withdrawal, refused before the network would accept it.
+/// Signature-free description of a withdrawal: what the native dialog shows and what
+/// [`btc_lock_sign_plan`] signs afterwards. Nothing here needs a private key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BtcLockPlan {
+    /// Unlock time of the lock.
+    pub t: u32,
+    /// BIP84 account of the lock and of the destination.
+    pub account: u32,
+    /// Coins spent, largest first.
+    pub coins: Vec<BtcLockUtxo>,
+    /// Receive index of the destination.
+    pub destination_index: u32,
+    /// The wallet's own address.
+    pub destination: String,
+    /// What the destination receives, sats.
+    pub amount_sats: u64,
+    /// Fee, sats.
+    pub fee_sats: u64,
+    /// Fee rate, sat/vB.
+    pub sat_per_vb: u64,
+    /// Virtual size the fee was computed on (never below the real one).
+    pub vsize: u64,
+    /// Coins left at the lock: worth less than their own input at this rate, or over
+    /// [`BTC_LOCK_MAX_INPUTS`]. They stay withdrawable later.
+    pub left_out: usize,
+    /// Their total, sats.
+    pub left_out_sats: u64,
+}
+
+fn witness_size(script_len: usize) -> u64 {
+    // Items count, signature, witness script, each with its length byte.
+    1 + 1 + MAX_SIG_LEN + 1 + script_len as u64
+}
+
+/// What one more input adds to the fee: outpoint, empty scriptSig, sequence, and the witness.
+fn input_vsize(script_len: usize) -> u64 {
+    (41 * 4 + witness_size(script_len)).div_ceil(4)
+}
+
+/// The plan, refused before the network would accept the spend.
 #[allow(clippy::too_many_arguments)]
-pub fn btc_lock_withdraw_tx(
+pub fn btc_lock_plan_withdraw(
     seed: &Seed,
     net: Network,
     account: u32,
@@ -436,17 +464,18 @@ pub fn btc_lock_withdraw_tx(
     destination_index: u32,
     sat_per_vb: u64,
     tip_mtp: u64,
-) -> Result<BtcLockSpend> {
+) -> Result<BtcLockPlan> {
     if !btc_lock_is_open(t, tip_mtp) {
         return Err(Error::input("still locked: the network would refuse it"));
     }
-    btc_lock_spend_unchecked(seed, net, account, t, utxos, destination_index, sat_per_vb)
+    btc_lock_plan_unchecked(seed, net, account, t, utxos, destination_index, sat_per_vb)
 }
 
-/// Builds and signs the spend of a lock to `m/84'/coin'/account'/0/destination_index`, the only
-/// destination there is. Does not look at the time: [`btc_lock_withdraw_tx`] is what the app calls.
-/// Public so that the node tests can show the network itself refusing an early spend.
-pub fn btc_lock_spend_unchecked(
+/// Picks the coins and works out the fee for a spend to
+/// `m/84'/coin'/account'/0/destination_index`, the only destination there is. A coin worth less
+/// than its own input at this rate is left out, so a stranger's dust can neither make the
+/// withdrawal fail nor cost more than it brings. Does not look at the time.
+pub fn btc_lock_plan_unchecked(
     seed: &Seed,
     net: Network,
     account: u32,
@@ -454,30 +483,45 @@ pub fn btc_lock_spend_unchecked(
     utxos: &[BtcLockUtxo],
     destination_index: u32,
     sat_per_vb: u64,
-) -> Result<BtcLockSpend> {
-    let day = btc_lock_day(t)?;
+) -> Result<BtcLockPlan> {
     if !(1..=BTC_LOCK_MAX_FEE_RATE).contains(&sat_per_vb) {
         return Err(Error::input("fee rate out of range"));
     }
     if utxos.is_empty() {
         return Err(Error::input("nothing to withdraw"));
     }
-    let mut coins = utxos.to_vec();
-    coins.sort_by(|a, b| {
+    let info = btc_lock_info(seed, net, account, t)?;
+    let script_len = info.witness_script.len() / 2;
+    let input_fee = input_vsize(script_len)
+        .checked_mul(sat_per_vb)
+        .ok_or_else(|| Error::input("fee overflow"))?;
+
+    let mut all = utxos.to_vec();
+    all.sort_by(|a, b| (&a.txid, a.vout).cmp(&(&b.txid, b.vout)));
+    all.dedup_by(|a, b| a.txid == b.txid && a.vout == b.vout);
+    all.sort_by(|a, b| {
         b.value
             .cmp(&a.value)
             .then_with(|| (&a.txid, a.vout).cmp(&(&b.txid, b.vout)))
     });
-    coins.dedup_by(|a, b| a.txid == b.txid && a.vout == b.vout);
-    let left_out = coins.len().saturating_sub(BTC_LOCK_MAX_INPUTS);
-    coins.truncate(BTC_LOCK_MAX_INPUTS);
-
-    let secp = secp()?;
-    let path = lock_path(net, account, day)?;
-    let key = lock_key(seed, &secp, net, &path)?;
-    let sk = key.xpriv().private_key;
-    let pubkey = sk.public_key(&secp);
-    let script = witness_script(pubkey, t);
+    let (mut coins, mut rest): (Vec<_>, Vec<_>) =
+        all.into_iter().partition(|c| c.value > input_fee);
+    if coins.len() > BTC_LOCK_MAX_INPUTS {
+        rest.extend(coins.split_off(BTC_LOCK_MAX_INPUTS));
+    }
+    if coins.is_empty() {
+        return Err(Error::input(
+            "the fee would take the whole amount: pick a lower fee",
+        ));
+    }
+    let left_out_sats = rest
+        .iter()
+        .try_fold(0u64, |s, c| s.checked_add(c.value))
+        .ok_or_else(|| Error::input("amount overflow"))?;
+    let total = coins
+        .iter()
+        .try_fold(0u64, |s, c| s.checked_add(c.value))
+        .ok_or_else(|| Error::input("amount overflow"))?;
 
     let destination = btc_address(
         seed,
@@ -487,35 +531,9 @@ pub fn btc_lock_spend_unchecked(
         false,
         destination_index,
     )?;
-    let destination_script = btc_script_pubkey(&destination, net)?;
-
-    let mut total = 0u64;
-    let mut input = Vec::with_capacity(coins.len());
-    for c in &coins {
-        total = total
-            .checked_add(c.value)
-            .ok_or_else(|| Error::input("amount overflow"))?;
-        input.push(TxIn {
-            previous_output: outpoint(c)?,
-            script_sig: ScriptBuf::new(),
-            sequence: Sequence(BTC_LOCK_SEQUENCE),
-            witness: Witness::new(),
-        });
-    }
-    let mut tx = Transaction {
-        version: Version::TWO,
-        lock_time: LockTime::from_time(t).map_err(|_| Error::input("invalid lock time"))?,
-        input,
-        output: vec![TxOut {
-            value: Amount::ZERO,
-            script_pubkey: destination_script,
-        }],
-    };
-
-    // Items count, signature, witness script, each with its length byte.
-    let witness_size = 1 + 1 + MAX_SIG_LEN + 1 + script.len() as u64;
+    let tx = unsigned_spend(t, &coins, btc_script_pubkey(&destination, net)?, 0)?;
     let inputs = coins.len() as u64;
-    let weight = (tx.base_size() as u64) * 4 + 2 + inputs * witness_size;
+    let weight = (tx.base_size() as u64) * 4 + 2 + inputs * witness_size(script_len);
     let vsize = weight.div_ceil(4);
     let fee_sats = vsize
         .checked_mul(sat_per_vb)
@@ -524,17 +542,82 @@ pub fn btc_lock_spend_unchecked(
         .checked_sub(fee_sats)
         .filter(|a| *a >= BTC_LOCK_MIN_OUTPUT_SATS)
         .ok_or_else(|| Error::input("the fee would take the whole amount: pick a lower fee"))?;
-    tx.output[0].value = Amount::from_sat(amount_sats);
+    Ok(BtcLockPlan {
+        t,
+        account,
+        coins,
+        destination_index,
+        destination,
+        amount_sats,
+        fee_sats,
+        sat_per_vb,
+        vsize,
+        left_out: rest.len(),
+        left_out_sats,
+    })
+}
 
-    let mut witnesses = Vec::with_capacity(coins.len());
+fn unsigned_spend(
+    t: u32,
+    coins: &[BtcLockUtxo],
+    destination: ScriptBuf,
+    amount_sats: u64,
+) -> Result<Transaction> {
+    let mut input = Vec::with_capacity(coins.len());
+    for c in coins {
+        input.push(TxIn {
+            previous_output: outpoint(c)?,
+            script_sig: ScriptBuf::new(),
+            sequence: Sequence(BTC_LOCK_SEQUENCE),
+            witness: Witness::new(),
+        });
+    }
+    Ok(Transaction {
+        version: Version::TWO,
+        lock_time: LockTime::from_time(t).map_err(|_| Error::input("invalid lock time"))?,
+        input,
+        output: vec![TxOut {
+            value: Amount::from_sat(amount_sats),
+            script_pubkey: destination,
+        }],
+    })
+}
+
+/// Signs a plan the user has approved. The destination is derived again here.
+pub fn btc_lock_sign_plan(seed: &Seed, net: Network, plan: &BtcLockPlan) -> Result<BtcLockSpend> {
+    let day = btc_lock_day(plan.t)?;
+    let destination = btc_address(
+        seed,
+        net,
+        BtcKind::Segwit,
+        plan.account,
+        false,
+        plan.destination_index,
+    )?;
+    if destination != plan.destination {
+        return Err(Error::input("the destination is not this wallet's"));
+    }
+    let secp = secp()?;
+    let path = lock_path(net, plan.account, day)?;
+    let key = lock_key(seed, &secp, net, &path)?;
+    let sk = &key.xpriv().private_key;
+    let pubkey = sk.public_key(&secp);
+    let script = witness_script(pubkey, plan.t);
+    let mut tx = unsigned_spend(
+        plan.t,
+        &plan.coins,
+        btc_script_pubkey(&destination, net)?,
+        plan.amount_sats,
+    )?;
+    let mut witnesses = Vec::with_capacity(plan.coins.len());
     {
         let mut cache = SighashCache::new(&tx);
-        for (i, c) in coins.iter().enumerate() {
+        for (i, c) in plan.coins.iter().enumerate() {
             let sighash = cache
                 .p2wsh_signature_hash(i, &script, Amount::from_sat(c.value), EcdsaSighashType::All)
                 .map_err(|_| Error::crypto("sighash failed"))?;
             let msg = Message::from_digest(sighash.to_byte_array());
-            let signature = secp.sign_ecdsa(&msg, &sk);
+            let signature = secp.sign_ecdsa(&msg, sk);
             secp.verify_ecdsa(&msg, &signature, &pubkey)
                 .map_err(|_| Error::crypto("signature self-check failed"))?;
             let mut w = Witness::new();
@@ -552,12 +635,6 @@ pub fn btc_lock_spend_unchecked(
     Ok(BtcLockSpend {
         hex: serialize_hex(&tx),
         txid: tx.compute_txid().to_string(),
-        amount_sats,
-        fee_sats,
-        vsize,
-        destination,
-        inputs: coins.len(),
-        left_out,
     })
 }
 
@@ -962,13 +1039,14 @@ mod tests {
         }
     }
 
-    fn spend(utxos: &[BtcLockUtxo], rate: u64) -> Result<BtcLockSpend> {
-        btc_lock_spend_unchecked(&seed(), Network::Testnet, 0, T, utxos, 3, rate)
+    fn plan(utxos: &[BtcLockUtxo], rate: u64) -> Result<BtcLockPlan> {
+        btc_lock_plan_unchecked(&seed(), Network::Testnet, 0, T, utxos, 3, rate)
     }
 
     #[test]
     fn the_spend_has_the_fields_the_network_needs() {
-        let s = spend(&[coin(1, 100_000), coin(2, 60_000)], 5).unwrap();
+        let p = plan(&[coin(1, 100_000), coin(2, 60_000)], 5).unwrap();
+        let s = btc_lock_sign_plan(&seed(), Network::Testnet, &p).unwrap();
         let tx: Transaction = deserialize_hex(&s.hex).unwrap();
         assert_eq!(tx.lock_time.to_consensus_u32(), T);
         assert_eq!(tx.version, Version::TWO);
@@ -987,24 +1065,24 @@ mod tests {
         }
         assert_eq!(tx.output.len(), 1, "no second destination");
         assert_eq!(
-            s.destination,
+            p.destination,
             btc_address(&seed(), Network::Testnet, BtcKind::Segwit, 0, false, 3).unwrap()
         );
-        assert_eq!(tx.output[0].value.to_sat(), s.amount_sats);
-        assert_eq!(s.amount_sats + s.fee_sats, 160_000);
+        assert_eq!(tx.output[0].value.to_sat(), p.amount_sats);
+        assert_eq!(p.amount_sats + p.fee_sats, 160_000);
         assert!(
-            s.vsize >= tx.vsize() as u64,
+            p.vsize >= tx.vsize() as u64,
             "the fee never falls under the rate"
         );
-        assert!(s.vsize <= tx.vsize() as u64 + 2);
-        assert_eq!(s.fee_sats, s.vsize * 5);
+        assert!(p.vsize <= tx.vsize() as u64 + 2);
+        assert_eq!(p.fee_sats, p.vsize * 5);
         assert_eq!(s.txid, tx.compute_txid().to_string());
     }
 
     #[test]
     fn no_withdrawal_before_the_network_allows_it() {
         let w = |mtp| {
-            btc_lock_withdraw_tx(
+            btc_lock_plan_withdraw(
                 &seed(),
                 Network::Testnet,
                 0,
@@ -1021,33 +1099,40 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_for_another_destination_is_not_signed() {
+        let mut p = plan(&[coin(1, 100_000)], 2).unwrap();
+        p.destination = STRANGER.to_owned();
+        assert!(btc_lock_sign_plan(&seed(), Network::Testnet, &p).is_err());
+    }
+
+    #[test]
     fn fees_that_eat_the_coins_are_refused() {
         let coins = [coin(1, 50_000)];
-        let fine = spend(&coins, 1).unwrap();
+        let fine = plan(&coins, 1).unwrap();
         assert!(fine.amount_sats > 49_000);
         // Rate so high the fee passes the amount, or leaves only dust.
-        assert!(spend(&coins, 1_000).is_err());
+        assert!(plan(&coins, 1_000).is_err());
         let vsize = fine.vsize;
         let at_limit = (50_000 - BTC_LOCK_MIN_OUTPUT_SATS) / vsize;
         assert_eq!(
-            spend(&coins, at_limit).unwrap().amount_sats,
+            plan(&coins, at_limit).unwrap().amount_sats,
             50_000 - at_limit * vsize
         );
-        assert!(spend(&coins, at_limit + 1).is_err());
-        assert!(spend(&coins, 0).is_err());
-        assert!(spend(&coins, BTC_LOCK_MAX_FEE_RATE + 1).is_err());
+        assert!(plan(&coins, at_limit + 1).is_err());
+        assert!(plan(&coins, 0).is_err());
+        assert!(plan(&coins, BTC_LOCK_MAX_FEE_RATE + 1).is_err());
         assert!(
-            spend(&[coin(1, u64::MAX), coin(2, u64::MAX)], 1).is_err(),
+            plan(&[coin(1, u64::MAX), coin(2, u64::MAX)], 1).is_err(),
             "overflow"
         );
-        assert!(spend(&[], 1).is_err());
+        assert!(plan(&[], 1).is_err());
     }
 
     #[test]
     fn a_coin_listed_twice_counts_once() {
-        let s = spend(&[coin(1, 100_000), coin(1, 100_000)], 1).unwrap();
-        assert_eq!(s.inputs, 1);
-        assert_eq!(s.amount_sats + s.fee_sats, 100_000);
+        let p = plan(&[coin(1, 100_000), coin(1, 100_000)], 1).unwrap();
+        assert_eq!(p.coins.len(), 1);
+        assert_eq!(p.amount_sats + p.fee_sats, 100_000);
     }
 
     #[test]
@@ -1061,9 +1146,10 @@ mod tests {
             })
             .collect();
         coins.push(coin(255, 100_000));
-        let s = spend(&coins, 1).unwrap();
-        assert_eq!(s.inputs, BTC_LOCK_MAX_INPUTS);
-        assert_eq!(s.left_out, coins.len() - BTC_LOCK_MAX_INPUTS);
+        let p = plan(&coins, 1).unwrap();
+        assert_eq!(p.coins.len(), BTC_LOCK_MAX_INPUTS);
+        assert_eq!(p.left_out, coins.len() - BTC_LOCK_MAX_INPUTS);
+        let s = btc_lock_sign_plan(&seed(), Network::Testnet, &p).unwrap();
         let tx: Transaction = deserialize_hex(&s.hex).unwrap();
         assert!(tx.weight().to_wu() < 400_000);
         assert!(
@@ -1072,6 +1158,46 @@ mod tests {
                 .any(|i| i.previous_output.txid.to_string() == "ff".repeat(32)),
             "the real coin is taken first"
         );
+    }
+
+    /// A stranger's dust must not make the withdrawal fail or cost more than it brings.
+    #[test]
+    fn dust_worth_less_than_its_input_is_left_out_and_stays_withdrawable() {
+        let per_input = input_vsize(41);
+        assert_eq!(per_input, 71);
+        let dust: Vec<BtcLockUtxo> = (2..=40u8).map(|n| coin(n, 546)).collect();
+        let mut coins = dust.clone();
+        coins.push(coin(1, 100_000));
+
+        // 20 sat/vB: an input costs 1,420 sats, a 546 sat coin is not worth spending.
+        let p = plan(&coins, 20).unwrap();
+        assert_eq!(p.coins, vec![coin(1, 100_000)]);
+        assert_eq!(p.left_out, dust.len());
+        assert_eq!(p.left_out_sats, 546 * dust.len() as u64);
+        assert_eq!(p.vsize, plan(&[coin(1, 100_000)], 20).unwrap().vsize);
+
+        // The rule's edge: worth exactly its input is not worth it, one sat more is.
+        let edge = per_input * 20;
+        assert_eq!(
+            plan(&[coin(1, 100_000), coin(2, edge)], 20)
+                .unwrap()
+                .left_out,
+            1
+        );
+        assert_eq!(
+            plan(&[coin(1, 100_000), coin(2, edge + 1)], 20)
+                .unwrap()
+                .left_out,
+            0
+        );
+
+        // At a low rate the same coins come along.
+        let p = plan(&coins, 1).unwrap();
+        assert_eq!((p.coins.len(), p.left_out), (coins.len(), 0));
+
+        // Only dust at a high rate: refused in plain words, nothing lost.
+        assert!(plan(&dust, 20).is_err());
+        assert!(plan(&dust, 1).is_ok());
     }
 
     #[test]
