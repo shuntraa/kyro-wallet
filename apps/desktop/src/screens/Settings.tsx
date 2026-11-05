@@ -29,6 +29,7 @@ import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
 import { BackupSection } from './settings/Backup';
 import { TorBridges } from './settings/TorBridges';
+import { SpendLimitSection } from './settings/SpendLimit';
 
 export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -219,6 +220,7 @@ function Security({ save }: { save: Save }) {
           </SettingRow>
         )}
       </Panel>
+      <SpendLimitSection />
       <RevealPhrase />
       <MoneroWallet />
     </>

@@ -34,6 +34,7 @@ import { addApproval, addLocalTx } from '../lib/storage';
 import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, pickSend, sendChoices, swapChainOf, swapRate, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
 import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
+import { declareSwap } from '../lib/spendLimit';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { SimulationPanel } from '../components/SimulationPanel';
@@ -284,6 +285,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           // LI.FI cross-chain: Rust decodes, Kyro checks the transfers, NEAR Intents confirms the deposit — BEFORE the password.
           const routeCheck = await quote.tx.verify(wire, await adapters.sol.decodeWire(wire));
           setPhase('swapping');
+          await declareSwap('sol', wire, sell.contract, sellAmount);
           const signed = await adapters.sol.signWireTransaction(wire, password);
           const signedCheck = await quote.tx.verify(wire, signed.summary);
           if (signedCheck.depositAddress !== routeCheck.depositAddress) throw new Error(t('swap.errSignedMismatch'));
@@ -309,6 +311,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         };
         await verifyJupiterSwap({ ...check, summary: await adapters.sol.decodeWire(wire) });
         setPhase('swapping');
+        await declareSwap('sol', wire, sell.contract, sellAmount);
         const signed = await adapters.sol.signWireTransaction(wire, password);
         await verifyJupiterSwap({ ...check, summary: signed.summary });
         const id = await adapters.sol.broadcast(signed);
@@ -389,6 +392,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       // Rust's decoding must be exactly the call that was checked (contract from Kyro's list, same data and value).
       const decoded = await evmAdapter.decode(unsigned);
       if (decoded.to.toLowerCase() !== known.toLowerCase() || unsigned.tx.data !== fresh.tx.data || unsigned.tx.valueWei !== fresh.tx.value.toString()) throw new Error(t('swap.errTxMismatch'));
+      await declareSwap(`evm:${chain.chainId}`, unsigned.tx.data, sell.contract, sellAmount);
       const signed = await evmAdapter.signTx(unsigned, password);
       const hash = await evmAdapter.broadcast(signed);
       recordSwap(hash, fresh, { fee: unsigned.maxFee.toString(), counterparty: fresh.tx.to });
