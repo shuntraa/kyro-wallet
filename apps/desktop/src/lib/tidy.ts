@@ -154,6 +154,12 @@ export function settle<T>(run: TidyRun<T>, index: number, outcome: TidyOutcome):
   return { ...run, outcomes: [...run.outcomes, outcome] };
 }
 
+/** Settles item `index`, then stops: the rest is skipped. A late answer changes nothing. */
+export function settleAndStop<T>(run: TidyRun<T>, index: number, outcome: TidyOutcome): TidyRun<T> {
+  const next = settle(run, index, outcome);
+  return next === run ? run : stopRun(next);
+}
+
 /** Stops here: everything not settled yet is skipped. */
 export const stopRun = <T>(run: TidyRun<T>): TidyRun<T> => ({ ...run, outcomes: [...run.outcomes, ...run.items.slice(run.outcomes.length).map((): TidyOutcome => ({ status: 'skipped' }))] });
 

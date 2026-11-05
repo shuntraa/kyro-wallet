@@ -248,6 +248,7 @@
     "allow-spend-limit-override-confirm",
     "allow-spend-limit-cancel",
     "allow-spend-limit-declare",
+    "allow-spend-limit-check",
     "allow-wallet-new",
     "allow-wallet-new-cancel",
     "allow-wallet-rename",

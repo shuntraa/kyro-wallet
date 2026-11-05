@@ -402,10 +402,16 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     return signed;
   }
 
+  /** What Rust signs, and sees, of a wire transaction: its message, not the whole wire. */
+  wireMessage(wireB64: string): string {
+    const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
+    return getBase64Decoder().decode(tx.messageBytes);
+  }
+
   /** Sign any wire transaction we are a signer of (our builds, Jupiter swaps…). */
   async signWireTransaction(wireB64: string, password: string): Promise<SolSigned & { summary: SolTxSummary }> {
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
-    const message = getBase64Decoder().decode(tx.messageBytes);
+    const message = this.wireMessage(wireB64);
     const res = await call('sol_sign_tx', { message, password, ...accountArg(this.account) });
     const index = res.summary.ourSignerIndex;
     if (index === null) throw new Error(l10n('Ce compte ne signe pas cette transaction', 'This account does not sign this transaction'));

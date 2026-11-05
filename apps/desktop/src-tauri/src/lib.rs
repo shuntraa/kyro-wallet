@@ -425,6 +425,7 @@ pub fn run() {
             spend_limit::spend_limit_override_confirm,
             spend_limit::spend_limit_cancel,
             spend_limit::spend_limit_declare,
+            spend_limit::spend_limit_check,
             wallets::wallet_new,
             wallets::wallet_new_cancel,
             wallets::wallet_rename,

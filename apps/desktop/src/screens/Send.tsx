@@ -156,7 +156,7 @@ const LEVELS: Array<{ level: FeeLevel; label: 'send.feeSlow' | 'send.feeNormal' 
   { level: 'fast', label: 'send.feeFast' },
 ];
 
-export function Send({ assetId, to: initialTo, amount: initialAmount, memo: initialMemo }: { assetId?: string; to?: string; amount?: string; memo?: string }) {
+export function Send({ assetId, to: initialTo, amount: initialAmount, memo: initialMemo, xlmMemo: initialXlmMemo }: { assetId?: string; to?: string; amount?: string; memo?: string; xlmMemo?: { kind: StellarMemoKind; value: string } }) {
   const { t } = useT();
   const { back, settings, navigate, hideBalances, accountSources, accountName, selectedAccounts, vaultLists } = useApp();
   const { adapters, accounts, activeHw } = useVault();
@@ -316,8 +316,8 @@ export function Send({ assetId, to: initialTo, amount: initialAmount, memo: init
   const xrpMe = useAsync(xrpAdapter ? () => xrpAdapter.account() : null, [xrpAdapter], { intervalMs: 30_000 });
   const isXlm = asset?.family === 'xlm';
   const xlmAdapter = isXlm ? (adapter as StellarAdapter | undefined) : undefined;
-  const [xlmMemoKind, setXlmMemoKind] = useState<StellarMemoKind>('id');
-  const [xlmMemo, setXlmMemo] = useState('');
+  const [xlmMemoKind, setXlmMemoKind] = useState<StellarMemoKind>(initialXlmMemo?.kind ?? 'id');
+  const [xlmMemo, setXlmMemo] = useState(initialXlmMemo?.value ?? '');
   const xlmMemoParsed = useMemo((): { memo?: ReturnType<typeof parseStellarMemo>; error: string | null } => {
     try {
       return { memo: parseStellarMemo(xlmMemoKind, xlmMemo), error: null };
@@ -558,7 +558,7 @@ export function Send({ assetId, to: initialTo, amount: initialAmount, memo: init
   // A token's fee is paid in the chain's coin, which the amount above says nothing about. The real
   // fee once built, else (the build may refuse for this very reason) the usual cost of a transfer.
   const tokenFee = !asset || !nativeAsset || asset.kind === 'native' ? null : built?.unsigned.family === 'tron' ? BigInt(built.unsigned.estimate.totalBurn) : maxFee !== null ? maxFee + rent : addrValid && !building && amountBase !== null && amountBase > 0n ? swapFeeOn(nativeAsset, { token: true, plain: true, estimates: fees.data, nativePrice }) : null;
-  const sendBack: Route | undefined = asset ? { name: 'send', assetId: asset.id, ...(toTrim ? { to: toTrim } : {}), ...(amountBase ? { amount: toInputDecimal(amountBase, decimals) } : {}), ...(memo ? { memo } : {}) } : undefined;
+  const sendBack: Route | undefined = asset ? { name: 'send', assetId: asset.id, ...(toTrim ? { to: toTrim } : {}), ...(amountBase ? { amount: toInputDecimal(amountBase, decimals) } : {}), ...(memo ? { memo } : {}), ...(isXlm && xlmMemo ? { xlmMemo: { kind: xlmMemoKind, value: xlmMemo } } : {}) } : undefined;
 
   const [password, setPassword] = useState('');
   const [signing, setSigning] = useState(false);

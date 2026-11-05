@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { allChains, assetsFor, parseUnits, type AssetDef } from '@kyro/chains';
-import { currentItem, runFinished, settle, startRun, stopRun, suspectAssetIds, TIDY_DEFAULT_THRESHOLD, TIDY_MAX_FEE_RATIO, tickedByDefault, tidyCost, tidyRows, tidySummary, type TidyInput } from './tidy';
+import { currentItem, runFinished, settle, settleAndStop, startRun, stopRun, suspectAssetIds, TIDY_DEFAULT_THRESHOLD, TIDY_MAX_FEE_RATIO, tickedByDefault, tidyCost, tidyRows, tidySummary, type TidyInput } from './tidy';
 import { AAVE_MARKETS, LIDO_STETH } from './earn';
 import { nativeFloor } from './topUp';
 
@@ -162,6 +162,19 @@ describe('a run', () => {
     expect(settle(run, 0, { status: 'failed', reason: 'late' })).toBe(run);
     const end = settle(run, 1, { status: 'done', id: '2' });
     expect(settle(end, 2, { status: 'skipped' })).toBe(end);
+  });
+
+  it('over the limit: this one fails, the rest is skipped, no other swap is tried', () => {
+    const run = settle(startRun(['a', 'b', 'c']), 0, { status: 'done', id: '1' });
+    const end = settleAndStop(run, 1, { status: 'failed', reason: 'limit' });
+    expect(runFinished(end)).toBe(true);
+    expect(tidySummary(end)).toEqual({ done: ['a'], failed: [{ item: 'b', reason: 'limit' }], skipped: ['c'] });
+  });
+
+  it('an answer arriving after a stop changes nothing', () => {
+    const stopped = stopRun(startRun(['a', 'b']));
+    expect(settle(stopped, 0, { status: 'failed', reason: 'late' })).toBe(stopped);
+    expect(settleAndStop(stopped, 0, { status: 'failed', reason: 'late' })).toBe(stopped);
   });
 
   it('stopping skips what is left and keeps what is done', () => {

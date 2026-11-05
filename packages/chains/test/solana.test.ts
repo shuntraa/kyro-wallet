@@ -228,7 +228,12 @@ describe('SolanaAdapter against the demo backend', () => {
       ),
     );
     confirms.length = 0;
-    const signed = await adapters.sol!.signWireTransaction(getBase64EncodedWireTransaction(tx), PASSWORD);
+    const wire = getBase64EncodedWireTransaction(tx);
+    // Rust is given the message: that is what a swap's declaration has to name, not the wire.
+    const message = adapters.sol!.wireMessage(wire);
+    expect(message).not.toBe(wire);
+    expect([...getBase64Encoder().encode(message)]).toEqual([...tx.messageBytes]);
+    const signed = await adapters.sol!.signWireTransaction(wire, PASSWORD);
     expect(signed.summary.ourSignerIndex).toBe(1);
     expect(signed.summary.requiresExtraConfirmation).toBe(true);
     expect(confirms).toHaveLength(2);

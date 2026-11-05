@@ -242,11 +242,12 @@ const COMMANDS: &[&str] = &[
     "spend_limit_override_confirm",
     "spend_limit_cancel",
     "spend_limit_declare",
+    "spend_limit_check",
     "wallet_new",
     "wallet_new_cancel",
     "wallet_rename",
     "wallet_remove",
-    // Second password (docs/IPC.md §2.9c).
+    // Second password (docs/IPC.md §2.9d).
     "duress_status",
     "duress_enable",
     "duress_show_phrase",

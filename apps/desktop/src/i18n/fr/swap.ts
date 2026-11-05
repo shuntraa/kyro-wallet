@@ -66,6 +66,7 @@ export const swap = {
   'swap.simOkUnmeasured': 'Simulation réussie : la transaction passe (montant reçu non mesuré par ce serveur).',
   'swap.simFails': 'La simulation échoue : {reason}',
   'swap.broadcast': 'Swap diffusé : {id}.',
+  'swap.feeUnpaid': 'Le swap est parti, mais les frais de service Kyro n’ont pas été payés.',
   'swap.viewHistory': 'Voir l’historique',
   'swap.review': 'Vérifier le swap',
   'swap.bestPrice': 'Meilleur prix',

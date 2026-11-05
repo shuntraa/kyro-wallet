@@ -186,13 +186,13 @@ async fn seal_and_start(
     password: Zeroizing<String>,
 ) -> AppResult<()> {
     check_password_strength(&password)?;
-    crate::duress::refuse_its_password(state, &password).await?;
     let _creating = state.vault_create_lock.lock().await;
     if state.vault_exists() {
         return Err(AppError::InvalidInput(
             "a vault already exists on this device".into(),
         ));
     }
+    crate::duress::refuse_its_password(state, &password).await?;
     let seed = secret.seed();
     let cardano = secret.cardano_root();
     let polkadot = secret.polkadot_root()?;
@@ -403,10 +403,10 @@ pub async fn vault_change_password(
             "the new password is the same as the current one".into(),
         ));
     }
-    crate::duress::refuse_its_password(&state, &next).await?;
     // Held to the end: no switch, no second change, no new vault meanwhile.
     let _creating = state.vault_create_lock.lock().await;
     let secret = secret_from_password(&state, current).await?;
+    crate::duress::refuse_its_password(&state, &next).await?;
     let path = state.active_vault_path();
     blocking(move || crate::wallets::rewrite_vault(&path, &secret, &next, KdfParams::production()))
         .await?;

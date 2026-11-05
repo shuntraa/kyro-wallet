@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Réglages › Sécurité: optional second password (docs/IPC.md §2.9c). Same words in every session,
+// Réglages › Sécurité: optional second password (docs/IPC.md §2.9d). Same words in every session,
 // so nothing here tells which wallet is open. Rust creates the wallet and shows its phrase.
 
 import { useEffect, useState } from 'react';

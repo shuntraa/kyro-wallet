@@ -75,6 +75,8 @@ async fn open_for_unlock(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<(WalletSecret, bool)> {
+    // One at a time: `before` must still be the counter when it is put back.
+    let _one_unlock = state.vault_create_lock.lock().await;
     let file = state.read_vault()?;
     let decoy = if state.in_decoy() {
         None
@@ -117,6 +119,13 @@ pub(crate) async fn unlock(state: &AppState, password: Zeroizing<String>) -> App
         ))
     })
     .await?;
+    // A signature still waiting in its window keeps its seed: no session may start under it, the
+    // limit it answers to would become the wrong wallet's.
+    if state.dialogs.any_open() {
+        return Err(AppError::InvalidInput(
+            "close the confirmation window first".into(),
+        ));
+    }
     if decoy {
         state.start_decoy_session(epoch, seed, cardano, polkadot)
     } else {
@@ -506,6 +515,22 @@ mod tests {
         assert!(!state.in_decoy());
         assert_eq!(seed_of(&state), real_seed(PHRASE_1));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn no_session_starts_under_a_signature_still_waiting_in_its_window() {
+        let (state, dir) = enabled_device("window");
+        let open = state.dialogs.enter();
+        assert!(matches!(
+            run(unlock(&state, pw(COERCED))),
+            Err(AppError::InvalidInput(_))
+        ));
+        assert!(!state.is_unlocked());
+        assert!(!state.in_decoy());
+        drop(open);
+        run(unlock(&state, pw(COERCED))).unwrap();
+        assert!(state.in_decoy());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

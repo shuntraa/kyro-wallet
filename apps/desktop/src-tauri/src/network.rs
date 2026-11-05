@@ -236,6 +236,12 @@ pub fn network_get(state: State<'_, AppState>) -> NetworkInfo {
 /// (the vault of the other network is opened after the restart, nothing is deleted).
 #[tauri::command]
 pub fn network_set(app: AppHandle, state: State<'_, AppState>, network: String) -> AppResult<bool> {
+    // `network.json` is the real side's: that session changes nothing there.
+    if state.in_decoy() {
+        return Err(AppError::InvalidInput(
+            "the network cannot be changed now".into(),
+        ));
+    }
     let n = check_switch(
         state.network_source,
         state.dialogs.any_open(),

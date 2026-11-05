@@ -66,6 +66,7 @@ export const swap: Record<keyof typeof fr, string> = {
   'swap.simOkUnmeasured': 'Simulation succeeded: the transaction goes through (amount received not measured by this server).',
   'swap.simFails': 'The simulation fails: {reason}',
   'swap.broadcast': 'Swap broadcast: {id}.',
+  'swap.feeUnpaid': 'The swap went through, but Kyro’s service fee was not paid.',
   'swap.viewHistory': 'View history',
   'swap.review': 'Review the swap',
   'swap.bestPrice': 'Best price',

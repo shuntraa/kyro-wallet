@@ -184,7 +184,7 @@ function Unlocked() {
       case 'asset':
         return <AssetDetail id={route.id} />;
       case 'send':
-        return <Send {...(route.assetId ? { assetId: route.assetId } : {})} {...(route.to ? { to: route.to } : {})} {...(route.amount ? { amount: route.amount } : {})} {...(route.memo ? { memo: route.memo } : {})} />;
+        return <Send {...(route.assetId ? { assetId: route.assetId } : {})} {...(route.to ? { to: route.to } : {})} {...(route.amount ? { amount: route.amount } : {})} {...(route.memo ? { memo: route.memo } : {})} {...(route.xlmMemo ? { xlmMemo: route.xlmMemo } : {})} />;
       case 'receive':
         return <Receive {...(route.family ? { family: route.family } : {})} />;
       case 'swap':

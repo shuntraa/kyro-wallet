@@ -706,7 +706,7 @@ Reference TypeScript types: `packages/shared/src/ipc.ts`. Names in `snake_case`,
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage, tray, autostart }` | `tray`: the tray options are offered (Windows only, and `false` in the demo); `autostart`: *Start with Windows* is offered (Windows outside the Store). `systemLanguage`: `'fr' \| 'en'`, the computer's language (what `settings.language = 'auto'` uses); never the keys themselves; each `hasXKey` = environment variable **or** key saved in the settings (e.g. TronGrid: `KYRO_TRONGRID_API_KEY` or `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | network choice from within the application, applied by **restarting** the app: see §2.10 |
 | `vault_change_password` | `{ current, next }` | `void` | unlocked session, wallet in use. Rate-limited like any password. Same KDF and strength rule; the vault is re-encrypted to `<vault>.new`, read back and opened, then renamed over the old file. Ends the session |
-| `duress_status` | — | `{ enabled }` | second password (§2.9c); unlocked session. `false` during a session of its own wallet |
+| `duress_status` | — | `{ enabled }` | second password (§2.9d); unlocked session. `false` during a session of its own wallet |
 | `duress_enable` | `{ current, password }` | `void` | checks `current` (rate-limited), the strength rule, that `password` opens no real wallet; writes a new vault with a fresh 12-word phrase, then shows the phrase in the phrase window |
 | `duress_show_phrase` | `{ password }` | `void` | the second password (rate-limited), native confirmation, phrase window, like `vault_reveal_mnemonic` |
 | `duress_disable` | `{ password }` | `string` | password of the wallet in use, native warning, then deletes `profile-<network>/`. Returns the store scope the interface clears (`""`: none) |
@@ -1438,7 +1438,7 @@ A wallet is a recovery phrase with its own password. The first one stays in `cof
 - Per wallet: password attempts (`<id>.attempts`), account lists (`settings.json` `walletAccounts`), and in the webview transactions, approvals, backup state, account choice and balance cache (key suffix `@<id>`). Monero caches and Bitcoin Core wallets were already keyed by the keys.
 - Shared by the device: settings, servers, contacts, hardware-wallet accounts and watch addresses.
 
-### 2.9c Second password
+### 2.9d Second password
 
 Optional, off by default (`duress.rs`). Typed on the normal unlock screen of any wallet, it opens a separate wallet with its own fresh phrase. In this file and in the code it is the duress password and its wallet the decoy; nothing the session shows uses those words, in any language.
 
@@ -1460,7 +1460,7 @@ Optional, off by default (`duress.rs`). Typed on the normal unlock screen of any
 | `*.lnswaps` | `profile-<network>/vault.lnswaps` |
 | `cbf/` | `profile-<network>/cbf/` |
 | `monero/` | already named after the keys |
-| `network.json`, `other_vault_exists` | `network_get.otherVaultExists` is `false`. `network_set` works as usual: the network is a device choice, and the app restarts locked |
+| `network.json`, `other_vault_exists` | `network_get.otherVaultExists` is `false`. `network_set` is refused with a plain error: `network.json` belongs to the real side |
 | `weekly-count`, `update/` | shared, they hold nothing about a wallet |
 | `localStorage` (contacts, favorites, alerts, transactions, approvals, balance, history, chart and market caches, account choice, backup state) | the `kyro@<scope>.` prefix. `storage.ts` is the only file that touches `localStorage` (a test checks it) |
 | Backup (`backup_export`, `backup_apply`) | reads and writes the session's own stores above |
@@ -1793,7 +1793,8 @@ Optional, off by default, set in Settings › Security. Above an amount per roll
 | `spend_limit_override_request` | — | `SpendLimitStatus` | starts the wait; no password, it grants nothing yet |
 | `spend_limit_override_confirm` | `{ password }` | `SpendLimitStatus` | after the wait: opens 1 hour for one send above the limit |
 | `spend_limit_cancel` | `{ what: 'override' \| 'change' }` | `SpendLimitStatus` | no password: it only takes something away |
-| `spend_limit_declare` | `{ chain: 'evm:<id>' \| 'sol', payload, contract: string \| null, amount }` | `void` | Swap only, see below. Kept in memory for 5 minutes, for one signature of exactly `payload` |
+| `spend_limit_declare` | `{ chain: 'evm:<id>' \| 'sol', payload, contract: string \| null, amount }` | `void` | Swap only, see below. Kept in memory for 5 minutes, for one signature of exactly `payload`. On Solana `payload` is the message Rust signs, not the wire transaction |
+| `spend_limit_check` | `{ chain: 'evm:<id>' \| 'sol', contract: string \| null, amount }` | `void` | Swap only, before an approval that costs gas: `SPEND_LIMIT` if the amount would not fit. Counts nothing, keeps an open override. The signature still decides |
 
 A wait that is over lapses after 24 hours if nobody confirms it. Passwords are rate-limited like any other.
 

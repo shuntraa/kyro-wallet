@@ -144,10 +144,13 @@ pub fn evm(net: Network, s: &wallet_core::EvmTxSummary, earn: bool, data: &str) 
         },
         // An allowance moves nothing by itself, but it lets someone else move funds with no further
         // signature here, so it counts in full. The pinned swap contracts only ever pull from their
-        // caller, inside a call that comes back through this gate.
+        // caller, inside a call that comes back through this gate. So does the pinned Aave pool, and
+        // what it pulls stays the user's (Earn does not count).
         EvmTxKind::Erc20Approve => {
             let spender = s.spender.as_deref().unwrap_or_default();
-            if swap_contract(s.chain_id, spender) {
+            let aave = crate::earn_evm::aave_pool(s.chain_id)
+                .is_some_and(|pool| pool.eq_ignore_ascii_case(spender));
+            if aave || swap_contract(s.chain_id, spender) {
                 Spend::Free
             } else if s.unlimited_approval {
                 Spend::Unknown
@@ -502,6 +505,27 @@ mod tests {
 
     fn eth(raw: &str) -> Coin {
         Coin::new(Some("ethereum"), raw, 18)
+    }
+
+    #[test]
+    fn an_approval_of_the_pinned_aave_pool_is_free_on_its_own_chain_only() {
+        let approval = |chain_id: u64, spender: &str| wallet_core::EvmTxSummary {
+            chain_id,
+            spender: Some(spender.to_owned()),
+            token_contract: Some(USDC.to_owned()),
+            ..evm_summary(EvmTxKind::Erc20Approve)
+        };
+        let pool = crate::earn_evm::AAVE_V3_POOL
+            .to_uppercase()
+            .replace("0X", "0x");
+        assert!(matches!(
+            evm(Network::Mainnet, &approval(1, &pool), false, "0x"),
+            Spend::Free
+        ));
+        assert!(!matches!(
+            evm(Network::Mainnet, &approval(42_161, &pool), false, "0x"),
+            Spend::Free
+        ));
     }
 
     #[test]

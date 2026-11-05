@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The records of the second password's session live apart from the real ones (docs/IPC.md §2.9c).
+// The records of the second password's session live apart from the real ones (docs/IPC.md §2.9d).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

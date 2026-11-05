@@ -112,7 +112,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export function SpendLimitGate() {
-  const { settings } = useApp();
+  const { settings, phase } = useApp();
   const { t } = useT();
   const [over, setOver] = useState<SpendLimitExceeded | null>(null);
   const { status, setStatus } = useSpendLimit(over !== null);
@@ -123,6 +123,10 @@ export function SpendLimitGate() {
       }),
     [settings.currency],
   );
+  // The figures are the wallet's: they do not stay on the lock screen.
+  useEffect(() => {
+    if (phase !== 'ready') setOver(null);
+  }, [phase]);
   if (!over) return null;
   const cur = over.currency;
   return (

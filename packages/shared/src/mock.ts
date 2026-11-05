@@ -1138,6 +1138,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       return spendLimit;
     },
     spend_limit_declare: () => undefined,
+    spend_limit_check: () => undefined,
     wallets_get: () => walletsInfo(),
     wallet_switch: (a) => {
       if (!walletEntries.some((w) => w.id === a.id)) throw new IpcError('INVALID_INPUT', 'unknown wallet');

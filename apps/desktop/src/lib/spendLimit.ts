@@ -68,3 +68,8 @@ export function readExceeded(data: unknown, fallback: Currency): SpendLimitExcee
 export function declareSwap(chain: string, payload: string, contract: string | undefined, amount: bigint): Promise<void> {
   return call('spend_limit_declare', { chain, payload, contract: contract ?? null, amount: amount.toString() });
 }
+
+/** Swap only, before an approval: over the limit, no gas is spent on an approval for nothing. */
+export function checkSwap(chain: string, contract: string | undefined, amount: bigint): Promise<void> {
+  return call('spend_limit_check', { chain, contract: contract ?? null, amount: amount.toString() });
+}

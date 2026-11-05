@@ -593,6 +593,38 @@ pub fn spend_limit_declare(
     Ok(())
 }
 
+/// Would `value` fit right now? Nothing is saved: no count, and an open override stays open.
+fn would_fit(path: &Path, value: Option<f64>) -> Result<(), Exceeded> {
+    let _lock = guard(&STORE_LOCK);
+    let mut limit = Limit::load(path);
+    limit.tick(wall_now());
+    limit.spend(value)
+}
+
+/// Swap only, before an approval that costs gas: refuses now what the signature would refuse after.
+/// `approve` still decides at the signature.
+#[tauri::command]
+pub async fn spend_limit_check(
+    state: State<'_, AppState>,
+    chain: String,
+    contract: Option<String>,
+    amount: String,
+) -> AppResult<()> {
+    require_unlocked(&state)?;
+    let coin =
+        crate::spend_value::declared_coin(state.network, &chain, contract.as_deref(), amount)?;
+    let path = file_of(&state);
+    let currency = {
+        let _lock = guard(&STORE_LOCK);
+        match Limit::load(&path).config {
+            Some(c) => c.currency,
+            None => return Ok(()),
+        }
+    };
+    let value = fiat_value(&state, std::slice::from_ref(&coin), &currency).await;
+    would_fit(&path, value).map_err(AppError::SpendLimit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -615,6 +647,31 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn a_check_counts_nothing_and_keeps_an_open_override() {
+        let dir = temp("check");
+        let path = dir.join("v.spendlimit");
+        let mut l = Limit::default();
+        l.tick(wall_now());
+        l.configure(Some(cfg(100.0, HOUR))).unwrap();
+        l.save(&path).unwrap();
+        assert!(would_fit(&path, Some(60.0)).is_ok());
+        assert!(
+            would_fit(&path, Some(60.0)).is_ok(),
+            "the first check counted"
+        );
+        assert!(would_fit(&path, Some(500.0)).is_err());
+        assert!(would_fit(&path, None).is_err());
+
+        let mut l = Limit::load(&path);
+        l.override_until = Some(l.clock.now + HOUR);
+        l.save(&path).unwrap();
+        assert!(would_fit(&path, Some(500.0)).is_ok());
+        assert!(Limit::load(&path).override_until.is_some());
+        assert!(Limit::load(&path).spends.is_empty());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

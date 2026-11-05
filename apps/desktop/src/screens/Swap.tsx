@@ -33,7 +33,7 @@ import { addApproval, addLocalTx } from '../lib/storage';
 import { buildDepositTx, buildKyroFeeTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, pickSend, sendChoices, swapQuoteParams, swapRate, swapTokenAddress, tokenOf, usdRate, type PreparedDeposit } from '../lib/crossSwap';
 import { TokenPicker, type TokenPickerItem } from '../components/TokenPicker';
 import { useAsync, useDebounced } from '../lib/useAsync';
-import { declareSwap } from '../lib/spendLimit';
+import { checkSwap, declareSwap } from '../lib/spendLimit';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { SimulationPanel } from '../components/SimulationPanel';
@@ -89,10 +89,10 @@ export function Swap({ sellAssetId, buyAssetId, amount, returnTo }: { sellAssetI
 }
 
 /** What became of a swap started from another screen. */
-export type SwapOutcome = { status: 'done'; id: string } | { status: 'failed'; reason: string } | { status: 'cancelled' };
+export type SwapOutcome = { status: 'done'; id: string } | { status: 'failed'; reason: string; overLimit?: boolean } | { status: 'cancelled' };
 
 /** The swap flow. Prefilled values are only a starting point: review, simulation and signature stay the same. */
-export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome }: { sellAssetId?: string; buyAssetId?: string; amount?: string; returnTo?: Route; onOutcome?: (o: SwapOutcome) => void }) {
+export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome, onBusy }: { sellAssetId?: string; buyAssetId?: string; amount?: string; returnTo?: Route; onOutcome?: (o: SwapOutcome) => void; onBusy?: (busy: boolean) => void }) {
   const { settings, network, swapProviders, navigate, vaultLists } = useApp();
   const { t } = useT();
   const { adapters, accounts } = useVault();
@@ -130,6 +130,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
   const [execError, setExecError] = useState<string | null>(null);
   const [wrongPw, setWrongPw] = useState(0);
   const [doneId, setDoneId] = useState<string | null>(null);
+  const [feeUnpaid, setFeeUnpaid] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reviewed, setReviewed] = useState<Quote | null>(null);
 
@@ -251,8 +252,13 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
         const id = await signAndBroadcast(sourceAdapter, fresh.unsigned, password);
         recordSwap(id, quote, { fee: fresh.unsigned.maxFee.toString(), counterparty: plan.depositAddress }, plan.depositAddress, plan.orderId);
         // Exolix: Kyro's service fee, a second plain transfer of the same coin (checked like the deposit).
-        const feeTx = await buildKyroFeeTx(sell, adapters, plan);
-        if (feeTx) await signAndBroadcast(sourceAdapter, feeTx.unsigned, password);
+        // The deposit has left: from here nothing may read as a failed swap, or be sent again.
+        try {
+          const feeTx = await buildKyroFeeTx(sell, adapters, plan);
+          if (feeTx) await signAndBroadcast(sourceAdapter, feeTx.unsigned, password);
+        } catch {
+          setFeeUnpaid(true);
+        }
         setDoneId(id);
         setPhase('done');
         setPassword('');
@@ -269,7 +275,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
           // LI.FI cross-chain: Rust decodes, Kyro checks the transfers, NEAR Intents confirms the deposit — BEFORE the password.
           const routeCheck = await quote.tx.verify(wire, await adapters.sol.decodeWire(wire));
           setPhase('swapping');
-          await declareSwap('sol', wire, sell.contract, sellAmount);
+          await declareSwap('sol', adapters.sol.wireMessage(wire), sell.contract, sellAmount);
           const signed = await adapters.sol.signWireTransaction(wire, password);
           const signedCheck = await quote.tx.verify(wire, signed.summary);
           if (signedCheck.depositAddress !== routeCheck.depositAddress) throw new Error(t('swap.errSignedMismatch'));
@@ -295,7 +301,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
         };
         await verifyJupiterSwap({ ...check, summary: await adapters.sol.decodeWire(wire) });
         setPhase('swapping');
-        await declareSwap('sol', wire, sell.contract, sellAmount);
+        await declareSwap('sol', adapters.sol.wireMessage(wire), sell.contract, sellAmount);
         const signed = await adapters.sol.signWireTransaction(wire, password);
         await verifyJupiterSwap({ ...check, summary: signed.summary });
         const id = await adapters.sol.broadcast(signed);
@@ -318,6 +324,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
 
       if (needsApproval && quote.allowanceTarget && sell.contract) {
         if (quote.allowanceTarget.toLowerCase() !== known.toLowerCase()) throw new Error(t('swap.errUnknownSpender'));
+        await checkSwap(`evm:${chain.chainId}`, sell.contract, sellAmount);
         setPhase('approving');
         if (requiresZeroAllowanceFirst(chain.chainId, sell.contract, allowance.data ?? 0n)) {
           const reset = buildRevoke(sell.contract, quote.allowanceTarget);
@@ -391,7 +398,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
       else setExecError(err.code === 'USER_REJECTED' ? t('swap.signCancelled') : err.message);
       setPhase('idle');
       allowance.reload();
-      if (err.code !== 'WRONG_PASSWORD') onOutcome?.(err.code === 'USER_REJECTED' ? { status: 'cancelled' } : { status: 'failed', reason: err.message });
+      if (err.code !== 'WRONG_PASSWORD') onOutcome?.(err.code === 'USER_REJECTED' ? { status: 'cancelled' } : { status: 'failed', reason: err.message, overLimit: err.code === 'SPEND_LIMIT' });
     }
   };
 
@@ -399,7 +406,11 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
   useEffect(() => {
     if (phase === 'done' && doneId) onOutcome?.({ status: 'done', id: doneId });
   }, [phase, doneId]);
-  const noQuote = amountStr === amount && !!params && !!debouncedKey && !quotes.loading && !quotesTorBlocked && (!!quotes.error || (!!quotes.data && list.length === 0));
+  useEffect(() => {
+    onBusy?.(busy || confirmOpen);
+  }, [busy, confirmOpen]);
+  // Only while nothing is under way: a refresh failing during a swap must not end that swap's row.
+  const noQuote = phase === 'idle' && !confirmOpen && amountStr === amount && !!params && !!debouncedKey && !quotes.loading && !quotesTorBlocked && (!!quotes.error || (!!quotes.data && list.length === 0));
   useEffect(() => {
     if (noQuote) onOutcome?.({ status: 'failed', reason: t('swap.noPrice') });
   }, [noQuote]);
@@ -622,6 +633,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
               </button>
             </Notice>
           )}
+          {phase === 'done' && feeUnpaid && <Notice tone="warn">{t('swap.feeUnpaid')}</Notice>}
           <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter) || (chosen.tx.kind === 'deposit' && !sourceAdapter)} onClick={openConfirm}>
             {t('swap.review')}
           </Button>

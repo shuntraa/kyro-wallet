@@ -12,7 +12,7 @@ import { usePortfolio } from '../state/portfolio';
 import { ownAddressOn, swapQuoteParams, usdRate } from '../lib/crossSwap';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtFiat, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
-import { currentItem, runFinished, settle, startRun, stopRun, suspectAssetIds, TIDY_DEFAULT_THRESHOLD, tickedByDefault, tidyCost, tidyRows, tidySummary, type TidyCost, type TidyOutcome, type TidyRow, type TidyRun } from '../lib/tidy';
+import { currentItem, runFinished, settle, settleAndStop, startRun, stopRun, suspectAssetIds, TIDY_DEFAULT_THRESHOLD, tickedByDefault, tidyCost, tidyRows, tidySummary, type TidyCost, type TidyOutcome, type TidyRow, type TidyRun } from '../lib/tidy';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState } from '../components/kit';
 import { useFeeOf, type FeeOf } from '../components/MissingFee';
@@ -50,7 +50,7 @@ export function Tidy() {
       </div>
     );
   }
-  if (run && target && !runFinished(run)) return <Running run={run} target={target} onChange={setRun} />;
+  if (run && target && !runFinished(run)) return <Running run={run} target={target} onChange={(step) => setRun((r) => r && step(r))} />;
   if (run && target) return <Summary run={run} target={target} onBack={() => navigate({ name: 'assets' })} />;
   return (
     <Picking
@@ -212,13 +212,15 @@ function networkFeeFiat(r: TidyRow, q: Quote, assets: AssetDef[], feeOf: FeeOf, 
   return (q.provider === 'exolix' ? base * 2 : base) + approval;
 }
 
-function Running({ run, target, onChange }: { run: TidyRun<TidyRow>; target: AssetDef; onChange: (next: TidyRun<TidyRow>) => void }) {
+function Running({ run, target, onChange }: { run: TidyRun<TidyRow>; target: AssetDef; onChange: (step: (r: TidyRun<TidyRow>) => TidyRun<TidyRow>) => void }) {
   const { t } = useT();
+  const [busy, setBusy] = useState(false);
   const item = currentItem(run);
   const index = run.outcomes.length;
   const last = run.outcomes[index - 1];
   if (!item) return null;
-  const finish = (o: TidyOutcome) => onChange(settle(run, index, o));
+  // On the run as it is by then, not as this render saw it.
+  const finish = (o: TidyOutcome) => onChange((r) => settle(r, index, o));
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-8 py-3 text-[13px]">
@@ -227,11 +229,11 @@ function Running({ run, target, onChange }: { run: TidyRun<TidyRow>; target: Ass
         </span>
         {last && <span className={cn('min-w-0 flex-1 truncate', last.status === 'failed' ? 'text-down' : 'text-mute')}>{last.status === 'done' ? t('tidy.lastDone') : last.status === 'failed' ? t('tidy.lastFailed', { reason: last.reason }) : t('tidy.lastSkipped')}</span>}
         <span className="flex shrink-0 gap-2">
-          <Button onClick={() => finish({ status: 'skipped' })}>{t('tidy.skip')}</Button>
-          <Button onClick={() => onChange(stopRun(run))}>{t('tidy.stop')}</Button>
+          <Button disabled={busy} onClick={() => finish({ status: 'skipped' })}>{t('tidy.skip')}</Button>
+          <Button disabled={busy} onClick={() => onChange(stopRun)}>{t('tidy.stop')}</Button>
         </span>
       </div>
-      <SwapVault key={index} sellAssetId={item.asset.id} buyAssetId={target.id} amount={toInputDecimal(item.amount, item.asset.decimals)} onOutcome={(o) => finish(o.status === 'cancelled' ? { status: 'skipped' } : o)} />
+      <SwapVault key={index} sellAssetId={item.asset.id} buyAssetId={target.id} amount={toInputDecimal(item.amount, item.asset.decimals)} onBusy={setBusy} onOutcome={(o) => (o.status === 'failed' && o.overLimit ? onChange((r) => settleAndStop(r, index, o)) : finish(o.status === 'cancelled' ? { status: 'skipped' } : o))} />
     </div>
   );
 }

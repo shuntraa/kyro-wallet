@@ -22,7 +22,7 @@ export function scoped(key: string): string {
  * The session of the second password keeps every record apart: `vault_status.storeScope` moves the
  * whole store to another prefix, so no key can be forgotten. `''` = the historical keys. Set once
  * per page: a session on the other side reloads the page, which also drops all that is in memory
- * and every load still running, so nothing crosses over (docs/IPC.md §2.9c).
+ * and every load still running, so nothing crosses over (docs/IPC.md §2.9d).
  */
 let storeScope = '';
 let scopeKnown = false;
