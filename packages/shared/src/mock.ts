@@ -27,6 +27,8 @@ import {
   type Settings,
   type SettingsInput,
   type VaultStatus,
+  type SpendLimitConfig,
+  type SpendLimitStatus,
   type WalletEntry,
   type WalletsInfo,
   type WatchAddress,
@@ -362,6 +364,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     ? { password: opts.preset.password, words: opts.preset.words ?? generateMnemonic(wordlist, 256).split(' ') }
     : null;
   let unlocked = opts.preset?.unlocked ?? false;
+  let spendLimit: SpendLimitStatus = { config: null, spent: 0, override: null, change: null };
   let lastTouch = now();
   let failed = 0;
   let blockedUntil = 0;
@@ -1109,6 +1112,32 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       secondPassword = null;
       return '';
     },
+    // Demo: the limit is kept for the session, waits are over at once (nothing is signed for real).
+    spend_limit_status: () => spendLimit,
+    spend_limit_set: (a) => {
+      checkPassword(a.password);
+      spendLimit = { ...spendLimit, config: a.enabled ? ({ amount: a.amount, currency: a.currency, waitSecs: a.waitSecs } as SpendLimitConfig) : null };
+      return spendLimit;
+    },
+    spend_limit_apply: (a) => {
+      checkPassword(a.password);
+      spendLimit = { ...spendLimit, config: spendLimit.change?.target ?? null, change: null };
+      return spendLimit;
+    },
+    spend_limit_override_request: () => {
+      spendLimit = { ...spendLimit, override: { phase: 'ready', secsLeft: 0 } };
+      return spendLimit;
+    },
+    spend_limit_override_confirm: (a) => {
+      checkPassword(a.password);
+      spendLimit = { ...spendLimit, override: { phase: 'open', secsLeft: 3600 } };
+      return spendLimit;
+    },
+    spend_limit_cancel: (a) => {
+      spendLimit = a.what === 'override' ? { ...spendLimit, override: null } : { ...spendLimit, change: null };
+      return spendLimit;
+    },
+    spend_limit_declare: () => undefined,
     wallets_get: () => walletsInfo(),
     wallet_switch: (a) => {
       if (!walletEntries.some((w) => w.id === a.id)) throw new IpcError('INVALID_INPUT', 'unknown wallet');

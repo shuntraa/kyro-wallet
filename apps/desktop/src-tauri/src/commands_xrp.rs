@@ -453,7 +453,6 @@ pub async fn xrp_sign_tx(
         signer.body(lang, &describe_xrp(lang, &summary, &context, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -465,6 +464,7 @@ pub async fn xrp_sign_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::xrp(&summary)).await?;
     let b = blob.clone();
     let (signed, hash, again) = blocking(move || Ok(wallet_core::xrp_sign(&seed, a, &b)?)).await?;
     if again != summary {

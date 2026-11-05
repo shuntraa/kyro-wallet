@@ -72,6 +72,8 @@ mod server_approval;
 mod servers;
 mod settings;
 mod solana;
+mod spend_limit;
+mod spend_value;
 mod stake_ada;
 mod stake_aptos;
 mod stake_near;
@@ -416,6 +418,13 @@ pub fn run() {
             duress::duress_show_phrase,
             duress::duress_disable,
             wallets::wallet_switch,
+            spend_limit::spend_limit_status,
+            spend_limit::spend_limit_set,
+            spend_limit::spend_limit_apply,
+            spend_limit::spend_limit_override_request,
+            spend_limit::spend_limit_override_confirm,
+            spend_limit::spend_limit_cancel,
+            spend_limit::spend_limit_declare,
             wallets::wallet_new,
             wallets::wallet_new_cancel,
             wallets::wallet_rename,

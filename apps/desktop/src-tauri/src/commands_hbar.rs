@@ -876,7 +876,6 @@ pub async fn hbar_sign_tx(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -888,6 +887,7 @@ pub async fn hbar_sign_tx(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::hbar(&summary)).await?;
     let net = state.network;
     let b = bodies.clone();
     let (signed, again) =

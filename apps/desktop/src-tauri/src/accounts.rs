@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use wallet_core::Network;
 
 use crate::error::{AppError, AppResult};
@@ -376,8 +376,14 @@ impl SignerInfo {
     }
 }
 
-/// Reinforced confirmation when the signing account is « unknown ».
-pub async fn confirm_signer(app: &AppHandle, signer: &SignerInfo) -> AppResult<()> {
+/// The last check before a software-wallet key signs: reinforced confirmation when the signing
+/// account is « unknown », then the daily spending limit (`spend_limit.rs`). Comes after every other
+/// dialog, because it counts the send: a send cancelled in a dialog must not count.
+pub async fn confirm_signer(
+    app: &AppHandle,
+    signer: &SignerInfo,
+    spend: crate::spend_value::Spend,
+) -> AppResult<()> {
     if signer.unknown() {
         let lang = crate::i18n::current();
         crate::commands::confirm_native(
@@ -387,7 +393,7 @@ pub async fn confirm_signer(app: &AppHandle, signer: &SignerInfo) -> AppResult<(
         )
         .await?;
     }
-    Ok(())
+    crate::spend_limit::approve(&app.state::<AppState>(), spend).await
 }
 
 /// Bitcoin signing paths of `account` (both kinds).

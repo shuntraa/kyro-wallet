@@ -39,6 +39,8 @@ pub struct KnownToken {
     pub name: &'static str,
     /// Decimals.
     pub decimals: u8,
+    /// CoinGecko id (`spend_value.rs` prices sends with it).
+    pub coingecko: &'static str,
 }
 
 /// An EVM chain Kyro lists.
@@ -52,6 +54,8 @@ pub struct KnownEvmChain {
     pub name: &'static str,
     /// Native coin ticker (ETH, POL, BNB, CRO, …).
     pub native_symbol: &'static str,
+    /// CoinGecko id of the native coin.
+    pub coingecko: &'static str,
 }
 
 #[derive(Debug)]

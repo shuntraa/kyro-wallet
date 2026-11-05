@@ -925,7 +925,6 @@ pub async fn sui_sign_tx(
         signer.body(lang, &describe_sui(lang, &summary, &context, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -937,6 +936,12 @@ pub async fn sui_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::sui(state.network, &summary),
+    )
+    .await?;
     let b = bcs.clone();
     let testnet = state.network == Network::Testnet;
     let (signature, again) = blocking(move || {

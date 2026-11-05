@@ -1207,7 +1207,6 @@ pub async fn sol_stake_sign(
         signer.body(lang, &describe(lang, &stake, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if stake.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -1219,6 +1218,7 @@ pub async fn sol_stake_sign(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::Spend::Free).await?;
     let m = me.clone();
     let sig = blocking(move || {
         let sig = wallet_core::sol_sign_message(&seed, a, &bytes)?;

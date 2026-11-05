@@ -1099,6 +1099,7 @@ pub async fn evm_sign_tx(
     let mut summary = summary;
     let (token, earn_body) = evm_earn_review(lang, &tx, &mut summary, &from, token)?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let is_earn = earn_body.is_some();
     let body = earn_body.unwrap_or_else(|| describe_evm(lang, &summary, token.as_ref()));
     confirm_native(
         &app,
@@ -1109,7 +1110,6 @@ pub async fn evm_sign_tx(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if evm_needs_extra(&summary, token.as_ref()) {
         confirm_native(
             &app,
@@ -1118,6 +1118,12 @@ pub async fn evm_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::evm(state.network, &summary, is_earn, &tx.data),
+    )
+    .await?;
     let net = state.network;
     let (raw_tx, hash) =
         blocking(move || Ok(wallet_core::evm_sign_tx(&seed, a, &tx, net)?)).await?;
@@ -1252,7 +1258,6 @@ pub async fn btc_sign_psbt(
         signer.body(lang, &(head + &describe_btc(lang, &summary))),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -1261,6 +1266,7 @@ pub async fn btc_sign_psbt(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::btc(&summary)).await?;
     let (signed, again) =
         blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, a, &psbt)?)).await?;
     if again != summary {
@@ -1330,7 +1336,6 @@ pub async fn sol_sign_tx(
         signer.body(lang, &solana::describe(lang, &decoded, &me, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -1342,6 +1347,12 @@ pub async fn sol_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::sol(state.network, &summary, &me, &message),
+    )
+    .await?;
     let sig = blocking(move || Ok(wallet_core::sol_sign_message(&seed, a, &bytes)?)).await?;
     state.touch();
     Ok(SolSigned {

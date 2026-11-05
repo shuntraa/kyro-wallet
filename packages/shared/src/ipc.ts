@@ -2785,6 +2785,15 @@ export interface Commands {
   duress_show_phrase: { args: { password: string }; ret: void };
   /** Returns the store scope to clear (`""`: nothing). */
   duress_disable: { args: { password: string }; ret: string };
+  spend_limit_status: { args: undefined; ret: SpendLimitStatus };
+  /** Turning on or tightening applies now; anything else starts the wait. */
+  spend_limit_set: { args: { enabled: boolean; amount: number; currency: Currency; waitSecs: number; password: string }; ret: SpendLimitStatus };
+  spend_limit_apply: { args: { password: string }; ret: SpendLimitStatus };
+  spend_limit_override_request: { args: undefined; ret: SpendLimitStatus };
+  spend_limit_override_confirm: { args: { password: string }; ret: SpendLimitStatus };
+  spend_limit_cancel: { args: { what: 'override' | 'change' }; ret: SpendLimitStatus };
+  /** Swap only: what the next signature of exactly `payload` sells. `chain`: `evm:<id>` or `sol`. */
+  spend_limit_declare: { args: { chain: string; payload: string; contract: string | null; amount: string }; ret: void };
   wallets_get: { args: undefined; ret: WalletsInfo };
   wallet_switch: { args: { id: string }; ret: WalletsInfo };
   wallet_new: { args: { name: string }; ret: void };
@@ -2936,6 +2945,8 @@ export const ERROR_CODES = [
   'HW_BUSY',
   'HW_TIMEOUT',
   'HW_BAD_RESPONSE',
+  /** Over the daily spending limit, nothing signed. `data`: {@link SpendLimitExceeded}. */
+  'SPEND_LIMIT',
   /** `data: { device, expected }` — do NOT use the address. */
   'HW_ADDRESS_MISMATCH',
   'HW_WRONG_DEVICE',
@@ -2946,9 +2957,34 @@ export const ERROR_CODES = [
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
+/** A limit, in the currency it was set in (it does not follow the display currency). */
+export interface SpendLimitConfig {
+  amount: number;
+  currency: Currency;
+  waitSecs: number;
+}
+
+/** State of the wallet in use (docs/IPC.md §2.13). `config: null` = off. */
+export interface SpendLimitStatus {
+  config: SpendLimitConfig | null;
+  spent: number;
+  override: { phase: 'waiting' | 'ready' | 'open'; secsLeft: number } | null;
+  /** A raise or a disable waiting; `target: null` turns it off; `secsLeft: 0` = the password applies it. */
+  change: { target: SpendLimitConfig | null; secsLeft: number } | null;
+}
+
+export interface SpendLimitExceeded {
+  spent: number;
+  limit: number;
+  /** `null`: the value is not known, which counts as over the limit. */
+  amount: number | null;
+  currency: Currency;
+}
+
 /** Shape of a rejected command promise. `message` is user-facing French. */
 /** `data` of the hardware-wallet errors that carry details. */
 export interface IpcErrorData {
+  SPEND_LIMIT: SpendLimitExceeded;
   HW_WRONG_APP: { expected: string; open: string };
   HW_APP_MISSING: { app: string };
   HW_UNSUPPORTED: { min: string | null };

@@ -697,7 +697,6 @@ pub async fn near_sign_tx(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -709,6 +708,12 @@ pub async fn near_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::near(state.network, &summary),
+    )
+    .await?;
     let t = tx.clone();
     let (signed, hash, again) = blocking(move || Ok(wallet_core::near_sign(&seed, a, &t)?)).await?;
     if again != summary {

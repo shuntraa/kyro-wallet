@@ -31,6 +31,7 @@ import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { UpdateNotice } from './components/UpdateNotice';
+import { SpendLimitGate } from './components/SpendLimitGate';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { WatchOnlyScreen } from './components/WatchOnly';
 import { screenEnter } from './components/motion';
@@ -48,6 +49,8 @@ export function App() {
         <TorDialogs />
         {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
         <HwPromptLayer />
+        {/* Over the daily limit: whatever screen asked for the signature. */}
+        <SpendLimitGate />
         <UpdateNotice />
       </AppProvider>
     </MotionConfig>

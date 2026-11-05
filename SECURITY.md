@@ -286,6 +286,19 @@ Details: [docs/IPC.md §2.9b](docs/IPC.md). Each added wallet is a separate vaul
 
 Settings › Security, off by default. Details: [docs/IPC.md §2.9c](docs/IPC.md). A second password, typed on the normal unlock screen of any wallet, opens a separate wallet with its own recovery phrase and a small balance, for when someone forces you to open Kyro. Kyro tries the wallet's own password first, then this one, with the same screen and the same answers; a wrong password counts as one attempt. That wallet behaves like a first wallet: real wallets, hardware accounts, watch addresses, contacts, alerts and caches are not there and no command reaches them, and nothing done in that session changes them. The Settings section looks as if the feature were off. The password must differ from those of your wallets, and Kyro keeps it that way when you change a password or add a wallet. Turning it off takes your password, and deletes that wallet from the device: only its phrase then gives access to its funds. **Limits**: it helps against someone in front of you, not against an analysis of your disk: the code is public and a second vault file exists, in `profile-<network>/`, with records under a separate prefix in the webview's storage. Someone who knows Kyro well can also notice that wallet names on the lock screen do not match the single wallet inside, that adding a wallet fails there, that opening that wallet takes about twice as long as a normal unlock, and that the page reloads when it opens. Settings changed in that session are forgotten at the lock. Servers, Tor and API keys are the device's and stay visible there. While the feature is on, a wrong password runs the KDF twice. It does not hide funds on the chain, and a small balance that never moves can look odd. A hardware wallet plugged in stays visible as a device.
 
+## Daily spending limit
+
+Details: [docs/IPC.md §2.13](docs/IPC.md). Optional. It slows down someone using an unlocked computer, or someone pressing the user to send quickly: above the chosen amount per 24 hours, a send needs a wait of 1 or 24 hours and then the password. Raising or turning off the limit goes through the same wait. It is enforced in Rust, in `confirm_signer`, before the key signs.
+
+What it does not do:
+
+- It does not protect against someone who has the recovery phrase. Anyone with the password can display the phrase and use it elsewhere.
+- It does not protect against someone who can edit the files of this Windows account: deleting `<vault>.spendlimit` turns the limit off, and that file is not signed. They still need the password to sign.
+- Moving the system clock forward (administrator rights) shortens waits. Moving it back does not.
+- Hardware accounts are not counted: the device confirms each send.
+- The amount of an aggregator swap (0x, LI.FI, Jupiter) comes from the interface, because Rust cannot read that calldata. A compromised interface could under-declare it. Everything else is read in Rust.
+- Limits are valued at the price of the moment of the send. A wrong price from CoinGecko gives a wrong total.
+
 ## Watch addresses
 
 A watch address is a public address or xpub followed with no key. Kyro stores it in plain text next to the vault, like hardware-wallet accounts: anyone who reads your disk sees which addresses you follow. Rust refuses private keys and recovery phrases when adding one and when loading the file. Nothing can be signed: Send, Swap and Earn stop on a clear screen, and every build, sign and broadcast method of its adapters refuses. **Limits**: reading an xpub asks servers about each derived address, so a server can link them, as with your own accounts (Tor hides your IP, not that link). A Watch address proves nothing about ownership. Monero cannot be watched: a balance needs a private view key.

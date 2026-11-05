@@ -662,7 +662,6 @@ pub async fn near_stake_sign(
         signer.body(lang, &describe(lang, &summary, &context, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -671,6 +670,7 @@ pub async fn near_stake_sign(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::Spend::Free).await?;
     let t = tx.clone();
     let (signed, hash, again) =
         blocking(move || Ok(wallet_core::near_stake_sign(&seed, a, &t)?)).await?;

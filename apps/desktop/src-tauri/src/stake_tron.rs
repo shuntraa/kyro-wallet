@@ -867,7 +867,6 @@ pub async fn tron_stake_sign(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -879,6 +878,7 @@ pub async fn tron_stake_sign(
         )
         .await?;
     }
+    confirm_signer(&app, &signer, crate::spend_value::Spend::Free).await?;
     let r = raw.clone();
     let (sig, again) = blocking(move || Ok(wallet_core::tron_stake_sign(&seed, a, &r)?)).await?;
     if again != summary {

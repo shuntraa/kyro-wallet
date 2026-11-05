@@ -592,7 +592,7 @@ pub async fn dot_sign_tx(
         signer.body(lang, &describe_dot(lang, &summary, &context, state.network)),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
+    confirm_signer(&app, &signer, crate::spend_value::dot(&summary)).await?;
     let (p, r) = (payload.clone(), rt.clone());
     let (extrinsic, hash, again) =
         blocking(move || Ok(wallet_core::dot_sign(&root, a, &r, &p)?)).await?;

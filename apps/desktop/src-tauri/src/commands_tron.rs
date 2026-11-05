@@ -497,7 +497,6 @@ pub async fn tron_sign_tx(
         ),
     )
     .await?;
-    confirm_signer(&app, &signer).await?;
     if tron_needs_extra(&summary, state.network) {
         confirm_native(
             &app,
@@ -506,6 +505,12 @@ pub async fn tron_sign_tx(
         )
         .await?;
     }
+    confirm_signer(
+        &app,
+        &signer,
+        crate::spend_value::tron(state.network, &summary),
+    )
+    .await?;
     let raw2 = raw.clone();
     let (sig, again) = blocking(move || Ok(wallet_core::tron_sign(&seed, a, &raw2)?)).await?;
     if again != summary {
