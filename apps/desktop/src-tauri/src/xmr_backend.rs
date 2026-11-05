@@ -729,6 +729,17 @@ impl XmrManager {
         self.epoch.fetch_add(1, Ordering::SeqCst);
     }
 
+    /// Sync times and errors belong to the keys of the session that scanned: a session of the
+    /// other side (`duress.rs`) starts blank. A scan still stopping keeps its `running`.
+    pub fn forget_progress(&self) {
+        for p in crate::net::lock(&self.progress).values_mut() {
+            *p = SyncProgress {
+                running: p.running,
+                ..SyncProgress::default()
+            };
+        }
+    }
+
     pub fn epoch(&self) -> u64 {
         self.epoch.load(Ordering::SeqCst)
     }

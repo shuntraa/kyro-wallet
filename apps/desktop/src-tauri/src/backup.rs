@@ -479,7 +479,7 @@ pub async fn backup_export(
     guard(&state)?;
     check_password_strength(&password)?;
     local.validate()?;
-    let watch = crate::commands_watch::load(&state.watch_path, state.network)?;
+    let watch = crate::commands_watch::load(&state.watch_path(), state.network)?;
     let content = BackupContent {
         version: CONTENT_VERSION,
         created_at: now_ms(),
@@ -575,7 +575,7 @@ pub async fn backup_open(
         BackupContent::parse(&plain)
     })
     .await?;
-    let watch = crate::commands_watch::load(&state.watch_path, state.network)?;
+    let watch = crate::commands_watch::load(&state.watch_path(), state.network)?;
     let out = preview(
         &content,
         state.network,
@@ -624,7 +624,7 @@ pub fn backup_apply(
     if content.network == network_key(net) {
         {
             let _write = crate::hw::lock(&state.watch_store_lock);
-            let mut store = crate::commands_watch::load(&state.watch_path, net)?;
+            let mut store = crate::commands_watch::load(&state.watch_path(), net)?;
             let plan = plan_watch(&store.addresses, &content.watch, net);
             if choices.add_watch {
                 for w in &plan.add {
@@ -649,7 +649,7 @@ pub fn backup_apply(
                 }
             }
             if choices.add_watch || choices.replace_names {
-                crate::commands_watch::save(&state.watch_path, &store, net)?;
+                crate::commands_watch::save(&state.watch_path(), &store, net)?;
             }
         }
         state.update_accounts(|accounts| {
@@ -665,7 +665,9 @@ pub fn backup_apply(
     let mut next = old.clone();
     content.settings.apply_to(&mut next);
     let saved = state.save_settings(next)?;
-    crate::tray::on_settings_saved(&app, &old, &saved);
+    if !state.in_decoy() {
+        crate::tray::on_settings_saved(&app, &old, &saved);
+    }
     if old.capture_protection != saved.capture_protection {
         if let Some(main) = app.get_webview_window("main") {
             let phrase = app.state::<crate::phrase_window::PhraseState>();

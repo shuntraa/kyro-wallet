@@ -290,6 +290,7 @@ pub async fn settings_set(
     settings: Value,
 ) -> AppResult<Value> {
     let old = state.settings();
+    let decoy = state.in_decoy();
     // A caller that does not know `servers` yet (older UI) must not wipe them.
     let has_servers = settings.get("servers").is_some();
     // `apiKeys` is a patch (absent = unchanged, "" = removed); keys are never sent to the UI.
@@ -310,11 +311,17 @@ pub async fn settings_set(
     }
     confirm_endpoints(&app, &endpoints(&new.servers), &old.servers).await?;
     probe_changes(&state.net, &new.servers, &old.servers, new.tor.enabled).await?;
-    if old.start_minimized != new.start_minimized {
+    // The windows above can outlast the session: settings go to the side that sent them.
+    if decoy != state.in_decoy() {
+        return Err(AppError::Locked);
+    }
+    if !decoy && old.start_minimized != new.start_minimized {
         crate::tray::sync_autostart(&new)?;
     }
     let saved = state.save_settings(new)?;
-    crate::tray::on_settings_saved(&app, &old, &saved);
+    if !decoy {
+        crate::tray::on_settings_saved(&app, &old, &saved);
+    }
     state.net.tor.set_bridges(saved.tor.bridges.clone());
     match (old.tor.enabled, saved.tor.enabled) {
         (false, true) => state.net.tor.start(),
@@ -837,7 +844,7 @@ mod cbf_glue {
             tor: s.tor.enabled,
             peers: crate::cbf::peer_list(net, &peers)?,
             birth_height: birth_height.unwrap_or(0),
-            data_dir: state.data_dir(),
+            data_dir: state.side_dir(),
         };
         let tor = state.net.tor.clone();
         let handle = app.clone();
@@ -877,7 +884,7 @@ mod cbf_glue {
             tor: s.tor.enabled,
             peers: crate::cbf::peer_list(state.network, &peers)?,
             birth_height: birth_height.unwrap_or(0),
-            data_dir: state.data_dir(),
+            data_dir: state.side_dir(),
         })
     }
 }
@@ -909,7 +916,7 @@ fn cbf_read(
     #[cfg(feature = "cbf")]
     {
         cbf_glue::refresh_if_stale(app, state);
-        let dir = state.data_dir();
+        let dir = state.side_dir();
         let net = state.network;
         let r = match (what, address) {
             ("info", Some(a)) => crate::cbf::address_info(&dir, net, a),
@@ -937,7 +944,7 @@ pub fn btc_cbf_status(state: State<'_, AppState>) -> AppResult<Value> {
         let mut st = crate::cbf::status();
         if st.last_sync_unix.is_none() {
             let store =
-                crate::cbf::Store::load(&crate::cbf::store_path(&state.data_dir(), state.network));
+                crate::cbf::Store::load(&crate::cbf::store_path(&state.side_dir(), state.network));
             st.tip_height = store.tip_height;
             st.scanned_height = store.scanned_to;
             st.last_sync_unix = store.last_sync_unix;

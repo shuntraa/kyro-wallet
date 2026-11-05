@@ -73,7 +73,7 @@ fn not_yet(chain: Chain) -> AppError {
 }
 
 pub(crate) fn load_account(state: &AppState, account_id: &str) -> AppResult<WatchOnlyAccount> {
-    let s = store::load(&state.hw_accounts_path, state.network)?;
+    let s = store::load(&state.hw_accounts_path(), state.network)?;
     store::find(&s, account_id)
 }
 
@@ -201,6 +201,9 @@ pub fn hw_thp_pairing_code(state: State<'_, AppState>, id: String, code: String)
 /// Trezor devices paired over THP with this installation (public keys only).
 #[tauri::command]
 pub fn hw_thp_pairings(state: State<'_, AppState>) -> AppResult<Vec<hw::thp_store::PairingInfo>> {
+    if state.in_decoy() {
+        return Ok(Vec::new());
+    }
     Ok(state.hw.thp_pairings()?)
 }
 
@@ -210,6 +213,9 @@ pub fn hw_thp_pairings(state: State<'_, AppState>) -> AppResult<Vec<hw::thp_stor
 pub fn hw_thp_forget(state: State<'_, AppState>, key: Option<String>) -> AppResult<usize> {
     guard(&state)?;
     let key = key.as_deref().map(parse_thp_key).transpose()?;
+    if state.in_decoy() {
+        return Ok(0);
+    }
     Ok(state.hw.thp_forget(key.as_ref())?)
 }
 
@@ -332,7 +338,7 @@ pub async fn hw_get_xpub(
 #[tauri::command]
 pub fn hw_accounts_get(state: State<'_, AppState>) -> AppResult<Vec<WatchOnlyAccount>> {
     guard(&state)?;
-    Ok(store::load(&state.hw_accounts_path, state.network)?.accounts)
+    Ok(store::load(&state.hw_accounts_path(), state.network)?.accounts)
 }
 
 /// Reads the keys of `chain` from device `id` and stores them as a watch-only account, new or
@@ -351,7 +357,7 @@ pub async fn hw_account_add(
     let info = state.hw.info(&id)?;
     let keys = read_keys(&app, &state, &id, chain, account).await?;
     let _write = hw::lock(&state.hw_store_lock);
-    let mut s = store::load(&state.hw_accounts_path, state.network)?;
+    let mut s = store::load(&state.hw_accounts_path(), state.network)?;
     let mut acc = match &account_id {
         Some(aid) => {
             let acc = store::find(&s, aid)?;
@@ -433,7 +439,7 @@ pub async fn hw_account_add(
     acc.validate()?;
     s.accounts.retain(|a| a.id != acc.id);
     s.accounts.push(acc.clone());
-    store::save(&state.hw_accounts_path, &s, state.network)?;
+    store::save(&state.hw_accounts_path(), &s, state.network)?;
     Ok(acc)
 }
 
@@ -441,7 +447,7 @@ pub async fn hw_account_add(
 pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppResult<()> {
     guard(&state)?;
     let _write = hw::lock(&state.hw_store_lock);
-    let mut s = store::load(&state.hw_accounts_path, state.network)?;
+    let mut s = store::load(&state.hw_accounts_path(), state.network)?;
     let before = s.accounts.len();
     s.accounts.retain(|a| a.id != account_id);
     if s.accounts.len() == before {
@@ -449,7 +455,7 @@ pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppR
             "unknown hardware wallet account".into(),
         ));
     }
-    store::save(&state.hw_accounts_path, &s, state.network)
+    store::save(&state.hw_accounts_path(), &s, state.network)
 }
 
 /// `m/a'/b'/…` → raw indices.

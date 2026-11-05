@@ -48,6 +48,7 @@ mod cosmos_backend;
 mod dialog_text;
 mod dot_backend;
 mod dot_history;
+mod duress;
 mod earn_evm;
 mod earn_rates;
 mod electrum;
@@ -410,6 +411,10 @@ pub fn run() {
             commands_kaspa::kas_watch_account,
             commands_kaspa::kas_watch_txs,
             wallets::wallets_get,
+            duress::duress_status,
+            duress::duress_enable,
+            duress::duress_show_phrase,
+            duress::duress_disable,
             wallets::wallet_switch,
             wallets::wallet_new,
             wallets::wallet_new_cancel,

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-duress-show-phrase"
+description = "Enables the duress_show_phrase command without any pre-configured scope."
+commands.allow = ["duress_show_phrase"]
+
+[[permission]]
+identifier = "deny-duress-show-phrase"
+description = "Denies the duress_show_phrase command without any pre-configured scope."
+commands.deny = ["duress_show_phrase"]

@@ -126,6 +126,26 @@ pub fn detail_fr(en: &str) -> String {
         ),
         ("no vault on this device", "aucun coffre sur cet appareil"),
         (
+            "the wallet could not be added, try again later",
+            "le portefeuille n'a pas pu être ajouté, réessaie plus tard",
+        ),
+        (
+            "this password cannot be used here, pick another one",
+            "ce mot de passe ne peut pas être utilisé ici, choisis-en un autre",
+        ),
+        (
+            "the second password is already on",
+            "le second mot de passe est déjà activé",
+        ),
+        (
+            "the second password is off",
+            "le second mot de passe est désactivé",
+        ),
+        (
+            "the second password must differ from the wallet's password",
+            "le second mot de passe doit être différent de celui du portefeuille",
+        ),
+        (
             "the password must be at least 10 characters long",
             "le mot de passe doit faire au moins 10 caractères",
         ),

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-duress-disable"
+description = "Enables the duress_disable command without any pre-configured scope."
+commands.allow = ["duress_disable"]
+
+[[permission]]
+identifier = "deny-duress-disable"
+description = "Denies the duress_disable command without any pre-configured scope."
+commands.deny = ["duress_disable"]

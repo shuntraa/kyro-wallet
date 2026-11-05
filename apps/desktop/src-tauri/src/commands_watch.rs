@@ -66,7 +66,7 @@ fn add(
 #[tauri::command]
 pub fn watch_addresses_get(state: State<'_, AppState>) -> AppResult<Vec<WatchAddress>> {
     guard(&state)?;
-    Ok(load(&state.watch_path, state.network)?.addresses)
+    Ok(load(&state.watch_path(), state.network)?.addresses)
 }
 
 #[tauri::command]
@@ -78,9 +78,9 @@ pub fn watch_address_add(
 ) -> AppResult<WatchAddress> {
     guard(&state)?;
     let _write = hw::lock(&state.watch_store_lock);
-    let mut s = load(&state.watch_path, state.network)?;
+    let mut s = load(&state.watch_path(), state.network)?;
     let entry = add(&mut s, state.network, family, &value, &label)?;
-    save(&state.watch_path, &s, state.network)?;
+    save(&state.watch_path(), &s, state.network)?;
     Ok(entry)
 }
 
@@ -93,7 +93,7 @@ pub fn watch_address_rename(
     guard(&state)?;
     let label = clean_name(&label)?;
     let _write = hw::lock(&state.watch_store_lock);
-    let mut s = load(&state.watch_path, state.network)?;
+    let mut s = load(&state.watch_path(), state.network)?;
     let entry = s
         .addresses
         .iter_mut()
@@ -101,7 +101,7 @@ pub fn watch_address_rename(
         .ok_or_else(|| AppError::InvalidInput("unknown watch address".into()))?;
     entry.label = label;
     let out = entry.clone();
-    save(&state.watch_path, &s, state.network)?;
+    save(&state.watch_path(), &s, state.network)?;
     Ok(out)
 }
 
@@ -109,13 +109,13 @@ pub fn watch_address_rename(
 pub fn watch_address_remove(state: State<'_, AppState>, id: String) -> AppResult<()> {
     guard(&state)?;
     let _write = hw::lock(&state.watch_store_lock);
-    let mut s = load(&state.watch_path, state.network)?;
+    let mut s = load(&state.watch_path(), state.network)?;
     let before = s.addresses.len();
     s.addresses.retain(|a| a.id != id);
     if s.addresses.len() == before {
         return Err(AppError::InvalidInput("unknown watch address".into()));
     }
-    save(&state.watch_path, &s, state.network)
+    save(&state.watch_path(), &s, state.network)
 }
 
 #[cfg(test)]
