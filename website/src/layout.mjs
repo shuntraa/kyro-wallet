@@ -173,7 +173,7 @@ export function page(opts) {
   const { path, title, description, body, chains, ld = [], scripts = [], noindex = false, preload } = opts;
   const url = SITE + path;
   const graph = ld.length ? ldJson({ '@context': 'https://schema.org', '@graph': ld }) : '';
-  const og = `${SITE}/img/og.jpg`;
+  const og = `${SITE}/img/og.jpg?v=2`;
   return html`<!doctype html>
 <html lang="en">
 <head>
@@ -201,7 +201,7 @@ export function page(opts) {
   <meta property="og:image" content="${og}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window on blue satin.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${esc(title)}">

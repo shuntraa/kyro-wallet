@@ -175,3 +175,14 @@ export const EARN_ON = {
   polygon: 'Lending USDT and USDC on Aave.',
   base: 'Lending USDC on Aave.'
 };
+
+/** Staking, liquid staking or lending: what the Earn tick means. */
+export const canEarn = (c) => c.features.staking || !!EARN_ON[c.slug];
+
+/** Native staking from a hardware account: HW_STAKE in the app. Anywhere else it takes a recovery phrase. */
+const STAKE_HW = {
+  solana: ', a Ledger or a Trezor',
+  cardano: ', a Ledger or a Trezor (on a hardware wallet, only Trezor can withdraw rewards)',
+  near: ' or a Ledger'
+};
+export const stakeFrom = (c) => `a recovery-phrase account${STAKE_HW[c.slug] || ' only'}`;

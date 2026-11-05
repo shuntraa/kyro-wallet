@@ -1,6 +1,6 @@
 # Kyro Wallet: full text of kyrowallet.com
 
-Generated 2026-11-04 from the published pages. Short index: https://kyrowallet.com/llms.txt
+Generated 2026-11-05 from the published pages. Short index: https://kyrowallet.com/llms.txt
 
 ================================================================
 Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
@@ -799,11 +799,11 @@ Compare
 
 ## What works where
 
-Staking is available for SOL, ADA, TRX, NEAR, SUI and APT. See swap routes, Earn and hardware wallets for the details.
+Earn means staking or lending: staking for SOL, ADA, TRX, NEAR, SUI and APT, ETH liquid staking with Lido, and lending on Aave on Ethereum, Arbitrum, Polygon and Base. See swap routes, Earn and hardware wallets for the details.
 
 What Kyro supports on each blockchain
 
-| Blockchain | Send | Swap | Stake | Hardware
+| Blockchain | Send | Swap | Earn | Hardware
 
 | Bitcoin |  |  |  |
 
@@ -1107,7 +1107,7 @@ Yes
 
 ### Earn
 
-ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Rates are estimates.
+ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Works with a Ledger or Trezor too. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -1149,7 +1149,7 @@ What Kyro supports on Ethereum
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave.
+| Earn |  | ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Works with a Ledger or Trezor too.
 
 | Ledger |  | Keys stay in the device.
 
@@ -1168,7 +1168,7 @@ Q: Can I swap ETH in Kyro?
 A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
 
 Q: Can I earn on Ethereum in Kyro?
-A: Yes: ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+A: Yes: ETH liquid staking with Lido, and lending USDT, USDC, DAI and WETH on Aave. It works from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
 
 Q: Does Kyro work with a hardware wallet on Ethereum?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -1357,7 +1357,7 @@ Yes
 
 ### Earn
 
-Lending USDT and USDC on Aave. Rates are estimates.
+Lending USDT and USDC on Aave. Works with a Ledger or Trezor too. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -1395,7 +1395,7 @@ What Kyro supports on Polygon
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Lending USDT and USDC on Aave.
+| Earn |  | Lending USDT and USDC on Aave. Works with a Ledger or Trezor too.
 
 | Ledger |  | Keys stay in the device.
 
@@ -1414,7 +1414,7 @@ Q: Can I swap POL in Kyro?
 A: Yes, in both directions. Providers: 0x and LI.FI. 1Click. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
 
 Q: Can I earn on Polygon in Kyro?
-A: Yes: Lending USDT and USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+A: Yes: lending USDT and USDC on Aave. It works from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
 
 Q: Does Kyro work with a hardware wallet on Polygon?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -1480,7 +1480,7 @@ Yes
 
 ### Earn
 
-Lending USDT and USDC on Aave. Rates are estimates.
+Lending USDT and USDC on Aave. Works with a Ledger or Trezor too. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -1518,7 +1518,7 @@ What Kyro supports on Arbitrum
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Lending USDT and USDC on Aave.
+| Earn |  | Lending USDT and USDC on Aave. Works with a Ledger or Trezor too.
 
 | Ledger |  | Keys stay in the device.
 
@@ -1537,7 +1537,7 @@ Q: Can I swap ETH in Kyro?
 A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
 
 Q: Can I earn on Arbitrum in Kyro?
-A: Yes: Lending USDT and USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+A: Yes: lending USDT and USDC on Aave. It works from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
 
 Q: Does Kyro work with a hardware wallet on Arbitrum?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -1726,7 +1726,7 @@ Yes
 
 ### Earn
 
-Lending USDC on Aave. Rates are estimates.
+Lending USDC on Aave. Works with a Ledger or Trezor too. Rates are estimates.
 Yes
 
 ### Hardware wallet
@@ -1764,7 +1764,7 @@ What Kyro supports on Base
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Lending USDC on Aave.
+| Earn |  | Lending USDC on Aave. Works with a Ledger or Trezor too.
 
 | Ledger |  | Keys stay in the device.
 
@@ -1783,7 +1783,7 @@ Q: Can I swap ETH in Kyro?
 A: Yes, in both directions. Providers: 0x and LI.FI on the same chain. 1Click and LI.FI across chains. Exolix to XMR, KAS, ALGO and NEAR. Routes and limits.
 
 Q: Can I earn on Base in Kyro?
-A: Yes: Lending USDC on Aave. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
+A: Yes: lending USDC on Aave. It works from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates, never guaranteed, and contract risks apply. Options and risks.
 
 Q: Does Kyro work with a hardware wallet on Base?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -3119,7 +3119,7 @@ What Kyro supports on Solana
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -3138,7 +3138,7 @@ Q: Can I swap SOL in Kyro?
 A: Yes, in both directions. Providers: Jupiter on Solana. LI.FI and 1Click across chains. Exolix for SOL, USDT and USDC. Routes and limits.
 
 Q: Can I stake SOL in Kyro?
-A: Yes, from a recovery-phrase account or a hardware wallet. Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account, a Ledger or a Trezor. Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Solana?
 A: Yes, with a Ledger or Trezor. Device table.
@@ -3244,7 +3244,7 @@ What Kyro supports on TRON
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account only. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -3263,7 +3263,7 @@ Q: Can I swap TRX in Kyro?
 A: Yes, in both directions. Providers: 1Click. Exolix. Routes and limits.
 
 Q: Can I stake TRX in Kyro?
-A: Yes, from a recovery-phrase account. Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account only. Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on TRON?
 A: Yes, with a Ledger. Device table.
@@ -3369,7 +3369,7 @@ What Kyro supports on Cardano
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account, a Ledger or a Trezor (on a hardware wallet, only Trezor can withdraw rewards). Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -3388,7 +3388,7 @@ Q: Can I swap ADA in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
 Q: Can I stake ADA in Kyro?
-A: Yes, from a recovery-phrase account or a hardware wallet. Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account, a Ledger or a Trezor (on a hardware wallet, only Trezor can withdraw rewards). Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Cardano?
 A: Yes, with a Ledger or Trezor. Not on the Trezor One. A Ledger gives different Cardano addresses than the software wallet for the same phrase. Device table.
@@ -4208,7 +4208,7 @@ Details
 
 ## NEAR in Kyro
 
-Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available.
+Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it.
 
 - NEAR Protocol mainnet.
 
@@ -4236,7 +4236,7 @@ What Kyro supports on NEAR
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account or a Ledger. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -4255,7 +4255,7 @@ Q: Can I swap NEAR in Kyro?
 A: Yes, in both directions. Providers: Exolix. Kyro's fee is a second transfer. Routes and limits.
 
 Q: Can I stake NEAR in Kyro?
-A: Yes, from a recovery-phrase account or a hardware wallet. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account or a Ledger. Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on NEAR?
 A: Yes, with a Ledger. The Ledger account is a different account than the software wallet. Device table.
@@ -4361,7 +4361,7 @@ What Kyro supports on Sui
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account only. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -4380,7 +4380,7 @@ Q: Can I swap SUI in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
 Q: Can I stake SUI in Kyro?
-A: Yes, from a recovery-phrase account. Delegate SUI to a validator, at least 1 SUI. It earns from the next epoch, and you can withdraw at any time. A validator cannot take your SUI. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account only. Delegate SUI to a validator, at least 1 SUI. It earns from the next epoch, and you can withdraw at any time. A validator cannot take your SUI. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Sui?
 A: Yes, with a Ledger. Device table.
@@ -4988,7 +4988,7 @@ What Kyro supports on Aptos
 
 | Swap to |  | The amount you see already has Kyro's fee out.
 
-| Earn |  | Staking from your own account, with a recovery-phrase account only. Rates are estimates.
+| Earn |  | Staking from a recovery-phrase account only. Rates are estimates.
 
 | Ledger |  | Keys stay in the device.
 
@@ -5007,7 +5007,7 @@ Q: Can I swap APT in Kyro?
 A: Yes, in both directions. Providers: 1Click. Routes and limits.
 
 Q: Can I stake APT in Kyro?
-A: Yes, from a recovery-phrase account. Delegate APT to a pool, at least 11 APT. To get it back, unlock and wait for the end of the pool's lockup (up to 14 days). The operator cannot take your APT. Rates are estimates, never guaranteed.
+A: Yes, from a recovery-phrase account only. Delegate APT to a pool, at least 11 APT. To get it back, unlock and wait for the end of the pool's lockup (up to 14 days). The operator cannot take your APT. Rates are estimates, never guaranteed.
 
 Q: Does Kyro work with a hardware wallet on Aptos?
 A: Yes, with a Ledger. Device table.

@@ -56,12 +56,12 @@ Key facts:
 ## Blockchains
 
 - [Bitcoin (BTC)](https://kyrowallet.com/chains/bitcoin/): send and receive, swap, hardware wallet
-- [Ethereum (ETH)](https://kyrowallet.com/chains/ethereum/): send and receive, swap, hardware wallet
+- [Ethereum (ETH)](https://kyrowallet.com/chains/ethereum/): send and receive, swap, Earn (Lido liquid staking, Aave lending), hardware wallet
 - [BNB Chain (BNB)](https://kyrowallet.com/chains/bnb-chain/): send and receive, swap, hardware wallet
-- [Polygon (POL)](https://kyrowallet.com/chains/polygon/): send and receive, swap, hardware wallet
-- [Arbitrum (ETH)](https://kyrowallet.com/chains/arbitrum/): send and receive, swap, hardware wallet
+- [Polygon (POL)](https://kyrowallet.com/chains/polygon/): send and receive, swap, Earn (Aave lending), hardware wallet
+- [Arbitrum (ETH)](https://kyrowallet.com/chains/arbitrum/): send and receive, swap, Earn (Aave lending), hardware wallet
 - [Optimism (ETH)](https://kyrowallet.com/chains/optimism/): send and receive, swap, hardware wallet
-- [Base (ETH)](https://kyrowallet.com/chains/base/): send and receive, swap, hardware wallet
+- [Base (ETH)](https://kyrowallet.com/chains/base/): send and receive, swap, Earn (Aave lending), hardware wallet
 - [Avalanche (AVAX)](https://kyrowallet.com/chains/avalanche/): send and receive, swap, hardware wallet
 - [Cronos (CRO)](https://kyrowallet.com/chains/cronos/): send and receive, swap, hardware wallet
 - [Mantle (MNT)](https://kyrowallet.com/chains/mantle/): send and receive, swap, hardware wallet

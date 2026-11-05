@@ -211,7 +211,7 @@ ${pages
 ${chains
   .map((c) => {
     const f = c.features;
-    const can = ['send and receive', f.swap && 'swap', f.staking && 'staking', f.hardware && 'hardware wallet'].filter(Boolean).join(', ');
+    const can = ['send and receive', f.swap && 'swap', f.staking && 'staking', c.slug === 'ethereum' && 'Earn (Lido liquid staking, Aave lending)', ['arbitrum', 'polygon', 'base'].includes(c.slug) && 'Earn (Aave lending)', f.hardware && 'hardware wallet'].filter(Boolean).join(', ');
     return `- [${c.name} (${c.ticker})](${SITE}/chains/${c.slug}/): ${can}`;
   })
   .join('\n')}

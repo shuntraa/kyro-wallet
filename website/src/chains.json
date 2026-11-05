@@ -588,7 +588,7 @@
       "hwNote": "The Ledger account is a different account than the software wallet.",
       "tokens": "USDC and USDT",
       "swapNote": "Swap native NEAR in and out through Exolix, without an account. Kyro's fee is a second ordinary transfer on NEAR. NEAR tokens are not offered.",
-      "staking": "Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it. With a Ledger account, staking is not available."
+      "staking": "Stake with a NEAR staking pool from the official factories. Kyro checks the pool's code before each transaction. Unstaked NEAR stays locked for 4 epochs before you can withdraw it."
     },
     {
       "slug": "sui",

@@ -3,6 +3,7 @@
 // are demo numbers: running digits, so nobody takes them for a real balance, rate or price.
 
 import { esc, iconOf } from './layout.mjs';
+import { EARN_ON } from './kit.mjs';
 
 const ico = (file, cls = '') => `<img class="tok${cls ? ' ' + cls : ''}" src="/img/coins/${file}.svg" width="32" height="32" alt="" decoding="async">`;
 
@@ -204,7 +205,7 @@ export const swapWidget = () => `
 /** Per-chain app card, for the chain pages. */
 export function coinCard(c) {
   const f = c.features;
-  const acts = ['Send', 'Receive', f.swap && 'Swap', f.staking && 'Stake'].filter(Boolean);
+  const acts = ['Send', 'Receive', f.swap && 'Swap', f.staking ? 'Stake' : EARN_ON[c.slug] && 'Earn'].filter(Boolean);
   return `
   <div class="kw-card coin-card c-${c.slug} spot" role="img" aria-label="${esc(c.name)} in Kyro, with demo numbers."><div aria-hidden="true">
     <div class="kw-coin"><img class="tok" src="/img/coins/${iconOf(c)}.svg" width="32" height="32" alt=""><span><b>${esc(c.name)}</b><small>${esc(c.ticker)}</small></span><em class="kw-demo">DEMO</em></div>

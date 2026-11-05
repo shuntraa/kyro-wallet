@@ -2,7 +2,7 @@
 // Content of every page on kyrowallet.com.
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, a, coin, pageHero, dlButton, osCards, installBlock, ctaPanel, breadcrumbLd } from './layout.mjs';
-import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT, routeOf, NO_SWAP, EARN_ON } from './kit.mjs';
+import { strip, head, sec, row, ul, tbl, cards, faqBlock, faqLd, nextLinks, DONE, NEXT, routeOf, NO_SWAP, EARN_ON, canEarn, stakeFrom } from './kit.mjs';
 import { appWindow, assetsCard, earnCard, confirmCard, vaultCard, ledgerScene, swapWidget, coinCard, coinHero, feeCalc, icon, term, circuits, phraseCard, privateCard, seesCards, moneroCard, roadList } from './components.mjs';
 
 const layers = () => html`
@@ -37,7 +37,7 @@ function matrix(chains) {
   const rows = chains
     .map(
       (c) =>
-        `<tr><th scope="row"><a class="c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}${esc(c.name)}</a></th><td>${yesNo(c.features.send)}</td><td>${yesNo(c.features.swap)}</td><td>${yesNo(c.features.staking)}</td><td>${yesNo(c.features.hardware)}</td></tr>`
+        `<tr><th scope="row"><a class="c-${c.slug}" href="/chains/${c.slug}/">${coin(c)}${esc(c.name)}</a></th><td>${yesNo(c.features.send)}</td><td>${yesNo(c.features.swap)}</td><td>${yesNo(canEarn(c))}</td><td>${yesNo(c.features.hardware)}</td></tr>`
     )
     .join('\n                ');
   return html`
@@ -45,7 +45,7 @@ function matrix(chains) {
             <table class="matrix">
               <caption class="visually-hidden">What Kyro supports on each blockchain</caption>
               <thead>
-                <tr><th scope="col">Blockchain</th><th scope="col">Send</th><th scope="col">Swap</th><th scope="col">Stake</th><th scope="col">Hardware</th></tr>
+                <tr><th scope="col">Blockchain</th><th scope="col">Send</th><th scope="col">Swap</th><th scope="col">Earn</th><th scope="col">Hardware</th></tr>
               </thead>
               <tbody>
                 ${rows}
@@ -1106,7 +1106,7 @@ export function chainsIndex(chains) {
         <div class="head-center" data-reveal>
           <p class="eyebrow">Compare</p>
           <h2 id="matrix-title">What works <em>where</em></h2>
-          <p>Staking is available for SOL, ADA, TRX, NEAR, SUI and APT. See <a href="/swap/">swap routes</a>, <a href="/earn/">Earn</a> and <a href="/hardware-wallets/">hardware wallets</a> for the details.</p>
+          <p>Earn means staking or lending: staking for SOL, ADA, TRX, NEAR, SUI and APT, ETH liquid staking with Lido, and lending on Aave on Ethereum, Arbitrum, Polygon and Base. See <a href="/swap/">swap routes</a>, <a href="/earn/">Earn</a> and <a href="/hardware-wallets/">hardware wallets</a> for the details.</p>
         </div>
         ${matrix(chains)}
         <p class="center small mute">Missing a blockchain? <a href="${REPO}/issues">Ask on GitHub</a>.</p>
@@ -1137,7 +1137,7 @@ function chainFaqs(c, ctx) {
   const q = [
     [`Is Kyro a free ${c.name} wallet?`, `Yes. Kyro is free, open source and non-custodial. You pay the network fee when you send ${esc(c.ticker)}, and your keys stay on your own computer.`],
     [`Can I swap ${c.ticker} in Kyro?`, route ? `${route[1] === 'Yes' ? `Yes, ${route[2] === 'Yes' ? 'in both directions' : 'from it'}.` : 'You can swap into it, not out of it yet.'} Providers: ${route[3]}. <a href="/swap/">Routes and limits</a>.` : `Not yet. ${esc(NO_SWAP[c.slug] || '')}`],
-    [f.staking ? `Can I stake ${c.ticker} in Kyro?` : `Can I earn on ${c.name} in Kyro?`, f.staking ? `Yes, from a recovery-phrase account${['solana', 'cardano', 'near'].includes(c.slug) ? ' or a hardware wallet' : ''}. ${esc(c.staking || '')} Rates are estimates, never guaranteed.` : earnOn ? `Yes: ${earnOn} Rates are estimates, never guaranteed, and contract risks apply. <a href="/earn/">Options and risks</a>.` : `Kyro offers no staking or lending on ${esc(c.name)}.`],
+    [f.staking ? `Can I stake ${c.ticker} in Kyro?` : `Can I earn on ${c.name} in Kyro?`, f.staking ? `Yes, from ${stakeFrom(c)}. ${esc(c.staking || '')} Rates are estimates, never guaranteed.` : earnOn ? `Yes: ${earnOn.replace(/^L/, 'l')} It works from a recovery-phrase account, a Ledger or a Trezor. Rates are estimates, never guaranteed, and contract risks apply. <a href="/earn/">Options and risks</a>.` : `Kyro offers no staking or lending on ${esc(c.name)}.`],
     [`Does Kyro work with a hardware wallet on ${c.name}?`, f.hardware ? `Yes, with a ${hwNames}.${c.hwNote ? ' ' + esc(c.hwNote) : ''} <a href="/hardware-wallets/">Device table</a>.` : `No. ${esc(c.name)} is not supported on hardware wallets in Kyro. Use a software account.`],
     [`What can a server see when I use ${c.name} in Kyro?`, c.slug === 'monero' ? 'The node sees the blocks you download and the transactions you publish, from a Tor exit relay. It never gets your addresses or your view key, because Kyro scans blocks locally. <a href="/monero/">Details</a>.' : `The server sees the addresses and transactions you ask about, and the IP of a Tor exit relay, not yours. ${esc(c.name)} has its own circuit family, except that all EVM networks share one. <a href="/tor/">Who sees what</a>.`],
     [`Can I use my existing recovery phrase for ${c.name}?`, `Yes, if it is a standard 12 or 24-word BIP39 phrase. It covers all ${chains.length} blockchains. <a href="/faq/">More questions</a>.`]
@@ -1168,7 +1168,7 @@ export function chainPage(c, chains) {
   const caps = [
     ['ic-send', 'Send and receive', f.send, `Send and receive ${assets}, with address-poisoning alerts and clipboard checks.`, `Not available on ${c.name} yet.`],
     ['ic-swap', 'Swap', f.swap, `${c.swapNote || `Swap ${c.ticker} in the app.`} The amount you receive already includes Kyro’s swap fee, from 0.7%, and the provider’s own costs.`, `Swaps are not available on ${c.name} yet. ${NO_SWAP[c.slug] || ''}`],
-    ['ic-stake', 'Earn', f.staking || !!earnOn, f.staking ? `Stake ${c.ticker} from your own account. Kyro takes no fee on staking. Rates are estimates.` : `${earnOn} Rates are estimates.`, `Kyro offers no staking or lending on ${c.name}.`],
+    ['ic-stake', 'Earn', f.staking || !!earnOn, f.staking ? `Stake ${c.ticker} from your own account. Kyro takes no fee on staking. Rates are estimates.` : `${earnOn} Works with a Ledger or Trezor too. Rates are estimates.`, `Kyro offers no staking or lending on ${c.name}.`],
     ['ic-hw', 'Hardware wallet', f.hardware, `Sign ${c.name} transactions with a ${hwDev}.${c.hwNote ? ' ' + c.hwNote : ''}`, `Not supported on ${c.name} yet. Use a software account.`]
   ];
 
@@ -1228,7 +1228,7 @@ export function chainPage(c, chains) {
           ['Send and receive', yesNo(f.send), `${esc(assets)}. Over Tor, with address-poisoning alerts.`],
           ['Swap from', yesNo(route && route[1] === 'Yes'), route ? `Providers: ${route[3]}.` : esc(NO_SWAP[c.slug] || '')],
           ['Swap to', yesNo(route && route[2] === 'Yes'), route ? 'The amount you see already has Kyro’s fee out.' : 'No route yet.'],
-          ['Earn', yesNo(f.staking || earnOn), f.staking ? `Staking from your own account, with a recovery-phrase account only. Rates are estimates.` : earnOn || 'Not offered.'],
+          ['Earn', yesNo(f.staking || earnOn), f.staking ? `Staking from ${stakeFrom(c)}. Rates are estimates.` : earnOn ? `${earnOn} Works with a Ledger or Trezor too.` : 'Not offered.'],
           ['Ledger', yesNo(f.hardware && devices.includes('Ledger')), f.hardware && devices.includes('Ledger') ? 'Keys stay in the device.' : 'Not supported.'],
           ['Trezor', yesNo(f.hardware && devices.includes('Trezor')), f.hardware && devices.includes('Trezor') ? 'Keys stay in the device.' : 'Not supported.']
         ])}
