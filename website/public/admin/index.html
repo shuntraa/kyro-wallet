@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kyro Mail</title>
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#04060a">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/admin/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/admin/icon-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Kyro Mail">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script src="/admin/admin.js" defer></script>
+</head>
+<body class="adm">
+  <div class="adm-shell" role="main">
+    <header class="adm-top">
+      <span class="adm-brand"><img src="/img/kyro-mark-dark.svg" width="24" height="24" alt=""><span class="adm-brand-name">Kyro Mail</span></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="logout" hidden>Déconnexion</button>
+    </header>
+
+    <section class="adm-card" id="view-login" aria-labelledby="login-title">
+      <h1 class="adm-title" id="login-title">Connexion</h1>
+      <form id="login-form" method="post" novalidate>
+        <label class="adm-label" for="user">Identifiant</label>
+        <input class="adm-input" id="user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
+
+        <label class="adm-label" for="password">Mot de passe</label>
+        <input class="adm-input" id="password" name="password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
+
+        <p class="adm-msg" id="login-msg" role="alert" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary btn-xl adm-btn" id="login-btn">Se connecter</button>
+      </form>
+    </section>
+
+    <section class="adm-card" id="view-compose" hidden aria-labelledby="compose-title">
+      <h1 class="adm-title" id="compose-title">Nouveau message</h1>
+      <form id="compose-form" novalidate>
+        <fieldset class="adm-fieldset">
+          <legend class="adm-label">Envoyer depuis</legend>
+          <div class="adm-senders" id="senders"></div>
+        </fieldset>
+
+        <label class="adm-label" for="to">À</label>
+        <input class="adm-input" id="to" type="text" inputmode="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="nom@exemple.com" required>
+        <p class="adm-hint">Plusieurs adresses : sépare-les par une virgule (5 maximum).</p>
+
+        <label class="adm-label" for="subject">Objet</label>
+        <input class="adm-input" id="subject" type="text" autocomplete="off" maxlength="200" required>
+
+        <label class="adm-label" for="body">Message</label>
+        <textarea class="adm-input adm-area" id="body" rows="10" required></textarea>
+
+        <p class="adm-hint" id="sign-hint"></p>
+        <p class="adm-msg" id="send-msg" role="status" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary btn-xl adm-btn" id="send-btn">Envoyer</button>
+      </form>
+    </section>
+  </div>
+</body>
+</html>

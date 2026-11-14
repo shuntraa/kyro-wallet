@@ -1,0 +1,64 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Admin mailer. Same tokens, radii and buttons as the site (/style.css), phone first. */
+
+.adm { min-height: 100vh; min-height: 100dvh; background: var(--ink); }
+.adm-shell {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+}
+
+.adm-top { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin-bottom: 14px; }
+.adm-brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; }
+.adm-brand-name { font: 600 17px/1 var(--sans); letter-spacing: -.01em; }
+
+/* The card stays invisible until the session is known, so a signed-in phone never flashes the login form.
+   Its fields still exist the whole time, which keeps the password manager able to find them. */
+.adm-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 22px 18px 20px; box-shadow: var(--sh-2), var(--hl); transition: opacity .2s; }
+.adm:not(.adm-ready) .adm-card { opacity: 0; }
+.adm-title { font: 400 30px/1.12 var(--head); font-variation-settings: 'opsz' 48; color: #fff; letter-spacing: -.018em; margin: 0 0 20px; }
+
+.adm-label { display: block; margin: 18px 0 7px; padding: 0; font: 500 13.5px/1.3 var(--sans); color: var(--mute); letter-spacing: .01em; }
+.adm-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.adm-fieldset .adm-label { margin-top: 0; }
+
+/* 16px minimum so iOS does not zoom in on focus. */
+.adm-input {
+  display: block; width: 100%; min-height: 50px;
+  padding: 13px 14px; border-radius: var(--r-sm);
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line-2);
+  font: 400 16px/1.4 var(--sans);
+  -webkit-appearance: none; appearance: none;
+}
+.adm-input::placeholder { color: var(--faint); }
+.adm-input:focus { outline: none; border-color: var(--ice-line); box-shadow: 0 0 0 3px rgba(124, 196, 255, .22); }
+.adm-area { min-height: 220px; resize: vertical; }
+
+.adm-senders { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adm-sender { position: relative; display: block; }
+.adm-sender input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.adm-sender-box {
+  display: flex; align-items: center;
+  min-height: 52px; padding: 10px 14px; border-radius: var(--r-sm);
+  background: var(--panel); border: 1px solid var(--line-2);
+  transition: border-color .15s, background .15s;
+}
+.adm-sender-name { font: 600 15px/1.2 var(--sans); color: var(--text); }
+.adm-sender input:checked + .adm-sender-box { border-color: var(--ice); background: var(--ice-deep); }
+.adm-sender input:checked + .adm-sender-box .adm-sender-name { color: var(--ice-text); }
+.adm-sender input:focus-visible + .adm-sender-box { outline: 2px solid var(--ice); outline-offset: 2px; }
+
+.adm-hint { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--faint); }
+.adm-msg { min-height: 22px; margin: 14px 0 0; font-size: 14px; line-height: 1.45; color: var(--down); }
+.adm-msg.ok { color: var(--up); }
+
+/* The button itself is the site's .btn .btn-primary .btn-xl; this only makes it full width. */
+.adm-btn { display: flex; width: 100%; min-height: 52px; margin-top: 10px; font-size: 16px; border-radius: var(--r-sm); }
+.adm-btn:disabled { opacity: .55; cursor: default; }
+
+@media (min-width: 640px) {
+  .adm-shell { padding-top: 40px; }
+  .adm-card { padding: 28px 24px 24px; }
+}

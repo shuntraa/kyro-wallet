@@ -41,3 +41,20 @@ Upload the `website/public` folder (direct upload), or connect the repository wi
 - Build output directory: `website/public`
 
 `public/_redirects` and `public/_headers` are read by Cloudflare Pages.
+
+## Admin mailer (`/admin/`)
+
+`public/admin/` is a small page to send email from the four kyrowallet.com addresses (contact, support, business, report), through [Resend](https://resend.com). Its server code is in `functions/` (Cloudflare Pages Functions: `/api/admin/login`, `session`, `logout`, `send`). It is published here so anyone can check what it does.
+
+No login, password, hash or key is in this code. Everything comes from Cloudflare Pages secrets, and logins are refused when one is missing or too short:
+
+| Secret | Content |
+|---|---|
+| `RESEND` | Resend API key |
+| `ADMIN_USER` | Login name |
+| `ADMIN_PASSWORD` | Password, 16 characters or more |
+| `ADMIN_SESSION_SECRET` | Random string, 32 characters or more, used only to sign the session cookie |
+
+Sessions last 12 hours (`HttpOnly`, `Secure`, `SameSite=Strict`, `__Host-` cookie). Writes need the site's own origin and a JSON body. The sender is always one of the four addresses in `functions/_lib/config.js`, never a free value. Changing `ADMIN_SESSION_SECRET` logs everyone out.
+
+For the Functions to run, the Pages project needs `functions/` next to its output folder (the deployed site keeps them side by side).
