@@ -7,7 +7,7 @@ Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
 URL: https://kyrowallet.com/
 ================================================================
 
-v1.1.0 Free and open source
+v1.1.1 Free and open source
 
 # Keep it to yourself.
 
@@ -308,7 +308,7 @@ Check the claims on this page yourself.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -453,18 +453,18 @@ Why there is a swap fee at all.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
 One-line install, all files and checksums
 
 ================================================================
-Download Kyro Wallet 1.1.0 for Windows, macOS and Linux
+Download Kyro Wallet 1.1.1 for Windows, macOS and Linux
 URL: https://kyrowallet.com/download/
 ================================================================
 
-Version 1.1.0
+Version 1.1.1
 
 # Download Kyro Wallet
 
@@ -532,7 +532,7 @@ For a hardware wallet over USB on Linux, install the Ledger or Trezor udev rules
 
 ## All files
 
-Kyro 1.1.0 release files
+Kyro 1.1.1 release files
 
 | File | System | Notes
 
@@ -700,7 +700,7 @@ A: Right-click Kyro in Applications and choose Open, or go to System Settings > 
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -881,7 +881,7 @@ Missing a blockchain? Ask on GitHub.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1125,7 +1125,7 @@ All 36 blockchains
 
 ## Get Kyro for Bitcoin
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1252,7 +1252,7 @@ All 36 blockchains
 
 ## Get Kyro for Ethereum
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1375,7 +1375,7 @@ All 36 blockchains
 
 ## Get Kyro for BNB Chain
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1498,7 +1498,7 @@ All 36 blockchains
 
 ## Get Kyro for Polygon
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1621,7 +1621,7 @@ All 36 blockchains
 
 ## Get Kyro for Arbitrum
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1744,7 +1744,7 @@ All 36 blockchains
 
 ## Get Kyro for Optimism
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1867,7 +1867,7 @@ All 36 blockchains
 
 ## Get Kyro for Base
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -1990,7 +1990,7 @@ All 36 blockchains
 
 ## Get Kyro for Avalanche
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2113,7 +2113,7 @@ All 36 blockchains
 
 ## Get Kyro for Cronos
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2236,7 +2236,7 @@ All 36 blockchains
 
 ## Get Kyro for Mantle
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2359,7 +2359,7 @@ All 36 blockchains
 
 ## Get Kyro for Sonic
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2482,7 +2482,7 @@ All 36 blockchains
 
 ## Get Kyro for Flare
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2605,7 +2605,7 @@ All 36 blockchains
 
 ## Get Kyro for Kaia
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2728,7 +2728,7 @@ All 36 blockchains
 
 ## Get Kyro for Gnosis
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2851,7 +2851,7 @@ All 36 blockchains
 
 ## Get Kyro for HyperEVM
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -2974,7 +2974,7 @@ All 36 blockchains
 
 ## Get Kyro for Sei
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3097,7 +3097,7 @@ All 36 blockchains
 
 ## Get Kyro for Conflux
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3222,7 +3222,7 @@ All 36 blockchains
 
 ## Get Kyro for Solana
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3347,7 +3347,7 @@ All 36 blockchains
 
 ## Get Kyro for TRON
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3472,7 +3472,7 @@ All 36 blockchains
 
 ## Get Kyro for Cardano
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3599,7 +3599,7 @@ All 36 blockchains
 
 ## Get Kyro for XRP Ledger
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3722,7 +3722,7 @@ All 36 blockchains
 
 ## Get Kyro for Litecoin
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3847,7 +3847,7 @@ All 36 blockchains
 
 ## Get Kyro for Dogecoin
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -3968,7 +3968,7 @@ All 36 blockchains
 
 ## Get Kyro for Bitcoin Cash
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4089,7 +4089,7 @@ All 36 blockchains
 
 ## Get Kyro for Dash
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4214,7 +4214,7 @@ All 36 blockchains
 
 ## Get Kyro for Stellar
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4339,7 +4339,7 @@ All 36 blockchains
 
 ## Get Kyro for NEAR
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4464,7 +4464,7 @@ All 36 blockchains
 
 ## Get Kyro for Sui
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4591,7 +4591,7 @@ All 36 blockchains
 
 ## Get Kyro for Monero
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4718,7 +4718,7 @@ All 36 blockchains
 
 ## Get Kyro for TON
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4843,7 +4843,7 @@ All 36 blockchains
 
 ## Get Kyro for Cosmos Hub
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -4966,7 +4966,7 @@ All 36 blockchains
 
 ## Get Kyro for Polkadot
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5091,7 +5091,7 @@ All 36 blockchains
 
 ## Get Kyro for Aptos
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5214,7 +5214,7 @@ All 36 blockchains
 
 ## Get Kyro for Algorand
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5337,7 +5337,7 @@ All 36 blockchains
 
 ## Get Kyro for Kaspa
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5460,7 +5460,7 @@ All 36 blockchains
 
 ## Get Kyro for Zcash
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5607,7 +5607,7 @@ Tor covers the network. This covers the vault and the signature.
 
 ## A wallet that keeps quiet
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5750,7 +5750,7 @@ Circuits, exit relays and what happens when Tor is down.
 
 ## Get Monero on your desktop
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -5902,7 +5902,7 @@ Slippage, approvals, gas and the rest, in plain words.
 
 ## Swap from your own wallet
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6061,7 +6061,7 @@ The native window, and why it reads Rust's decoding.
 
 ## Earn without an account
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6390,7 +6390,7 @@ What Kyro protects, and what no software can.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6405,7 +6405,7 @@ Roadmap
 
 # Where Kyro is going
 
-Version 1.1.0 today. This page lists what has shipped and what is planned. There are no dates, because a wallet ships when it is checked.
+Version 1.1.1 today. This page lists what has shipped and what is planned. There are no dates, because a wallet ships when it is checked.
 
 ### Shipped
 
@@ -6549,7 +6549,7 @@ Why it exists and how it is paid for.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6774,7 +6774,7 @@ All releases and files on GitHub
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6901,7 +6901,7 @@ Logos and colours for writing about Kyro.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -6982,11 +6982,11 @@ Headlines and big numbers use Unbounded, the same face as in the app, with a lig
 
 ## Facts to check
 
-Kyro has no mobile app and no external audit published yet. The current version is 1.1.0. If you are unsure of a claim, the site summary and the repository are the reference.
+Kyro has no mobile app and no external audit published yet. The current version is 1.1.1. If you are unsure of a claim, the site summary and the repository are the reference.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7059,7 +7059,7 @@ New to the words? Read the glossary
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7152,7 +7152,7 @@ Import your phrase, or send your coins across.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7217,7 +7217,7 @@ The lookalike address in your own history.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7302,7 +7302,7 @@ The lookalike address in your own history.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7383,7 +7383,7 @@ Your IP and your addresses in the same log line.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7452,7 +7452,7 @@ Paper, in order, offline. What to do and what to avoid.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7539,7 +7539,7 @@ Import your phrase, or send your coins across.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7618,7 +7618,7 @@ Check a release with SHA-256 in two minutes.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7689,7 +7689,7 @@ Pick a validator, delegate, and get your SOL back.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7770,7 +7770,7 @@ From the welcome screen to your first receive address.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7861,7 +7861,7 @@ From the welcome screen to your first receive address.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7956,7 +7956,7 @@ From the welcome screen to your first receive address.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
@@ -7991,7 +7991,7 @@ How Kyro protects your keys.
 
 ## Get Kyro
 
-Version 1.1.0 · Free · Windows, macOS and Linux
+Version 1.1.1 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x86_64 distros
 
