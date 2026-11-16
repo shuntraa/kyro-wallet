@@ -157,7 +157,7 @@ function footer(chains) {
       </div>
       <div class="footer-bottom">
         <span>Kyro ${VERSION} · GPL-3.0-or-later</span>
-        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Fraunces (<a href="/fonts/OFL-Fraunces.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Unbounded (<a href="/fonts/OFL-Unbounded.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
     </div>
@@ -187,8 +187,7 @@ export function page(opts) {
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/fonts/fraunces-roman.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/fonts/fraunces-italic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-wordmark.woff2" as="font" type="font/woff2" crossorigin>
   ${preload || ''}
   <link rel="stylesheet" href="/style.css">

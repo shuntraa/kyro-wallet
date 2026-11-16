@@ -1,6 +1,6 @@
 # Kyro Wallet: full text of kyrowallet.com
 
-Generated 2026-11-05 from the published pages. Short index: https://kyrowallet.com/llms.txt
+Generated 2026-11-16 from the published pages. Short index: https://kyrowallet.com/llms.txt
 
 ================================================================
 Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
@@ -17,7 +17,7 @@ Download Kyro  Other platforms
 
 36:  blockchains
 
-9:  active wallets this week105:  downloads in total
+16:  active wallets this week165:  downloads in total
 
 Blockchains
 
@@ -472,7 +472,7 @@ Free for Windows, macOS and Linux. One command, or the file yourself. Kyro is pu
 
 Download Kyro Release notes
 
-9:  active wallets this week105:  downloads in total
+16:  active wallets this week165:  downloads in total
 
 Recommended
 
@@ -6875,7 +6875,7 @@ Kyro Wallet is a free, open-source, non-custodial desktop wallet for Windows, ma
 
 ## Type
 
-Headlines use Fraunces, with its italic for the accent words. Everything else uses Geist, and the Kyro wordmark uses Archivo. All three are under the SIL Open Font License, with the licence files in OFL-Fraunces, OFL-Geist and OFL-Archivo.
+Headlines and big numbers use Unbounded, the same face as in the app, with a lighter weight for the accent words. Everything else uses Geist, and the Kyro wordmark uses Archivo. All three are under the SIL Open Font License, with the licence files in OFL-Unbounded, OFL-Geist and OFL-Archivo.
 
 ## Usage
 

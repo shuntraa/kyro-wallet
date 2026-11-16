@@ -4,12 +4,11 @@
 @font-face { font-family: 'Geist Variable'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('/fonts/geist-latin-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: 'Geist Variable'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('/fonts/geist-latin-ext-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: 'Geist Mono Variable'; font-style: normal; font-display: swap; font-weight: 100 900; src: url('/fonts/geist-mono-latin-wght-normal.woff2') format('woff2-variations'); }
-/* Headlines: Fraunces at weight 400, SOFT and WONK pinned to 0, optical size kept (20 to 144). Latin only. */
-@font-face { font-family: 'Fraunces'; font-style: normal; font-display: swap; font-weight: 400; src: url('/fonts/fraunces-roman.woff2') format('woff2'); }
-@font-face { font-family: 'Fraunces'; font-style: italic; font-display: swap; font-weight: 400; src: url('/fonts/fraunces-italic.woff2') format('woff2'); }
-/* Georgia scaled to the same width and box, so the swap does not move the layout. */
-@font-face { font-family: 'Head Fallback'; font-style: normal; font-weight: 400; src: local('Georgia'); size-adjust: 92%; ascent-override: 106%; descent-override: 28%; line-gap-override: 0%; }
-@font-face { font-family: 'Head Fallback'; font-style: italic; font-weight: 400; src: local('Georgia Italic'); size-adjust: 87%; ascent-override: 112%; descent-override: 29%; line-gap-override: 0%; }
+/* Headlines and big numbers: Unbounded, the app's display face. size-adjust 80% keeps the old type sizes. */
+@font-face { font-family: 'Unbounded Variable'; font-style: normal; font-display: swap; font-weight: 200 900; size-adjust: 80%; src: url('/fonts/unbounded-latin-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Unbounded Variable'; font-style: normal; font-display: swap; font-weight: 200 900; size-adjust: 80%; src: url('/fonts/unbounded-latin-ext-wght-normal.woff2') format('woff2-variations'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+20A0-20AB, U+20AD-20C0, U+2C60-2C7F, U+A720-A7FF; }
+/* Arial Black stretched to Unbounded's box, so the swap barely moves the layout. */
+@font-face { font-family: 'Head Fallback'; font-style: normal; src: local('Arial Black'), local('Arial'); size-adjust: 88%; ascent-override: 96%; descent-override: 24%; line-gap-override: 0%; }
 /* The Kyro wordmark: Archivo Expanded at 800, cut to its letters. */
 @font-face { font-family: 'Archivo Display'; font-style: normal; font-display: swap; font-weight: 800; src: url('/fonts/archivo-wordmark.woff2') format('woff2'); }
 /* Same box as the wordmark while the font loads, so the swap does not move the layout. */
@@ -38,8 +37,8 @@
   --down: #ff6b6b;
   --sans: 'Geist Variable', 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --display: var(--sans);
-  --head: 'Fraunces', 'Head Fallback', Georgia, serif;
+  --display: 'Unbounded Variable', 'Head Fallback', var(--sans);
+  --head: 'Unbounded Variable', 'Head Fallback', sans-serif;
   --wordmark: 'Archivo Display', 'Display Fallback', var(--sans);
   --gutter: 16px;
   --max: 1200px;
@@ -104,9 +103,8 @@ b, strong { color: var(--text); font-weight: 600; }
 
 /* ---------- type */
 .notfound-n, .card-num, .fee-value { font-family: var(--display); font-weight: 600; color: #fff; letter-spacing: -.04em; }
-/* --opsz: bigger titles take the finer cut of Fraunces, small ones the sturdier one. */
-h1, h2 { font-family: var(--head); font-weight: 400; font-synthesis: none; font-variation-settings: 'opsz' var(--opsz, 72); color: #fff; letter-spacing: -.018em; }
-h1 em, h2 em { font-style: italic; color: var(--ice); letter-spacing: -.012em; }
+h1, h2 { font-family: var(--head); font-weight: 500; font-synthesis: none; color: #fff; letter-spacing: -.03em; }
+h1 em, h2 em { font-style: normal; font-weight: 300; color: var(--ice); }
 main .wrap > p:last-child:has(> .more) { text-align: center; }
 .more { display: inline-flex; align-items: center; gap: 8px; margin-top: 32px; color: var(--text); font-weight: 500; background: linear-gradient(var(--ice), var(--ice)) 0 100% / 0 1.5px no-repeat; transition: background-size .4s var(--out); }
 .more:hover { background-size: 100% 1.5px; }
@@ -135,7 +133,7 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
 .hero { position: relative; isolation: isolate; padding: 104px 0 36px; overflow: clip; }
 .hero-copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .badge-arrow { color: var(--ice); }
-#hero-title { --opsz: 110; margin-top: 26px; font-size: clamp(60px, 21vw, 132px); line-height: .92; letter-spacing: -.028em; }
+#hero-title { margin-top: 26px; font-size: clamp(60px, 21vw, 132px); line-height: .92; letter-spacing: -.028em; }
 #hero-title em { letter-spacing: -.02em; }
 #hero-title .ln { display: block; overflow: clip; overflow-clip-margin: .24em; padding-bottom: .02em; }
 #hero-title .ln + .ln { padding-bottom: .16em; }
@@ -173,7 +171,7 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
   .hero::before { background: linear-gradient(90deg, rgba(4, 6, 10, .78), rgba(4, 6, 10, .5) 44%, transparent 68%); -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-image: linear-gradient(to bottom, #000 70%, transparent); }
   .hero-copy.wrap { align-items: flex-start; text-align: left; width: 45vw; max-width: 700px; margin: 0 0 0 7vw; padding: 0; }
   .hero-copy .hero-cta, .hero .stats { justify-content: flex-start; }
-  #hero-title { --opsz: 144; font-size: clamp(88px, min(10.4vw, 16.6vh), 156px); letter-spacing: -.035em; white-space: nowrap; }
+  #hero-title { font-size: clamp(88px, min(10.4vw, 16.6vh), 156px); letter-spacing: -.035em; white-space: nowrap; }
   #hero-title em { letter-spacing: -.03em; }
   .hero-stage { position: absolute; inset: 0; z-index: 1; margin: 0; max-width: none; padding: 0; perspective: 1700px; perspective-origin: 62% 50%; pointer-events: none; }
   .kw-tilt { position: absolute; top: 50%; left: 51%; width: min(66vw, calc((100svh - 130px) * 1.6)); pointer-events: auto; transform: translate3d(0, -50%, 0) rotateY(-15deg) rotateX(5deg) rotateZ(.9deg); }
@@ -543,7 +541,7 @@ html:not(.js) .mq { overflow-x: auto; -webkit-mask-image: none; mask-image: none
 .dl-help { margin: 22px auto 0; }
 .dl-files > p { margin-top: 18px; }
 .chain-group + .chain-group { margin-top: 36px; }
-.chain-group h2 { --opsz: 36; margin-bottom: 14px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
+.chain-group h2 { margin-bottom: 14px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
 .chain-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr)); gap: 8px; }
 .dl-sub { color: var(--text-2); }
 .notfound { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; text-align: center; overflow: hidden; }
@@ -580,7 +578,7 @@ html:not(.js) .mq { overflow-x: auto; -webkit-mask-image: none; mask-image: none
 @media (min-width: 900px) { .footer-cols { grid-template-columns: 1.6fr repeat(4, 1fr); } .footer-brand { grid-column: auto; } }
 
 /* ---------- type and rhythm */
-h1 { --opsz: 120; font-size: clamp(38px, 5.6vw, 84px); line-height: 1.04; letter-spacing: -.025em; text-wrap: balance; }
+h1 { font-size: clamp(38px, 5.6vw, 84px); line-height: 1.04; letter-spacing: -.025em; text-wrap: balance; }
 h2 { font-size: clamp(30px, 3.6vw, 52px); line-height: 1.08; text-wrap: balance; }
 h3 { font: 600 16.5px/1.35 var(--sans); color: var(--text); letter-spacing: -.01em; }
 .section { position: relative; isolation: isolate; padding: clamp(60px, 7.6vw, 108px) 0; }
@@ -804,7 +802,7 @@ h3 { font: 600 16.5px/1.35 var(--sans); color: var(--text); letter-spacing: -.01
 .answer p + p, .answer h3, .answer ol, .answer pre { margin-top: 10px; }
 /* Groups read as a side title and its questions. */
 .faq:has(> h2) { border-top: 0; max-width: 1040px; }
-.faq > h2 { --opsz: 36; padding-bottom: 12px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
+.faq > h2 { padding-bottom: 12px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
 @media (min-width: 900px) {
   .faq:has(> h2) { display: grid; grid-template-columns: 240px minmax(0, 1fr); column-gap: 56px; }
   .faq > h2 { grid-column: 1; grid-row: 1 / span 99; position: sticky; top: 84px; align-self: start; padding: 14px 0 0; }
@@ -819,7 +817,7 @@ h3 { font: 600 16.5px/1.35 var(--sans); color: var(--text); letter-spacing: -.01
 .faq details:last-child { border-bottom: 1px solid var(--line); }
 
 /* ---------- final call */
-.final h2 { --opsz: 120; font-size: clamp(38px, 5.4vw, 76px); letter-spacing: -.025em; }
+.final h2 { font-size: clamp(38px, 5.4vw, 76px); letter-spacing: -.025em; }
 
 /* ---------- inner page heads */
 .page-hero { position: relative; isolation: isolate; display: flex; align-items: center; padding: 116px 0 clamp(32px, 4.6vw, 60px); overflow: hidden; }
@@ -830,7 +828,7 @@ h3 { font: 600 16.5px/1.35 var(--sans); color: var(--text); letter-spacing: -.01
 
 /* ---------- reading */
 .prose { max-width: 740px; margin: 0 auto; }
-.prose h2 { --opsz: 48; margin: 44px 0 12px; font-size: clamp(25px, 2.6vw, 33px); letter-spacing: -.018em; }
+.prose h2 { margin: 44px 0 12px; font-size: clamp(25px, 2.6vw, 33px); letter-spacing: -.018em; }
 .prose > :first-child, .prose .eyebrow + h2 { margin-top: 0; }
 .prose h3 { margin: 24px 0 6px; }
 .prose p { margin-top: 12px; }
@@ -1048,7 +1046,7 @@ html.ui .feature-tabs .tab-panel [data-reveal] { opacity: 1; transform: none; }
 .prose .os-steps li + li { margin-top: 0; }
 
 .log-entry + .log-entry { margin-top: 36px; }
-.log-entry h2 { --opsz: 48; margin-top: 0; font-size: clamp(24px, 2.5vw, 32px); letter-spacing: -.018em; }
+.log-entry h2 { margin-top: 0; font-size: clamp(24px, 2.5vw, 32px); letter-spacing: -.018em; }
 .log-entry .latest { margin-left: 10px; padding: 2px 8px; border: 1px solid var(--line-2); border-radius: var(--r-xs); background: rgba(124, 196, 255, .1); color: var(--ice-text); font: 500 12px var(--sans); vertical-align: middle; }
 
 .brand-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -1075,7 +1073,7 @@ html.ui .feature-tabs .tab-panel [data-reveal] { opacity: 1; transform: none; }
 .gloss dt:first-child { margin-top: 0; }
 .gloss dd { margin-top: 6px; color: var(--text-2); }
 .guide-groups { display: grid; gap: clamp(36px, 5vw, 56px); }
-.guide-groups h2 { --opsz: 36; margin-bottom: 14px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
+.guide-groups h2 { margin-bottom: 14px; font-size: clamp(22px, 2.1vw, 26px); letter-spacing: -.014em; }
 @media (prefers-reduced-motion: reduce) { .js .cir-line::after { display: none; } }
 .ic-dash { --icon: url('/img/ic-dash.svg'); }
 .stack2 { display: grid; gap: 16px; }
