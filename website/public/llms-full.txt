@@ -6556,7 +6556,7 @@ Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage, most x8
 One-line install, all files and checksums
 
 ================================================================
-Changelog: every Kyro release up to 1.1.0 | Kyro Wallet
+Changelog: every Kyro release up to 1.1.1 | Kyro Wallet
 URL: https://kyrowallet.com/changelog/
 ================================================================
 
@@ -6566,7 +6566,17 @@ Changelog
 
 Every release of Kyro, newest first. This page is generated from CHANGELOG.md at build time.
 
-## 1.1.0Latest
+## 1.1.1Latest
+
+- Moving between sections: the next screen rises out of a soft blur, and the ice square in the header glides to the section you open.
+
+- Brighter: the ice light behind every screen is stronger, a faint violet and ice light adds depth low on the screen, the ice veins drift very slowly, and cards are a little lighter.
+
+- Assets: an asset you don't hold keeps its colour instead of turning grey, so a new wallet is no longer a grey page. On hover a tile lifts and its rim lights up in the coin's colour.
+
+- Charts (Portfolio, asset pages, Earn calculator): under the pointer the curve is lit up to that point, and the point glides along the curve with the pointer (no more jumping from one data point to the next), its label in the curve's colour.
+
+## 1.1.0
 
 - New look: every screen is redrawn. Each coin has its ring and its own light, one header bar replaces the side rail and the status bar, figures use the Unbounded face, and the main button is tinted ice. Everything is in English and French.
 

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Changelog: every Kyro release up to 1.1.0 | Kyro Wallet</title>
-  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.0. Generated from the CHANGELOG.md file in the repository.">
+  <title>Changelog: every Kyro release up to 1.1.1 | Kyro Wallet</title>
+  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
   <link rel="canonical" href="https://kyrowallet.com/changelog/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#000000">
@@ -17,8 +17,8 @@
   <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Changelog: every Kyro release up to 1.1.0 | Kyro Wallet">
-  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.0. Generated from the CHANGELOG.md file in the repository.">
+  <meta property="og:title" content="Changelog: every Kyro release up to 1.1.1 | Kyro Wallet">
+  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
   <meta property="og:url" content="https://kyrowallet.com/changelog/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg?v=2">
   <meta property="og:image:width" content="1200">
@@ -26,10 +26,10 @@
   <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window on blue satin.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.1.0 | Kyro Wallet">
-  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.0. Generated from the CHANGELOG.md file in the repository.">
+  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.1.1 | Kyro Wallet">
+  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg?v=2">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.0. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
   <script>(function () {var m = window.matchMedia;document.documentElement.classList.add('ui');if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');})();</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -96,8 +96,12 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           
+          <section class="log-entry" id="v1-1-1" aria-label="Version 1.1.1">
+            <h2>1.1.1<span class="latest">Latest</span></h2>
+            <ul><li>Moving between sections: the next screen rises out of a soft blur, and the ice square in the header glides to the section you open.</li><li>Brighter: the ice light behind every screen is stronger, a faint violet and ice light adds depth low on the screen, the ice veins drift very slowly, and cards are a little lighter.</li><li>Assets: an asset you don&#39;t hold keeps its colour instead of turning grey, so a new wallet is no longer a grey page. On hover a tile lifts and its rim lights up in the coin&#39;s colour.</li><li>Charts (Portfolio, asset pages, Earn calculator): under the pointer the curve is lit up to that point, and the point glides along the curve with the pointer (no more jumping from one data point to the next), its label in the curve&#39;s colour.</li></ul>
+          </section>
           <section class="log-entry" id="v1-1-0" aria-label="Version 1.1.0">
-            <h2>1.1.0<span class="latest">Latest</span></h2>
+            <h2>1.1.0</h2>
             <ul><li>New look: every screen is redrawn. Each coin has its ring and its own light, one header bar replaces the side rail and the status bar, figures use the Unbounded face, and the main button is tinted ice. Everything is in English and French.</li><li>Signing window: Kyro now draws its own native window to confirm a transaction. It shows what Kyro read in the transaction, the amount in the coin&#39;s colour, the recipient in blocks, then Cancel and Sign. Sign becomes active after a short moment. If the window can&#39;t open, the system dialog is used as before. The recovery phrase window has the same look.</li><li>Bitcoin time lock: lock bitcoins until a day you choose. The Bitcoin network refuses to spend them before that date, even with the phrase. A timeline shows when each lock opens, withdrawal works after that date, and a scan finds your locks again after a restore. Nobody can cancel a lock once it is confirmed. How to withdraw with Bitcoin Core alone: docs/BTC_TIMELOCK.md.</li><li>Second password (Settings › Security, off by default): typed on the normal unlock screen, it opens a separate wallet with its own phrase and a small balance, for when someone forces you to open Kyro.</li><li>Daily spending limit (optional): above the amount you choose per 24 hours, a send waits 1 or 24 hours and then asks for the password. Raising or turning off the limit waits the same way.</li><li>Missing network fees: when a token send lacks the coin that pays the fee, Kyro offers to swap a little of another coin for it. Tidy turns small leftover balances into one coin.</li><li>Earn: rates load in the background, each option shows its risk level and your positions, and a calculator shows what an amount could earn with the best option of each risk level. Rates are estimates.</li><li>Private note on each transaction, in History, in the CSV export and in the backup.</li><li>Warning before a first send to an address you never used and that is not in your contacts.</li><li>Bitcoin amounts in BTC or in sats (Settings › Display).</li><li>Hide small balances: off, empty ones, under 1 or under 10 in your currency.</li><li>Send only to my contacts (optional). Turning it off and adding a contact ask for the password.</li><li>Charts: points are placed by their real time, so &quot;All&quot; is no longer squashed and the highest price and the tooltip show real prices.</li><li>Rebuilding a release: tools and steps to rebuild Kyro yourself and compare the binaries&#39; hashes, in docs/REPRODUCIBLE.md.</li></ul>
           </section>
           <section class="log-entry" id="v1-0-7" aria-label="Version 1.0.7">
