@@ -14,8 +14,7 @@
   <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-wordmark.woff2" as="font" type="font/woff2" crossorigin>
   
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/chains.css">
+  <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="About Kyro: why this private wallet exists | Kyro Wallet">
@@ -31,12 +30,13 @@
   <meta name="twitter:description" content="Why Kyro exists: a desktop crypto wallet with no account and no analytics, keys on your machine, Tor by default, code anyone can read and a fee anyone can check.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg?v=2">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/about/#page","url":"https://kyrowallet.com/about/","name":"About Kyro Wallet","description":"Why Kyro exists: a desktop crypto wallet with no account and no analytics, keys on your machine, Tor by default, code anyone can read and a fee anyone can check.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"About","item":"https://kyrowallet.com/about/"}]}]}</script>
-  <script src="/boot.js"></script>
+  <script>(function () {var m = window.matchMedia;document.documentElement.classList.add('ui');if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');})();</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
+<!--email_off-->
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
@@ -198,5 +198,6 @@
     </div>
     <div class="foot-word" aria-hidden="true"></div>
   </footer>
+<!--/email_off-->
 </body>
 </html>

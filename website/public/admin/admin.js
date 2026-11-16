@@ -16,6 +16,7 @@
   function show(name) {
     Object.keys(views).forEach(function (k) { views[k].hidden = k !== name; });
     logoutBtn.hidden = name !== 'compose';
+    document.body.setAttribute('data-view', name);
   }
 
   function api(path, method, body) {

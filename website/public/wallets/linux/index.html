@@ -14,8 +14,7 @@
   <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-wordmark.woff2" as="font" type="font/woff2" crossorigin>
   
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/chains.css">
+  <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Private crypto wallet for Linux: AppImage and .deb | Kyro">
@@ -31,13 +30,14 @@
   <meta name="twitter:description" content="Install Kyro on Linux x86_64: one command, an AppImage that updates itself or a .deb. Free, open source and non-custodial, with built-in Tor. FUSE and udev notes.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg?v=2">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/wallets/linux/#page","url":"https://kyrowallet.com/wallets/linux/","name":"Kyro for Linux","description":"Install Kyro on Linux x86_64: one command, an AppImage that updates itself or a .deb. Free, open source and non-custodial, with built-in Tor. FUSE and udev notes.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Download","item":"https://kyrowallet.com/download/"},{"@type":"ListItem","position":3,"name":"Linux","item":"https://kyrowallet.com/wallets/linux/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/wallets/linux/#faq","url":"https://kyrowallet.com/wallets/linux/","mainEntity":[{"@type":"Question","name":"Why does my AppImage not start?","acceptedAnswer":{"@type":"Answer","text":"It most likely needs FUSE 2: sudo apt install libfuse2 on Ubuntu 22.04, or libfuse2t64 on Ubuntu 24.04 and later."}},{"@type":"Question","name":"Why does Kyro not see my Ledger or Trezor on Linux?","acceptedAnswer":{"@type":"Answer","text":"Install the manufacturer’s udev rules, unplug the device and plug it back in. Also close Ledger Live or Trezor Suite, which hold the device."}},{"@type":"Question","name":"Can I build Kyro myself?","acceptedAnswer":{"@type":"Answer","text":"Yes. You need Rust, Node.js 22+, pnpm and the Tauri prerequisites. See how to build Kyro from source."}}]}]}</script>
-  <script src="/boot.js"></script>
+  <script>(function () {var m = window.matchMedia;document.documentElement.classList.add('ui');if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');})();</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
   <script src="/copy.js" defer></script>
 </head>
 <body>
+<!--email_off-->
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
@@ -324,5 +324,6 @@
     </div>
     <div class="foot-word" aria-hidden="true"></div>
   </footer>
+<!--/email_off-->
 </body>
 </html>

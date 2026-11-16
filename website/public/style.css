@@ -135,11 +135,12 @@ main .wrap > p:last-child:has(> .more) { text-align: center; }
 .badge-arrow { color: var(--ice); }
 #hero-title { margin-top: 26px; font-size: clamp(60px, 21vw, 132px); line-height: .92; letter-spacing: -.028em; }
 #hero-title em { letter-spacing: -.02em; }
-#hero-title .ln { display: block; overflow: clip; overflow-clip-margin: .24em; padding-bottom: .02em; }
+#hero-title .ln { display: block; padding-bottom: .02em; }
 #hero-title .ln + .ln { padding-bottom: .16em; }
-.js #hero-title .ln > * { display: inline-block; animation: ln-rise 1.15s var(--out) .05s both; }
-.js #hero-title .ln + .ln > * { animation-delay: .15s; }
-@keyframes ln-rise { from { transform: translate3d(0, 130%, 0) rotate(2deg); } }
+/* The title is painted on the first frame (it is the LCP): it only settles into place. */
+.js #hero-title .ln > * { display: inline-block; animation: ln-rise .9s var(--out) both; }
+.js #hero-title .ln + .ln > * { animation-delay: .08s; }
+@keyframes ln-rise { from { opacity: .02; transform: translate3d(0, .3em, 0); } }
 .js .hero-copy > :not(h1) { animation: heroin .9s var(--out) both; }
 .js .hero-copy > .hero-lead { animation-delay: .3s; } .js .hero-copy > .hero-cta { animation-delay: .4s; } .js .hero-copy > .stats { animation-delay: .5s; }
 .hero-copy .hero-cta { justify-content: center; }
@@ -575,6 +576,7 @@ html:not(.js) .mq { overflow-x: auto; -webkit-mask-image: none; mask-image: none
 .site-footer li + li { margin-top: 7px; }
 .site-footer ul a { display: inline-block; padding: 2px 0; color: var(--text-2); }
 .site-footer ul a:hover { color: #fff; }
+.footer-bottom a { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(198, 204, 212, .45); }
 .footer-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--mute); font-size: 13.5px; }
 @media (min-width: 900px) { .footer-cols { grid-template-columns: 1.6fr repeat(4, 1fr); } .footer-brand { grid-column: auto; } }
 

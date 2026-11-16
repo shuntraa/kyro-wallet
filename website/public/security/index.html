@@ -14,8 +14,7 @@
   <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-wordmark.woff2" as="font" type="font/woff2" crossorigin>
   
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/chains.css">
+  <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Security: how Kyro Wallet protects your keys">
@@ -31,12 +30,13 @@
   <meta name="twitter:description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg?v=2">
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/security/#page","url":"https://kyrowallet.com/security/","name":"Kyro Wallet security","description":"Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://kyrowallet.com/security/"}]}]}</script>
-  <script src="/boot.js"></script>
+  <script>(function () {var m = window.matchMedia;document.documentElement.classList.add('ui');if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');})();</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
   <script src="/download.js" defer></script>
 </head>
 <body>
+<!--email_off-->
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 
@@ -318,5 +318,6 @@
     </div>
     <div class="foot-word" aria-hidden="true"></div>
   </footer>
+<!--/email_off-->
 </body>
 </html>

@@ -6,7 +6,7 @@
   <title>Kyro Mail</title>
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#04060a">
+  <meta name="theme-color" content="#07080a">
   <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="manifest" href="/admin/manifest.webmanifest">
@@ -15,19 +15,23 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Kyro Mail">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/site.css">
   <link rel="stylesheet" href="/admin/admin.css">
   <script src="/admin/admin.js" defer></script>
 </head>
 <body class="adm">
   <div class="adm-shell" role="main">
     <header class="adm-top">
-      <span class="adm-brand"><img src="/img/kyro-mark-dark.svg" width="24" height="24" alt=""><span class="adm-brand-name">Kyro Mail</span></span>
+      <span class="adm-brand"><img src="/img/kyro-mark-dark.svg" width="22" height="22" alt=""><span class="adm-brand-name">Kyro</span><span class="adm-brand-sub">Mail</span></span>
       <button type="button" class="btn btn-ghost btn-sm" id="logout" hidden>Déconnexion</button>
     </header>
 
-    <section class="adm-card" id="view-login" aria-labelledby="login-title">
-      <h1 class="adm-title" id="login-title">Connexion</h1>
+    <section class="adm-card adm-login" id="view-login" aria-labelledby="login-title">
+      <div class="adm-hero">
+        <img class="adm-mark" src="/img/kyro-mark-dark.svg" width="112" height="112" alt="">
+        <h1 class="adm-word" id="login-title">Kyro Mail</h1>
+        <p class="adm-state"><i></i>Accès réservé · connexion chiffrée</p>
+      </div>
       <form id="login-form" method="post" novalidate>
         <label class="adm-label" for="user">Identifiant</label>
         <input class="adm-input" id="user" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
@@ -36,7 +40,7 @@
         <input class="adm-input" id="password" name="password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" required>
 
         <p class="adm-msg" id="login-msg" role="alert" aria-live="polite"></p>
-        <button type="submit" class="btn btn-primary btn-xl adm-btn" id="login-btn">Se connecter</button>
+        <button type="submit" class="btn btn-primary btn-xl adm-btn" id="login-btn">Déverrouiller</button>
       </form>
     </section>
 

@@ -1,7 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Admin mailer. Same tokens, radii and buttons as the site (/style.css), phone first. */
+/* Admin mailer, in the 1.1.0 look: the app's unlock screen for the login, its surfaces and ice-sheet
+   button for the composer. Tokens, fonts and .btn come from the site (/site.css). Phone first. */
 
-.adm { min-height: 100vh; min-height: 100dvh; background: var(--ink); }
+.adm {
+  min-height: 100vh; min-height: 100dvh;
+  background:
+    radial-gradient(60% 42% at 50% 0, rgba(124, 196, 255, .09), transparent 70%),
+    radial-gradient(40% 30% at 50% 100%, rgba(124, 196, 255, .05), transparent 70%),
+    #07080a;
+}
 .adm-shell {
   width: 100%;
   max-width: 560px;
@@ -9,56 +16,76 @@
   padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
 }
 
-.adm-top { display: flex; align-items: center; justify-content: space-between; min-height: 48px; margin-bottom: 14px; }
-.adm-brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; }
-.adm-brand-name { font: 600 17px/1 var(--sans); letter-spacing: -.01em; }
+/* Header bar, like the app's: mark, wordmark, then the section name. Hidden on the login screen. */
+.adm-top { display: flex; align-items: center; justify-content: space-between; min-height: 52px; margin-bottom: 18px; border-bottom: 1px solid #1b1f25; }
+.adm-brand { display: inline-flex; align-items: center; gap: 9px; color: #fff; }
+.adm-brand-name { font: 800 16px/1 var(--wordmark); letter-spacing: -.02em; }
+.adm-brand-sub { display: inline-flex; align-items: center; gap: 7px; margin-left: 4px; color: var(--mute); font: 500 14px/1 var(--sans); }
+.adm-brand-sub::before { content: ''; width: 6px; height: 6px; border-radius: 1px; background: var(--ice); box-shadow: 0 0 8px rgba(124, 196, 255, .8); }
+.adm[data-view="login"] .adm-top { visibility: hidden; border-color: transparent; }
 
 /* The card stays invisible until the session is known, so a signed-in phone never flashes the login form.
    Its fields still exist the whole time, which keeps the password manager able to find them. */
-.adm-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 22px 18px 20px; box-shadow: var(--sh-2), var(--hl); transition: opacity .2s; }
+.adm-card { padding: 24px 20px 22px; border: 1px solid #1b1f25; border-radius: 18px; background: linear-gradient(180deg, #0e1114, #090a0c 70%); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(170, 220, 255, .06); transition: opacity .25s; }
 .adm:not(.adm-ready) .adm-card { opacity: 0; }
-.adm-title { font: 400 30px/1.12 var(--head); font-variation-settings: 'opsz' 48; color: #fff; letter-spacing: -.018em; margin: 0 0 20px; }
+.adm-title { margin: 0 0 20px; font: 500 26px/1.15 var(--head); letter-spacing: -.03em; color: #fff; }
 
-.adm-label { display: block; margin: 18px 0 7px; padding: 0; font: 500 13.5px/1.3 var(--sans); color: var(--mute); letter-spacing: .01em; }
+/* Login: the app's unlock screen. Big mark with its ice light, the wordmark, one status line, the fields. */
+.adm-login { max-width: 400px; margin: 0 auto; padding: 0; border: 0; background: none; box-shadow: none; }
+.adm-hero { display: flex; flex-direction: column; align-items: center; padding: clamp(8px, 6vh, 56px) 0 26px; text-align: center; }
+.adm-mark { width: 112px; height: 112px; filter: drop-shadow(0 0 22px rgba(124, 196, 255, .35)) drop-shadow(0 18px 40px rgba(0, 0, 0, .6)); }
+.adm-word { margin: 18px 0 0; font: 800 34px/1 var(--wordmark); letter-spacing: -.03em; color: #fff; }
+.adm-state { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--mute); font-size: 13.5px; }
+.adm-state i { width: 7px; height: 7px; border-radius: 1px; background: var(--ice); box-shadow: 0 0 10px rgba(124, 196, 255, .9); }
+.adm-ready .adm-mark { animation: adm-in .9s var(--out) both; }
+@keyframes adm-in { from { opacity: 0; transform: scale(.92); } }
+
+.adm-label { display: block; margin: 18px 0 8px; padding: 0; font: 500 13px/1.3 var(--sans); color: var(--mute); letter-spacing: .01em; }
 .adm-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 .adm-fieldset .adm-label { margin-top: 0; }
 
-/* 16px minimum so iOS does not zoom in on focus. */
+/* The app's fields: dark well, ice ring on focus. 16px minimum so iOS does not zoom in on focus. */
 .adm-input {
-  display: block; width: 100%; min-height: 50px;
-  padding: 13px 14px; border-radius: var(--r-sm);
-  background: var(--panel); color: var(--text);
-  border: 1px solid var(--line-2);
+  display: block; width: 100%; min-height: 52px;
+  padding: 14px 15px; border-radius: 12px;
+  background: #0b0d10; color: var(--text);
+  border: 1px solid #222730;
   font: 400 16px/1.4 var(--sans);
   -webkit-appearance: none; appearance: none;
+  transition: border-color .15s, box-shadow .15s;
 }
 .adm-input::placeholder { color: var(--faint); }
-.adm-input:focus { outline: none; border-color: var(--ice-line); box-shadow: 0 0 0 3px rgba(124, 196, 255, .22); }
-.adm-area { min-height: 220px; resize: vertical; }
+.adm-input:focus { outline: none; border-color: var(--ice-line); box-shadow: 0 0 0 3px rgba(124, 196, 255, .16), 0 0 24px -6px rgba(124, 196, 255, .5); }
+.adm-area { min-height: 240px; resize: vertical; }
 
+/* Senders: the app's tabs, an ice square on the one in use. */
 .adm-senders { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .adm-sender { position: relative; display: block; }
 .adm-sender input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
 .adm-sender-box {
-  display: flex; align-items: center;
-  min-height: 52px; padding: 10px 14px; border-radius: var(--r-sm);
-  background: var(--panel); border: 1px solid var(--line-2);
-  transition: border-color .15s, background .15s;
+  display: flex; align-items: center; gap: 9px;
+  min-height: 50px; padding: 10px 14px; border-radius: 12px;
+  background: #0b0d10; border: 1px solid #222730;
+  transition: border-color .15s, background .15s, box-shadow .15s;
 }
-.adm-sender-name { font: 600 15px/1.2 var(--sans); color: var(--text); }
-.adm-sender input:checked + .adm-sender-box { border-color: var(--ice); background: var(--ice-deep); }
-.adm-sender input:checked + .adm-sender-box .adm-sender-name { color: var(--ice-text); }
+.adm-sender-box::before { content: ''; width: 7px; height: 7px; border-radius: 1px; background: #39404a; transition: background .15s, box-shadow .15s; }
+.adm-sender-name { font: 600 15px/1.2 var(--sans); color: var(--text-2); }
+.adm-sender input:checked + .adm-sender-box { border-color: var(--ice-line); background: linear-gradient(180deg, rgba(124, 196, 255, .1), rgba(124, 196, 255, .03)); box-shadow: inset 0 1px 0 rgba(170, 220, 255, .1); }
+.adm-sender input:checked + .adm-sender-box::before { background: var(--ice); box-shadow: 0 0 8px rgba(124, 196, 255, .9); }
+.adm-sender input:checked + .adm-sender-box .adm-sender-name { color: #fff; }
 .adm-sender input:focus-visible + .adm-sender-box { outline: 2px solid var(--ice); outline-offset: 2px; }
 
 .adm-hint { margin: 8px 0 0; font-size: 13px; line-height: 1.45; color: var(--faint); }
 .adm-msg { min-height: 22px; margin: 14px 0 0; font-size: 14px; line-height: 1.45; color: var(--down); }
 .adm-msg.ok { color: var(--up); }
+.adm-login .adm-msg { text-align: center; }
 
-/* The button itself is the site's .btn .btn-primary .btn-xl; this only makes it full width. */
-.adm-btn { display: flex; width: 100%; min-height: 52px; margin-top: 10px; font-size: 16px; border-radius: var(--r-sm); }
+/* The button is the site's .btn .btn-primary .btn-xl (the app's ice sheet); this only makes it full width. */
+.adm-btn { display: flex; width: 100%; min-height: 52px; margin-top: 10px; font-size: 16px; border-radius: 12px; }
 .adm-btn:disabled { opacity: .55; cursor: default; }
 
 @media (min-width: 640px) {
-  .adm-shell { padding-top: 40px; }
-  .adm-card { padding: 28px 24px 24px; }
+  .adm-shell { padding-top: 32px; }
+  .adm-card:not(.adm-login) { padding: 28px 26px 26px; }
 }
+@media (prefers-reduced-motion: reduce) { .adm-mark { animation: none !important; } }

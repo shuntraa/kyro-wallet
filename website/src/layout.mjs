@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Shared page shell for kyrowallet.com: <head>, header, footer and small HTML helpers.
 
+import { readFileSync } from 'node:fs';
+
 export const SITE = 'https://kyrowallet.com';
+/** public/boot.js, inlined in every head (it must run before the first paint); its hash goes in the CSP. */
+export const BOOT = readFileSync(new URL('../public/boot.js', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/\s*\n\s*/g, '').trim();
 export const VERSION = '1.0.7';
 export const REPO = 'https://github.com/shuntraa/kyro-wallet';
 export const DL = `${REPO}/releases/latest/download/`;
@@ -190,8 +194,7 @@ export function page(opts) {
   <link rel="preload" href="/fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/archivo-wordmark.woff2" as="font" type="font/woff2" crossorigin>
   ${preload || ''}
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/chains.css">
+  <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="${opts.ogType || 'website'}">
   <meta property="og:title" content="${esc(title)}">
@@ -207,12 +210,13 @@ export function page(opts) {
   <meta name="twitter:description" content="${esc(description)}">
   <meta name="twitter:image" content="${og}">
   ${graph}
-  <script src="/boot.js"></script>
+  <script>${BOOT}</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
   ${scripts.map((s) => `<script src="${s}" defer></script>`).join('\n  ')}
 </head>
 <body>
+<!--email_off-->
   <a class="skip" href="#content">Skip to content</a>
   <div class="silk" aria-hidden="true"><canvas data-silk></canvas></div>
 ${header(path)}
@@ -221,6 +225,7 @@ ${header(path)}
 ${body}
   </main>
 ${footer(chains)}
+<!--/email_off-->
 </body>
 </html>
 `;
