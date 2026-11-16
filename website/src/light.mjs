@@ -46,9 +46,9 @@ function render({ w, h, T, zoom, gain, spec, ramp, aspect, top = 1, bottom = 0 }
         g = mix(g, c[1], t);
         b = mix(b, c[2], t);
       };
-      blend([0.006, 0.03, 0.095], step(0, 0.14, val));
-      blend([0.012, 0.15, 0.38], step(0.1, 0.36, val));
-      blend([0.12, 0.46, 0.86], step(0.32, 0.62, val));
+      blend([0.016, 0.026, 0.042], step(0, 0.14, val));
+      blend([0.06, 0.12, 0.2], step(0.1, 0.36, val));
+      blend([0.36, 0.6, 0.82], step(0.32, 0.62, val));
       const i = (py * w + px) * 3;
       buf[i] = Math.min(255, (r * ramp + 0.0157) * 255);
       buf[i + 1] = Math.min(255, (g * ramp + 0.0235) * 255);
@@ -77,7 +77,7 @@ function fold(x, y, T) {
 function satin({ w, h, T }) {
   const buf = Buffer.alloc(w * h * 3);
   const key = unit([-0.62, 0.72, 0.6]), half = unit([key[0], key[1], key[2] + 1]), side = [0.56, -0.34, 0.76];
-  const stops = [[0.008, 0.016, 0.045], [0.012, 0.075, 0.235], [0.085, 0.29, 0.72], [0.49, 0.77, 1]];
+  const stops = [[0.010, 0.012, 0.017], [0.022, 0.036, 0.058], [0.085, 0.16, 0.27], [0.43, 0.68, 0.9]];
   const e = 0.012, knee = 0.42;
   for (let py = 0; py < h; py++) {
     for (let px = 0; px < w; px++) {

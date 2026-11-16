@@ -63,9 +63,9 @@
     '  float over=max(v-knee,0.);',
     '  v=min(v,knee)+over/(1.+over*mix(9.,3.,open));',
     // Near-black navy, deep blue, Kyro blue, ice, and a soft near-white for the very peaks only.
-    '  vec3 c=mix(vec3(.008,.016,.045),vec3(.012,.075,.235),smoothstep(.02,.28,v));',
-    '  c=mix(c,vec3(.085,.29,.72),smoothstep(.22,.56,v));',
-    '  c=mix(c,vec3(.49,.77,1.),smoothstep(.52,.84,v));',
+    '  vec3 c=mix(vec3(.010,.012,.017),vec3(.022,.036,.058),smoothstep(.02,.28,v));',
+    '  c=mix(c,vec3(.085,.16,.27),smoothstep(.22,.56,v));',
+    '  c=mix(c,vec3(.43,.68,.9),smoothstep(.52,.84,v));',
     '  c=mix(c,vec3(.88,.95,1.),smoothstep(.84,1.1,v));',
     // Interleaved gradient noise, one 8-bit step and fixed in place: no banding, no shimmer.
     '  float z=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))));',

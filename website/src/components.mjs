@@ -124,22 +124,28 @@ export const earnCard = (only) => `
 
 /** The native confirmation window, as the app shell draws it. */
 export const confirmCard = () => `
-  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
-    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+  <div class="dlg" role="img" aria-label="Kyro signing window: what Kyro read in the transaction (amount, recipient, network fee), with Cancel and Sign buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm the transaction<i class="dlg-x">✕</i></div>
     <div class="dlg-body">
-      <div class="dlg-amount">${ico('eth')}<strong>1.2345 ETH</strong></div>
-      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
-      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
-      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
-      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
-      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+      <p class="dlg-acct">Signing account: “Main” · m/44'/60'/0'/0/0</p>
+      <p class="dlg-read"><i></i>What Kyro read in the transaction</p>
+      <p class="dlg-kind">Ethereum send</p>
+      <div class="dlg-amount"><strong>1.2345</strong><span>ETH</span></div>
+      <p class="dlg-k">To</p>
+      <p class="dlg-addr mono"><b>0x1234</b> 5678 9abc def0 1234 5678 9abc def0 <b>cdef</b></p>
+      <div class="dlg-rows">
+        <div class="kw-kv"><span>Amount</span><b class="dlg-coin">1.2345 ETH</b></div>
+        <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+        <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      </div>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Sign</i></div>
     </div>
   </div></div>`;
 
 /** The vault panel from the Portfolio screen. */
 export const vaultCard = () => `
   <div class="kw-card kw-card-narrow" role="img" aria-label="Kyro vault panel: keys encrypted on this device, auto-lock timer, no unlimited approvals, Tor on."><div aria-hidden="true">
-    <div class="kw-vault">${icon('shield')}<span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
+    <div class="kw-vault"><i class="kw-sq"></i><span><b>Vault</b><small>Keys encrypted on this device</small></span><em>Unlocked</em></div>
     <div class="kw-kv"><span>Auto-lock</span><b>14:54</b></div>
     <div class="kw-bar"><i></i></div>
     <div class="kw-kv"><span>Hardware wallet</span><b class="ice">Add</b></div>

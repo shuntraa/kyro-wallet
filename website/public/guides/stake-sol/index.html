@@ -102,15 +102,21 @@
       <h2>Stake</h2>
       <ol class="os-steps"><li>Open <b>Earn</b> and choose <b>Solana</b>.</li><li>Choose <b>Stake SOL</b>. Kyro creates a stake account in your name, and only you can manage or withdraw it.</li><li>Pick a validator. Names are declared by the validators themselves and not verified, so look at commission and status too.</li><li>Enter the amount and review.</li><li>Confirm with your password in the system window.</li></ol>
       
-  <div class="dlg" role="img" aria-label="Kyro confirmation window: amount, recipient, network and network fee, with Cancel and Confirm buttons."><div aria-hidden="true">
-    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm transaction</div>
+  <div class="dlg" role="img" aria-label="Kyro signing window: what Kyro read in the transaction (amount, recipient, network fee), with Cancel and Sign buttons."><div aria-hidden="true">
+    <div class="dlg-bar"><img src="/img/kyro-mark-dark.svg" width="14" height="14" alt="">Kyro · Confirm the transaction<i class="dlg-x">✕</i></div>
     <div class="dlg-body">
-      <div class="dlg-amount"><img class="tok" src="/img/coins/eth.svg" width="32" height="32" alt="" decoding="async"><strong>1.2345 ETH</strong></div>
-      <div class="kw-kv"><span>To</span><b class="mono">0x1234…cdef</b></div>
-      <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
-      <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
-      <p>Decoded by the Rust core. Nothing is sent until you confirm.</p>
-      <div class="dlg-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+      <p class="dlg-acct">Signing account: “Main” · m/44'/60'/0'/0/0</p>
+      <p class="dlg-read"><i></i>What Kyro read in the transaction</p>
+      <p class="dlg-kind">Ethereum send</p>
+      <div class="dlg-amount"><strong>1.2345</strong><span>ETH</span></div>
+      <p class="dlg-k">To</p>
+      <p class="dlg-addr mono"><b>0x1234</b> 5678 9abc def0 1234 5678 9abc def0 <b>cdef</b></p>
+      <div class="dlg-rows">
+        <div class="kw-kv"><span>Amount</span><b class="dlg-coin">1.2345 ETH</b></div>
+        <div class="kw-kv"><span>Network</span><b>Ethereum</b></div>
+        <div class="kw-kv"><span>Network fee</span><b>0.00123 ETH</b></div>
+      </div>
+      <div class="dlg-actions"><i>Cancel</i><i class="on">Sign</i></div>
     </div>
   </div></div>
       <p>A commission above 10%, or a delinquent validator that has stopped voting, gets a second, reinforced confirmation.</p>
