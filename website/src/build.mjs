@@ -144,6 +144,7 @@ const allPages = () => [
   P.chainsIndex(chains),
   P.privacy(),
   P.codeSigningPolicy(),
+  P.donatePage(),
   ...chains.map((c) => P.chainPage(c, chains)),
   ...M.morePages(chains, changelog)
 ];

@@ -130,7 +130,7 @@ const donate = () => html`
           <details id="support">
             <summary>How can I support Kyro?</summary>
             <div class="answer">
-              <p>Kyro is free. Donations keep it going. You can also <a href="https://github.com/sponsors/shuntraa">sponsor on GitHub</a>.</p>
+              <p>Kyro is free. Donations keep it going: see the <a href="/donate/">donation page</a>, or <a href="https://github.com/sponsors/shuntraa">sponsor on GitHub</a>.</p>
               <div class="donate">
                 <table class="stack">
                   <thead>
@@ -1310,7 +1310,7 @@ export function privacy() {
 
           <h2 id="network">Network requests</h2>
           <p>To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).</p>
-          <p>The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, and its usage counters are written into the pages when the site is built.</p>
+          <p>The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, including its usage counters, which the home and download pages read from kyrowallet.com when they open.</p>
 
           <h2 id="contact">Contact</h2>
           <p>Questions about privacy: <a href="mailto:contact@kyrowallet.com">contact@kyrowallet.com</a>. Help with the app: <a href="mailto:support@kyrowallet.com">support@kyrowallet.com</a>. Security issues: <a href="mailto:security@kyrowallet.com">security@kyrowallet.com</a>.</p>
@@ -1320,6 +1320,51 @@ export function privacy() {
     </section>`;
 
   return { path, title, description, body, ld: webPage(path, 'Kyro Wallet privacy policy', description, trail) };
+}
+
+// ------------------------------------------------------------------ donate
+
+const DONATE_SLUG = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ltc: 'litecoin', doge: 'dogecoin', trx: 'tron', ada: 'cardano' };
+const DONATE_NOTE = {
+  eth: 'Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain and the other EVM chains Kyro supports: same address.',
+  trx: 'TRX or USDT on TRON.',
+  sol: 'SOL or SPL tokens such as USDC.'
+};
+
+export function donatePage() {
+  const path = '/donate/';
+  const trail = [['/', 'Home'], [path, 'Donate']];
+  const title = 'Donate to Kyro Wallet';
+  const description = 'Kyro Wallet is free and open source. Support it with a donation in Bitcoin, Ethereum, Solana, Litecoin, Dogecoin, TRON or Cardano, or through GitHub Sponsors.';
+
+  const card = ([id, name, addr, label]) => `
+          <article class="don-card c-${DONATE_SLUG[id]}">
+            <div class="don-head"><img src="/img/coins/${id}.svg" width="36" height="36" alt=""><h2>${name}</h2></div>
+            <p class="don-addr address" id="don-${id}">${addr}</p>
+            ${DONATE_NOTE[id] ? `<p class="don-note">${DONATE_NOTE[id]}</p>` : ''}
+            <button class="btn btn-ghost don-copy" type="button" data-copy-target="don-${id}" data-copy-label="${label} address" aria-label="Copy the ${label} address">Copy</button>
+          </article>`;
+
+  const body = html`
+    ${pageHero({
+      trail,
+      eyebrow: 'Donate',
+      h1: 'Support <em>Kyro</em>',
+      lead: 'Kyro is free and open source, with no ads and no account. Donations fund the work on it and keep it free.',
+      extra: `<div class="hero-cta"><a class="btn btn-primary btn-xl" href="https://github.com/sponsors/shuntraa">Sponsor on GitHub</a><a class="btn btn-ghost btn-xl" href="#addresses">Send crypto</a></div>`
+    })}
+
+    <section class="section section-tight" id="addresses" aria-labelledby="don-title">
+      <div class="wrap">
+        <h2 class="visually-hidden" id="don-title">Donation addresses</h2>
+        <div class="don-grid">${donateRows.map(card).join('')}
+        </div>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+        <p class="don-foot">Send each coin only on its own network. These are Kyro's own addresses, the same as in the <a href="${REPO}#support-the-project">README</a>.</p>
+      </div>
+    </section>`;
+
+  return { path, title, description, body, scripts: ['/copy.js'], ld: webPage(path, 'Donate to Kyro Wallet', description, trail) };
 }
 
 // ------------------------------------------------------------------ code signing policy

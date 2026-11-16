@@ -914,7 +914,7 @@ Your recovery phrase and keys are encrypted with your password (Argon2id, then X
 
 To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in NETWORK.md, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).
 
-The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, and its usage counters are written into the pages when the site is built.
+The website kyrowallet.com sets no cookies, uses no trackers or analytics and makes no third-party request. Everything it loads comes from the site itself, including its usage counters, which the home and download pages read from kyrowallet.com when they open.
 
 ## Contact
 
@@ -956,6 +956,55 @@ Kyro collects no personal data and transfers no information to other networked s
 ## Report a problem
 
 If you find a signed file that does not come from this project's release workflow, report it to security@kyrowallet.com or through GitHub security advisories.
+
+================================================================
+Donate to Kyro Wallet
+URL: https://kyrowallet.com/donate/
+================================================================
+
+Donate
+
+# Support Kyro
+
+Kyro is free and open source, with no ads and no account. Donations fund the work on it and keep it free.
+
+Sponsor on GitHubSend crypto
+
+## Bitcoin
+
+bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard
+
+## Ethereum & EVM
+
+0x86cD9af8067fF5e0001c709a550cD62b5e968B44
+
+Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain and the other EVM chains Kyro supports: same address.
+
+## Solana
+
+ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM
+
+SOL or SPL tokens such as USDC.
+
+## Litecoin
+
+LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw
+
+## Dogecoin
+
+DKCSjtypvD9qg3R175YdijmwvKh5FnAU14
+
+## TRON
+
+TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES
+
+TRX or USDT on TRON.
+
+## Cardano
+
+addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3
+
+Send each coin only on its own network. These are Kyro's own addresses, the same as in the README.
 
 ================================================================
 Bitcoin wallet for Windows, macOS and Linux | Kyro

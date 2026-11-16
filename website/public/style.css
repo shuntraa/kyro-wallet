@@ -1145,3 +1145,15 @@ body { position: relative; max-width: 100%; }
 .dlg-actions { grid-template-columns: 1fr 1.3fr; gap: 10px; margin-top: 22px; }
 .dlg-actions i { height: 44px; border-radius: 12px; border-color: #222730; background: #101317; font-weight: 600; }
 @media (max-width: 480px) { .dlg-amount strong { font-size: 36px; } .dlg-body { padding: 16px 18px 18px; } }
+
+/* ---------- Donate page: one card per network, in the app's surfaces with the coin's light */
+.don-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+.don-card { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 20px 20px 18px; border: 1px solid #1b1f25; border-radius: 18px; background: radial-gradient(90% 60% at 0 0, color-mix(in srgb, var(--c, var(--ice)) 12%, transparent), transparent 70%), linear-gradient(180deg, #0e1114, #090a0c 70%); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9), inset 0 1px 0 rgba(170, 220, 255, .06); }
+.don-head { display: flex; align-items: center; gap: 12px; }
+.don-head img { width: 36px; height: 36px; border-radius: 50%; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--c, var(--ice)) 55%, transparent)); }
+.don-head h2 { margin: 0; font: 500 18px/1.2 var(--head); letter-spacing: -.02em; }
+.don-addr { margin: 0; padding: 12px 14px; border: 1px solid #222730; border-radius: 12px; background: #0b0d10; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+.don-note { margin: 0; color: var(--mute); font-size: 13px; line-height: 1.45; }
+.don-copy { margin-top: auto; width: 100%; min-height: 42px; border-radius: 12px; }
+.don-foot { max-width: 70ch; margin: 22px 0 0; color: var(--mute); font-size: 14px; }
+.don-foot a { text-decoration: underline; text-underline-offset: 2px; }
