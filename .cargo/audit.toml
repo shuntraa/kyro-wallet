@@ -15,4 +15,11 @@ ignore = [
     # printing nothing (cargo deny, which reads the compiled graph, passes without an ignore).
     # Kyro itself does not use k256/crypto-bigint at all. Re-check on each arti bump.
     "RUSTSEC-2026-0387",
+    # RUSTSEC-2026-0459 - libsqlite3-sys 0.38.2, bundled SQLite < 3.54: a crafted database plus
+    # -wal file pair can make queries return uninitialized memory (local vector). Pulled only by
+    # arti (tor-dirmgr -> rusqlite 0.40, static-sqlite) for its directory cache, a folder of
+    # Kyro's app data that arti writes itself: exploiting it needs someone who can already write
+    # files in the user's account. tor-dirmgr 0.48 still caps rusqlite < 0.41, so the patched
+    # libsqlite3-sys 0.39 cannot be used yet. Same justification in deny.toml. Re-check on each arti bump.
+    "RUSTSEC-2026-0459",
 ]

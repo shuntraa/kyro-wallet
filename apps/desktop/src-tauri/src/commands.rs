@@ -1785,7 +1785,11 @@ mod tests {
         );
         let t = crate::phrase_window::render(Lang::En, &v);
         assert!(t.contains("No one legitimate will ever ask you for these words"));
-        assert!(t.contains("hidden from screenshots and screen sharing"));
+        // Content protection exists on Windows and macOS only (phrase_window.rs); Linux says less.
+        assert_eq!(
+            t.contains("hidden from screenshots and screen sharing"),
+            cfg!(any(windows, target_os = "macos"))
+        );
         assert!(!t.contains("mots") && !t.contains("Écris"));
         assert!(reveal_text(Lang::En).contains("in a protected window"));
         assert!(reveal_text(Lang::En).contains("Anyone who sees it can take all your funds"));
