@@ -85,7 +85,7 @@ const GLASS_TOKENS = {
 } as CSSProperties;
 
 const GLASS_CSS = `
-.kyro-glass .bg-card{backdrop-filter:blur(22px) saturate(1.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+.kyro-glass .bg-card{box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
 .kyro-glass .btn-primary:not(:disabled){background-image:linear-gradient(180deg,#e6f3ff,#c2e0fa);color:#061423;box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(53,119,180,.35),inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px -12px rgba(124,196,255,.85)}
 `;
 

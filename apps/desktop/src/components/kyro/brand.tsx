@@ -11,7 +11,8 @@ export const THIN: CSSProperties = { ...DISPLAY, fontWeight: 300, letterSpacing:
 /** Small spaced capitals used for section labels. */
 export const LABEL = 'text-[11px] font-medium uppercase tracking-[0.16em] text-faint';
 /** Glass surface used by rows, fields and secondary buttons. */
-export const GLASS_ROW = 'bg-white/[.055] ring-1 ring-white/[.08] backdrop-blur-xl';
+/** A tinted surface, not a backdrop blur: a blur under every tile halved the frame rate while scrolling. */
+export const GLASS_ROW = 'bg-[rgba(22,27,35,.72)] ring-1 ring-white/[.08]';
 /** App background: a cold top, near-black bottom. */
 export const BG = 'linear-gradient(180deg, #0e1826 0%, #0a0f16 48%, #07090d 100%)';
 
@@ -101,9 +102,8 @@ export function Glass({ children, className, style }: { children?: ReactNode; cl
     <div
       className={className}
       style={{
-        background: 'linear-gradient(180deg, rgba(255,255,255,.068), rgba(255,255,255,.032))',
+        background: 'linear-gradient(180deg, rgba(255,255,255,.068), rgba(255,255,255,.032)), rgba(12,16,22,.55)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(255,255,255,.06), 0 24px 60px -30px rgba(0,0,0,.8)',
-        backdropFilter: 'blur(22px) saturate(1.2)',
         ...style,
       }}
     >

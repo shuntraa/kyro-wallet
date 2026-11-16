@@ -422,7 +422,7 @@ function Overview({ save, open, status }: { save: Save; open: (p: Page) => void;
 }
 
 function Panel({ children, className, tone }: { children: ReactNode; className?: string; tone?: 'danger' }) {
-  return <section className={cn('flex flex-col rounded-[18px] px-6 py-1.5 ring-1 backdrop-blur-xl', tone === 'danger' ? 'bg-down/[.04] ring-down/30' : 'bg-white/[.045] ring-white/[.07]', className)}>{children}</section>;
+  return <section className={cn('flex flex-col rounded-[18px] px-6 py-1.5 ring-1', tone === 'danger' ? 'bg-down/[.04] ring-down/30' : 'bg-[rgba(21,26,34,.72)] ring-white/[.07]', className)}>{children}</section>;
 }
 
 function SettingRow({ title, desc, children, last }: { title: string; desc: string; children: ReactNode; last?: boolean }) {
