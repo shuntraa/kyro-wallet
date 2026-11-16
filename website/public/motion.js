@@ -61,18 +61,20 @@
   }
 
   /** Rolls the number inside el up from zero, keeping its prefix, suffix and decimals. */
-  function roll(el, ms) {
+  /** Counts up to the number in el's text, from 0 or from `from` (a refreshed counter). */
+  function roll(el, ms, from) {
     var full = el.textContent;
     var m = /[\d,]*\.?\d+/.exec(full);
     if (!m || !motion) return;
     var target = parseFloat(m[0].replace(/,/g, ''));
     var dec = (m[0].split('.')[1] || '').length;
     var head = full.slice(0, m.index), tail = full.slice(m.index + m[0].length);
-    var t0 = performance.now();
+    var t0 = performance.now(), id = (el.kyroRoll = (el.kyroRoll || 0) + 1);
     (function tick(now) {
+      if (el.kyroRoll !== id) return; // a newer value took over (stats.js)
       var t = Math.min(1, (now - t0) / (ms || 1300));
       var k = 1 - Math.pow(1 - t, 4);
-      el.textContent = t < 1 ? head + (target * k).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + tail : full;
+      el.textContent = t < 1 ? head + ((from || 0) + (target - (from || 0)) * k).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + tail : full;
       if (t < 1) requestAnimationFrame(tick);
     })(t0);
   }

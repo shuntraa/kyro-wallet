@@ -167,11 +167,12 @@ export const setUsageStats = (s) => {
   usageStats = s || {};
 };
 
-/** Usage counters, baked in at build time so the site makes no outside request. Nothing shown without a value. */
+/** Usage counters, baked in at build time; stats.js refreshes them from /api/stats (this same site) on every visit.
+ * Nothing shown without a value. */
 const usage = () => {
   const item = (key, label, cls = '') => {
     const v = usageStats[key];
-    return v > 0 ? `<span${cls}><strong data-roll>${compact(Math.floor(v))}</strong> ${label}</span>` : '';
+    return v > 0 ? `<span${cls}><strong data-roll data-stat="${key}" data-shown="${compact(Math.floor(v))}">${compact(Math.floor(v))}</strong> ${label}</span>` : '';
   };
   const items = item('weekly_active', 'active wallets this week') + item('downloads_total', 'downloads in total', ' class="usage-total"');
   return items ? `<p class="usage">${items}</p>` : '';
@@ -449,7 +450,7 @@ export function home(chains) {
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js', '/scenes.js'],
+    scripts: ['/download.js', '/copy.js', '/scenes.js', '/stats.js'],
     ld: [
       {
         '@type': 'Organization',
@@ -965,7 +966,7 @@ pnpm build</code></pre>
     title,
     description,
     body,
-    scripts: ['/download.js', '/copy.js'],
+    scripts: ['/download.js', '/copy.js', '/stats.js'],
     ld: [...webPage(path, 'Download Kyro Wallet', description, trail), appLd(chains)]
   };
 }
