@@ -34,6 +34,9 @@ export const staking = {
 
   // screen
   'staking.noSlashing': 'Pas de slashing sur cette chaîne : tes fonds ne peuvent pas être confisqués. Mais les récompenses dépendent du validateur, du pool ou du SR que tu choisis.',
+  'staking.heroLabel': 'Staking · {chain}',
+  'staking.staked': 'Staké',
+  'staking.tronPowerLine': 'TRON Power voté {used} / {limit}',
   'staking.title': 'Staking',
   'staking.chain': 'Chaîne',
   'staking.overview': 'Vue d’ensemble',

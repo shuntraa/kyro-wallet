@@ -17,7 +17,8 @@ import { useAsync, useDebounced } from '../lib/useAsync';
 import { CoinIcon, EmptyState } from '../components/kit';
 import { useFeeOf, type FeeOf } from '../components/MissingFee';
 import type { TokenPickerItem } from '../components/TokenPicker';
-import { Button, Input, Notice, Spinner } from '../components/ui/primitives';
+import { Notice, Spinner } from '../components/ui/primitives';
+import { DISPLAY, Frost, GLASS_ROW, GlassButton, LABEL } from '../components/kyro';
 import { useT } from '../i18n';
 import { SwapVault, TokenButton } from './Swap';
 
@@ -124,27 +125,29 @@ function Picking({ onStart }: { onStart: (rows: TidyRow[], target: AssetDef) => 
 
   if (!target) return <EmptyState title={t('tidy.title')} />;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
-      <header className="flex flex-col gap-1 border-b border-line pb-4">
-        <h1 className="screen-title">{t('tidy.title')}</h1>
-        <p className="m-0 text-[13px] text-mute">{t('tidy.intro')}</p>
+    <div className="mx-auto flex min-h-0 w-[min(900px,calc(100%-48px))] flex-1 flex-col gap-5 pt-8 pb-6">
+      <header className="flex flex-col gap-2.5">
+        <h1 className="m-0 text-[22px] leading-none" style={{ ...DISPLAY, fontWeight: 400, letterSpacing: '-0.03em' }}>
+          {t('tidy.title')}
+        </h1>
+        <p className="m-0 text-[12.5px] text-faint">{t('tidy.intro')}</p>
       </header>
       <div className="flex flex-wrap items-end gap-5">
-        <label className="flex flex-col gap-1.5 text-[12.5px] text-mute">
-          {t('tidy.threshold', { currency: cur })}
-          <Input className="w-[120px]" inputMode="decimal" value={thresholdStr} onChange={(e) => setThresholdStr(sanitizeDecimalInput(e.target.value, 2))} />
+        <label className="flex flex-col gap-2">
+          <span className={LABEL}>{t('tidy.threshold', { currency: cur })}</span>
+          <input className={cn('h-11 w-[120px] rounded-[14px] px-4 text-[14px] text-text transition-shadow focus:ring-ice-line', GLASS_ROW)} inputMode="decimal" value={thresholdStr} onChange={(e) => setThresholdStr(sanitizeDecimalInput(e.target.value, 2))} />
         </label>
-        <div className="flex flex-col gap-1.5 text-[12.5px] text-mute">
-          {t('tidy.target')}
+        <div className="flex flex-col gap-2">
+          <span className={LABEL}>{t('tidy.target')}</span>
           <TokenButton title={t('tidy.target')} asset={target} items={items} onSelect={setTargetId} />
         </div>
         <span className="flex-1" />
-        <Button disabled={quotes.loading} onClick={quotes.reload}>
+        <GlassButton disabled={quotes.loading} onClick={quotes.reload}>
           {t('tidy.refresh')}
-        </Button>
+        </GlassButton>
       </div>
 
-      <section className="min-h-0 flex-1 overflow-y-auto rounded-panel border border-line bg-card scroll-thin">
+      <section className={cn('min-h-0 shrink overflow-y-auto rounded-[20px] scroll-thin', GLASS_ROW)}>
         {rows.length === 0 && <p className="m-0 px-5 py-6 text-[13px] text-mute">{pf.balancesLoaded ? t('tidy.empty') : t('common.loading')}</p>}
         {rows.map((r) => {
           const q = quotes.data?.get(r.asset.id);
@@ -153,7 +156,7 @@ function Picking({ onStart }: { onStart: (rows: TidyRow[], target: AssetDef) => 
           const native = assets.find((a) => a.chainKey === r.asset.chainKey && a.kind === 'native');
           const note = r.block === 'noRoute' ? t('tidy.noRoute', { symbol: target.symbol }) : r.block === 'noFees' ? t('tidy.noFees', { symbol: native?.symbol ?? '', chain: r.chain.label }) : pending ? null : !q ? t('tidy.noQuote') : !cost ? t('tidy.feesUnknown') : !tickedByDefault(cost) ? t('tidy.feesHigh', { pct: fmtPct(cost.ratio * 100, { sign: false, decimals: 0 }) }) : null;
           return (
-            <label key={r.asset.id} className={cn('flex items-center gap-3 border-b border-line px-5 py-3 text-[13px] last:border-b-0', (r.block || (!pending && !q)) && 'opacity-60')}>
+            <label key={r.asset.id} className={cn('flex items-center gap-3 border-b border-white/[.05] px-5 py-3 text-[13px] last:border-b-0', (r.block || (!pending && !q)) && 'opacity-60')}>
               <input type="checkbox" className="size-4 accent-[#7cc4ff]" disabled={!!r.block || !q} checked={ticked(r)} aria-label={t('tidy.tick', { symbol: r.asset.symbol, chain: r.chain.label })} onChange={(e) => setTicks((x) => ({ ...x, [r.asset.id]: e.target.checked }))} />
               <CoinIcon asset={r.asset} size={28} />
               <span className="flex min-w-0 flex-1 flex-col">
@@ -180,10 +183,10 @@ function Picking({ onStart }: { onStart: (rows: TidyRow[], target: AssetDef) => 
       </section>
 
       <footer className="flex items-center justify-between gap-4">
-        <span className="text-[13px] text-mute">{selected.length > 0 ? `${tp('tidy.toSign', selected.length)} · ${t('tidy.netTotal', { net: fmtFiat(net, cur) })}` : t('tidy.nothingSelected')}</span>
-        <Button variant="primary" size="xl" className="h-[46px] px-10" disabled={selected.length === 0} onClick={() => onStart(selected, target)}>
+        <span className="text-[12.5px] text-mute">{selected.length > 0 ? `${tp('tidy.toSign', selected.length)} · ${t('tidy.netTotal', { net: fmtFiat(net, cur) })}` : t('tidy.nothingSelected')}</span>
+        <Frost className="w-[260px]" disabled={selected.length === 0} onClick={() => onStart(selected, target)}>
           {t('tidy.start')}
-        </Button>
+        </Frost>
       </footer>
     </div>
   );
@@ -223,14 +226,14 @@ function Running({ run, target, onChange }: { run: TidyRun<TidyRow>; target: Ass
   const finish = (o: TidyOutcome) => onChange((r) => settle(r, index, o));
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-8 py-3 text-[13px]">
+      <div className={cn('mx-auto mt-5 flex w-[min(900px,calc(100%-48px))] shrink-0 items-center justify-between gap-4 rounded-[16px] py-2 pr-2 pl-5 text-[13px]', GLASS_ROW)}>
         <span className="font-medium">
           {t('tidy.step', { n: index + 1, total: run.items.length })} · {item.asset.symbol} ({item.chain.label}) → {target.symbol}
         </span>
         {last && <span className={cn('min-w-0 flex-1 truncate', last.status === 'failed' ? 'text-down' : 'text-mute')}>{last.status === 'done' ? t('tidy.lastDone') : last.status === 'failed' ? t('tidy.lastFailed', { reason: last.reason }) : t('tidy.lastSkipped')}</span>}
         <span className="flex shrink-0 gap-2">
-          <Button disabled={busy} onClick={() => finish({ status: 'skipped' })}>{t('tidy.skip')}</Button>
-          <Button disabled={busy} onClick={() => onChange(stopRun)}>{t('tidy.stop')}</Button>
+          <GlassButton className="h-9 rounded-[11px] text-[12.5px]" disabled={busy} onClick={() => finish({ status: 'skipped' })}>{t('tidy.skip')}</GlassButton>
+          <GlassButton className="h-9 rounded-[11px] text-[12.5px]" disabled={busy} onClick={() => onChange(stopRun)}>{t('tidy.stop')}</GlassButton>
         </span>
       </div>
       <SwapVault key={index} sellAssetId={item.asset.id} buyAssetId={target.id} amount={toInputDecimal(item.amount, item.asset.decimals)} onBusy={setBusy} onOutcome={(o) => (o.status === 'failed' && o.overLimit ? onChange((r) => settleAndStop(r, index, o)) : finish(o.status === 'cancelled' ? { status: 'skipped' } : o))} />
@@ -244,10 +247,10 @@ function Summary({ run, target, onBack }: { run: TidyRun<TidyRow>; target: Asset
   const { done, failed, skipped } = tidySummary(run);
   const line = (r: TidyRow) => `${fmtCrypto(r.amount, r.asset.decimals, r.asset.symbol)} · ${r.chain.label}`;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
-      <header className="border-b border-line pb-4">
-        <h1 className="screen-title">{t('tidy.summaryTitle', { symbol: target.symbol })}</h1>
-      </header>
+    <div className="mx-auto flex min-h-0 w-[min(900px,calc(100%-48px))] flex-1 flex-col gap-5 overflow-y-auto pt-8 pb-6 scroll-thin">
+      <h1 className="m-0 text-[22px] leading-none" style={{ ...DISPLAY, fontWeight: 400, letterSpacing: '-0.03em' }}>
+        {t('tidy.summaryTitle', { symbol: target.symbol })}
+      </h1>
       {done.length > 0 && (
         <Notice tone="success">
           <strong className="font-semibold">{t('tidy.sumDone', { n: done.length })}</strong>
@@ -267,9 +270,9 @@ function Summary({ run, target, onBack }: { run: TidyRun<TidyRow>; target: Asset
           <ul className="m-0 mt-1 list-disc pl-5">{skipped.map((r) => <li key={r.asset.id}>{line(r)}</li>)}</ul>
         </Notice>
       )}
-      <div className="flex gap-2">
-        <Button variant="primary" onClick={onBack}>{t('tidy.backAssets')}</Button>
-        <Button onClick={() => navigate({ name: 'history' })}>{t('tidy.history')}</Button>
+      <div className="flex gap-2.5">
+        <Frost className="w-[220px]" onClick={onBack}>{t('tidy.backAssets')}</Frost>
+        <GlassButton className="h-12 w-[180px]" onClick={() => navigate({ name: 'history' })}>{t('tidy.history')}</GlassButton>
       </div>
     </div>
   );

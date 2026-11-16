@@ -93,8 +93,24 @@ pub(crate) async fn confirm_native_with(
     cancel: &'static str,
 ) -> AppResult<()> {
     let _open = app.state::<AppState>().dialogs.enter();
-    let app = app.clone();
     let body = crate::dialog_text::body(&body);
+    // Kyro's own confirmation window (`confirm_window.rs`), rendered by Rust from this body.
+    let view = crate::confirm_window::ConfirmView {
+        title,
+        body: &body,
+        ok,
+        cancel,
+    };
+    let lang = crate::i18n::current();
+    if let Some(approved) = crate::confirm_window::ask(app, lang, view).await? {
+        return if approved {
+            Ok(())
+        } else {
+            Err(AppError::UserRejected)
+        };
+    }
+    // The window could not be created: the OS message box, as before.
+    let app = app.clone();
     let approved = blocking(move || {
         Ok(app
             .dialog()

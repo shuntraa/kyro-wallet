@@ -65,7 +65,9 @@ import { CoinIcon, CopyButton, EmptyState, EnClair, ErrorLine, HIDDEN, PasswordF
 import { instructionLabel } from '../components/SolSummaryView';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { Dialog } from '../components/ui/dialog';
-import { Badge, Button, Card, Input, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
+import { Badge, Button, Input, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
+import { CoinPill, Frost, GLASS_ROW, LABEL, THIN, Tabs } from '../components/kyro';
+import { StakeHero, useStakeColor } from '../components/StakeHero';
 import { IconCheck, IconChevronRight, IconInfo, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
 import { AccountPicker } from '../components/AccountPicker';
@@ -98,24 +100,23 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const refused = (c: StakeChain) => !!hwChains && !hwChains.includes(c);
   const names: Record<StakeChain, string> = { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR', sui: 'Sui', apt: 'Aptos' };
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin">
-      <header className="flex items-end justify-between gap-4">
-        <h1 className="screen-title">{t('staking.title')}</h1>
-        {tab !== 'home' && !activeHw && <AccountPicker family={tab} />}
-        <Segmented
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto px-8 pt-5 pb-8 scroll-thin [&>*]:shrink-0">
+      <header className="relative z-10 flex flex-wrap items-center gap-x-8 gap-y-2">
+        <h1 className={cn(LABEL, 'm-0')}>{t('staking.title')}</h1>
+        <Tabs<'home' | StakeChain>
           label={t('staking.chain')}
           value={tab}
           onChange={(v) => navigate(v === 'home' ? { name: 'staking' } : { name: 'staking', chain: v })}
-          options={[
-            { value: 'home', label: t('staking.overview') },
-            { value: 'sol', label: 'Solana', disabled: refused('sol') || !has.sol },
-            { value: 'ada', label: 'Cardano', disabled: refused('ada') || !has.ada },
-            { value: 'tron', label: 'TRON', disabled: refused('tron') || !has.tron },
-            { value: 'near', label: 'NEAR', disabled: refused('near') || !has.near },
-            { value: 'sui', label: 'Sui', disabled: refused('sui') || !has.sui },
-            { value: 'apt', label: 'Aptos', disabled: refused('apt') || !has.apt },
+          items={[
+            { id: 'home' as const, label: t('staking.overview') },
+            ...(['sol', 'ada', 'tron', 'near', 'sui', 'apt'] as const).filter((c) => c === tab || (!refused(c) && has[c])).map((c) => ({ id: c, label: names[c] })),
           ]}
         />
+        {tab !== 'home' && !activeHw && (
+          <span className="ml-auto">
+            <AccountPicker family={tab} />
+          </span>
+        )}
       </header>
       {activeHw && hwChains && (tab === 'home' || refused(tab)) && (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -191,7 +192,7 @@ function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; ha
   ];
   return (
     <>
-      <div className="grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-panel border border-line bg-line">
+      <div className="grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-panel border border-white/[.06] bg-line">
         {cards.map((c, i) => (
           <div key={c.chain} className="rise group flex flex-col gap-3 bg-card px-5 pt-4 pb-5" style={idx(i)}>
             <div className="flex items-center gap-2.5">
@@ -200,7 +201,7 @@ function StakingHome({ refused, has }: { refused: (c: StakeChain) => boolean; ha
               <span className="text-[12px] text-mute">{networkLabel(c.chain, network)}</span>
             </div>
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{c.what}</p>
-            <div className="min-h-5 border-t border-line pt-3 text-[13px] font-medium">
+            <div className="min-h-5 border-t border-white/[.06] pt-3 text-[13px] font-medium">
               {refused(c.chain) || !has[c.chain] ? (
                 <span className="font-normal text-mute">{refused(c.chain) ? t('staking.homeHwUnavailable') : t('staking.homeNoAccount')}</span>
               ) : c.error ? (
@@ -334,7 +335,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
               <SecondConfirmNotice lines={warnings} />
               <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('staking.reviewNote')}</p>
               {activeHw ? (
-                <div className="flex items-center gap-2 rounded-ctl border border-line bg-bg px-3.5 py-2.5 text-[12px] text-mute">
+                <div className="flex items-center gap-2 rounded-ctl border border-white/[.06] bg-bg px-3.5 py-2.5 text-[12px] text-mute">
                   <DeviceBadge device={activeHw.device} model={activeHw.model} />
                   <span>{t('send.hwNoPassword')}</span>
                 </div>
@@ -367,7 +368,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
             <IconCheck size={22} />
           </span>
           <p className="m-0 text-[14px] leading-[1.6] text-text2">{spec.doneText}</p>
-          <div className="flex w-full items-center justify-between gap-2 rounded-ctl border border-line bg-bg py-2 pr-2 pl-3.5">
+          <div className="flex w-full items-center justify-between gap-2 rounded-ctl border border-white/[.06] bg-bg py-2 pr-2 pl-3.5">
             <span className="truncate font-mono text-[12px] text-text2">{txid}</span>
             <CopyButton text={txid} />
           </div>
@@ -380,9 +381,14 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
   );
 }
 
+/** Glass panel in place of the old card. */
+function Card({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cn('overflow-hidden rounded-[20px]', GLASS_ROW, className)}>{children}</div>;
+}
+
 function Row({ k, v, tone }: { k: string; v: ReactNode; tone?: 'warn' | 'up' }) {
   return (
-    <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line py-1.5">
+    <div className="flex min-h-9 items-center justify-between gap-3 border-b border-white/[.06] py-1.5">
       <dt className="shrink-0 text-mute">{k}</dt>
       <dd className={cn('m-0 min-w-0 text-right break-words', tone === 'warn' && 'text-warn', tone === 'up' && 'text-up')}>{v}</dd>
     </div>
@@ -392,8 +398,10 @@ function Row({ k, v, tone }: { k: string; v: ReactNode; tone?: 'warn' | 'up' }) 
 function Stat({ k, v, sub }: { k: string; v: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="eyebrow">{k}</span>
-      <span className="figure truncate text-[20px]">{v}</span>
+      <span className={LABEL}>{k}</span>
+      <span className="figure truncate text-[20px] leading-tight" style={THIN}>
+        {v}
+      </span>
       {sub && <span className="text-[12px] text-faint">{sub}</span>}
     </div>
   );
@@ -476,7 +484,7 @@ function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: str
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label={t('staking.validators')} className="flex max-h-[240px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
+        <div role="radiogroup" aria-label={t('staking.validators')} className="flex max-h-[240px] flex-col overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
           {sorted.map((v) => (
             <ValidatorRow key={v.voteAccount} v={v} selected={v.voteAccount === value} onSelect={() => onChange(v.voteAccount)} />
           ))}
@@ -491,7 +499,7 @@ function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: str
 function ValidatorRow({ v, selected, onSelect }: { v: SolValidator; selected: boolean; onSelect: () => void }) {
   const { t } = useT();
   return (
-    <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/[.07]' : 'hover:bg-raised')}>
+    <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={cn('flex items-center gap-3 border-b border-white/[.06] px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/[.07]' : 'hover:bg-raised')}>
       <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium">
@@ -532,6 +540,20 @@ function SolStaking() {
   const total = o.accounts.reduce((s, a) => s + BigInt(a.lamports), 0n);
   return (
     <>
+      <StakeHero
+        chain="sol"
+        staked={total}
+        available={BigInt(o.balance)}
+        decimals={SOL.decimals}
+        symbol="SOL"
+        stakedLabel={t('staking.inStakeAccounts')}
+        extra={tp('staking.accounts', o.accounts.length)}
+        actions={
+          <Frost className="w-[220px]" onClick={() => setOp({ kind: 'create' })}>
+            {t('staking.stakeSol')}
+          </Frost>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
@@ -539,16 +561,13 @@ function SolStaking() {
             <Stat k={t('staking.inStakeAccounts')} v={h(amt(total, SOL))} sub={tp('staking.accounts', o.accounts.length)} />
             <Stat k={t('staking.minDelegation')} v={amt(o.minimumDelegation, SOL)} sub={t('staking.rentReserve', { amount: amt(o.rentExemptReserve, SOL), network: networkLabel('sol', network) })} />
           </div>
-          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'create' })}>
-            {t('staking.stakeSol')}
-          </Button>
         </div>
         <EpochBar label={t('staking.epoch')} epoch={o.epoch.epoch} slotsInEpoch={o.epoch.slotsInEpoch} slotSecs={0.4} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
         <Hint>{t('staking.solHint', { noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5 text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourStakeAccounts')}</div>
+        <div className="flex h-[50px] items-center border-b border-white/[.06] px-5 text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.yourStakeAccounts')}</div>
         {o.accounts.length === 0 ? (
           <EmptyState title={t('staking.noStakeAccount')}>{t('staking.noStakeAccountBody')}</EmptyState>
         ) : (
@@ -558,7 +577,7 @@ function SolStaking() {
             const canDelegate = a.state === 'initialized' || a.state === 'inactive';
             const canWithdraw = BigInt(a.withdrawable) > 0n || a.canClose;
             return (
-              <div key={a.address} className="flex items-center gap-4 border-b border-line px-5 py-3.5 text-[13px] last:border-b-0">
+              <div key={a.address} className="flex items-center gap-4 border-b border-white/[.06] px-5 py-3.5 text-[13px] last:border-b-0">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex items-center gap-2">
                     <Badge tone={solStateTone(a.state)}>{solStateLabel(a.state)}</Badge>
@@ -747,7 +766,7 @@ function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: Dre
       <legend className="pb-1 text-[12px] font-medium text-mute">{t('staking.drepLegend')}</legend>
       <p className="m-0 text-[12px] leading-[1.55] text-mute">{rt('staking.drepExplain', bold2)}</p>
       {opts.map((o) => (
-        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/[.06]' : 'border-line hover:bg-raised')}>
+        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/[.06]' : 'border-white/[.06] hover:bg-raised')}>
           <input type="radio" name="drep" className="mt-1 accent-[#7CC4FF]" checked={mode === o.value} onChange={() => onMode(o.value)} />
           <span className="flex flex-col gap-0.5">
             <span className="font-semibold">{o.title}</span>
@@ -798,11 +817,11 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label={t('staking.pools')} className="flex max-h-[220px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
+        <div role="radiogroup" aria-label={t('staking.pools')} className="flex max-h-[220px] flex-col overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
           {rows.map((p) => {
             const selected = p.poolId === value;
             return (
-              <button key={p.poolId} type="button" role="radio" aria-checked={selected} onClick={() => onChange(p.poolId, p)} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/10' : 'hover:bg-raised')}>
+              <button key={p.poolId} type="button" role="radio" aria-checked={selected} onClick={() => onChange(p.poolId, p)} className={cn('flex items-center gap-3 border-b border-white/[.06] px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/10' : 'hover:bg-raised')}>
                 <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-semibold">
@@ -856,8 +875,23 @@ function AdaStaking() {
   // What the device would sign without showing it is refused by Rust too (`HW_UNSUPPORTED`).
   const ledgerNoWithdraw = activeHw?.device === 'ledger';
   const hwNoStop = !!activeHw && rewards > 0n;
+  const delegated = s.registered && !!s.delegatedPool;
   return (
     <>
+      <StakeHero
+        chain="ada"
+        staked={delegated ? BigInt(s.totalBalance) : 0n}
+        available={delegated ? 0n : BigInt(s.totalBalance)}
+        decimals={ADA.decimals}
+        symbol="ADA"
+        stakedLabel={t('staking.adaDelegated')}
+        extra={delegated ? (o.pool?.ticker ?? shortAddress(s.delegatedPool ?? '')) : null}
+        actions={
+          <Frost className="w-[220px]" onClick={() => setOp('delegate')}>
+            {s.registered && s.delegatedPool ? t('staking.changePool') : t('staking.delegate')}
+          </Frost>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
@@ -865,17 +899,14 @@ function AdaStaking() {
             <Stat k={t('staking.adaRewards')} v={h(amt(s.rewardsAvailable, ADA))} sub={t('staking.adaRewardsSub')} />
             <Stat k={t('staking.adaDeposit')} v={s.registered ? amt(s.deposit, ADA) : t('staking.none')} sub={s.registered ? t('staking.adaDepositBack') : t('staking.adaDepositFirst', { amount: amt(o.keyDeposit, ADA) })} />
           </div>
-          <Button variant="primary" size="lg" onClick={() => setOp('delegate')}>
-            {s.registered && s.delegatedPool ? t('staking.changePool') : t('staking.delegate')}
-          </Button>
         </div>
         <EpochBar label={t('staking.epoch')} epoch={o.epoch.epoch} slotsInEpoch={o.epoch.epochLength} slotSecs={1} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
         <Hint>{t('staking.adaHint', { noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourDelegation', { network: networkLabel('ada', network) })}</span>
+        <div className="flex h-[50px] items-center justify-between border-b border-white/[.06] px-5">
+          <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.yourDelegation', { network: networkLabel('ada', network) })}</span>
           <span className="font-mono text-[12px] text-faint">{shortAddress(s.stakeAddress, 12, 6)}</span>
         </div>
         <dl className="m-0 flex flex-col px-5 py-1 text-[13px]">
@@ -916,7 +947,7 @@ function AdaStaking() {
             {t('staking.adaHwNoWithdraw')}
           </Notice>
         )}
-        <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-white/[.06] px-5 py-3">
           <Button size="sm" onClick={() => setOp('vote')}>
             {s.delegatedDrep ? t('staking.changeMyVote') : t('staking.delegateMyVote')}
           </Button>
@@ -1047,6 +1078,7 @@ function TronStaking() {
   const { t, tp } = useT();
   const [op, setOp] = useState<TronOp | null>(null);
   const a = ov.data;
+  const trxC = useStakeColor('tron');
   const h = (s: string) => (hideBalances ? HIDDEN : s);
   if (ov.error && !a) return <ErrorLine error={ov.error} onRetry={ov.reload}>{ov.error.message}</ErrorLine>;
   if (!a) return <Skeleton className="h-64 w-full" />;
@@ -1054,6 +1086,25 @@ function TronStaking() {
   const claimable = BigInt(a.reward) > 0n && (a.nextClaimTime === 0 || a.nextClaimTime <= now);
   return (
     <>
+      <StakeHero
+        chain="tron"
+        staked={BigInt(a.stakedEnergy) + BigInt(a.stakedBandwidth)}
+        available={BigInt(a.balance)}
+        decimals={TRX.decimals}
+        symbol="TRX"
+        stakedLabel={t('staking.staked')}
+        extra={t('staking.tronPowerLine', { used: a.tronPowerUsed, limit: a.tronPowerLimit })}
+        actions={
+          <>
+            <Frost className="w-[220px]" onClick={() => setOp('freeze')}>
+              {t('staking.stakeTrx')}
+            </Frost>
+            <CoinPill c={trxC} disabled={BigInt(a.stakedEnergy) + BigInt(a.stakedBandwidth) === 0n} onClick={() => setOp('unfreeze')}>
+              {t('staking.unfreeze')}
+            </CoinPill>
+          </>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-4 gap-6">
@@ -1062,22 +1113,14 @@ function TronStaking() {
             <Stat k={t('staking.stakedBandwidth')} v={h(amt(a.stakedBandwidth, TRX))} sub={t('staking.bandwidthLeft', { left: a.bandwidthLimit - a.bandwidthUsed, limit: a.bandwidthLimit })} />
             <Stat k={t('staking.tronPowerVoted')} v={`${a.tronPowerUsed} / ${a.tronPowerLimit}`} sub={t('staking.oneTrxOneVote')} />
           </div>
-          <div className="flex shrink-0 flex-col gap-2">
-            <Button variant="primary" size="lg" onClick={() => setOp('freeze')}>
-              {t('staking.stakeTrx')}
-            </Button>
-            <Button size="md" disabled={BigInt(a.stakedEnergy) + BigInt(a.stakedBandwidth) === 0n} onClick={() => setOp('unfreeze')}>
-              {t('staking.unfreeze')}
-            </Button>
-          </div>
         </div>
         <Hint>{t(network === 'testnet' ? 'staking.tronHintTestnet' : 'staking.tronHint', { days: tp('time.days', a.unfreezeDelayDays), noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="flex flex-col">
-          <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourVotes')}</span>
+          <div className="flex h-[50px] items-center justify-between border-b border-white/[.06] px-5">
+            <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.yourVotes')}</span>
             <Button size="sm" disabled={a.tronPowerLimit === 0} onClick={() => setOp('vote')}>
               {t('staking.vote')}
             </Button>
@@ -1088,7 +1131,7 @@ function TronStaking() {
             a.votes.map((v) => {
               const w = byAddr.get(v.address);
               return (
-                <div key={v.address} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+                <div key={v.address} className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-2.5 text-[13px] last:border-b-0">
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate font-semibold">
                       {w?.url ?? shortAddress(v.address)} <span className="font-normal text-faint">{t('staking.declared')}</span>
@@ -1103,7 +1146,7 @@ function TronStaking() {
               );
             })
           )}
-          <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-[13px]">
+          <div className="flex items-center justify-between gap-3 border-t border-white/[.06] px-5 py-3 text-[13px]">
             <span className="flex flex-col">
               <span className="text-mute">{t('staking.voteRewards')}</span>
               <span className="font-semibold">{h(amt(a.reward, TRX))}</span>
@@ -1116,8 +1159,8 @@ function TronStaking() {
         </Card>
 
         <Card className="flex flex-col">
-          <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.pendingUnfreezes')}</span>
+          <div className="flex h-[50px] items-center justify-between border-b border-white/[.06] px-5">
+            <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.pendingUnfreezes')}</span>
             <div className="flex gap-2">
               <Button size="sm" disabled={a.unfreezing.length === 0} onClick={() => setOp('cancel')}>
                 {t('staking.cancelUnfreezes')}
@@ -1131,7 +1174,7 @@ function TronStaking() {
             <EmptyState title={t('staking.noUnfreeze')}>{t('staking.noUnfreezeBody')}</EmptyState>
           ) : (
             a.unfreezing.map((u, i) => (
-              <div key={`${u.expireTime}-${i}`} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+              <div key={`${u.expireTime}-${i}`} className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-2.5 text-[13px] last:border-b-0">
                 <span className="flex flex-col">
                   <span className="font-semibold">{h(amt(u.amount, TRX))}</span>
                   <span className="text-[12px] text-faint">{u.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth')}</span>
@@ -1159,9 +1202,9 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
         <strong className="font-semibold text-text">{t('staking.replaceVotesTitle')}</strong> {t('staking.replaceVotesBody')}
       </Notice>
       <SortBar label="Super Representatives" value={sort} onChange={setSort} options={[{ value: 'rank', label: t('staking.sortRank') }, { value: 'votes', label: t('staking.sortVotes') }]} />
-      <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
+      <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
         {sorted.map((w) => (
-          <div key={w.address} className="flex items-center gap-3 border-b border-line px-3 py-1.5 text-[13px] last:border-b-0">
+          <div key={w.address} className="flex items-center gap-3 border-b border-white/[.06] px-3 py-1.5 text-[13px] last:border-b-0">
             <span className="w-9 shrink-0 text-right text-mute">#{w.rank}</span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-semibold">
@@ -1318,6 +1361,20 @@ function NearStaking() {
   const apy = vs.data?.grossApy ?? null;
   return (
     <>
+      <StakeHero
+        chain="near"
+        staked={staked}
+        available={BigInt(o.spendable)}
+        decimals={NEAR.decimals}
+        symbol="NEAR"
+        stakedLabel={t('staking.nearStaked')}
+        extra={apy !== null ? `${t('staking.nearApy')} ≈ ${pc(apy, 1)}` : null}
+        actions={
+          <Frost className="w-[220px]" onClick={() => setOp({ kind: 'stake', pool: '' })}>
+            {t('staking.stakeNear')}
+          </Frost>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
@@ -1325,21 +1382,18 @@ function NearStaking() {
             <Stat k={t('staking.nearStaked')} v={h(amt(staked, NEAR))} sub={t('staking.nearRewardsIn')} />
             <Stat k={t('staking.nearApy')} v={apy !== null ? `≈ ${pc(apy, 1)}` : '—'} sub={t('staking.nearApySub')} />
           </div>
-          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake', pool: '' })}>
-            {t('staking.stakeNear')}
-          </Button>
         </div>
         <Hint>{t('staking.nearHint', { epochs: o.unlockEpochs, duration: unlock })}</Hint>
       </Card>
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5">
-          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.nearPools')}</span>
+        <div className="flex h-[50px] items-center border-b border-white/[.06] px-5">
+          <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.nearPools')}</span>
         </div>
         {o.positions.length === 0 ? (
           <EmptyState title={t('staking.nearNoPool')}>{t('staking.nearNoPoolBody')}</EmptyState>
         ) : (
           o.positions.map((p) => (
-            <div key={p.poolId} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+            <div key={p.poolId} className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-2.5 text-[13px] last:border-b-0">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-semibold">{p.poolId}</span>
                 <span className="text-[12px] text-faint">
@@ -1379,14 +1433,14 @@ function NearPoolPicker({ value, onChange, validators, apy }: { value: string; o
   return (
     <div className="flex flex-col gap-2">
       <Input aria-label={t('staking.nearSearch')} placeholder={t('staking.nearSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
-      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
         {validators.length === 0 ? (
           <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
             <Spinner /> {t('staking.nearLoadingPools')}
           </div>
         ) : (
           list.map((v) => (
-            <button key={v.poolId} type="button" onClick={() => onChange(v.poolId)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.poolId && 'bg-bg')}>
+            <button key={v.poolId} type="button" onClick={() => onChange(v.poolId)} className={cn('flex w-full items-center justify-between gap-3 border-b border-white/[.06] px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.poolId && 'bg-bg')}>
               <span className="truncate font-medium">{v.poolId}</span>
               <span className="shrink-0 text-[12px] text-faint">{fmtStake(v.stake, 24, 'NEAR')}</span>
             </button>
@@ -1494,6 +1548,20 @@ function SuiStaking() {
   const apy = vs.data?.networkApy ?? null;
   return (
     <>
+      <StakeHero
+        chain="sui"
+        staked={staked}
+        available={BigInt(o.spendable)}
+        decimals={SUI.decimals}
+        symbol="SUI"
+        stakedLabel={t('staking.nearStaked')}
+        extra={apy !== null ? `${t('staking.suiApy')} ≈ ${pc(apy, 2)}` : null}
+        actions={
+          <Frost className="w-[220px]" onClick={() => setOp({ kind: 'stake' })}>
+            {t('staking.stakeSui')}
+          </Frost>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
@@ -1501,21 +1569,18 @@ function SuiStaking() {
             <Stat k={t('staking.nearStaked')} v={h(amt(staked, SUI))} sub={t('staking.suiRewards', { amount: h(amt(rewards, SUI)) })} />
             <Stat k={t('staking.suiApy')} v={apy !== null ? `≈ ${pc(apy, 2)}` : '—'} sub={t('staking.suiApySub')} />
           </div>
-          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake' })}>
-            {t('staking.stakeSui')}
-          </Button>
         </div>
         <Hint>{t('staking.suiHint')}</Hint>
       </Card>
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5">
-          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.suiPositions')}</span>
+        <div className="flex h-[50px] items-center border-b border-white/[.06] px-5">
+          <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.suiPositions')}</span>
         </div>
         {o.positions.length === 0 ? (
           <EmptyState title={t('staking.nearNoPool')}>{t('staking.suiNoStakeBody')}</EmptyState>
         ) : (
           o.positions.map((p) => (
-            <div key={p.objectId} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+            <div key={p.objectId} className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-2.5 text-[13px] last:border-b-0">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-semibold">{p.validatorName ?? shortAddress(p.poolId)}</span>
                 <span className="text-[12px] text-faint">
@@ -1549,14 +1614,14 @@ function SuiValidatorPicker({ value, onChange, validators }: { value: string; on
   return (
     <div className="flex flex-col gap-2">
       <Input aria-label={t('staking.suiSearch')} placeholder={t('staking.suiSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
-      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
         {validators.length === 0 ? (
           <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
             <Spinner /> {t('staking.suiLoading')}
           </div>
         ) : (
           list.map((v) => (
-            <button key={v.address} type="button" onClick={() => onChange(v.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.address && 'bg-bg')}>
+            <button key={v.address} type="button" onClick={() => onChange(v.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-white/[.06] px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === v.address && 'bg-bg')}>
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-medium">{v.name || shortAddress(v.address)}</span>
                 {suiValidatorBadges(v).map((b) => (
@@ -1641,6 +1706,20 @@ function AptosStaking() {
   const left = (p: { lockupEnds: number | null }) => fmtDuration((p.lockupEnds ?? o.ledgerTime) - o.ledgerTime);
   return (
     <>
+      <StakeHero
+        chain="apt"
+        staked={staked}
+        available={BigInt(o.balance)}
+        decimals={APT.decimals}
+        symbol="APT"
+        stakedLabel={t('staking.nearStaked')}
+        extra={apy !== null ? `${t('staking.nearApy')} ≈ ${pc(apy, 1)}` : null}
+        actions={
+          <Frost className="w-[220px]" onClick={() => setOp({ kind: 'stake', pool: '' })}>
+            {t('staking.stakeApt')}
+          </Frost>
+        }
+      />
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
@@ -1648,21 +1727,18 @@ function AptosStaking() {
             <Stat k={t('staking.nearStaked')} v={h(amt(staked, APT))} sub={t('staking.nearRewardsIn')} />
             <Stat k={t('staking.nearApy')} v={apy !== null ? `≈ ${pc(apy, 1)}` : '—'} sub={t('staking.aptApySub')} />
           </div>
-          <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'stake', pool: '' })}>
-            {t('staking.stakeApt')}
-          </Button>
         </div>
         <Hint>{t('staking.aptHint')}</Hint>
       </Card>
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5">
-          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.nearPools')}</span>
+        <div className="flex h-[50px] items-center border-b border-white/[.06] px-5">
+          <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('staking.nearPools')}</span>
         </div>
         {o.positions.length === 0 ? (
           <EmptyState title={t('staking.nearNoPool')}>{t('staking.aptNoPoolBody')}</EmptyState>
         ) : (
           o.positions.map((p) => (
-            <div key={p.pool} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
+            <div key={p.pool} className="flex items-center justify-between gap-3 border-b border-white/[.06] px-5 py-2.5 text-[13px] last:border-b-0">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate font-semibold">{ps.data?.pools.find((x) => x.address === p.pool)?.name ?? shortAddress(p.pool)}</span>
                 <span className="text-[12px] text-faint">
@@ -1706,14 +1782,14 @@ function AptosPoolPicker({ value, onChange, pools }: { value: string; onChange: 
   return (
     <div className="flex flex-col gap-2">
       <Input aria-label={t('staking.nearSearch')} placeholder={t('staking.nearSearch')} value={q} onChange={(e) => setQ(e.target.value)} />
-      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-line scroll-thin">
+      <div className="max-h-[260px] overflow-y-auto rounded-ctl border border-white/[.06] scroll-thin">
         {pools.length === 0 ? (
           <div className="flex items-center gap-2 px-3.5 py-3 text-[13px] text-mute">
             <Spinner /> {t('staking.nearLoadingPools')}
           </div>
         ) : (
           list.map((p) => (
-            <button key={p.address} type="button" onClick={() => onChange(p.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-line px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === p.address && 'bg-bg')}>
+            <button key={p.address} type="button" onClick={() => onChange(p.address)} className={cn('flex w-full items-center justify-between gap-3 border-b border-white/[.06] px-3.5 py-2 text-left text-[13px] last:border-b-0 hover:bg-bg', value === p.address && 'bg-bg')}>
               <span className="truncate font-medium">{p.name ?? shortAddress(p.address)}</span>
               <span className="shrink-0 text-[12px] text-faint">
                 {p.apy !== null ? `≈ ${pc(p.apy, 1)} · ` : ''}

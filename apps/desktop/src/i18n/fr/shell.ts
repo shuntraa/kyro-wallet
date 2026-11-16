@@ -16,6 +16,7 @@ export const shell = {
   'shell.searchAddressHint': 'adresse',
   // Nav rail / title bar
   'shell.navigation': 'Navigation',
+  'shell.swap': 'Échanger',
   'shell.lockVault': 'Verrouiller le coffre',
   'shell.minimize': 'Réduire',
   'shell.maximize': 'Agrandir',

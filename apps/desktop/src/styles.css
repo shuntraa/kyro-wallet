@@ -211,11 +211,12 @@ input[type='radio'] {
 }
 /* Primary button: frosted white with a soft ice glow on hover. */
 .btn-primary {
-  background-image: linear-gradient(180deg, #ffffff, #e2e9f1);
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 1px 0 rgba(255, 255, 255, 0.15);
+  background-image: linear-gradient(180deg, #e6f3ff, #c2e0fa);
+  color: #061423;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(53, 119, 180, 0.35), 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .btn-primary:not(:disabled):hover {
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 10px 30px -10px rgba(124, 196, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(53, 119, 180, 0.35), 0 10px 30px -10px rgba(124, 196, 255, 0.6);
 }
 .btn-primary:disabled {
   background-image: none;

@@ -163,7 +163,16 @@ export interface Settings {
   lockBeforeSleep?: boolean;
   /** Start with Windows, hidden in the tray. */
   startMinimized: boolean;
+  /** How Bitcoin amounts are written in the interface (display only; native dialogs keep BTC). Absent = `btc`. */
+  btcUnit?: BtcUnit;
+  /** Holdings left out of the Portfolio and of « My assets » (search still finds them). Absent = `off`. */
+  hideSmall?: HideSmall;
+  /** Send only to the address book. `settings_set` turns it on, never off (`contacts_only_off`, password). */
+  contactsOnly?: boolean;
 }
+
+export type BtcUnit = 'btc' | 'sats';
+export type HideSmall = 'off' | 'zero' | 'under1' | 'under10';
 
 /** Which fixed notification text Rust shows (`alerts.rs`); `symbol` and the figures are checked there. */
 export type AlertNote =
@@ -2152,6 +2161,9 @@ export interface BtcLockView {
   unconfirmedSats: number;
   /** Until the network's own clock (median time past) reaches the date. */
   secsLeft: number;
+  /** Unix seconds: block time of the funding's first confirmation. `null` while unconfirmed or
+   *  when the server does not say (Electrum, Bitcoin Core): read the history then. */
+  fundedAt: number | null;
 }
 
 export interface BtcLocksStatus {
@@ -2229,6 +2241,15 @@ export interface BackupLocal {
   contacts: BackupContact[];
   favorites: string[];
   alerts: { received: boolean; prices: BackupPriceAlert[] };
+  /** Private transaction notes (absent from older files). */
+  notes?: BackupNote[];
+}
+/** `text`: 1–200 characters, no control or invisible character (checked by Rust). */
+export interface BackupNote {
+  network: Network;
+  chain: string;
+  id: string;
+  text: string;
 }
 export interface BackupWatch {
   label: string;
@@ -2973,6 +2994,10 @@ export interface Commands {
   settings_get: { args: undefined; ret: Settings };
   /** Async: live-checks every changed custom server before saving (`SERVER_INVALID`, `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`); */
   settings_set: { args: { settings: SettingsInput }; ret: Settings };
+  /** Turns `contactsOnly` off after the vault password (`WRONG_PASSWORD`, `LOCKED`). */
+  contacts_only_off: { args: { password: string }; ret: Settings };
+  /** One counted password attempt, for an action the interface guards with it (a new contact while `contactsOnly` is on). */
+  vault_password_check: { args: { password: string }; ret: void };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
   /** Opens https://kyrowallet.com/frais (URL fixed in Rust) in the system browser. */
   open_fees_page: { args: undefined; ret: void };

@@ -198,6 +198,9 @@ pub struct Coin {
 pub struct AddrView {
     pub coins: Vec<Coin>,
     pub tx_count: u64,
+    /// Block time (Unix seconds) of the earliest confirmed coin, when the server gives it
+    /// (Esplora does; Electrum and Core lists do not, the interface then reads its history).
+    pub funded_at: Option<u64>,
 }
 
 /// What one date of the grid holds or held.
@@ -240,7 +243,13 @@ pub struct Backend<'a>(pub Ctx<'a>);
 fn parse_view(utxos: &Value, info: &Value) -> AppResult<AddrView> {
     let bad = || AppError::ServerUnreachable("unexpected server answer".into());
     let mut coins = Vec::new();
+    let mut funded_at: Option<u64> = None;
     for u in utxos.as_array().ok_or_else(bad)? {
+        if u["status"]["confirmed"].as_bool() == Some(true) {
+            if let Some(time) = u["status"]["block_time"].as_u64().filter(|t| *t > 0) {
+                funded_at = Some(funded_at.map_or(time, |f| f.min(time)));
+            }
+        }
         coins.push(Coin {
             utxo: BtcLockUtxo {
                 txid: u["txid"].as_str().ok_or_else(bad)?.to_owned(),
@@ -256,6 +265,7 @@ fn parse_view(utxos: &Value, info: &Value) -> AppResult<AddrView> {
     Ok(AddrView {
         coins,
         tx_count: btc_backend::tx_count_of(info)?,
+        funded_at,
     })
 }
 
@@ -393,6 +403,9 @@ pub struct LockView {
     unconfirmed_sats: u64,
     /// Seconds until the network's clock (median time past) reaches the date.
     secs_left: u64,
+    /// Block time (Unix seconds) of the funding's first confirmation; `None` while unconfirmed,
+    /// or when the server does not say (the interface then reads its history).
+    funded_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -473,6 +486,7 @@ pub async fn read_status<C: LockChain>(
             Err(AppError::ServerUnreachable(String::new()))
         };
         let mtp = tip.as_ref().map_or(0, |t| t.mtp);
+        let funded_at = view.as_ref().ok().and_then(|v| v.funded_at);
         let (amount_sats, status, coins, unconfirmed_sats) = match view {
             Ok(v) => {
                 let status = status_of(&v, r.t, mtp, r);
@@ -512,6 +526,7 @@ pub async fn read_status<C: LockChain>(
             coins,
             unconfirmed_sats,
             secs_left: u64::from(r.t).saturating_sub(mtp),
+            funded_at,
         });
     }
     locks.sort_by_key(|l| (l.t, l.account));
@@ -707,10 +722,10 @@ fn lock_head(lang: Lang, info: &BtcLockInfo, sats: u64) -> String {
     let address = &info.address;
     match lang {
         Lang::Fr => format!(
-            "BLOCAGE BITCOIN\n\n{amount} BTC bloqués jusqu'au {date} à 00:00 UTC, disponibles environ 1 à 2 h après.\nAdresse recalculée par Kyro : {address}\n\nUne fois confirmé, personne ne peut annuler ni raccourcir ce blocage, pas même avec la phrase de récupération. La phrase reste nécessaire pour récupérer les fonds.\n\n"
+            "Blocage Bitcoin\n\n{amount} BTC jusqu'au {date} à 00:00 UTC.\nRetrait possible 1 à 2 h après.\nAdresse : {address}\n\nC'est définitif : personne ne peut annuler ni raccourcir ce blocage, même avec la phrase. Sans ta phrase, ces bitcoins sont perdus.\n\n"
         ),
         Lang::En => format!(
-            "BITCOIN LOCK\n\n{amount} BTC locked until {date} at 00:00 UTC, available about 1 to 2 hours later.\nAddress recomputed by Kyro: {address}\n\nOnce confirmed, nobody can cancel or shorten this lock, not even with the recovery phrase. The phrase stays necessary to get the funds back.\n\n"
+            "Bitcoin lock\n\n{amount} BTC until {date} at 00:00 UTC.\nYou can withdraw 1 to 2 hours later.\nAddress: {address}\n\nThis is final: nobody can cancel or shorten this lock, even with the phrase. Without your phrase, these bitcoin are lost.\n\n"
         ),
     }
 }
@@ -1135,6 +1150,7 @@ mod tests {
     struct Fake {
         coins: Vec<Coin>,
         tx_count: u64,
+        funded_at: Option<u64>,
         mtp: u64,
         tip_time: u64,
         used: Vec<String>,
@@ -1151,6 +1167,7 @@ mod tests {
             Fake {
                 coins: Vec::new(),
                 tx_count: 0,
+                funded_at: None,
                 mtp: 0,
                 tip_time: CLOCK,
                 used: Vec::new(),
@@ -1185,6 +1202,7 @@ mod tests {
             Ok(AddrView {
                 coins: self.coins.clone(),
                 tx_count: self.tx_count,
+                funded_at: self.funded_at,
             })
         }
         async fn wallet_address_used(&self, a: &str) -> AppResult<bool> {
@@ -1217,7 +1235,11 @@ mod tests {
     }
 
     fn view(coins: Vec<Coin>, tx_count: u64) -> AddrView {
-        AddrView { coins, tx_count }
+        AddrView {
+            coins,
+            tx_count,
+            funded_at: None,
+        }
     }
 
     fn record() -> Record {
@@ -1649,6 +1671,46 @@ mod tests {
             ..Fake::default()
         };
         assert!(plan(&fake, &path).is_err());
+    }
+
+    #[test]
+    fn funded_at_is_the_earliest_confirmed_block_time() {
+        let counts = serde_json::json!({ "chain_stats": { "tx_count": 3 }, "mempool_stats": { "tx_count": 1 } });
+        let utxos = serde_json::json!([
+            { "txid": "aa", "vout": 0, "value": 5, "status": { "confirmed": true, "block_height": 9, "block_time": 1_800_000_600u64 } },
+            { "txid": "bb", "vout": 1, "value": 6, "status": { "confirmed": true, "block_height": 8, "block_time": 1_800_000_000u64 } },
+            { "txid": "cc", "vout": 0, "value": 7, "status": { "confirmed": false } },
+        ]);
+        assert_eq!(
+            parse_view(&utxos, &counts).unwrap().funded_at,
+            Some(1_800_000_000)
+        );
+        let pending = serde_json::json!([{ "txid": "cc", "vout": 0, "value": 7, "status": { "confirmed": false } }]);
+        assert_eq!(parse_view(&pending, &counts).unwrap().funded_at, None);
+        // Electrum-shaped answer: a height, no time.
+        let electrum = serde_json::json!([{ "txid": "aa", "vout": 0, "value": 5, "status": { "confirmed": true, "block_height": 9 } }]);
+        assert_eq!(parse_view(&electrum, &counts).unwrap().funded_at, None);
+
+        let path = dir("funded-at");
+        let i = info(0, T);
+        update(&path, |s| upsert(s, &i, 70_000)).unwrap();
+        let fake = Fake {
+            coins: vec![coin(1, 70_000, true)],
+            tx_count: 1,
+            funded_at: Some(1_800_000_000),
+            ..Fake::default()
+        };
+        let st = run(read_status(&fake, &path, std::slice::from_ref(&i), false)).unwrap();
+        assert_eq!(st.locks[0].funded_at, Some(1_800_000_000));
+        let json = serde_json::to_value(&st.locks[0]).unwrap();
+        assert_eq!(json["fundedAt"], 1_800_000_000u64);
+        let down = Fake {
+            fail_tip: true,
+            ..Fake::default()
+        };
+        let st = run(read_status(&down, &path, std::slice::from_ref(&i), false)).unwrap();
+        assert_eq!(st.locks[0].funded_at, None);
+        assert!(serde_json::to_value(&st.locks[0]).unwrap()["fundedAt"].is_null());
     }
 
     #[test]

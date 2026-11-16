@@ -122,6 +122,9 @@ export function earnRowName(o: EarnOption): { name: string; network: string | nu
 /** Lido and TRON publish a yearly rate without compounding. */
 export const rateIsApr = (o: EarnOption): boolean => o.id === 'eth-lido' || o.id === 'trx';
 
+/** Rewards that do not earn by themselves: TRON's wait to be claimed and staked again. Everywhere else they add to what is staked, Lido's included. */
+export const rewardsWaitForClaim = (o: EarnOption): boolean => o.id === 'trx';
+
 /** Network-wide figures: the validator's commission comes off. Sui's is already after it. */
 export const rateIsGross = (o: EarnOption): boolean => o.target.kind === 'tab' && o.id !== 'sui';
 

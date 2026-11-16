@@ -27,7 +27,7 @@ export function GainsCard() {
   return (
     <section aria-label={t('portfolio.gains')} className="flex flex-col gap-3 border-b border-line px-6 pt-5 pb-5">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.gains')}</span>
+        <span className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">{t('portfolio.gains')}</span>
         <Figure gain={total.gain} pct={total.gainPct} hidden={hideBalances} currency={cur} />
       </div>
       <div className="flex flex-col">

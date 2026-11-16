@@ -299,6 +299,7 @@ pub async fn settings_set(
         new.servers = old.servers.clone();
     }
     new.migrate_legacy_rpc(state.network);
+    new.keep_contacts_only(&old);
     new.servers.merge_secrets_from(&old.servers);
     new.validate()?;
     check_cookie_paths(&new.servers, &old.servers, state.picked_cookie().as_deref())?;
@@ -330,6 +331,37 @@ pub async fn settings_set(
         _ => {}
     }
     Ok(saved.for_ui())
+}
+
+/// Turns « send only to my contacts » off, after the vault password (`settings_set` cannot).
+#[tauri::command]
+pub async fn contacts_only_off(state: State<'_, AppState>, password: String) -> AppResult<Value> {
+    if !state.is_unlocked() {
+        return Err(AppError::Locked);
+    }
+    let decoy = state.in_decoy();
+    crate::commands::secret_from_password(&state, zeroize::Zeroizing::new(password)).await?;
+    // The password check can outlast the session: settings go to the side that asked.
+    if decoy != state.in_decoy() {
+        return Err(AppError::Locked);
+    }
+    let mut next = state.settings();
+    next.contacts_only = false;
+    let saved = state.save_settings(next)?;
+    state.touch();
+    Ok(saved.for_ui())
+}
+
+/// The vault password, checked (one counted attempt) for an action the interface guards with it:
+/// adding a contact while « send only to my contacts » is on.
+#[tauri::command]
+pub async fn vault_password_check(state: State<'_, AppState>, password: String) -> AppResult<()> {
+    if !state.is_unlocked() {
+        return Err(AppError::Locked);
+    }
+    crate::commands::secret_from_password(&state, zeroize::Zeroizing::new(password)).await?;
+    state.touch();
+    Ok(())
 }
 
 #[derive(Debug, Deserialize)]

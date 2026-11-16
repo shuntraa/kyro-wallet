@@ -30,6 +30,7 @@ pub const SCHEME: &str = "kyrophrase";
 const DONE_PATH: &str = "/done";
 const SANS_PATH: &str = "/font/sans.woff2";
 const MONO_PATH: &str = "/font/mono.woff2";
+const DISPLAY_PATH: &str = "/font/display.woff2";
 
 /// The BIP39 passphrase of the wallet, in the window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -71,25 +72,30 @@ impl PhraseState {
     }
 }
 
-/// Asset keys of the app's fonts (Geist, Geist Mono), found once at startup.
-static FONTS: OnceLock<(Option<String>, Option<String>)> = OnceLock::new();
+/// Asset keys of the app's fonts (Geist, Geist Mono, Unbounded), found once at startup.
+static FONTS: OnceLock<[Option<String>; 3]> = OnceLock::new();
 
-/// Remembers which bundled assets are the Latin Geist fonts (hashed file names).
+/// Remembers which bundled assets are the Latin Geist / Geist Mono / Unbounded fonts (hashed
+/// file names).
 pub fn remember_fonts<'a>(keys: impl Iterator<Item = &'a str>) {
-    let mut sans = None;
-    let mut mono = None;
+    let mut f: [Option<String>; 3] = Default::default();
     for k in keys {
         let name = k.rsplit('/').next().unwrap_or_default();
         if !name.ends_with(".woff2") {
             continue;
         }
-        if name.starts_with("geist-latin-wght-normal") {
-            sans = Some(format!("/{}", k.trim_start_matches('/')));
+        let slot = if name.starts_with("geist-latin-wght-normal") {
+            0
         } else if name.starts_with("geist-mono-latin-wght-normal") {
-            mono = Some(format!("/{}", k.trim_start_matches('/')));
-        }
+            1
+        } else if name.starts_with("unbounded-latin-wght-normal") {
+            2
+        } else {
+            continue;
+        };
+        f[slot] = Some(format!("/{}", k.trim_start_matches('/')));
     }
-    let _ = FONTS.set((sans, mono));
+    let _ = FONTS.set(f);
 }
 
 /// URL of the page (Windows: `http://kyrophrase.localhost/`, elsewhere `kyrophrase://localhost/`).
@@ -132,51 +138,65 @@ fn escape(s: &str) -> String {
 const STYLE: &str = r#"
 @font-face{font-family:'Geist';src:url(/font/sans.woff2) format('woff2');font-weight:100 900;font-display:block}
 @font-face{font-family:'Geist Mono';src:url(/font/mono.woff2) format('woff2');font-weight:100 900;font-display:block}
-:root{color-scheme:dark;--bg:#090a0c;--card:#0d0f12;--raised:#13161a;--control:#191c21;--control2:#20242a;--line:#1e2228;--line2:#292e35;--text:#eef1f4;--text2:#c3c9d1;--mute:#878e99;--faint:#5b616b;--primary:#e4ecf3;--on-primary:#08090b;--ice:#7cc4ff;--ice-line:#355b80;--ice-deep:#16263a;--warn:#f5b74f}
+@font-face{font-family:'Unbounded Variable';src:url(/font/display.woff2) format('woff2');font-weight:200 900;font-display:block}
+:root{color-scheme:dark;--bg:#05070a;--text:#f1f4f7;--text2:#c6ccd4;--mute:#8d949f;--faint:#636a75;--ice:#7cc4ff;--warn:#f5b74f;--glass:rgba(255,255,255,.045);--glass-line:rgba(255,255,255,.07)}
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 ::selection{background:transparent}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font:14px/1.5 'Geist','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-body{display:flex;justify-content:center}
-main{width:100%;max-width:760px;padding:28px 32px 26px;display:flex;flex-direction:column;gap:18px}
-header{display:flex;gap:14px;align-items:flex-start}
-.badge{flex:none;width:38px;height:38px;border-radius:10px;background:var(--ice-deep);border:1px solid var(--ice-line);display:grid;place-items:center;color:var(--ice)}
-.badge svg{width:20px;height:20px}
-h1{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em}
-.lead{margin:4px 0 0;color:var(--text2)}
-.lead strong{color:var(--warn);font-weight:500}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 14px 16px}
-.bar{display:flex;align-items:center;justify-content:space-between;margin:0 2px 12px}
-.count{color:var(--mute);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+body{position:relative;overflow-x:hidden}
+.light{position:fixed;inset:0;pointer-events:none;background:radial-gradient(900px 520px at 50% 6%,rgba(124,196,255,.085),rgba(124,196,255,.022) 45%,transparent 75%)}
+.light svg{position:absolute;inset:0;width:100%;height:100%;opacity:.1;mix-blend-mode:screen;-webkit-mask-image:radial-gradient(1000px 620px at 50% 6%,#000 0%,rgba(0,0,0,.55) 38%,transparent 72%);mask-image:radial-gradient(1000px 620px at 50% 6%,#000 0%,rgba(0,0,0,.55) 38%,transparent 72%)}
+.light::after{content:'';position:absolute;inset:0;background:radial-gradient(1400px 900px at 50% 40%,transparent 55%,rgba(0,0,0,.55))}
 .sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;padding:0}
-.toggle{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:6px;background:var(--control);border:1px solid var(--line2);color:var(--text);font-size:13px;font-weight:500;cursor:pointer}
-.toggle:hover{background:var(--control2)}
-.toggle svg{width:15px;height:15px;color:var(--text2)}
-.toggle .h,#reveal:checked~main .toggle .s{display:none}
-#reveal:checked~main .toggle .h{display:inline-flex;align-items:center;gap:7px}
-.toggle .s{display:inline-flex;align-items:center;gap:7px}
-#reveal:focus-visible~main .toggle{outline:1.5px solid var(--ice);outline-offset:2px}
-ol{list-style:none;margin:0;padding:0;display:grid;gap:8px;cursor:pointer}
+main{position:relative;display:flex;flex-direction:column;align-items:center;padding:34px 20px 30px}
+.label{display:flex;align-items:center;gap:8px;color:var(--faint);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase}
+.label i{width:6px;height:6px;background:var(--ice);box-shadow:0 0 10px var(--ice);flex:none}
+h1{margin:16px 0 0;font:500 28px/1.15 'Unbounded Variable','Unbounded','Geist',sans-serif;letter-spacing:-.04em;text-align:center}
+.lead{margin:12px 0 0;max-width:640px;color:var(--mute);font-size:13.5px;text-align:center}
+.wrap{position:relative;margin-top:30px;width:100%;max-width:760px}
+.wrap.k3{max-width:590px}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:10px;cursor:pointer}
 ol.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
 ol.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
 ol.c5{grid-template-columns:repeat(5,minmax(0,1fr))}
-li{display:flex;align-items:baseline;gap:10px;height:40px;padding:0 12px;border-radius:7px;background:var(--raised);border:1px solid var(--line);align-items:center;min-width:0}
-.n{flex:none;width:20px;text-align:right;color:var(--faint);font:500 12px/1 'Geist Mono',ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
-.w{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 15px/1 'Geist Mono',ui-monospace,Consolas,monospace;color:var(--text);filter:blur(7px);opacity:.85;transition:filter .18s ease,opacity .18s ease}
+ol li{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;border-radius:12px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--glass-line);min-width:0}
+.n{flex:none;width:20px;text-align:right;color:var(--faint);font:500 11.5px/1 'Geist',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.w{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:400 14px/1.2 'Geist Mono',ui-monospace,Consolas,monospace;color:var(--text);filter:blur(7px);opacity:.85;transition:filter .18s ease,opacity .18s ease}
 #reveal:checked~main .w,ol:active .w{filter:none;opacity:1}
-.hint{margin:12px 2px 0;color:var(--mute);font-size:12.5px}
-#reveal:checked~main .hint{visibility:hidden}
-.pp{margin:12px 2px 0;display:flex;flex-direction:column;gap:6px}
+.sides{position:absolute;inset:0;pointer-events:none}
+.side{position:absolute;display:flex;align-items:center;gap:8px;width:202px}
+.side.r{left:100%;margin-left:12px;top:56px}
+.side.l{right:100%;margin-right:12px;top:52%;flex-direction:row-reverse;text-align:right}
+.sq{flex:none;width:6px;height:6px;background:#cfe7ff}
+.ln{flex:none;width:20px;height:1px;background:rgba(255,255,255,.18)}
+.tx{width:160px;color:var(--mute);font-size:12.5px;line-height:1.4}
+.tx strong{display:block;margin-bottom:2px;color:var(--text);font-size:13px;font-weight:600}
+@media (max-width:1227px){.wrap.k4 .sides{position:static;display:flex;gap:28px;justify-content:center;margin-top:22px}.wrap.k4 .side{position:static;margin:0;width:auto;max-width:300px;flex-direction:row;text-align:left}.wrap.k4 .tx{width:auto}}
+@media (max-width:1057px){.wrap.k3 .sides{position:static;display:flex;gap:28px;justify-content:center;margin-top:22px}.wrap.k3 .side{position:static;margin:0;width:auto;max-width:280px;flex-direction:row;text-align:left}.wrap.k3 .tx{width:auto}}
+.pp{margin:12px 0 0;display:flex;align-items:center;gap:14px;min-height:44px;padding:10px 16px;border-radius:12px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--glass-line)}
+.ppl{flex:none;color:var(--faint);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase}
 .pp .w{white-space:normal;overflow-wrap:anywhere;line-height:1.35}
-.notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;color:var(--mute);font-size:12.5px}
-.notes li{display:block;height:auto;padding:0 0 0 14px;background:none;border:0;border-radius:0;position:relative}
-.notes li::before{content:'';position:absolute;left:2px;top:.62em;width:4px;height:4px;border-radius:2px;background:var(--faint)}
-footer{display:flex;justify-content:flex-end;padding-top:2px}
-.btn{display:inline-flex;align-items:center;height:38px;padding:0 18px;border-radius:6px;background:var(--primary);color:var(--on-primary);font-weight:600;font-size:14px;text-decoration:none}
-.btn:hover{background:#fff}
+.hint{margin:14px 0 0;color:var(--faint);font-size:12.5px;text-align:center}
+#reveal:checked~main .hint{visibility:hidden}
+.notes{margin:16px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;width:100%;max-width:760px;color:var(--text2);font-size:12.5px}
+.notes li{padding:0 0 0 14px;position:relative}
+.notes li::before{content:'';position:absolute;left:2px;top:.62em;width:4px;height:4px;background:var(--warn)}
+footer{display:flex;gap:12px;justify-content:center;margin-top:30px}
+.toggle,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:14px;font-weight:600;cursor:pointer;text-decoration:none}
+.toggle{width:150px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--glass-line);color:var(--text);font-size:13.5px}
+.toggle:hover{background:rgba(255,255,255,.08)}
+.toggle svg{width:16px;height:16px;color:var(--text2)}
+.toggle .h,#reveal:checked~main .toggle .s{display:none}
+#reveal:checked~main .toggle .h{display:inline-flex;align-items:center;gap:8px}
+.toggle .s{display:inline-flex;align-items:center;gap:8px}
+#reveal:focus-visible~main .toggle{outline:1.5px solid var(--ice);outline-offset:2px}
+.btn{width:260px;background:linear-gradient(180deg,#e6f3ff,#c2e0fa);color:#061423;font-size:14.5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(53,119,180,.35),inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px -12px rgba(124,196,255,.85)}
+.btn:hover{background:linear-gradient(180deg,#fff,#e6f3ff)}
 .btn:focus-visible{outline:1.5px solid var(--ice);outline-offset:2px}
 "#;
 
-const SHIELD: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>"#;
+/// The ice light at the top of the page (the interface's `IceLight`, inline: no image request).
+const LIGHT: &str = r#"<div class="light" aria-hidden="true"><svg><filter id="ice" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="2" seed="4"/><feComponentTransfer><feFuncR type="table" tableValues="0 0 0 0 0 0 .15 1 .15 0 0 0 0 0 0 0 0 0 0 0"/><feFuncG type="table" tableValues="0 0 0 0 0 0 .15 1 .15 0 0 0 0 0 0 0 0 0 0 0"/><feFuncB type="table" tableValues="0 0 0 0 0 0 .15 1 .15 0 0 0 0 0 0 0 0 0 0 0"/><feFuncA type="linear" slope="0" intercept="1"/></feComponentTransfer><feGaussianBlur stdDeviation="0.45"/><feColorMatrix type="matrix" values="0 0 0 0 .62  0 0 0 0 .84  0 0 0 0 1  1 0 0 0 0"/></filter><rect width="100%" height="100%" filter="url(#ice)"/></svg></div>"#;
 const EYE: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>"#;
 const EYE_OFF: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17.3 17.3 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>"#;
 
@@ -186,6 +206,16 @@ pub fn columns(n: usize) -> usize {
         4
     } else {
         3
+    }
+}
+
+/// Window width (logical px) that leaves room for the two side notes beside the grid
+/// (the page's media queries stack them under the grid below these widths).
+pub fn wide_width(cols: usize) -> f64 {
+    if cols == 4 {
+        1240.0
+    } else {
+        1080.0
     }
 }
 
@@ -200,31 +230,55 @@ fn csp() -> String {
     )
 }
 
+/// The two notes beside the grid: only what is true of this window. `(title, text)`.
+pub fn side_notes(lang: Lang) -> [(&'static str, &'static str); 2] {
+    let offline = (
+        lang.pick("Hors ligne", "Offline"),
+        lang.pick(
+            "Ces mots ne passent jamais par Internet, même pas par Tor. Personne de légitime ne te \
+             les demandera jamais.",
+            "These words never go over the Internet, not even through Tor. No one legitimate will \
+             ever ask you for these words.",
+        ),
+    );
+    // Content protection exists on Windows and macOS only.
+    let photo = if cfg!(any(windows, target_os = "macos")) {
+        lang.pick(
+            "Ni capture, ni cloud, ni message. Cette fenêtre est masquée des captures et du \
+             partage d’écran, pas d’une caméra : vérifie que personne ne regarde.",
+            "No screenshot, no cloud, no message. This window is hidden from screenshots and \
+             screen sharing, not from a camera: make sure nobody is watching.",
+        )
+    } else {
+        lang.pick(
+            "Ni capture, ni cloud, ni message. Vérifie que personne ne regarde.",
+            "No screenshot, no cloud, no message. Make sure nobody is watching.",
+        )
+    };
+    [offline, (lang.pick("Pas de photo", "No photo"), photo)]
+}
+
 /// The whole page, words included (wiped from memory when dropped).
 pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
     let n = view.words.len();
-    let mut out = Zeroizing::new(String::with_capacity(8192 + n * 96));
+    let cols = columns(n);
+    let mut out = Zeroizing::new(String::with_capacity(12288 + n * 96));
     out.push_str(&format!(
         "<!doctype html><html lang=\"{}\"><head><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
          <meta name=\"referrer\" content=\"no-referrer\"><title>{}</title><style>{STYLE}</style>\
-         </head><body><input type=\"checkbox\" id=\"reveal\" class=\"sr\" aria-label=\"{}\"><main>\
-         <header><div class=\"badge\">{SHIELD}</div><div><h1>{}</h1><p class=\"lead\">{}</p></div>\
-         </header><section class=\"card\"><div class=\"bar\"><span class=\"count\">{}</span>\
-         <label for=\"reveal\" class=\"toggle\"><span class=\"s\">{EYE}{}</span>\
-         <span class=\"h\">{EYE_OFF}{}</span></label></div><ol class=\"c{}\">",
+         </head><body>{LIGHT}<input type=\"checkbox\" id=\"reveal\" class=\"sr\" aria-label=\"{}\"><main>\
+         <div class=\"label\"><i></i><span class=\"count\">{}</span></div><h1>{}</h1>\
+         <p class=\"lead\">{}</p><div class=\"wrap k{cols}\"><ol class=\"c{cols}\">",
         lang.pick("fr", "en"),
         escape(view.title),
         escape(lang.pick("Afficher les mots", "Show the words")),
-        escape(view.title),
-        escape(view.lead),
         escape(&match lang {
             Lang::Fr => format!("{n} mots"),
             Lang::En => format!("{n} words"),
         }),
-        escape(lang.pick("Afficher", "Show")),
-        escape(lang.pick("Masquer", "Hide")),
-        columns(n),
+        escape(view.title),
+        escape(view.lead),
     ));
     for (i, w) in view.words.iter().enumerate() {
         out.push_str("<li><span class=\"n\">");
@@ -233,20 +287,29 @@ pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
         out.push_str(&Zeroizing::new(escape(w)));
         out.push_str("</span></li>");
     }
-    out.push_str("</ol>");
+    out.push_str("</ol><div class=\"sides\">");
+    for ((title, text), side) in side_notes(lang).into_iter().zip(["r", "l"]) {
+        out.push_str(&format!(
+            "<div class=\"side {side}\"><span class=\"sq\"></span><span class=\"ln\"></span>\
+             <span class=\"tx\"><strong>{}</strong>{}</span></div>",
+            escape(title),
+            escape(text)
+        ));
+    }
+    out.push_str("</div>");
     if let Passphrase::Shown(p) = view.passphrase {
-        out.push_str("<div class=\"pp\"><span class=\"count\">");
+        out.push_str("<div class=\"pp\"><span class=\"ppl\">");
         out.push_str(&escape(lang.pick("Phrase secrète", "Passphrase")));
         out.push_str("</span><span class=\"w\">");
         out.push_str(&Zeroizing::new(escape(p)));
         out.push_str("</span></div>");
     }
-    out.push_str("<p class=\"hint\">");
+    out.push_str("</div><p class=\"hint\">");
     out.push_str(&escape(lang.pick(
         "Clique sur « Afficher », ou maintiens le clic sur les mots, pour les lire.",
         "Click “Show”, or press and hold the words, to read them.",
     )));
-    out.push_str("</p></section><ul class=\"notes\">");
+    out.push_str("</p>");
     let passphrase_note = (view.passphrase != Passphrase::None).then(|| {
         lang.pick(
             "Ce portefeuille a aussi une phrase secrète. Sans elle, ces mots n’ouvrent pas ces fonds. \
@@ -255,26 +318,27 @@ pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
              forget it, these funds are lost. Nobody can recover it.",
         )
     });
-    let fixed = [
-        lang.pick(
-            "Pas de photo, pas de copie, pas de cloud. Personne de légitime ne te demandera jamais ces mots.",
-            "No photo, no copy, no cloud. No one legitimate will ever ask you for these words.",
-        ),
-        lang.pick(
-            "Cette fenêtre est masquée des captures et des partages d’écran (Windows, macOS), pas \
-             d’une caméra : vérifie que personne ne regarde.",
-            "This window is hidden from screenshots and screen sharing (Windows, macOS), not from \
-             a camera: make sure nobody is watching.",
-        ),
-    ];
-    let notes = view.notes.iter().map(String::as_str);
-    for note in notes.chain(passphrase_note).chain(fixed) {
-        out.push_str("<li>");
-        out.push_str(&escape(note));
-        out.push_str("</li>");
+    let notes: Vec<&str> = view
+        .notes
+        .iter()
+        .map(String::as_str)
+        .chain(passphrase_note)
+        .collect();
+    if !notes.is_empty() {
+        out.push_str("<ul class=\"notes\">");
+        for note in notes {
+            out.push_str("<li>");
+            out.push_str(&escape(note));
+            out.push_str("</li>");
+        }
+        out.push_str("</ul>");
     }
     out.push_str(&format!(
-        "</ul><footer><a class=\"btn\" href=\"{DONE_PATH}\">{}</a></footer></main></body></html>",
+        "<footer><label for=\"reveal\" class=\"toggle\"><span class=\"s\">{EYE}{}</span>\
+         <span class=\"h\">{EYE_OFF}{}</span></label><a class=\"btn\" href=\"{DONE_PATH}\">{}</a>\
+         </footer></main></body></html>",
+        escape(lang.pick("Afficher", "Show")),
+        escape(lang.pick("Masquer", "Hide")),
         escape(lang.pick("J’ai noté ma phrase", "I’ve written it down"))
     ));
     out
@@ -318,10 +382,12 @@ pub fn protocol<R: Runtime>(
             signal(&state);
             respond(StatusCode::NO_CONTENT, "text/plain", Vec::new())
         }
-        p @ (SANS_PATH | MONO_PATH) => {
-            let key = FONTS
-                .get()
-                .and_then(|(s, m)| if p == SANS_PATH { s.clone() } else { m.clone() });
+        p @ (SANS_PATH | MONO_PATH | DISPLAY_PATH) => {
+            let i = [SANS_PATH, MONO_PATH, DISPLAY_PATH]
+                .iter()
+                .position(|x| *x == p)
+                .unwrap_or(0);
+            let key = FONTS.get().and_then(|f| f[i].clone());
             match key.and_then(|k| app.asset_resolver().get(k)) {
                 Some(a) => respond(StatusCode::OK, "font/woff2", a.bytes),
                 None => respond(StatusCode::NOT_FOUND, "text/plain", Vec::new()),
@@ -386,8 +452,25 @@ pub async fn show(app: &AppHandle, view: PhraseView<'_>) -> AppResult<()> {
     }
     let cols = columns(view.words.len());
     let rows = view.words.len().div_ceil(cols);
-    let width = if cols == 4 { 760.0 } else { 640.0 };
-    let height = 372.0 + rows as f64 * 48.0 + view.notes.len() as f64 * 22.0;
+    // Wide enough for the side notes, never wider than the screen (the page then stacks them
+    // under the grid).
+    let screen = main
+        .as_ref()
+        .and_then(|m| m.current_monitor().ok().flatten())
+        .map(|mon| mon.size().width as f64 / mon.scale_factor() - 40.0);
+    let width = screen.map_or(wide_width(cols), |s| wide_width(cols).min(s).max(640.0));
+    let stacked = width < wide_width(cols);
+    let extra_notes = view.notes.len() + usize::from(view.passphrase != Passphrase::None);
+    let mut height = 318.0 + rows as f64 * 54.0;
+    if matches!(view.passphrase, Passphrase::Shown(_)) {
+        height += 58.0;
+    }
+    if extra_notes > 0 {
+        height += 16.0 + extra_notes as f64 * 40.0;
+    }
+    if stacked {
+        height += 110.0;
+    }
     let mut builder =
         tauri::WebviewWindowBuilder::new(app, LABEL, WebviewUrl::CustomProtocol(page_url()))
             .title(lang.pick("Kyro — Phrase de récupération", "Kyro — Recovery phrase"))
@@ -399,7 +482,7 @@ pub async fn show(app: &AppHandle, view: PhraseView<'_>) -> AppResult<()> {
             .maximizable(false)
             .content_protected(true)
             .theme(Some(tauri::Theme::Dark))
-            .background_color(tauri::window::Color(9, 10, 12, 255))
+            .background_color(tauri::window::Color(5, 7, 10, 255))
             .incognito(true)
             .devtools(false)
             .on_new_window(|_url, _features| NewWindowResponse::Deny);
@@ -524,6 +607,46 @@ mod tests {
     }
 
     #[test]
+    fn side_notes_are_rendered_once_with_the_grid_class() {
+        let w = words(24);
+        let page = render(Lang::Fr, &recovery_view(Lang::Fr, &w, Passphrase::None));
+        assert!(page.contains("<div class=\"wrap k4\"><ol class=\"c4\">"));
+        for (title, text) in side_notes(Lang::Fr) {
+            let needle = format!("<strong>{}</strong>{}", escape(title), escape(text));
+            assert_eq!(page.matches(&needle).count(), 1, "{needle}");
+        }
+        assert!(page.contains("Hors ligne") && page.contains("Pas de photo"));
+        // No extra notes: no list at all.
+        assert!(!page.contains("<ul class=\"notes\">"));
+        assert!(page.contains("<h1>Ta phrase de récupération</h1>"));
+        assert!(page.contains("<span class=\"count\">24 mots</span>"));
+        let en = render(
+            Lang::En,
+            &recovery_view(Lang::En, &words(12), Passphrase::None),
+        );
+        assert!(en.contains("<div class=\"wrap k3\"><ol class=\"c3\">"));
+        assert!(
+            en.contains("<strong>Offline</strong>") && en.contains("<strong>No photo</strong>")
+        );
+    }
+
+    #[test]
+    fn toggle_and_done_are_in_the_footer_and_nothing_is_external() {
+        let page = render(
+            Lang::En,
+            &recovery_view(Lang::En, &words(24), Passphrase::None),
+        );
+        let footer = &page[page.find("<footer>").unwrap()..];
+        assert!(footer.contains("<label for=\"reveal\" class=\"toggle\">"));
+        assert!(footer.contains("<a class=\"btn\" href=\"/done\">"));
+        // The checkbox precedes <main>, so the CSS reveal selectors still apply.
+        assert!(page.find("id=\"reveal\"").unwrap() < page.find("<main>").unwrap());
+        assert!(!page.contains(" style=") && !page.contains("<img") && !page.contains("http"));
+        assert!(!page.contains("<script"));
+        assert!(wide_width(4) > wide_width(3));
+    }
+
+    #[test]
     fn csp_allows_only_the_page_style_and_fonts() {
         let c = csp();
         assert!(c.starts_with("default-src 'none'; script-src 'none'; style-src 'sha256-"));
@@ -558,18 +681,24 @@ mod tests {
                 "/assets/geist-latin-ext-wght-normal-DC.woff2",
                 "/assets/geist-mono-latin-wght-normal-XN.woff2",
                 "/assets/geist-latin-wght-normal-Bg.woff2",
+                "/assets/unbounded-latin-ext-wght-normal-Ux.woff2",
+                "/assets/unbounded-latin-wght-normal-Ub.woff2",
                 "/assets/index.js",
             ]
             .into_iter(),
         );
-        let (s, m) = FONTS.get().unwrap();
+        let f = FONTS.get().unwrap();
         assert_eq!(
-            s.as_deref(),
+            f[0].as_deref(),
             Some("/assets/geist-latin-wght-normal-Bg.woff2")
         );
         assert_eq!(
-            m.as_deref(),
+            f[1].as_deref(),
             Some("/assets/geist-mono-latin-wght-normal-XN.woff2")
+        );
+        assert_eq!(
+            f[2].as_deref(),
+            Some("/assets/unbounded-latin-wght-normal-Ub.woff2")
         );
     }
 
@@ -588,7 +717,19 @@ mod tests {
         } else {
             Lang::En
         };
-        let page = render(lang, &recovery_view(lang, &w, Passphrase::None));
+        let mut page = render(lang, &recovery_view(lang, &w, Passphrase::None)).to_string();
+        if let Ok(dir) = std::env::var("KYRO_PHRASE_FONTS") {
+            // Font URLs for a page opened from disk (proof only).
+            for f in ["sans", "mono", "display"] {
+                page = page.replace(
+                    &format!("url(/font/{f}.woff2)"),
+                    &format!("url({dir}{f}.woff2)"),
+                );
+            }
+        }
+        if std::env::var("KYRO_PHRASE_REVEAL").is_ok() {
+            page = page.replace("class=\"sr\" aria-label", "class=\"sr\" checked aria-label");
+        }
         std::fs::write(path, page.as_bytes()).unwrap();
     }
 }

@@ -102,4 +102,11 @@ export const history = {
   'history.speedUpConfirm': 'Accélérer',
   'history.cancelConfirm': 'Annuler le paiement',
   'history.cancelLabel': 'Paiement annulé',
+  'history.search': 'Rechercher',
+  'history.noMatch': 'Rien ne correspond à ta recherche',
+  'history.csvNote': 'note',
+  'history.noteAdd': 'Note',
+  'history.noteEdit': 'Modifier la note',
+  'history.notePlaceholder': 'Note privée, gardée sur cet appareil',
+  'history.noteLabel': 'Note privée',
 } as const;

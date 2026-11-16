@@ -1,6 +1,6 @@
 // A lock's date must not move with the computer's time zone: these tests run under several.
 import { afterEach, describe, expect, it } from 'vitest';
-import { addDays, confirmWord, lockFeeRate, lockScanStart, runLockScan, type LockScanProgress, dateOfLockTime, isHeld, localToday, lockDateError, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, shortcutDate, unlockLocal, unlockUtc, utcToday } from './btcLock';
+import { addDays, confirmWord, lockElapsed, lockFeeRate, lockStartMs, lockScanStart, runLockScan, type LockScanProgress, dateOfLockTime, isHeld, localToday, lockDateError, lockTimeLeft, lockTimeOf, maxLockDate, minLockDate, shortcutDate, unlockLocal, unlockUtc, utcToday, lockTimeline } from './btcLock';
 
 const ZONES = ['UTC', 'Europe/Paris', 'America/Los_Angeles', 'Asia/Tokyo', 'Pacific/Auckland', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'];
 const original = process.env.TZ;
@@ -12,6 +12,42 @@ function inZone(zone: string) {
 afterEach(() => {
   if (original === undefined) delete process.env.TZ;
   else process.env.TZ = original;
+});
+
+describe('the timeline', () => {
+  const now = 1_800_000_000;
+  const day = 86_400;
+
+  it('puts the last date at the end and a nearer one before it', () => {
+    const { marks } = lockTimeline([{ t: now + 100 * day, sats: 1 }, { t: now + 25 * day, sats: 2 }], null, now);
+    expect(marks.map((m) => Math.round(m.pos))).toEqual([50, 100]);
+  });
+
+  it('gathers what can be withdrawn at the start of the line', () => {
+    const { marks, today } = lockTimeline([{ t: now - 5 * day, sats: 1 }, { t: now - day, sats: 2 }, { t: now + 30 * day, sats: 3 }], null, now);
+    expect(marks[0]).toMatchObject({ past: true, sats: 3, pos: 0, labeled: true });
+    expect(today).toBe(false);
+  });
+
+  it('adds the date being chosen to one that already exists', () => {
+    const { marks } = lockTimeline([{ t: now + 30 * day, sats: 5 }], { t: now + 30 * day, sats: 2 }, now);
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({ sats: 7, draft: true });
+  });
+
+  it('dates too close share one label, and the one being chosen keeps it', () => {
+    const far = { t: now + 1000 * day, sats: 1 };
+    const a = { t: now + 400 * day, sats: 1 };
+    const b = { t: now + 402 * day, sats: 1 };
+    expect(lockTimeline([far, a, b], null, now).marks.map((m) => m.labeled)).toEqual([false, true, true]);
+    expect(lockTimeline([far, b], a, now).marks.map((m) => m.labeled)).toEqual([true, false, true]);
+  });
+
+  it('gives up "today" before anything else', () => {
+    expect(lockTimeline([{ t: now + 365 * day, sats: 1 }], null, now).today).toBe(true);
+    expect(lockTimeline([{ t: now + 2000 * day, sats: 1 }], { t: now + day, sats: 1 }, now).today).toBe(false);
+    expect(lockTimeline([], null, now).today).toBe(true);
+  });
 });
 
 describe('the date never moves', () => {
@@ -188,5 +224,24 @@ describe('words and figures', () => {
     expect(lockTimeLeft(3_660, u)).toBe('1 h 1 min');
     expect(lockTimeLeft(30, u)).toBe('1 min');
     expect(lockTimeLeft(0, u)).toBe('0 min');
+  });
+});
+
+describe('when a lock started', () => {
+  it('prefers the funding block time and falls back to the history', () => {
+    expect(lockStartMs(1_800_000_000, [1_700_000_000_000])).toBe(1_800_000_000_000);
+    expect(lockStartMs(null, [1_800_000_500_000, 1_800_000_100_000])).toBe(1_800_000_100_000);
+    expect(lockStartMs(undefined, [])).toBeNull();
+    expect(lockStartMs(0, [Number.NaN])).toBeNull();
+  });
+
+  it('gives the elapsed part of the ring, clamped', () => {
+    const start = 1_800_000_000_000;
+    const t = 1_800_000_000 + 100 * 86_400;
+    expect(lockElapsed(start, t, start + 25 * 86_400_000)).toBeCloseTo(0.25);
+    expect(lockElapsed(start, t, start)).toBe(0.02);
+    expect(lockElapsed(start, t, start + 200 * 86_400_000)).toBe(0.98);
+    expect(lockElapsed(null, t, start)).toBeNull();
+    expect(lockElapsed(t * 1000 + 1, t, start)).toBeNull();
   });
 });

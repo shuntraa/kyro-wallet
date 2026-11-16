@@ -18,6 +18,7 @@ const DEMO_SWAP_FEES: SwapFeeConfig = {
 };
 import { torStore } from './tor';
 import { settingsPayload } from '../lib/settingsPayload';
+import { setBtcUnit } from '../lib/format';
 import { setLanguagePreference, setSystemLanguage, t } from '../i18n';
 
 /** Accounts without the chains hidden in this release (`HIDDEN_FAMILIES`). */
@@ -28,6 +29,20 @@ function visibleAccounts<T extends object>(acc: T): T {
 }
 
 export type SettingsSection = 'security' | 'privacy' | 'alerts' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts' | 'backup';
+
+/**
+ * Demo only (never in the desktop app): `?screen=send` opens a screen directly, `?screen=asset&id=btc`
+ * an asset page, `?screen=staking&chain=sol` a staking page, so every screen can be reviewed in a browser.
+ */
+function demoStartRoute(): Route | null {
+  if (!isDemoMode() || typeof window === 'undefined') return null;
+  const q = new URLSearchParams(window.location.search);
+  const name = q.get('screen');
+  const simple = ['portfolio', 'assets', 'send', 'receive', 'swap', 'tidy', 'btcLocks', 'history', 'staking', 'settings'] as const;
+  if (name === 'asset') return { name: 'asset', id: q.get('id') ?? 'btc' };
+  if (name === 'staking' && q.get('chain')) return { name: 'staking', chain: q.get('chain') as StakeChain };
+  return simple.find((x) => x === name) ? ({ name } as Route) : null;
+}
 
 export type Route =
   | { name: 'portfolio' }
@@ -157,6 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [fatal, setFatal] = useState<string | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // Display unit of Bitcoin amounts, read by fmtCrypto during this render.
+  setBtcUnit(settings.btcUnit);
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [vaultAccounts, setVaultAccounts] = useState<Accounts | null>(null);
   const [vaultLists, setVaultLists] = useState<VaultAccountLists | null>(null);
@@ -166,7 +183,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [watchAddresses, setWatchAddresses] = useState<WatchAddress[]>([]);
   const [wallets, setWallets] = useState<WalletsInfo | null>(null);
   const [activeAccountId, setActiveAccountId] = useState<string>('vault');
-  const [history, setHistory] = useState<Route[]>([{ name: 'portfolio' }]);
+  const [history, setHistory] = useState<Route[]>(() => [demoStartRoute() ?? { name: 'portfolio' }]);
   const [hideBalances, setHideBalances] = useState(false);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -245,7 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelection(readJson<Partial<Record<AccountChain, number>>>(scoped(`accountSelection.${acc.network}`), {}));
     setActiveAccountId((prev) => (prev === 'vault' || known(prev) ? prev : 'vault'));
     setHideBalances(settingsRef.current.hideBalancesOnStart);
-    setHistory([{ name: 'portfolio' }]);
+    setHistory([demoStartRoute() ?? { name: 'portfolio' }]);
     setPhase('ready');
   }, [toLocked]);
 

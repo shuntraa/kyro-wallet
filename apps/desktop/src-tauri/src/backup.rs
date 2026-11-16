@@ -35,6 +35,9 @@ const MAX_PRICE_ALERTS: usize = 50;
 const MAX_LABELS: usize = 5_000;
 const MAX_NAME: usize = 200;
 const MAX_ADDRESS: usize = 200;
+const MAX_NOTES: usize = 5_000;
+/// Characters of a private transaction note (the interface keeps the same limit).
+const MAX_NOTE: usize = 200;
 
 fn invalid(what: &str) -> AppError {
     AppError::InvalidInput(format!("backup file: {what}"))
@@ -88,6 +91,19 @@ pub struct BackupAlerts {
     prices: Vec<BackupPriceAlert>,
 }
 
+/// A private note on one transaction: written on this device, never sent anywhere else.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupNote {
+    /// `mainnet` or `testnet`.
+    network: String,
+    /// Registry key of the chain (`bitcoin`, `ethereum`…).
+    chain: String,
+    /// Transaction id or hash.
+    id: String,
+    text: String,
+}
+
 /// What lives in the interface's storage; the interface also merges it back.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -95,6 +111,10 @@ pub struct LocalData {
     contacts: Vec<BackupContact>,
     favorites: Vec<String>,
     alerts: BackupAlerts,
+    /// Absent from older files, and left out when empty so that an older Kyro still reads the
+    /// file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    notes: Vec<BackupNote>,
 }
 
 impl LocalData {
@@ -118,6 +138,23 @@ impl LocalData {
         }
         if !self.favorites.iter().all(|f| coin_id_ok(f)) {
             return Err(invalid("invalid favorite"));
+        }
+        if self.notes.len() > MAX_NOTES {
+            return Err(invalid("too many entries"));
+        }
+        for n in &self.notes {
+            let network_ok = n.network == "mainnet" || n.network == "testnet";
+            let chain_ok = !n.chain.is_empty()
+                && n.chain.len() <= 64
+                && n.chain
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+            let id_ok = !n.id.is_empty()
+                && n.id.len() <= MAX_ADDRESS
+                && n.id.bytes().all(|b| b.is_ascii_graphic());
+            if !network_ok || !chain_ok || !id_ok || !clean_text(&n.text, MAX_NOTE) {
+                return Err(invalid("invalid note"));
+            }
         }
         for a in &self.alerts.prices {
             if !coin_id_ok(&a.coin_id)
@@ -740,6 +777,7 @@ mod tests {
                         currency: "USD".into(),
                     }],
                 },
+                notes: Vec::new(),
             },
             locks: Vec::new(),
         }
@@ -767,6 +805,61 @@ mod tests {
         assert_eq!(parsed.locks, c.locks);
 
         c.locks = vec![lock_record(1_804_982_401)];
+        assert!(BackupContent::parse(&serde_json::to_vec(&c).unwrap()).is_err());
+    }
+
+    fn note(text: &str) -> BackupNote {
+        BackupNote {
+            network: "mainnet".into(),
+            chain: "bitcoin".into(),
+            id: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b".into(),
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn notes_travel_and_older_files_still_open() {
+        let plain = serde_json::to_vec(&sample()).unwrap();
+        assert!(!String::from_utf8_lossy(&plain).contains("notes"));
+        assert_eq!(BackupContent::parse(&plain).unwrap(), sample());
+
+        let mut c = sample();
+        c.local.notes = vec![note("Loyer de mars")];
+        let json = serde_json::to_vec(&c).unwrap();
+        let text = seal_backup(&json, "a long password", KdfParams::minimum()).unwrap();
+        assert!(!text.contains("Loyer"));
+        let plain = open_backup(&text, "a long password").unwrap();
+        assert_eq!(
+            BackupContent::parse(&plain).unwrap().local.notes,
+            c.local.notes
+        );
+
+        let bad = [
+            BackupNote {
+                network: "regtest".into(),
+                ..note("x")
+            },
+            BackupNote {
+                chain: "Bitcoin".into(),
+                ..note("x")
+            },
+            BackupNote {
+                id: "with space".into(),
+                ..note("x")
+            },
+            note(""),
+            note("a\nb"),
+            note("a\u{202e}b"),
+            note(&"x".repeat(MAX_NOTE + 1)),
+        ];
+        for n in bad {
+            let mut c = sample();
+            c.local.notes = vec![n.clone()];
+            let json = serde_json::to_vec(&c).unwrap();
+            assert!(BackupContent::parse(&json).is_err(), "{n:?}");
+        }
+        let mut c = sample();
+        c.local.notes = vec![note("ok"); MAX_NOTES + 1];
         assert!(BackupContent::parse(&serde_json::to_vec(&c).unwrap()).is_err());
     }
 

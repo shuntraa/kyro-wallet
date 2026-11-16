@@ -2,7 +2,7 @@
 // Réglages › Sécurité: new password for the wallet in use. Rust re-encrypts its vault, checks the
 // new file, swaps it in, then locks: the next unlock proves the new password.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { call, toIpcError } from '@kyro/shared';
 import { useApp } from '../../state/app';
 import { PasswordField } from '../../components/kit';
@@ -12,7 +12,8 @@ import { useT } from '../../i18n';
 
 const MIN_LENGTH = 10;
 
-export function ChangePassword() {
+/** `trigger` replaces the default button (the Settings row « Mot de passe · Changer »). */
+export function ChangePassword({ trigger }: { trigger?: (open: () => void) => ReactNode } = {}) {
   const { enterVault, walletName, wallets } = useApp();
   const { t } = useT();
   const [open, setOpen] = useState(false);
@@ -49,9 +50,13 @@ export function ChangePassword() {
   };
   return (
     <>
-      <Button variant="outline" size="md" onClick={() => setOpen(true)}>
-        {t('common.password')}
-      </Button>
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : (
+        <Button variant="outline" size="md" onClick={() => setOpen(true)}>
+          {t('common.password')}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : !busy && close())} title={t('wallets.pwTitle')}>
         <p className="m-0 text-[13px] leading-[1.55] text-text2">{(wallets?.wallets.length ?? 1) > 1 ? t('wallets.pwIntroNamed', { name: walletName }) : t('wallets.pwIntro')}</p>
         <PasswordField id="pw-current" label={t('wallets.pwCurrent')} value={current} onChange={setCurrent} autoFocus wrong={wrong} />

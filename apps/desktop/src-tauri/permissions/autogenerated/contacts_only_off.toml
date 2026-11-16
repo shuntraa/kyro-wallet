@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-contacts-only-off"
+description = "Enables the contacts_only_off command without any pre-configured scope."
+commands.allow = ["contacts_only_off"]
+
+[[permission]]
+identifier = "deny-contacts-only-off"
+description = "Denies the contacts_only_off command without any pre-configured scope."
+commands.deny = ["contacts_only_off"]

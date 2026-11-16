@@ -21,7 +21,7 @@ const NO_DRAG = 'button, input, textarea, select, a, label, [role="button"], [ro
 // Tauri 2's data-tauri-drag-region only reacts when the clicked element itself carries the
 // attribute, so text spans and untagged columns were dead zones. One handler on the header
 // covers every non-interactive descendant: drag on press, maximize/restore on double-click.
-function onBarMouseDown(e: MouseEvent<HTMLElement>) {
+export function onBarMouseDown(e: MouseEvent<HTMLElement>) {
   if (e.button !== 0 || !isTauri()) return;
   // React bubbles portal events (account menu) up here; only the bar's own DOM counts.
   if (!(e.target instanceof Element) || !e.currentTarget.contains(e.target) || e.target.closest(NO_DRAG)) return;
@@ -104,7 +104,7 @@ function Slash() {
 }
 
 
-function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
+export function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
   const { t } = useT();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);

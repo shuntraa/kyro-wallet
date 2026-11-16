@@ -46,6 +46,7 @@ mod commands_watch;
 mod commands_xmr;
 mod commands_xrp;
 mod commands_zcash;
+mod confirm_window;
 mod core_rpc;
 mod cosmos_backend;
 mod dialog_text;
@@ -130,16 +131,19 @@ pub fn run() {
             .extend(dir.filter_map(|e| Some(format!("/assets/{}", e.ok()?.file_name().to_str()?))));
     }
     phrase_window::remember_fonts(assets.iter().map(String::as_str));
+    confirm_window::remember_fonts(assets.iter().map(String::as_str));
     tauri::Builder::default()
         .plugin(nav_guard::init(dev_url))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .register_uri_scheme_protocol(phrase_window::SCHEME, phrase_window::protocol)
+        .register_uri_scheme_protocol(confirm_window::SCHEME, confirm_window::protocol)
         .setup(move |app| {
             // Off by default: `capabilities/default.json` does not grant the `ln_*` commands.
             #[cfg(feature = "lightning")]
             app.add_capability(include_str!("../lightning.capability.json"))?;
             app.manage(phrase_window::PhraseState::default());
+            app.manage(confirm_window::ConfirmState::default());
             app.manage(backup::BackupState::default());
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
@@ -222,6 +226,8 @@ pub fn run() {
             commands::net_fetch,
             commands_servers::settings_get,
             commands_servers::settings_set,
+            commands_servers::contacts_only_off,
+            commands_servers::vault_password_check,
             commands_servers::server_test,
             commands_servers::electrum_fetch_cert,
             commands_servers::btc_backend_info,

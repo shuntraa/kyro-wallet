@@ -1039,6 +1039,8 @@ pub async fn core_lock_view(
     Ok(AddrView {
         coins,
         tx_count: txs.max(known.len() as u64),
+        // `listunspent` gives no block time: the interface reads it from the history.
+        funded_at: None,
     })
 }
 

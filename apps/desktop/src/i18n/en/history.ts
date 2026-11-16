@@ -100,4 +100,11 @@ export const history: Record<keyof typeof fr, string> = {
   'history.speedUpConfirm': 'Speed up',
   'history.cancelConfirm': 'Cancel the payment',
   'history.cancelLabel': 'Cancelled payment',
+  'history.search': 'Search',
+  'history.noMatch': 'Nothing matches your search',
+  'history.csvNote': 'note',
+  'history.noteAdd': 'Note',
+  'history.noteEdit': 'Edit the note',
+  'history.notePlaceholder': 'Private note, kept on this device',
+  'history.noteLabel': 'Private note',
 };

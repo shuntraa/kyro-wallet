@@ -201,8 +201,8 @@ function Choice({ title, checked, onChange, children }: { title: string; checked
 
 function Review({ preview, plan, onCancel, onDone }: { preview: BackupPreview; plan: LocalPlan; onCancel: () => void; onDone: () => void }) {
   const { t } = useT();
-  const { saveSettings, refreshVaultAccounts, refreshWatchAddresses } = useApp();
-  const newCount = plan.addContacts.length + preview.watch.add.length + preview.labels.add.length + plan.addFavorites.length + plan.addAlerts.length + (plan.turnOnReceived ? 1 : 0);
+  const { saveSettings, refreshVaultAccounts, refreshWatchAddresses, settings: current } = useApp();
+  const newCount = plan.addContacts.length + preview.watch.add.length + preview.labels.add.length + plan.addFavorites.length + plan.addAlerts.length + (plan.turnOnReceived ? 1 : 0) + plan.addNotes.length;
   const renames = useMemo(
     () => [
       ...plan.renameContacts.map((r) => ({ id: `c${r.id}`, where: shortAddress(r.address), current: r.current, backup: r.backup })),
@@ -218,10 +218,24 @@ function Review({ preview, plan, onCancel, onDone }: { preview: BackupPreview; p
   const [error, setError] = useState<string | null>(null);
   const shown = (v: unknown): string => (v === true ? t('settings.backupOn') : v === false ? t('settings.backupOff') : String(v));
   const leftOut = plan.invalidContacts + plan.lookalikeContacts + preview.watch.refused;
+  // « Send only to my contacts »: new contacts from a file need the vault password too.
+  const needPassword = current.contactsOnly === true && add && plan.addContacts.length > 0;
+  const [password, setPassword] = useState('');
+  const [wrong, setWrong] = useState(0);
   const apply = async () => {
     setBusy(true);
     setError(null);
     try {
+      if (needPassword) {
+        try {
+          await call('vault_password_check', { password });
+        } catch (e) {
+          if (toIpcError(e).code !== 'WRONG_PASSWORD') throw e;
+          setWrong((n) => n + 1);
+          setBusy(false);
+          return;
+        }
+      }
       const next: Settings = await call('backup_apply', { choices: { addWatch: add, addLabels: add, replaceNames, settings } });
       applyLocal(plan, { add, replaceNames });
       await Promise.all([refreshVaultAccounts(), refreshWatchAddresses()]);
@@ -242,6 +256,7 @@ function Review({ preview, plan, onCancel, onDone }: { preview: BackupPreview; p
           <Line label={t('settings.backupLabels')} value={preview.labels.add.length} />
           <Line label={t('settings.backupFavorites')} value={plan.addFavorites.length} />
           <Line label={t('settings.backupAlerts')} value={plan.addAlerts.length + (plan.turnOnReceived ? 1 : 0)} />
+          <Line label={t('settings.backupNotes')} value={plan.addNotes.length} />
         </Choice>
         {renames.length > 0 && (
           <Choice title={t('settings.backupReplaceNames', { n: renames.length })} checked={replaceNames} onChange={setReplaceNames}>
@@ -272,12 +287,18 @@ function Review({ preview, plan, onCancel, onDone }: { preview: BackupPreview; p
         )}
         {leftOut > 0 && <p className="m-0 text-[12px] leading-[1.5] text-faint">{t('settings.backupLeftOut', { n: leftOut })}</p>}
       </div>
+      {needPassword && (
+        <>
+          <p className="m-0 text-[12.5px] leading-[1.5] text-text2">{t('settings.contactsOnlyAddBody')}</p>
+          <PasswordField id="backup-vault-pw" value={password} onChange={setPassword} wrong={wrong} onEnter={() => void apply()} />
+        </>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel} disabled={busy}>
           {t('common.cancel')}
         </Button>
-        <Button variant="primary" disabled={busy || (!add && !replaceNames && !settings)} onClick={() => void apply()}>
+        <Button variant="primary" disabled={busy || (!add && !replaceNames && !settings) || (needPassword && !password)} onClick={() => void apply()}>
           {busy && <Spinner />} {t('settings.backupApply')}
         </Button>
       </div>

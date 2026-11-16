@@ -150,6 +150,15 @@ pub struct Settings {
     pub lock_before_sleep: bool,
     /// Start with Windows, hidden in the tray (the user's `Run` entry). Off by default.
     pub start_minimized: bool,
+    /// How the interface writes Bitcoin amounts. Display only: the native dialogs keep BTC.
+    #[serde(deserialize_with = "lenient")]
+    pub btc_unit: BtcUnit,
+    /// Holdings left out of the Portfolio and of « My assets » (still found by search).
+    #[serde(deserialize_with = "lenient")]
+    pub hide_small: HideSmall,
+    /// Send only to the address book. `settings_set` can turn it on, never off: that needs the
+    /// password (`contacts_only_off`).
+    pub contacts_only: bool,
     /// The vault's account lists (see `accounts.rs`).
     pub accounts: VaultAccounts,
     /// Account lists of the added wallets (`wallets.rs`), by wallet id.
@@ -175,6 +184,34 @@ impl Settings {
         }
         self.wallet_accounts.entry(id.to_owned()).or_default()
     }
+}
+
+/// `btc` (default) or `sats`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BtcUnit {
+    #[default]
+    Btc,
+    Sats,
+}
+
+/// `off` (default), `zero`, `under1` or `under10` (in the display currency).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HideSmall {
+    #[default]
+    Off,
+    Zero,
+    Under1,
+    Under10,
+}
+
+/// A value this version does not know (a newer file, a manual edit) falls back to the default.
+fn lenient<'de, D: serde::Deserializer<'de>, T: serde::de::DeserializeOwned + Default>(
+    d: D,
+) -> Result<T, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
 fn lenient_language<'de, D: serde::Deserializer<'de>>(
@@ -203,6 +240,9 @@ impl Default for Settings {
             lock_on_hide: true,
             lock_before_sleep: true,
             start_minimized: false,
+            btc_unit: BtcUnit::Btc,
+            hide_small: HideSmall::Off,
+            contacts_only: false,
             accounts: VaultAccounts::default(),
             wallet_accounts: BTreeMap::new(),
         }
@@ -305,6 +345,12 @@ impl Settings {
             s.api_keys.apply_patch(&p)?;
         }
         Ok(s)
+    }
+
+    /// `settings_set` never turns « send only to my contacts » off: only `contacts_only_off`,
+    /// after the password, does.
+    pub fn keep_contacts_only(&mut self, old: &Settings) {
+        self.contacts_only |= old.contacts_only;
     }
 
     pub fn save(&self, path: &Path) -> AppResult<()> {
@@ -643,6 +689,48 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn display_options_default_and_unknown_values_fall_back() {
+        let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
+        assert_eq!(
+            (s.btc_unit, s.hide_small, s.contacts_only),
+            (BtcUnit::Btc, HideSmall::Off, false)
+        );
+        let s: Settings = serde_json::from_str(
+            r#"{"currency":"USD","btcUnit":"sats","hideSmall":"under10","contactsOnly":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (s.btc_unit, s.hide_small, s.contacts_only),
+            (BtcUnit::Sats, HideSmall::Under10, true)
+        );
+        let s: Settings =
+            serde_json::from_str(r#"{"currency":"USD","btcUnit":"mbtc","hideSmall":5}"#).unwrap();
+        assert_eq!((s.btc_unit, s.hide_small), (BtcUnit::Btc, HideSmall::Off));
+        let ui = s.for_ui();
+        assert_eq!(
+            (&ui["btcUnit"], &ui["hideSmall"], &ui["contactsOnly"]),
+            (&"btc".into(), &"off".into(), &false.into())
+        );
+    }
+
+    #[test]
+    fn settings_set_cannot_turn_contacts_only_off() {
+        let on = Settings {
+            contacts_only: true,
+            ..Settings::default()
+        };
+        let mut next = Settings::default();
+        next.keep_contacts_only(&on);
+        assert!(next.contacts_only);
+        let mut next = on.clone();
+        next.keep_contacts_only(&Settings::default());
+        assert!(next.contacts_only, "turning it on stays possible");
+        let mut next = Settings::default();
+        next.keep_contacts_only(&Settings::default());
+        assert!(!next.contacts_only);
     }
 
     /// MOYENNE 3 + F5: a new vault never replaces an existing one; files are owner-only on Unix.

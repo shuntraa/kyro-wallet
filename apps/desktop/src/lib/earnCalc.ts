@@ -3,16 +3,16 @@
 // constant price, nothing more; the screen says so.
 
 import type { AssetDef } from '@kyro/chains';
-import { AAVE_MARKETS, earnRisk, rateIsApr, type EarnOption, type EarnRisk } from './earn';
+import { AAVE_MARKETS, earnRisk, rewardsWaitForClaim, type EarnOption, type EarnRisk } from './earn';
 
 export type CalcMonths = 1 | 12 | 60;
 
-/** An APY compounds over the period; an APR is simple interest. */
-export function projectedGain(amount: number, ratePct: number, months: number, apr: boolean): number {
+/** Rewards left in place earn too, so the gain compounds; simple is for those that stay aside. */
+export function projectedGain(amount: number, ratePct: number, months: number, simple: boolean): number {
   if (!(amount > 0) || !(ratePct > 0) || !(months > 0)) return 0;
   const rate = ratePct / 100;
   const years = months / 12;
-  return apr ? amount * rate * years : amount * (Math.pow(1 + rate, years) - 1);
+  return simple ? amount * rate * years : amount * (Math.pow(1 + rate, years) - 1);
 }
 
 export interface CurvePoint {
@@ -21,11 +21,11 @@ export interface CurvePoint {
 }
 
 /** Amount plus gain along the period, for the curve: by day over a month, else by month. */
-export function gainCurve(amount: number, ratePct: number, months: CalcMonths, apr: boolean): CurvePoint[] {
+export function gainCurve(amount: number, ratePct: number, months: CalcMonths, simple: boolean): CurvePoint[] {
   const steps = months === 1 ? 30 : months;
   return Array.from({ length: steps + 1 }, (_, i) => {
     const at = (months * i) / steps;
-    return { months: at, value: amount + projectedGain(amount, ratePct, at, apr) };
+    return { months: at, value: amount + projectedGain(amount, ratePct, at, simple) };
   });
 }
 
@@ -43,7 +43,7 @@ export function bestByRisk(options: EarnOption[], rateOf: (o: EarnOption) => num
     const rate = rateOf(option);
     const amount = amountOf(option);
     if (rate === null || !(amount > 0)) continue;
-    const gain = projectedGain(amount, rate, months, rateIsApr(option));
+    const gain = projectedGain(amount, rate, months, rewardsWaitForClaim(option));
     const risk = earnRisk(option);
     const best = out[risk];
     if (!best || gain > best.gain) out[risk] = { option, rate, amount, gain };

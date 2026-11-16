@@ -764,8 +764,8 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const dayStart = (offset: number) => (Math.floor(now() / 86_400_000) + offset) * 86_400;
   /** One lock running and one ready, so that the demo shows both. */
   const demoLocks: BtcLockView[] = [
-    { t: dayStart(90), day: dayStart(90) / 86_400, account: 0, address: demoLockInfo(dayStart(90), 0).address, amountSats: 2_500_000, status: 'locked', coins: 1, unconfirmedSats: 0, secsLeft: 90 * 86_400 - 5_000 },
-    { t: dayStart(-1), day: dayStart(-1) / 86_400, account: 0, address: demoLockInfo(dayStart(-1), 0).address, amountSats: 400_000, status: 'ready', coins: 2, unconfirmedSats: 30_000, secsLeft: 0 },
+    { t: dayStart(90), day: dayStart(90) / 86_400, account: 0, address: demoLockInfo(dayStart(90), 0).address, amountSats: 2_500_000, status: 'locked', coins: 1, unconfirmedSats: 0, secsLeft: 90 * 86_400 - 5_000, fundedAt: Math.floor(now() / 1000) - 4 * 86_400 - 9_000 },
+    { t: dayStart(-1), day: dayStart(-1) / 86_400, account: 0, address: demoLockInfo(dayStart(-1), 0).address, amountSats: 400_000, status: 'ready', coins: 2, unconfirmedSats: 30_000, secsLeft: 0, fundedAt: dayStart(-1) - 180 * 86_400 + 41_000 },
   ];
 
   let watchList: WatchAddress[] = [];
@@ -1030,10 +1030,20 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { ...settings.tor, ...(structuredClone(rest.tor) as Settings['tor']), enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
+      // settings.rs `keep_contacts_only`: turned off only by `contacts_only_off` (password).
+      const contactsOnly = settings.contactsOnly === true || rest.contactsOnly === true;
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { ...settings.tor, ...(structuredClone(rest.tor) as Settings['tor']), enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {}, contactsOnly };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();
+    },
+    contacts_only_off: (a) => {
+      checkPassword(a.password);
+      settings = { ...settings, contactsOnly: false };
+      return publicSettings();
+    },
+    vault_password_check: (a) => {
+      checkPassword(a.password);
     },
     // Demo: nothing to open (no system browser behind the mock).
     open_fees_page: () => undefined,
@@ -1164,7 +1174,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
         held.amountSats += Number(a.amountSats);
         held.coins += 1;
       } else {
-        demoLocks.push({ t: Number(a.t), day: Number(a.t) / 86_400, account, address: info.address, amountSats: Number(a.amountSats), status: 'confirming', coins: 1, unconfirmedSats: Number(a.amountSats), secsLeft: Math.max(0, Number(a.t) - now() / 1000) });
+        demoLocks.push({ t: Number(a.t), day: Number(a.t) / 86_400, account, address: info.address, amountSats: Number(a.amountSats), status: 'confirming', coins: 1, unconfirmedSats: Number(a.amountSats), secsLeft: Math.max(0, Number(a.t) - now() / 1000), fundedAt: null });
       }
       return out;
     },
@@ -1399,8 +1409,19 @@ function decodeSolMessageArg(m: unknown): Uint8Array {
   }
 }
 
+/** Demo only: `?vault=open` / `?vault=locked` start with a vault already created (screen reviews). */
+function demoVaultParam(): MockOptions {
+  try {
+    const v = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('vault') : null;
+    if (v === 'open' || v === 'locked') return { preset: { password: 'demo-password-1234', unlocked: v === 'open' } };
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
 let singleton: MockBackend | null = null;
 export function getMockBackend(): MockBackend {
-  singleton ??= createMockBackend();
+  singleton ??= createMockBackend(demoVaultParam());
   return singleton;
 }

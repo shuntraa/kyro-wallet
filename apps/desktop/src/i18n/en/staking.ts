@@ -32,6 +32,9 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.drepNoConfidence': 'Always no confidence',
 
   'staking.noSlashing': 'No slashing on this chain: your funds cannot be confiscated. But the rewards depend on the validator, pool or SR you choose.',
+  'staking.heroLabel': 'Staking · {chain}',
+  'staking.staked': 'Staked',
+  'staking.tronPowerLine': 'TRON Power voted {used} / {limit}',
   'staking.title': 'Staking',
   'staking.chain': 'Chain',
   'staking.overview': 'Overview',

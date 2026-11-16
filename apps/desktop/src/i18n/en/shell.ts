@@ -14,6 +14,7 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.searchSendTo': 'Send to {address}…',
   'shell.searchAddressHint': 'address',
   'shell.navigation': 'Navigation',
+  'shell.swap': 'Swap',
   'shell.lockVault': 'Lock the vault',
   'shell.minimize': 'Minimize',
   'shell.maximize': 'Maximize',

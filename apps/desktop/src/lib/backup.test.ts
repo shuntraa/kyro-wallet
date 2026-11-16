@@ -79,7 +79,7 @@ describe('merging', () => {
   it('importing twice adds nothing the second time', () => {
     const backup = local({ contacts: [{ name: 'Bob', address: B, family: 'evm', sends: 0 }], favorites: ['bitcoin'], alerts: { received: true, prices: [rule()] } });
     applyLocal(planLocal(backup, valid), { add: true, replaceNames: false });
-    expect(planLocal(backup, valid)).toEqual({ addContacts: [], renameContacts: [], invalidContacts: 0, lookalikeContacts: 0, addFavorites: [], addAlerts: [], turnOnReceived: false });
+    expect(planLocal(backup, valid)).toEqual({ addContacts: [], renameContacts: [], invalidContacts: 0, lookalikeContacts: 0, addFavorites: [], addAlerts: [], turnOnReceived: false, addNotes: [] });
   });
 
   it('leaves out invalid addresses and unknown networks', () => {

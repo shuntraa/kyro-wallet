@@ -43,8 +43,10 @@ import { AccountPicker } from '../components/AccountPicker';
 import { BestPrice } from '../components/BestPrice';
 import { BackLine, MissingFee, useSwapFee } from '../components/MissingFee';
 import { Dialog } from '../components/ui/dialog';
-import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
-import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
+import { Button, Notice, Spinner } from '../components/ui/primitives';
+import { IconCheck, IconChevronDown, IconSwap, IconWarn } from '../components/icons';
+import { BIG, Frost, GLASS_ROW, LABEL, Segmented as KSegmented, Switch as KSwitch, THIN, VaultRing, soft } from '../components/kyro';
+import { FitInput, InfoLine, coinColor } from '../components/CoinLight';
 import { t as tr, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
@@ -133,6 +135,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
   const [feeUnpaid, setFeeUnpaid] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [reviewed, setReviewed] = useState<Quote | null>(null);
+  const [slipOpen, setSlipOpen] = useState(false);
 
   useEffect(() => {
     if (!tokens.some((t) => t.id === sellId)) setSellId(tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
@@ -476,112 +479,155 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
   const multiAccount = (vaultLists?.[accountChainOf(chain)]?.length ?? 0) > 1;
   const rate = chosen && sellAmount ? swapRate(sellAmount, sell.decimals, chosen.buyAmount, buy.decimals) : null;
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
-      <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
-        <div className="flex items-center gap-4">
-          <h1 className="screen-title">{t('swap.title')}</h1>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <span className="eyebrow">{t('swap.slippageMax')}</span>
-          <Segmented<Slip>
-            label={t('swap.slippage')}
-            value={slip}
-            onChange={setSlip}
-            options={[
-              { value: 10, label: fmtPct(0.1, { sign: false, decimals: 1 }) },
-              { value: 50, label: fmtPct(0.5, { sign: false, decimals: 1 }) },
-              { value: 100, label: fmtPct(1, { sign: false, decimals: 0 }) },
-              { value: 'custom', label: t('swap.slippageCustom') },
-            ]}
-          />
-          {slip === 'custom' && (
-            <label className="pop-in flex h-9 items-center gap-1 rounded-ctl border border-line-2 bg-bg px-2.5 focus-within:border-ice-line">
-              <span className="sr-only">{t('swap.slippageCustomLabel')}</span>
-              <input value={slipCustom} inputMode="decimal" onChange={(e) => setSlipCustom(sanitizeDecimalInput(e.target.value, 2))} className="w-10 bg-transparent text-right text-[13px]" />
-              <span className="text-[12px] text-mute">%</span>
-            </label>
-          )}
-        </div>
-      </header>
-      {slip === 'custom' && !slipValid && <span className="-mt-2 text-right text-[12px] text-down">{t('swap.slippageRange')}</span>}
-      {slip === 'custom' && slipValid && slippageBps > 300 && <span className="-mt-2 text-right text-[12px] text-warn">{t('swap.slippageHigh')}</span>}
+  const sellColor = coinColor(sell);
+  const buyColor = coinColor(buy);
+  const W = 1040;
+  const S = 210;
+  const cy = S / 2;
+  const lx = W * 0.27;
+  const rx = W * 0.73;
+  const x0 = lx + 44;
+  const x1 = rx - S / 2 - 12;
+  const gid = `swapline-${sell.id}-${buy.id}`.replace(/[^a-zA-Z0-9-]/g, '_');
+  const slipLabel = slip === 'custom' ? (slipValid ? fmtPct(slippageBps / 100, { sign: false, decimals: 1 }) : '—') : fmtPct(slip / 100, { sign: false, decimals: slip === 100 ? 0 : 1 });
+  const invert = () => {
+    if (cross) setChainKey(buy.chainKey);
+    setSellId(buy.id);
+    setBuyId(sell.id);
+    setAmountStr('');
+  };
 
-      <div className="flex min-h-0 flex-1 gap-5">
-        <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card p-[22px] scroll-thin">
-          <div className="relative flex flex-col gap-2">
-            <TokenPanel
-              label={t('swap.youGive')}
-              right={
-                <>
-                  {t('swap.balance', { amount: fmtCrypto(balance, sell.decimals) })} ·{' '}
-                  <button type="button" className="font-semibold text-ice" onClick={() => setAmountStr(toInputDecimal(sell.kind === 'native' ? (balance * 97n) / 100n : balance, sell.decimals))}>
-                    {t('swap.maxButton')}
-                  </button>
-                </>
-              }
-              amount={
-                <input
-                  aria-label={t('swap.amountGiven')}
-                  value={amountStr}
-                  inputMode="decimal"
-                  placeholder="0"
-                  onChange={(e) => setAmountStr(sanitizeDecimalInput(e.target.value, sell.decimals))}
-                  className={cn('figure w-full min-w-0 bg-transparent text-[42px] tracking-[-0.035em]', over && 'text-down')}
-                />
-              }
-              sub={sellAmount && sellPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(sellAmount, sell.decimals) * sellPrice, cur)}` : over ? t('swap.insufficient') : ' '}
-              note={multiAccount ? <AccountPicker family={accountChainOf(chain)} className="mt-1" /> : undefined}
-              token={<TokenButton title={t('swap.pickGive')} asset={sell} items={sellItems} onSelect={selectSell} />}
-            />
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden scroll-thin">
+      <div className="relative flex flex-col items-center pb-10">
+        <div className="relative mx-auto mt-9 shrink-0" style={{ width: W, height: S + 228 }}>
+          <svg className="absolute inset-0" width={W} height={S} aria-hidden="true">
+            <defs>
+              <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={x0} x2={x1} y1={cy} y2={cy}>
+                <stop offset="0" stopColor={sellColor} />
+                <stop offset="1" stopColor={buyColor} />
+              </linearGradient>
+            </defs>
+            <path d={`M${x0},${cy} L${x1},${cy}`} stroke={`url(#${gid})`} strokeWidth="1.5" style={{ filter: `drop-shadow(0 0 6px ${soft(buyColor, 0.9)})` }} />
+            <rect x={x1 - 3} y={cy - 3} width="6" height="6" fill={buyColor} />
+          </svg>
+          <div key={sell.id} className="pop-in absolute" style={{ left: lx - S / 2, top: 0 }}>
+            <VaultRing size={S} segs={[{ color: sellColor, part: 1 }]} halo={sellColor}>
+              <CoinIcon asset={sell} size={56} />
+            </VaultRing>
+          </div>
+          <div key={buy.id} className="pop-in absolute" style={{ left: rx - S / 2, top: 0 }}>
+            <VaultRing size={S} segs={[{ color: buyColor, part: 1 }]} halo={buyColor}>
+              <CoinIcon asset={buy} size={56} />
+            </VaultRing>
+          </div>
+          <div className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: W / 2, top: cy }}>
+            {rate !== null && <span className="figure absolute -top-8 text-[12.5px] whitespace-nowrap text-mute">{t('swap.rateValue', { sell: sell.symbol, rate: fmtNumber(rate, rate >= 1 ? 4 : 8), buy: buy.symbol })}</span>}
             <button
               type="button"
               aria-label={t('swap.swapDirection')}
               disabled={!canInvert}
               title={canInvert ? undefined : t('swap.noSwapFrom', { chain: buyChain?.label ?? t('swap.thisNetwork') })}
-              onClick={() => {
-                if (cross) setChainKey(buy.chainKey);
-                setSellId(buy.id);
-                setBuyId(sell.id);
-                setAmountStr('');
-              }}
-              className="group absolute top-1/2 left-1/2 z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-ctl border border-line-3 bg-card text-text shadow-[0_0_0_4px_var(--color-card)] transition-colors hover:border-ice-line hover:bg-raised active:scale-95"
+              onClick={invert}
+              className={cn('press grid size-11 place-items-center rounded-full text-text transition-colors hover:bg-white/[.1] disabled:cursor-not-allowed disabled:opacity-40', GLASS_ROW)}
             >
-              <IconDown size={15} />
+              <IconSwap size={17} sw={2.1} />
             </button>
-            <TokenPanel
-              label={cross ? t('swap.youReceiveOnEstimated', { chain: buyChain?.label ?? buy.chainKey }) : t('swap.youReceiveEstimated')}
-              right={<>{t('swap.balance', { amount: fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals) })}</>}
-              amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
-              sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}` : ' '}
-              note={<FeesIncludedLink />}
-              token={<TokenButton title={t('swap.pickReceive')} asset={buy} items={buyItems} onSelect={setBuyId} />}
-            />
           </div>
 
+          <div className="absolute flex w-[320px] -translate-x-1/2 flex-col items-center" style={{ left: lx, top: S + 22 }}>
+            <label htmlFor="swap-amount" className={LABEL}>
+              {t('swap.giveLabel')}
+            </label>
+            <span className="mt-3 flex max-w-full items-baseline justify-center text-[40px] leading-none" style={{ ...THIN, ...(over ? { color: 'var(--color-down)' } : BIG(sellColor)) }}>
+              <FitInput id="swap-amount" aria-label={t('swap.amountGiven')} value={amountStr} inputMode="decimal" onChange={(e) => setAmountStr(sanitizeDecimalInput(e.target.value, sell.decimals))} className="text-center" />
+              <span className="ml-2.5 shrink-0 text-[18px]">{sell.symbol}</span>
+            </span>
+            <span className={cn('figure mt-2.5 text-[13px]', over ? 'text-down' : 'text-text2')}>{over ? t('swap.insufficient') : `≈ ${fmtFiat(sellAmount && sellPrice !== undefined ? unitsToNumber(sellAmount, sell.decimals) * sellPrice : 0, cur)}`}</span>
+            <CoinChooser className="mt-4" title={t('swap.pickGive')} asset={sell} chain={t('swap.networkOf', { chain: chain.name })} items={sellItems} onSelect={selectSell} />
+            <span className="figure mt-2.5 text-[11.5px] text-faint">
+              {t('swap.available', { amount: fmtCrypto(balance, sell.decimals, sell.symbol) })}
+              <button type="button" className="ml-2 font-semibold tracking-[0.08em] text-mute uppercase hover:text-text" onClick={() => setAmountStr(toInputDecimal(sell.kind === 'native' ? (balance * 97n) / 100n : balance, sell.decimals))}>
+                {t('swap.maxButton')}
+              </button>
+            </span>
+            {multiAccount && <AccountPicker family={accountChainOf(chain)} className="mt-2" />}
+          </div>
+          <div className="absolute flex w-[320px] -translate-x-1/2 flex-col items-center" style={{ left: rx, top: S + 22 }}>
+            <span className={LABEL}>{cross ? t('swap.getLabelOn', { chain: buyChain?.label ?? buy.chainKey }) : t('swap.getLabel')}</span>
+            <span key={buyAmount ? String(buyAmount) : 'none'} className="fade-in mt-3 flex max-w-full items-baseline justify-center text-[40px] leading-none" style={{ ...THIN, ...BIG(buyColor), ...(buyAmount ? {} : { opacity: 0.4 }) }}>
+              <span className="truncate">{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>
+              <span className="ml-2.5 shrink-0 text-[18px]">{buy.symbol}</span>
+            </span>
+            <span className="figure mt-2.5 text-[13px] text-text2">≈ {fmtFiat(buyAmount && buyPrice !== undefined ? unitsToNumber(buyAmount, buy.decimals) * buyPrice : 0, cur)}</span>
+            <CoinChooser className="mt-4" title={t('swap.pickReceive')} asset={buy} chain={t('swap.networkOf', { chain: buyChain?.name ?? buy.chainKey })} items={buyItems} onSelect={setBuyId} />
+            <span className="figure mt-2.5 text-[11.5px] text-faint">{chosen ? t('swap.minGuaranteedValue', { amount: fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6) }) : t('swap.balance', { amount: fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals, buy.symbol) })}</span>
+          </div>
+        </div>
+
+        <div className="w-[760px] max-w-[calc(100%-64px)]">
+          <BestPrice
+            quotes={params ? list : []}
+            sell={sell}
+            buy={buy}
+            sellChain={chain.label}
+            buyChain={buyChain?.label ?? buy.chainKey}
+            currency={cur}
+            fees={chosen ? (chosen.gasFeeFiat !== null ? fmtFiat(chosen.gasFeeFiat, cur) : t('swap.feesAtReviewShort')) : undefined}
+            tail={{
+              label: t('swap.slipShort'),
+              value: (
+                <button type="button" aria-expanded={slipOpen} aria-label={t('swap.slippage')} onClick={() => setSlipOpen((o) => !o)} className="flex items-center gap-1.5 hover:text-ice-text">
+                  {slipLabel}
+                  <IconChevronDown size={12} className={cn('text-faint transition-transform duration-150', slipOpen && 'rotate-180')} />
+                </button>
+              ),
+            }}
+            empty={!params ? t('swap.enterAmount') : quotes.loading ? <span className="flex items-center gap-2"><Spinner /> {t('swap.refreshing')}</span> : quotes.data && list.length === 0 && !quotesTorBlocked ? (network === 'testnet' ? t('swap.noPriceTestnet') : t('swap.noPrice')) : ''}
+          />
           {chosen && (
-            <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
-              {rate !== null && (
-                <div className="flex h-9 items-center justify-between border-b border-line">
-                  <span className="text-mute">{t('swap.rate')}</span>
-                  <span className="font-medium">{t('swap.rateValue', { sell: sell.symbol, rate: fmtNumber(rate, rate >= 1 ? 4 : 8), buy: buy.symbol })}</span>
-                </div>
+            <span className="mt-1 flex justify-center">
+              <FeesIncludedLink />
+            </span>
+          )}
+          {slipOpen && (
+            <div className="pop-in mt-3 flex flex-wrap items-center justify-center gap-3">
+              <span className={LABEL}>{t('swap.slippage')}</span>
+              <KSegmented<string>
+                label={t('swap.slippage')}
+                value={String(slip)}
+                onChange={(v) => setSlip(v === 'custom' ? 'custom' : (Number(v) as Slip))}
+                items={[
+                  { id: '10', label: fmtPct(0.1, { sign: false, decimals: 1 }) },
+                  { id: '50', label: fmtPct(0.5, { sign: false, decimals: 1 }) },
+                  { id: '100', label: fmtPct(1, { sign: false, decimals: 0 }) },
+                  { id: 'custom', label: t('swap.slippageCustom') },
+                ]}
+              />
+              {slip === 'custom' && (
+                <label className={cn('pop-in flex h-8 items-center gap-1 rounded-[10px] px-2.5', GLASS_ROW)}>
+                  <span className="sr-only">{t('swap.slippageCustomLabel')}</span>
+                  <input value={slipCustom} inputMode="decimal" onChange={(e) => setSlipCustom(sanitizeDecimalInput(e.target.value, 2))} className="w-10 bg-transparent text-right text-[13px]" />
+                  <span className="text-[12px] text-mute">%</span>
+                </label>
               )}
-              <div className="flex h-9 items-center justify-between border-b border-line">
-                <span className="text-mute">{t('swap.youReceive')}</span>
-                <span className="font-medium">≈ {fmtCrypto(chosen.buyAmount, buy.decimals, buy.symbol, 6)}</span>
-              </div>
-              <div className="flex h-9 items-center justify-between">
-                <span className="text-mute">{t('swap.networkFees')}</span>
-                <span className="text-text2">{chosen.gasFeeFiat !== null ? `≈ ${fmtFiat(chosen.gasFeeFiat, cur)}` : t('swap.networkFeesAtReview')}</span>
-              </div>
             </div>
           )}
+          {slip === 'custom' && !slipValid && <span className="mt-2 block text-center text-[12px] text-down">{t('swap.slippageRange')}</span>}
+          {slip === 'custom' && slipValid && slippageBps > 300 && <span className="mt-2 block text-center text-[12px] text-warn">{t('swap.slippageHigh')}</span>}
+        </div>
+
+        <div className="mt-4 flex w-full max-w-[560px] flex-col gap-3">
+          {params && quotes.loading && !quotes.data && <div className="skeleton h-[4px] rounded-full" />}
+          {cross && !recipient && <InfoLine tone="warn">{t('swap.noAccountToReceive', { chain: buyChain?.label ?? '' })}</InfoLine>}
+          {list.length === 0 && feeReasons.map((r) => <InfoLine key={r} tone="warn">{r}</InfoLine>)}
+          {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="justify-center" />}
+          {quotes.error && !quotesTorBlocked && <InfoLine tone="error">{quotes.error.message}</InfoLine>}
 
           {chosen && needsAllowanceCheck && (
-            <div className="fade-in flex flex-col gap-2.5 rounded-box border border-line border-l-2 border-l-ice/60 bg-bg px-4 py-3.5">
+            <div className={cn('fade-in flex flex-col gap-2.5 rounded-[16px] px-4 py-3.5', GLASS_ROW)}>
               <div className="flex items-center justify-between">
-                <span className="text-[14px] font-medium">{t('swap.approvalOf', { symbol: sell.symbol })}</span>
+                <span className="text-[13.5px] font-semibold">{t('swap.approvalOf', { symbol: sell.symbol })}</span>
                 <span className="text-[12px] text-mute">{needsApproval ? t('swap.step1of2') : allowance.loading ? t('swap.checking') : t('swap.alreadyApproved')}</span>
               </div>
               <div className="flex items-center justify-between text-[13px]">
@@ -591,16 +637,15 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
               {needsApproval && (
                 <div className="flex items-center justify-between text-[13px]">
                   <span className="text-text2">{t('swap.approveUnlimited')}</span>
-                  <Switch label={t('swap.approveUnlimited')} checked={unlimited} onCheckedChange={(v) => (v ? setConfirmUnlimited(true) : setUnlimited(false))} />
+                  <KSwitch label={t('swap.approveUnlimited')} on={unlimited} onChange={(v) => (v ? setConfirmUnlimited(true) : setUnlimited(false))} />
                 </div>
               )}
             </div>
           )}
 
           {chosen && sell.kind !== 'native' && sellFee !== null && <MissingFee chainKey={chainKey} need={sellFee} />}
-          <div className="flex-1" />
           {chosen && chosen.tx.kind === 'evm' && (
-            <div className="flex items-center gap-2 text-[13px]">
+            <div className="flex items-center justify-center gap-2 text-[13px]">
               {needsApproval ? (
                 <span className="text-mute">{t('swap.simAfterApproval')}</span>
               ) : sim.loading ? (
@@ -617,46 +662,26 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
             </div>
           )}
           {phase !== 'idle' && phase !== 'done' && (
-            <span className="flex items-center gap-2 text-[13px] text-ice-text2">
+            <span className="flex items-center justify-center gap-2 text-[13px] text-ice-text2">
               <Spinner /> {phaseLabel[phase]}
             </span>
           )}
-          {execError && <Notice tone="error">{execError}</Notice>}
-          {returnTo && (
-            <BackLine returnTo={returnTo} symbol={buy.symbol} state={phase !== 'done' ? 'before' : waitingArrival ? 'waiting' : 'arrived'} />
-          )}
+          {execError && <InfoLine tone="error">{execError}</InfoLine>}
+          {returnTo && <BackLine returnTo={returnTo} symbol={buy.symbol} state={phase !== 'done' ? 'before' : waitingArrival ? 'waiting' : 'arrived'} />}
           {phase === 'done' && doneId && (
-            <Notice tone="success">
+            <InfoLine tone="success">
               {rt('swap.broadcast', {}, { id: <span className="font-mono">{shortAddress(doneId, 10, 8)}</span> })}{' '}
               <button type="button" className="font-semibold underline" onClick={() => navigate({ name: 'history' })}>
                 {t('swap.viewHistory')}
               </button>
-            </Notice>
+            </InfoLine>
           )}
-          {phase === 'done' && feeUnpaid && <Notice tone="warn">{t('swap.feeUnpaid')}</Notice>}
-          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter) || (chosen.tx.kind === 'deposit' && !sourceAdapter)} onClick={openConfirm}>
-            {t('swap.review')}
-          </Button>
-        </section>
-
-        <div className="rise flex w-[400px] shrink-0 flex-col gap-4">
-          <section className="flex flex-col gap-2.5 rounded-panel border border-line bg-card p-[18px]">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[15px] font-medium tracking-[-0.01em]">{t('swap.bestPrice')}</span>
-              <span className="text-[12px] text-faint">{quotes.loading ? t('swap.refreshing') : ''}</span>
-            </div>
-            {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">{t('swap.enterAmount')}</p>}
-            {params && quotes.loading && !quotes.data && <div className="skeleton h-[62px] rounded-box" />}
-            {params && <BestPrice quotes={list} sell={sell} buy={buy} sellChain={chain.label} buyChain={buyChain?.label ?? buy.chainKey} currency={cur} />}
-            {params && quotes.data && list.length === 0 && !quotesTorBlocked && (
-              <p className="m-0 px-1 text-[13px] text-mute">{network === 'testnet' ? t('swap.noPriceTestnet') : t('swap.noPrice')}</p>
-            )}
-            {cross && !recipient && <Notice tone="warn">{t('swap.noAccountToReceive', { chain: buyChain?.label ?? '' })}</Notice>}
-            {list.length === 0 && feeReasons.map((r) => <Notice key={r} tone="warn">{r}</Notice>)}
-            {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
-            {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
-          </section>
+          {phase === 'done' && feeUnpaid && <InfoLine tone="warn">{t('swap.feeUnpaid')}</InfoLine>}
         </div>
+
+        <Frost className="mt-5 w-[340px]" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter) || (chosen.tx.kind === 'deposit' && !sourceAdapter)} onClick={openConfirm}>
+          {t('swap.reviewCta')}
+        </Frost>
       </div>
 
       {/* Confirmation before signing: the only place that names the contract (security), then the native dialog. */}
@@ -844,20 +869,22 @@ function FeesIncludedLink() {
   );
 }
 
-function TokenPanel({ label, right, amount, sub, note, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; note?: React.ReactNode; token: React.ReactNode }) {
+/** The coin chooser under each ring: coin, network, chevron, on glass. */
+function CoinChooser({ title, asset, chain, items, onSelect, className }: { title: string; asset: AssetDef; chain: string; items: TokenPickerItem[]; onSelect: (id: string) => void; className?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-box border border-line bg-bg px-[22px] py-3.5 transition-[border-color,box-shadow] duration-150 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]">
-      <div className="flex justify-between text-[13px]">
-        <span className="eyebrow">{label}</span>
-        <span className="text-text2">{right}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">{amount}</div>
-        {token}
-      </div>
-      <span className="text-[13px] text-faint">{sub}</span>
-      {note}
-    </div>
+    <TokenPicker
+      title={title}
+      value={asset.id}
+      items={items}
+      onSelect={onSelect}
+      trigger={(open) => (
+        <button type="button" onClick={open} className={cn('press flex h-9 max-w-full items-center gap-2 rounded-[12px] px-3 text-[12.5px] transition-colors hover:bg-white/[.08]', GLASS_ROW, className)}>
+          <span className="font-semibold whitespace-nowrap">{asset.name}</span>
+          <span className="truncate text-faint">{chain}</span>
+          <IconChevronDown size={14} className="shrink-0 text-faint" />
+        </button>
+      )}
+    />
   );
 }
 

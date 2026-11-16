@@ -5,22 +5,27 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { call, toIpcError, type EarnEvmAction, type HwDeviceKind } from '@kyro/shared';
-import { signAndBroadcastHw, tryParseUnits, type AssetDef, type EvmAdapter } from '@kyro/chains';
+import { assetsFor, signAndBroadcastHw, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import { buildApproval, buildRevoke, requiresZeroAllowanceFirst } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { useAsync, useCachedAsync, useNow } from '../lib/useAsync';
 import { useOnTorReady } from '../state/tor';
-import { fmtAgo, fmtCrypto, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
+import { fmtAgo, fmtCrypto, fmtFiat, fmtPct, sanitizeDecimalInput, toInputDecimal } from '../lib/format';
 import { HW_STAKE, type StakeChain } from '../lib/staking';
 import { useStakeOverviews } from '../lib/stakeOverviews';
 import { refreshRates, useEarnRates, type EvmGet } from '../state/earnRates';
-import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, parseUint, rateIsOld, rateLabelKey, type EarnFilter, type EarnOption, type EarnRisk } from '../lib/earn';
+import { AAVE_MARKETS, EARN_OPTIONS, LIDO_QUEUE, LIDO_STETH, SEL_GET_WITHDRAWAL_REQUESTS, parseUintArray, parseWithdrawalStatus, withdrawalStatusCall, type WithdrawalStatus, SEL_BALANCE_OF, addrArg, earnBlock, earnRisk, earnRiskKeys, earnRowName, filterOptions, parseUint, rateIsOld, rateLabelKey, rewardsWaitForClaim, type EarnFilter, type EarnOption, type EarnRisk } from '../lib/earn';
 import { EarnCalculator, useEarnCalc } from '../components/EarnCalculator';
 import { MissingFee, useSwapFee } from '../components/MissingFee';
 import { SimulationPanel } from '../components/SimulationPanel';
 import { CoinIcon, HIDDEN, PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
-import { Badge, Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
+import { Badge, Button, Input, Notice, Spinner } from '../components/ui/primitives';
+import { Annotated, BIG, Frost, GLASS_ROW, GLOW, GlassButton, IceDot, IceSquare, LABEL, Side, THIN, Tabs, midAngle, type Note, type Seg } from '../components/kyro';
+import { SplitFiat, coinTint, useWidth } from '../components/kyroParts';
+import { usePortfolio } from '../state/portfolio';
+import { earnAsset, projectedGain } from '../lib/earnCalc';
+import { cn } from '../lib/cn';
 import { IconCheck, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
@@ -59,17 +64,21 @@ async function readPositions(evm: EvmGet): Promise<Positions> {
 }
 
 export function Earn() {
-  const { navigate, network, activeHw, hideBalances } = useApp();
+  const { navigate, network, activeHw, hideBalances, settings } = useApp();
   const { adapters, accounts } = useVault();
+  const pf = usePortfolio();
   const { t } = useT();
   const [filter, setFilter] = useState<EarnFilter>('all');
   const [flow, setFlow] = useState<{ opt: EarnOption; mode: Mode } | null>(null);
   const [riskOf, setRiskOf] = useState<EarnOption | null>(null);
+  const [stageRef, stageW] = useWidth<HTMLDivElement>();
   const evm: EvmGet = (k) => (network === 'mainnet' ? adapters.evm.get(k) : undefined);
   const eth = evm('ethereum');
   const ethKey = eth?.getAddress() ?? '-';
   const rates = useEarnRates(network);
   const calc = useEarnCalc();
+  const cur = settings.currency;
+  const assets = useMemo(() => assetsFor(network), [network]);
   const refresh = () => refreshRates(network, evm, RATE_REFRESH_MS);
   useEffect(() => {
     refresh();
@@ -89,17 +98,71 @@ export function Earn() {
   const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron, near: !!accounts.near, sui: !!accounts.sui, apt: !!accounts.aptos };
   const hwChains: readonly string[] | null = activeHw ? HW_STAKE[activeHw.device] : null;
   const stakes = useStakeOverviews((c) => !!hwChains && !hwChains.includes(c), has);
-  const stakedOf = (o: EarnOption): string | null => {
-    if (o.target.kind !== 'tab') return null;
-    if (o.id === 'ada') {
-      const s = stakes.ada.data;
-      return s?.stake.registered && s.stake.delegatedPool ? (s.pool?.ticker ?? t('earn.delegated')) : null;
-    }
-    const v = o.id === 'trx' ? stakes.staked.tron : stakes.staked[o.id as 'sol' | 'near' | 'sui' | 'apt'];
-    return v !== undefined && v > 0n ? (hideBalances ? HIDDEN : fmtCrypto(v, o.decimals, o.symbol, 4)) : null;
-  };
   const typeLabel = { staking: t('earn.typeStaking'), liquid: t('earn.typeLiquid'), lending: t('earn.typeLending') } as const;
   const list = filterOptions(EARN_OPTIONS, filter);
+
+  /** What sits in this option now, in base units (a delegated Cardano wallet counts whole). */
+  const unitsOf = (o: EarnOption): bigint => {
+    if (o.target.kind !== 'tab') return pos.data?.[o.id] ?? 0n;
+    if (o.id === 'ada') {
+      const s = stakes.ada.data;
+      const a = earnAsset(o, assets);
+      return s?.stake.registered && s.stake.delegatedPool && a ? (pf.balances.get(a.id) ?? 0n) : 0n;
+    }
+    return (o.id === 'trx' ? stakes.staked.tron : stakes.staked[o.id as 'sol' | 'near' | 'sui' | 'apt']) ?? 0n;
+  };
+  const unitSym = (o: EarnOption) => (o.target.kind === 'lido' ? 'stETH' : o.symbol);
+  const positions = EARN_OPTIONS.flatMap((o) => {
+    const units = unitsOf(o);
+    if (units <= 0n) return [];
+    const a = earnAsset(o, assets);
+    const price = a ? pf.price(a.coingeckoId)?.price : undefined;
+    const value = price !== undefined ? unitsToNumber(units, o.decimals) * price : 0;
+    const rate = rates.store[o.id]?.value ?? null;
+    const year = rate !== null && value > 0 ? projectedGain(value, rate, 12, rewardsWaitForClaim(o)) : null;
+    return [{ o, units, asset: a, value, rate, year, color: coinTint(a?.color) }];
+  });
+  const positionText = (o: EarnOption): string | null => {
+    const p = positions.find((x) => x.o.id === o.id);
+    if (!p) return null;
+    if (o.id === 'ada') return stakes.ada.data?.pool?.ticker ?? t('earn.delegated');
+    return hideBalances ? HIDDEN : fmtCrypto(p.units, o.decimals, unitSym(o), 4);
+  };
+  const yearTotal = positions.reduce((s, p) => s + (p.year ?? 0), 0);
+  const anyValue = positions.some((p) => p.value > 0);
+  const segs: Seg[] = positions.length ? positions.map((p) => ({ color: p.color, part: anyValue ? p.value : 1 })) : [{ color: '#cfe7ff', part: 1, ice: true }];
+  const titleOf = (o: EarnOption) => {
+    const provider = o.target.kind === 'tab' ? null : o.name.split(' · ')[1];
+    return provider ? `${typeLabel[o.type]} · ${provider}` : typeLabel[o.type];
+  };
+  const subOf = (o: EarnOption) => {
+    const row = earnRowName(o);
+    return `${row.name.split(' · ')[0]}${row.network ? ` · ${row.network}` : ''}`;
+  };
+  const notes: Note[] = positions.map((p, i) => {
+    const a = ((midAngle(segs, i) % 360) + 360) % 360;
+    const side: 'L' | 'R' = a > 180 && a < 330 ? 'L' : 'R';
+    return {
+      seg: i,
+      side,
+      dot: p.color,
+      node: (
+        <button type="button" onClick={() => (p.o.target.kind === 'tab' ? navigate({ name: 'staking', chain: p.o.target.chain }) : setRiskOf(p.o))} className="press text-left">
+          <Side side={side} icon={<CoinIcon symbol={p.o.symbol} {...(p.asset ? { asset: p.asset } : {})} size={30} />}>
+            <span className="text-[13.5px] font-semibold">{p.o.target.kind === 'tab' ? `${typeLabel[p.o.type]} · ${subOf(p.o)}` : titleOf(p.o)}</span>
+            <span className="figure text-[12.5px] text-mute">
+              <span style={hideBalances ? undefined : GLOW(p.color)}>{positionText(p.o)}</span>
+              {p.rate !== null && <> · {t('earn.noteRate', { rate: fmtPct(p.rate, { decimals: 1, sign: false }) })}</>}
+              {p.year !== null && p.year > 0 && <> · <span className="text-up/90">{t('earn.perYear', { amount: hideBalances ? HIDDEN : fmtFiat(p.year, cur, { sign: true }) })}</span></>}
+            </span>
+          </Side>
+        </button>
+      ),
+    };
+  });
+  const W = Math.min(1200, Math.max(stageW, 0));
+  const shownAt = list.map((o) => rates.store[o.id]?.at).filter((x): x is number => x !== undefined);
+  const ratesAt = shownAt.length ? Math.min(...shownAt) : null;
 
   const adapterFor = (o: EarnOption): EvmAdapter | undefined => (o.target.kind === 'aave' ? evm(AAVE_MARKETS[o.target.market]!.chainKey) : o.target.kind === 'lido' ? eth : undefined);
   const unavailable = (o: EarnOption): string | null => {
@@ -108,97 +171,150 @@ export function Earn() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-7 pb-6 scroll-thin [&>*]:shrink-0">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="screen-title">{t('earn.title')}</h1>
-          <p className="m-0 mt-1 text-[13px] text-mute">{t('earn.subtitle')}</p>
+    <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
+      <section aria-label={t('earn.title')} className="flex flex-col pb-8">
+        <div ref={stageRef} className="mt-4 w-full">
+          {W > 0 && (
+            <Annotated W={W} H={250} size={210} segs={segs} notes={W >= 960 ? notes : []}>
+              <IceSquare size={40} />
+            </Annotated>
+          )}
         </div>
-        <Segmented
-          label={t('earn.title')}
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: 'all', label: t('earn.filterAll') },
-            { value: 'staking', label: t('earn.filterStaking') },
-            { value: 'stable', label: t('earn.filterStable') },
-            { value: 'low', label: t('earn.filterLow') },
-          ]}
-        />
-      </header>
+        <div className="mt-7 flex flex-col items-center px-8 text-center">
+          {positions.length ? (
+            <span className="text-[44px] leading-none" style={{ ...THIN, ...BIG('#8fe3b8') }}>
+              {hideBalances ? (
+                HIDDEN
+              ) : (
+                <>
+                  +<SplitFiat value={yearTotal} currency={cur} restClass="text-[22px]" />
+                </>
+              )}
+              <span className="ml-3 text-[18px] text-mute" style={{ textShadow: 'none' }}>
+                {t('earn.perYearEst')}
+              </span>
+            </span>
+          ) : (
+            <>
+              <span className="text-[30px] leading-none text-text2" style={THIN}>
+                {t('earn.emptyTitle')}
+              </span>
+              <span className="mt-3 text-[13px] text-mute">{t('earn.emptyBody')}</span>
+            </>
+          )}
+        </div>
 
-      <EarnCalculator calc={calc.panel} rates={rates.store} onPick={setRiskOf} />
-
-      <div className="flex flex-col divide-y divide-line overflow-hidden rounded-panel border border-line bg-card">
-        {list.map((o, i) => {
-          const why = unavailable(o);
-          const rate = rates.store[o.id];
-          const p = pos.data?.[o.id];
-          const position = stakedOf(o) ?? (p !== undefined && p > 0n ? (hideBalances ? HIDDEN : fmtCrypto(p, o.decimals, o.target.kind === 'lido' ? 'stETH' : o.symbol, 6)) : null);
-          const risk = earnRisk(o);
-          const row = earnRowName(o);
-          const gain = calc.gainLine(o, rate?.value ?? null);
-          const start = () => (o.target.kind === 'tab' ? navigate({ name: 'staking', chain: o.target.chain }) : setFlow({ opt: o, mode: 'in' }));
-          return (
-            <div key={o.id} className="rise grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,0.7fr)_minmax(0,0.65fr)_auto] items-center gap-4 px-5 py-3.5" style={idx(i)}>
-              <div className="flex min-w-0 items-center gap-3">
-                <CoinIcon symbol={o.symbol} size={34} />
-                <div className="min-w-0">
-                  <div className="truncate text-[15px] font-semibold tracking-[-0.01em]">{row.name}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-mute">
-                    <Badge>{typeLabel[o.type]}</Badge>
-                    {row.network && <Badge>{row.network}</Badge>}
-                  </div>
-                  {position && (
-                    <div className="mt-1 truncate text-[12px] text-text2">
-                      {t('earn.position')} · <strong className="font-semibold text-text">{position}</strong>
-                    </div>
-                  )}
+        <section aria-label={t('earn.offers')} className="mx-auto mt-6 w-full max-w-[1004px] px-8">
+          <div className="flex flex-wrap items-center gap-y-2 pb-3">
+            <span className={LABEL}>{t('earn.offers')}</span>
+            <span className="ml-8">
+              <Tabs
+                label={t('earn.offers')}
+                value={filter}
+                onChange={setFilter}
+                items={[
+                  { id: 'all', label: t('earn.filterAll') },
+                  { id: 'staking', label: t('earn.filterStaking') },
+                  { id: 'stable', label: t('earn.filterStable') },
+                  { id: 'low', label: t('earn.filterLow') },
+                ]}
+              />
+            </span>
+            {ratesAt !== null && <span className="ml-auto text-[12px] text-faint">{now - ratesAt < 60_000 ? t('earn.ratesNow') : t('earn.ratesAt', { ago: fmtAgo(ratesAt, now) })}</span>}
+          </div>
+          <div className={cn('overflow-hidden rounded-[20px]', GLASS_ROW)}>
+            {[...list.filter((o) => positionText(o)), ...list.filter((o) => !positionText(o))].map((o, i) => {
+              const why = unavailable(o);
+              const rate = rates.store[o.id];
+              const position = positionText(o);
+              const risk = earnRisk(o);
+              const gain = calc.gainLine(o, rate?.value ?? null);
+              const start = () => (o.target.kind === 'tab' ? navigate({ name: 'staking', chain: o.target.chain }) : setFlow({ opt: o, mode: 'in' }));
+              return (
+                <div key={o.id} className={cn('rise grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,0.55fr)_minmax(0,0.65fr)_auto] items-center gap-4 px-5 py-3', i && 'border-t border-white/[.05]')} style={idx(i)}>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <CoinIcon symbol={o.symbol} size={30} />
+                    <span className="flex min-w-0 flex-col leading-tight">
+                      <span className="truncate text-[13.5px] font-semibold">{titleOf(o)}</span>
+                      <span className="truncate text-[11.5px] text-faint">
+                        {subOf(o)}
+                        {position && (
+                          <>
+                            {' · '}
+                            <span className="figure" style={hideBalances ? undefined : GLOW(coinTint(earnAsset(o, assets)?.color))}>
+                              {position}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="figure text-[14px] font-semibold">{rate ? fmtPct(rate.value, { decimals: 1, sign: false }) : rates.waiting.has(o.id) ? <Spinner /> : '—'}</span>
+                    <span className="truncate text-[11px] text-faint" title={t(rateLabelKey(o))}>
+                      {rate && rateIsOld(rate, now) ? t('earn.rateOld', { ago: fmtAgo(rate.at, now) }) : t(rateLabelKey(o))}
+                    </span>
+                    {gain && <span className="figure mt-0.5 truncate text-[11px] text-up/80">{gain}</span>}
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="text-[13px] text-text2">{t(o.lockKey)}</span>
+                    <span className="text-[11px] text-faint">{t('earn.lock')}</span>
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <button type="button" className="press flex items-center gap-1.5 text-left text-[13px] text-text2 hover:text-text" title={t('earn.riskWhy')} onClick={() => setRiskOf(o)}>
+                      <span aria-hidden="true" className={cn('size-[5px] shrink-0', RISK_DOT[risk])} />
+                      {t(RISK_LABEL[risk])}
+                    </button>
+                    <span className="text-[11px] text-faint">{t('earn.risk')}</span>
+                  </span>
+                  <span className="flex min-w-0 flex-col leading-tight">
+                    <span className="figure text-[13px] text-text2">{o.min ?? t('earn.none')}</span>
+                    <span className="text-[11px] text-faint">{t('earn.min')}</span>
+                  </span>
+                  <span className="flex items-center justify-end gap-2" title={why ?? undefined}>
+                    {o.target.kind === 'lido' && claimable.length > 0 && (
+                      <GlassButton className="h-9 rounded-[12px] text-[12.5px]" disabled={!!why} onClick={() => setFlow({ opt: o, mode: 'claim' })}>
+                        {t('earn.claim', { amount: fmtCrypto(claimable.reduce((a, r) => a + r.amountOfStETH, 0n), 18, 'ETH', 4) })}
+                      </GlassButton>
+                    )}
+                    {position && o.target.kind !== 'tab' && (
+                      <GlassButton className="h-9 rounded-[12px] text-[12.5px]" disabled={!!why} onClick={() => setFlow({ opt: o, mode: 'out' })}>
+                        {o.target.kind === 'lido' ? t('earn.unstake') : t('earn.withdraw')}
+                      </GlassButton>
+                    )}
+                    {position ? (
+                      <GlassButton className="h-9 w-[120px] rounded-[12px] text-[12.5px]" disabled={!!why} onClick={start}>
+                        {o.target.kind === 'tab' ? t('earn.manage') : t('earn.add')}
+                      </GlassButton>
+                    ) : (
+                      <Frost className="h-9 w-[120px] rounded-[12px] px-3 text-[12.5px]" disabled={!!why} onClick={start}>
+                        {t('earn.start')}
+                      </Frost>
+                    )}
+                  </span>
                 </div>
-              </div>
-              <div>
-                <div className="text-[22px] font-semibold tracking-[-0.02em] text-up tabular-nums">{rate ? fmtPct(rate.value, { decimals: 2, sign: false }) : rates.waiting.has(o.id) ? <Spinner /> : '—'}</div>
-                <div className="text-[11.5px] text-mute">{rate && rateIsOld(rate, now) ? t('earn.rateOld', { ago: fmtAgo(rate.at, now) }) : t(rateLabelKey(o))}</div>
-                {gain && <div className="mt-0.5 text-[12px] font-medium text-text2 tabular-nums">{gain}</div>}
-              </div>
-              <div className="text-[13px]">
-                <div className="text-mute text-[11.5px]">{t('earn.lock')}</div>
-                {t(o.lockKey)}
-              </div>
-              <div className="text-[13px]">
-                <div className="text-mute text-[11.5px]">{t('earn.risk')}</div>
-                <button type="button" className="cursor-pointer rounded-full" title={t('earn.riskWhy')} onClick={() => setRiskOf(o)}>
-                  <Badge tone={RISK_TONE[risk]}>{t(RISK_LABEL[risk])}</Badge>
-                </button>
-              </div>
-              <div className="text-[13px]">
-                <div className="text-mute text-[11.5px]">{t('earn.min')}</div>
-                {o.min ?? t('earn.none')}
-              </div>
-              <div className="flex items-center justify-end gap-2" title={why ?? undefined}>
-                {o.target.kind === 'lido' && claimable.length > 0 && (
-                  <Button variant="outline" size="sm" disabled={!!why} onClick={() => setFlow({ opt: o, mode: 'claim' })}>
-                    {t('earn.claim', { amount: fmtCrypto(claimable.reduce((a, r) => a + r.amountOfStETH, 0n), 18, 'ETH', 4) })}
-                  </Button>
-                )}
-                {position && o.target.kind !== 'tab' && (
-                  <Button variant="outline" size="sm" disabled={!!why} onClick={() => setFlow({ opt: o, mode: 'out' })}>
-                    {o.target.kind === 'lido' ? t('earn.unstake') : t('earn.withdraw')}
-                  </Button>
-                )}
-                <Button size="sm" disabled={!!why} onClick={start}>
-                  {o.target.kind === 'tab' ? t('earn.manage') : t('earn.start')}
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {pending > 0n && <p className="m-0 px-1 text-[12.5px] text-mute">{t('earn.pending', { amount: fmtCrypto(pending, 18, 'stETH', 4) })} · {t('earn.queueNote')}</p>}
-      <p className="m-0 flex items-start gap-2.5 px-1 text-[13px] leading-[1.55] text-mute">
-        <IconShield size={16} className="mt-0.5 shrink-0 text-ice" />
-        <span>{t('earn.riskFooter')}</span>
-      </p>
+              );
+            })}
+          </div>
+          {pending > 0n && (
+            <p className="m-0 mt-3 flex items-start gap-2 px-1 text-[12.5px] leading-[1.5] text-mute">
+              <IceDot className="mt-[7px]" />
+              <span>
+                {t('earn.pending', { amount: fmtCrypto(pending, 18, 'stETH', 4) })} · {t('earn.queueNote')}
+              </span>
+            </p>
+          )}
+        </section>
+
+        <section className="mx-auto mt-10 w-full max-w-[1004px] px-8">
+          <EarnCalculator calc={calc.panel} rates={rates.store} onPick={setRiskOf} />
+        </section>
+
+        <p className="mx-auto mt-6 mb-0 flex w-full max-w-[1004px] items-start gap-2.5 px-9 text-[12.5px] leading-[1.55] text-mute">
+          <IconShield size={15} className="mt-0.5 shrink-0 text-ice" />
+          <span>{t('earn.riskFooter')}</span>
+        </p>
+      </section>
       {riskOf && <RiskDialog opt={riskOf} onClose={() => setRiskOf(null)} />}
       {flow && adapterFor(flow.opt) && (
         <EvmEarnDialog
@@ -219,6 +335,8 @@ export function Earn() {
     </div>
   );
 }
+
+const RISK_DOT = { low: 'bg-up shadow-[0_0_8px_#3ddc97]', medium: 'bg-warn shadow-[0_0_8px_#f5b544]', high: 'bg-down shadow-[0_0_8px_#ff6b6b]' } as const satisfies Record<EarnRisk, unknown>;
 
 const RISK_TONE = { low: 'up', medium: 'warn', high: 'down' } as const satisfies Record<EarnRisk, unknown>;
 const RISK_LABEL = { low: 'earn.riskLow', medium: 'earn.riskMedium', high: 'earn.riskHigh' } as const satisfies Record<EarnRisk, unknown>;

@@ -2,10 +2,12 @@
 // The "Best price" panel of the Swap screen: what the selected quote costs and how it travels, then
 // the other providers' quotes. Display only: Kyro keeps the first quote of the sorted list.
 
+import type { ReactNode } from 'react';
 import type { AssetDef } from '@kyro/chains';
 import type { Quote } from '@kyro/swap';
 import { fmtCrypto, fmtEta, fmtFiat, fmtPct } from '../lib/format';
-import { Badge } from './ui/primitives';
+import { cn } from '../lib/cn';
+import { GLASS_ROW } from './kyro';
 import { useT } from '../i18n';
 
 const AMOUNT_DIGITS = 6;
@@ -17,44 +19,47 @@ export function routeLabel(sell: string, buy: string, sellChain: string, buyChai
   return sell === buy ? `${sell} (${sellChain}) → ${buy} (${buyChain})` : `${sell} → ${buy}`;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Cell({ label, value, first }: { label: ReactNode; value: ReactNode; first?: boolean }) {
   return (
-    <div className="flex h-10 items-center justify-between gap-3 border-t border-line">
-      <span className="text-mute">{label}</span>
-      <span className="truncate text-text2">{value}</span>
-    </div>
+    <span className={cn('flex min-w-0 flex-1 flex-col gap-1 px-5 py-3.5', !first && 'border-l border-white/[.06]')}>
+      <span className="text-[11.5px] text-faint">{label}</span>
+      <span className="figure truncate text-[13.5px] font-semibold">{value}</span>
+    </span>
   );
 }
 
-/** `quotes` is the list from `fetchQuotes`, best first: the first one is the quote Kyro uses. */
-export function BestPrice({ quotes, sell, buy, sellChain, buyChain, currency }: { quotes: Quote[]; sell: Side; buy: Side; sellChain: string; buyChain: string; currency: Parameters<typeof fmtFiat>[1] }) {
+/**
+ * The route strip of the Swap screen (route, estimated fees, time, slippage), then one line with the
+ * rest of the selected quote (route, amount, minimum, Kyro and provider fees) and the other quotes.
+ * `quotes` is the list from `fetchQuotes`, best first: the first one is the quote Kyro uses.
+ */
+export function BestPrice({ quotes, sell, buy, sellChain, buyChain, currency, fees, tail, empty }: { quotes: Quote[]; sell: Side; buy: Side; sellChain: string; buyChain: string; currency: Parameters<typeof fmtFiat>[1]; fees?: ReactNode; tail?: { label: ReactNode; value: ReactNode }; empty?: ReactNode }) {
   const { t } = useT();
   const [best, ...others] = quotes;
-  if (!best) return null;
-  const providerFee = best.providerFeeFiat !== null && best.providerFeeFiat > 0 ? best.providerFeeFiat : null;
+  if (!best && !tail) return null;
+  const providerFee = best && best.providerFeeFiat !== null && best.providerFeeFiat > 0 ? best.providerFeeFiat : null;
   return (
-    <div className="fade-in flex flex-col gap-2.5">
-      <div className="flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
-        <div className="flex h-11 items-center justify-between gap-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-[14px] font-medium">{best.providerName}</span>
-            <Badge tone="up">{t('swap.bestTag')}</Badge>
-          </span>
-          <span className="font-medium whitespace-nowrap">{fmtCrypto(best.buyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)}</span>
-        </div>
-        <Row label={t('swap.route')} value={routeLabel(sell.symbol, buy.symbol, sellChain, buyChain)} />
-        <Row label={t('swap.minReceived')} value={fmtCrypto(best.minBuyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)} />
-        <Row label={t('swap.kyroFee')} value={fmtPct(best.kyroFeeBps / 100, { sign: false })} />
-        {providerFee !== null && <Row label={t('swap.providerFee')} value={`≈ ${fmtFiat(providerFee, currency)}${best.providerFeeIncluded ? '' : t('swap.providerFeeExtra')}`} />}
-        {best.etaSecs !== undefined && <Row label={t('swap.estTime')} value={fmtEta(best.etaSecs)} />}
+    <div className="flex flex-col items-center gap-2.5">
+      <div className={cn('flex w-full rounded-[18px]', GLASS_ROW)}>
+        <Cell first label={t('swap.route')} value={best ? best.providerName : '—'} />
+        <Cell label={t('swap.feesEstimated')} value={best ? (fees ?? '—') : '—'} />
+        {(!best || best.etaSecs !== undefined) && <Cell label={t('swap.estTime')} value={best?.etaSecs !== undefined ? fmtEta(best.etaSecs) : '—'} />}
+        {tail && <Cell label={tail.label} value={tail.value} />}
       </div>
-      {others.length > 0 && (
-        <div className="flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
-          <span className="eyebrow flex h-9 items-center">{t('swap.otherQuotes')}</span>
-          {others.map((q) => (
-            <Row key={q.provider} label={q.providerName} value={fmtCrypto(q.buyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)} />
-          ))}
-        </div>
+      {best ? (
+        <span className="fade-in figure max-w-full px-2 text-center text-[12px] leading-[1.6] text-faint">
+          <span className="mr-1.5 rounded-[6px] bg-up/[.12] px-1.5 py-px text-[10.5px] font-semibold tracking-[0.04em] text-up">{t('swap.bestTag')}</span>
+          {routeLabel(sell.symbol, buy.symbol, sellChain, buyChain)} · {fmtCrypto(best.buyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)} · {t('swap.minReceived')} {fmtCrypto(best.minBuyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)} · {t('swap.kyroFee')} {fmtPct(best.kyroFeeBps / 100, { sign: false })}
+          {providerFee !== null && ` · ${t('swap.providerFee')} ≈ ${fmtFiat(providerFee, currency)}${best.providerFeeIncluded ? '' : t('swap.providerFeeExtra')}`}
+          {others.length > 0 && (
+            <span className="block">
+              <span className="mr-2 text-mute">{t('swap.otherQuotes')}</span>
+              {others.map((q) => `${q.providerName} ${fmtCrypto(q.buyAmount, buy.decimals, buy.symbol, AMOUNT_DIGITS)}`).join(' · ')}
+            </span>
+          )}
+        </span>
+      ) : (
+        empty && <span className="text-[12.5px] text-mute">{empty}</span>
       )}
     </div>
   );

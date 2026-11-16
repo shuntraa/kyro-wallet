@@ -103,4 +103,13 @@ export const receive = {
   'receive.cosmosNote': '<b>ATOM de Cosmos Hub seulement :</b> les tokens IBC (USDC, OSMO…) envoyés ici s’affichent sur la page ATOM mais ne peuvent pas encore être envoyés depuis Kyro, et une adresse d’une autre chaîne Cosmos (osmo1…, celestia1…) n’est pas celle-ci. Kyro n’envoie que des ATOM.',
   'receive.aptNote': '<b>APT du réseau Aptos seulement :</b> l’adresse ressemble à une adresse Ethereum plus longue, mais ce n’est pas la même chaîne. Pas de montant minimum : le premier APT reçu crée ton compte sur la chaîne.',
   'receive.aptTokenNote': '<b>USDC et USDt sur Aptos :</b> reçois-les à cette même adresse, sans activation. Kyro n’affiche que l’USDC de Circle (0xbae2…46f3b) et l’USDt de Tether (0x357b…dc2b) ; les autres jetons sont ignorés. Pour les renvoyer, garde un peu d’APT pour le gaz (≈ 0,0001 APT).',
+  'receive.copyAddress': 'Copier l’adresse',
+  'receive.askAmount': 'Demander un montant',
+  'receive.onlyNetwork': 'Seulement le réseau {chain}',
+  'receive.addressFormat': 'Format de l’adresse',
+  'receive.onlyCoin': 'Seulement du {coin}',
+  'receive.onlyCoinVowel': 'Seulement de l’{coin}',
+  'receive.onlyCoinBody': 'Des {symbol}, sur le réseau {chain}. Rien d’autre.',
+  'receive.freshTitle': 'Adresse neuve',
+  'receive.freshBody': 'Prends-en une nouvelle à chaque réception, les anciennes restent valables.',
 } as const;

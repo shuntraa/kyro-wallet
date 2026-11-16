@@ -103,4 +103,13 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.algoRekeyed': 'This account was “rekeyed” to {addr}: Kyro can no longer sign for it.',
   'receive.cosmosNote': '<b>Cosmos Hub ATOM only:</b> IBC tokens (USDC, OSMO…) sent here show on the ATOM page but can’t be sent from Kyro yet, and an address from another Cosmos chain (osmo1…, celestia1…) is not this one. Kyro only sends ATOM.',
   'receive.aptNote': '<b>APT on the Aptos network only:</b> the address looks like a longer Ethereum address, but it is not the same chain. No minimum amount: the first APT received creates your account on chain.',
+  'receive.copyAddress': 'Copy address',
+  'receive.askAmount': 'Request an amount',
+  'receive.onlyNetwork': 'Only the {chain} network',
+  'receive.addressFormat': 'Address format',
+  'receive.onlyCoin': 'Only {coin}',
+  'receive.onlyCoinVowel': 'Only {coin}',
+  'receive.onlyCoinBody': '{symbol} on the {chain} network. Nothing else.',
+  'receive.freshTitle': 'Fresh address',
+  'receive.freshBody': 'Take a new one for each payment; the old ones stay valid.',
 };

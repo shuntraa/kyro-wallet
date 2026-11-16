@@ -4,7 +4,7 @@
 
 import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { areaPath, chartPointBudget, downsample, fitSeries, smoothPath } from '../lib/smooth';
+import { areaPath, chartPointBudget, downsample, fitSeries, pickPoints, smoothPath } from '../lib/smooth';
 import { EASE_OUT } from './motion';
 import { t } from '../i18n';
 
@@ -26,9 +26,11 @@ export interface SmoothChartProps {
   ariaLabel: string;
   className?: string;
   stroke?: string;
+  /** Coin light: the line glows in its own colour (the tooltip stays sharp). */
+  glow?: boolean;
 }
 
-export function SmoothChart({ values, height: maxH, fit = false, revealKey, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF' }: SmoothChartProps) {
+export function SmoothChart({ values, times, height: maxH, fit = false, revealKey, renderTooltip, defaultPoint = 'last', defaultLabel, padTop = 24, padBottom = 18, ariaLabel, className, stroke = '#7CC4FF', glow = false }: SmoothChartProps) {
   const gid = useId().replace(/:/g, '');
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -58,10 +60,13 @@ export function SmoothChart({ values, height: maxH, fit = false, revealKey, rend
   // The top padding (room for the tooltip) shrinks with a short chart, never below a usable plot.
   const top = Math.min(padTop, Math.round(height * 0.3));
   const bottom = Math.min(padBottom, Math.round(height * 0.1));
-  const data = useMemo(() => downsample(values, chartPointBudget(vbW)), [values, vbW]);
-  const ratio = values.length > 1 ? (values.length - 1) / Math.max(1, data.length - 1) : 1;
+  // Real points (never averages), placed by their time when `times` is given: « All » joins weekly
+  // and daily prices, and by index the last year took most of the width.
+  const kept = useMemo(() => pickPoints(values, chartPointBudget(vbW), times && times.length === values.length ? times : undefined), [values, times, vbW]);
+  const data = useMemo(() => kept.map((i) => values[i] as number), [kept, values]);
+  const xs = useMemo(() => (times && times.length === values.length ? kept.map((i) => times[i] as number) : kept), [kept, times, values.length]);
   // 2 px inset on each side: the stroke and the end point never get clipped at the edges.
-  const pts = useMemo(() => fitSeries(data, { width: Math.max(1, vbW - 4), height, padTop: top, padBottom: bottom }).map((q) => ({ x: q.x + 2, y: q.y })), [data, vbW, height, top, bottom]);
+  const pts = useMemo(() => fitSeries(data, { width: Math.max(1, vbW - 4), height, padTop: top, padBottom: bottom, xs }).map((q) => ({ x: q.x + 2, y: q.y })), [data, xs, vbW, height, top, bottom]);
   const line = useMemo(() => smoothPath(pts), [pts]);
   const area = useMemo(() => areaPath(line, pts, height), [line, pts, height]);
 
@@ -76,14 +81,24 @@ export function SmoothChart({ values, height: maxH, fit = false, revealKey, rend
   }, [defaultPoint, pts.length, data]);
   const idx = hover ?? fallback;
   const p = idx !== null ? pts[idx] : undefined;
-  const tip = idx !== null && renderTooltip ? renderTooltip(Math.min(values.length - 1, Math.round(idx * ratio))) : null;
+  const tip = idx !== null && renderTooltip && kept[idx] !== undefined ? renderTooltip(kept[idx]) : null;
 
   const onMove = (e: React.PointerEvent) => {
     const el = ref.current;
     if (!el || pts.length === 0) return;
     const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    setHover(Math.max(0, Math.min(pts.length - 1, Math.round(x * (pts.length - 1)))));
+    const x = ((e.clientX - rect.left) / rect.width) * vbW;
+    // Nearest drawn point by x (the points are not evenly spaced).
+    let lo = 0;
+    let hi = pts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((pts[mid] as { x: number }).x < x) lo = mid + 1;
+      else hi = mid;
+    }
+    const prev = lo > 0 ? lo - 1 : lo;
+    const best = Math.abs((pts[prev] as { x: number }).x - x) <= Math.abs((pts[lo] as { x: number }).x - x) ? prev : lo;
+    setHover(best);
   };
 
   return (
@@ -98,7 +113,7 @@ export function SmoothChart({ values, height: maxH, fit = false, revealKey, rend
         </defs>
         <g key={revealKey} className={revealKey === undefined ? undefined : 'fade-in'}>
           {area && <path d={area} fill={`url(#g${gid})`} />}
-          {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />}
+          {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={glow ? { filter: `drop-shadow(0 0 6px ${stroke}99)` } : undefined} />}
         </g>
       </svg>
       {p && (
@@ -132,12 +147,27 @@ export function SmoothChart({ values, height: maxH, fit = false, revealKey, rend
   );
 }
 
-export function Sparkline({ values, color, width = 96, height = 28 }: { values: number[]; color: string; width?: number; height?: number }) {
-  const d = useMemo(() => smoothPath(fitSeries(downsample(values, 32), { width: width - 4, height, padTop: 4, padBottom: 4 }).map((p) => ({ x: p.x + 2, y: p.y }))), [values, width, height]);
+/** Small trend line. `glow` lights it in its colour; `fill` adds a faint wash under it. */
+export function Sparkline({ values, color, width = 96, height = 28, glow = false, fill = false }: { values: number[]; color: string; width?: number; height?: number; glow?: boolean; fill?: boolean }) {
+  const gid = useId().replace(/:/g, '');
+  const pts = useMemo(() => fitSeries(downsample(values, 32), { width: width - 4, height, padTop: 4, padBottom: 4 }).map((p) => ({ x: p.x + 2, y: p.y })), [values, width, height]);
+  const d = useMemo(() => smoothPath(pts), [pts]);
+  const area = useMemo(() => (fill && d ? areaPath(d, pts, height) : ''), [fill, d, pts, height]);
   if (!d) return <span style={{ width, height }} className="inline-block" />;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" style={{ overflow: 'visible' }}>
+      {area && (
+        <>
+          <defs>
+            <linearGradient id={`s${gid}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={color} stopOpacity="0.22" />
+              <stop offset="1" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={area} fill={`url(#s${gid})`} />
+        </>
+      )}
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" style={glow ? { filter: `drop-shadow(0 0 4px ${color}aa)` } : undefined} />
     </svg>
   );
 }

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { assetsFor } from '@kyro/chains';
-import { EARN_OPTIONS } from './earn';
+import { EARN_OPTIONS, rewardsWaitForClaim } from './earn';
 import { bestByRisk, earnAsset, gainCurve, projectedGain } from './earnCalc';
 
 const of = (id: string) => EARN_OPTIONS.find((o) => o.id === id)!;
 
 describe('projected gain', () => {
-  it('an APY compounds, an APR does not', () => {
+  it('rewards left in place compound, rewards set aside do not', () => {
     expect(projectedGain(1000, 5, 12, false)).toBeCloseTo(50, 6);
     expect(projectedGain(1000, 5, 60, false)).toBeCloseTo(276.28, 2);
     expect(projectedGain(1000, 5, 60, true)).toBeCloseTo(250, 6);
@@ -21,6 +21,17 @@ describe('projected gain', () => {
     expect(projectedGain(Number.NaN, 5, 12, false)).toBe(0);
     expect(projectedGain(1000, Number.NaN, 12, false)).toBe(0);
     expect(projectedGain(1000, 0, 12, false)).toBe(0);
+  });
+});
+
+describe('which rewards compound', () => {
+  it('all of them but TRON, Lido included', () => {
+    expect(EARN_OPTIONS.filter(rewardsWaitForClaim).map((o) => o.id)).toEqual(['trx']);
+  });
+
+  it('five years on Lido earn more than five times one year', () => {
+    const b = bestByRisk([of('eth-lido')], () => 4.25, () => 1000, 60);
+    expect(b.medium?.gain).toBeCloseTo(231.35, 1);
   });
 });
 

@@ -11,19 +11,23 @@ import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { HW_STAKE } from '../lib/staking';
 import { fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { isHeld, lockTimeLeft, unlockUtc } from '../lib/btcLock';
+import { intlLocale } from '@kyro/shared';
 import { useAsync } from '../lib/useAsync';
 import { ReceivedTokens } from '../components/ReceivedTokens';
 import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
-import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
+import { AddressShort, CoinIcon, EmptyState, ErrorLine, HIDDEN, trendColor } from '../components/kit';
+import { Annotated, BIG, CoinGlow, CoinPill, CoinRound, DISPLAY, GLOW, Glass, GlassButton, IceSquare, LABEL, Segmented, Side, THIN, type Note, type Seg } from '../components/kyro';
+import { SplitFiat, coinTint, useWidth } from '../components/kyroParts';
 import { SmoothChart } from '../components/charts';
 import { AssetGains } from '../components/Gains';
-import { LockedLine } from './BtcLocks';
+import { LockedLine, useBtcLocks } from './BtcLocks';
 import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
-import { Badge, Button, IconButton, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
-import { IconBack, IconDown, IconLock, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
+import { Badge, Skeleton, Spinner } from '../components/ui/primitives';
+import { IconBack, IconDown, IconLock, IconQr, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
 
@@ -36,7 +40,7 @@ export function AssetDetail({ id }: { id: string }) {
   const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
-  const [period, setPeriod] = useState<Period>('1J');
+  const [period, setPeriod] = useState<Period>('1A');
   const { t } = useT();
   const cur = settings.currency;
 
@@ -62,7 +66,8 @@ export function AssetDetail({ id }: { id: string }) {
   const glyph = supported?.glyph ?? symbol.slice(0, 1);
   const price = pf.price(coinId);
   const points = chart.data ?? [];
-  const values = points.map((p) => p[1]);
+  const values = useMemo(() => points.map((p) => p[1]), [points]);
+  const times = useMemo(() => points.map((p) => p[0]), [points]);
   const firstV = values[0];
   const lastV = values[values.length - 1];
   // « All » has no change until its first point is the coin's start (1Y alone would say « since the start »).
@@ -107,93 +112,192 @@ export function AssetDetail({ id }: { id: string }) {
     xmrWasRunning.current = xmrRunning;
   }, [xmrRunning]);
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-1.5">
-          <IconButton label={t('common.back')} onClick={back} className="size-9">
-            <IconBack size={16} />
-          </IconButton>
-          <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={40} />
-          <h1 className="screen-title min-w-0 max-w-full truncate">{name}</h1>
-          <span className="shrink-0 rounded-full bg-control px-2.5 py-0.5 text-[12px] font-medium text-text2">{symbol}</span>
-          {coin?.rank && <span className="shrink-0 whitespace-nowrap text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
-          {supported && <AccountPicker family={supported.family} />}
-          <button type="button" aria-label={fav ? t('portfolio.removeFavorite') : t('portfolio.addFavorite')} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press flex size-8 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
-            <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
-              <IconStar size={18} filled={fav} />
-            </span>
-          </button>
-        </div>
-        {supported ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" size="lg" disabled={supported.readOnly || !!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
-              <IconUp size={16} /> {t('common.send')}
-            </Button>
-            <Button size="lg" onClick={() => navigate({ name: 'receive', family: supported.family })}>
-              <IconDown size={16} /> {t('common.receive')}
-            </Button>
-            <Button
-              size="lg"
-              disabled={!!activeWatch || !canSwapFrom(findChain(network, supported.chainKey), network)}
-              title={activeWatch ? t('watch.noSign') : !canSwapFrom(findChain(network, supported.chainKey), network) ? t('portfolio.swapUnavailable', { name: supported.name }) : undefined}
-              onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}
-            >
-              <IconSwap size={16} sw={2.2} /> Swap
-            </Button>
-            {supported.family === 'btc' && supported.kind === 'native' && (
-              <Button size="lg" onClick={() => navigate({ name: 'btcLocks' })}>
-                <IconLock size={16} /> {t('lock.title')}
-              </Button>
-            )}
-            {supported.kind === 'native' && stakeChain && (
-              <Button
-                size="lg"
-                disabled={!!activeWatch || (!!activeHw && !HW_STAKE[activeHw.device].includes(stakeChain))}
-                title={activeWatch ? t('watch.noSign') : activeHw && !HW_STAKE[activeHw.device].includes(stakeChain) ? t('portfolio.stakingNoHw') : undefined}
-                onClick={() => navigate({ name: 'staking', chain: stakeChain })}
-              >
-                <IconStake size={16} /> Staking
-              </Button>
-            )}
-          </div>
-        ) : (
-          <Badge tone="ice" className="h-6 px-2">
-            {t('portfolio.unsupported')}
-          </Badge>
-        )}
-      </header>
+  // Coin light: the coin's colour pulled a little toward the UI grey, so dark coins stay legible.
+  const c = coinTint(color, 0.95);
+  const isBtc = supported?.family === 'btc' && supported.kind === 'native';
+  const locks = useBtcLocks();
+  const lockedSats = isBtc ? locks.status?.lockedSats ?? 0 : 0;
+  const lockedUnits = BigInt(Math.max(0, Math.round(lockedSats)));
+  const heldLocks = (locks.status?.locks ?? []).filter((l) => isHeld(l.status));
+  const nextLock = heldLocks.filter((l) => l.status === 'locked' || l.status === 'confirming').sort((a, b) => a.t - b.t)[0];
+  const available = holding?.amount ?? 0n;
+  const totalAmount = available + (isBtc ? lockedUnits : 0n);
+  const unitPrice = price?.price ?? null;
+  const fiatOf = (amount: bigint, decimals: number) => (unitPrice === null ? null : (Number(amount) / 10 ** decimals) * unitPrice);
+  const totalFiat = supported ? (lockedSats > 0 ? fiatOf(totalAmount, supported.decimals) : holding?.value ?? null) : null;
+  const lockedFiat = supported && lockedSats > 0 ? fiatOf(lockedUnits, 8) ?? 0 : 0;
+  const shareOf = totalFiat !== null && pf.total + lockedFiat > 0 ? (totalFiat / (pf.total + lockedFiat)) * 100 : (holding?.share ?? 0) * 100;
+  const units = { d: t('lock.day'), h: t('lock.hour'), m: t('lock.minute') };
 
-      <div className="flex min-h-0 flex-[1.15] gap-5">
-        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden border-b border-line">
-          <div className="flex flex-wrap items-start justify-between gap-3 pt-2">
-            <div className="flex min-w-0 flex-col gap-2.5">
-              <span className="eyebrow">
-                {t('portfolio.priceOf', { symbol, currency: cur })}
+  // Previous / next among the assets the wallet holds (same order as the Portfolio).
+  const held = pf.holdings.filter((h) => h.amount > 0n);
+  const at = supported ? held.findIndex((h) => h.asset.id === supported.id) : -1;
+  const prev = held.length > 1 || (held.length === 1 && at < 0) ? held[at < 0 ? held.length - 1 : (at - 1 + held.length) % held.length] : undefined;
+  const next = held.length > 1 || (held.length === 1 && at < 0) ? held[at < 0 ? 0 : (at + 1) % held.length] : undefined;
+
+  const [stageRef, stageW] = useWidth<HTMLDivElement>();
+  const W = Math.min(1200, stageW);
+  const ringSize = W >= 1000 ? 250 : 220;
+  const segs: Seg[] =
+    supported && lockedSats > 0
+      ? [{ color: color ?? '#8fcaff', part: Number(available) }, { color: '#cfe7ff', part: lockedSats, ice: true }]
+      : [{ color: color ?? '#8fcaff', part: 1, mute: !supported || available === 0n }];
+  const notes: Note[] = [];
+  if (supported && holding) {
+    notes.push({
+      seg: 0,
+      side: 'L',
+      dot: c,
+      node: (
+        <Side side="L" icon={<span className="block size-[9px] rounded-[2px]" style={{ background: c, boxShadow: `0 0 8px ${c}` }} />}>
+          <span className="text-[13.5px] font-semibold">{t('portfolio.available')}</span>
+          <span className="figure text-[12.5px] text-mute">
+            <span style={hideBalances ? undefined : GLOW(c)}>{hideBalances ? HIDDEN : fmtCrypto(available, supported.decimals, supported.symbol)}</span>
+            {holding.value !== null && <> · {hideBalances ? HIDDEN : fmtFiat(holding.value, cur)}</>}
+          </span>
+        </Side>
+      ),
+    });
+  }
+  if (supported && lockedSats > 0) {
+    notes.push({
+      seg: 1,
+      side: 'R',
+      node: (
+        <button type="button" aria-label={t('lock.lineAria')} onClick={() => navigate({ name: 'btcLocks' })} className="press text-left">
+          <Side side="R" icon={<IceSquare size={10} />}>
+            <span className="text-[13.5px] font-semibold">{nextLock ? t('portfolio.lockedUntil', { date: unlockUtc(nextLock.t, intlLocale()) }) : t('portfolio.lockReady')}</span>
+            <span className="figure text-[12.5px] text-mute">
+              {hideBalances ? HIDDEN : fmtCrypto(lockedUnits, 8, 'BTC')}
+              {nextLock && <> · {t('lock.leftAfter', { time: lockTimeLeft(nextLock.secsLeft, units) })}</>}
+              {heldLocks.length > 1 && <> · {t('portfolio.lockMany', { n: heldLocks.length })}</>}
+            </span>
+          </Side>
+        </button>
+      ),
+    });
+  }
+
+  const swapOk = !!supported && canSwapFrom(findChain(network, supported.chainKey), network);
+  const stakeBlocked = !!activeWatch || (!!activeHw && !!stakeChain && !HW_STAKE[activeHw.device].includes(stakeChain));
+  const ROW = 'flex h-9 items-center justify-between gap-3 border-t border-white/[.06] text-[13px]';
+
+  return (
+    <div className="relative min-h-0 flex-1 overflow-y-auto scroll-thin">
+      <CoinGlow color={color ?? '#7cc4ff'} top={0} width={980} height={460} />
+      <section className="relative flex min-h-full flex-col">
+        {prev && (
+          <button type="button" aria-label={t('portfolio.prevAsset', { name: prev.asset.name })} onClick={() => navigate({ name: 'asset', id: prev.asset.id })} className="press absolute top-[166px] left-8 z-10 flex items-center gap-2 text-[12.5px] text-faint transition-colors hover:text-text2">
+            <span className="text-[15px]">‹</span> {prev.asset.name}
+          </button>
+        )}
+        {next && (
+          <button type="button" aria-label={t('portfolio.nextAsset', { name: next.asset.name })} onClick={() => navigate({ name: 'asset', id: next.asset.id })} className="press absolute top-[166px] right-8 z-10 flex items-center gap-2 text-[12.5px] text-faint transition-colors hover:text-text2">
+            {next.asset.name} <span className="text-[15px]">›</span>
+          </button>
+        )}
+
+        <div ref={stageRef} className="mt-5 w-full">
+          {W > 0 && (
+            <Annotated W={W} H={300} size={ringSize} segs={segs} notes={W >= 960 ? notes : []} halo={color ?? '#7cc4ff'}>
+              <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={Math.round(ringSize * 0.25)} />
+            </Annotated>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col items-center px-8">
+          <h1 className={cn(LABEL, 'm-0')}>{name}</h1>
+          {supported ? (
+            <>
+              <span key={hideBalances ? 'h' : totalAmount.toString()} className="fade-in mt-3 text-[52px] leading-none" style={{ ...THIN, ...(holding && !hideBalances ? BIG(c) : {}) }}>
+                {hideBalances ? HIDDEN : holding ? (
+                  <>
+                    {fmtCrypto(totalAmount, supported.decimals)}
+                    <span className="ml-3 text-[22px]">{supported.symbol}</span>
+                  </>
+                ) : (
+                  '—'
+                )}
               </span>
-              <span className="figure text-[60px] leading-none tracking-[-0.05em]">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
-              {changeAbs !== null && change !== null && (
-                <span>
-                  <TrendPill change={change}>
-                    {fmtFiat(Math.abs(changeAbs), cur)} · {fmtPct(Math.abs(change), { sign: false })}
-                  </TrendPill>
-                </span>
-              )}
-            </div>
-            <Segmented className="shrink-0" label={t('portfolio.period')} value={shown} onChange={setPeriod} options={coinPeriods(coinId).map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
+              <span className="figure mt-3 text-[13.5px] text-text2">
+                {hideBalances ? HIDDEN : totalFiat !== null ? fmtFiat(totalFiat, cur) : t('portfolio.priceUnavailable')}
+                {!hideBalances && totalFiat !== null && <span className="text-faint"> · {t('portfolio.shareOfPortfolio', { share: fmtNumber(shareOf, 0) })}</span>}
+              </span>
+              <div role="group" aria-label={t('portfolio.assetActions')} className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <CoinRound
+                  c={c}
+                  aria-label={t('shell.swap')}
+                  disabled={!!activeWatch || !swapOk}
+                  title={activeWatch ? t('watch.noSign') : !swapOk ? t('portfolio.swapUnavailable', { name: supported.name }) : t('shell.swap')}
+                  onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}
+                >
+                  <IconSwap size={18} sw={2.1} />
+                </CoinRound>
+                <CoinPill c={c} disabled={supported.readOnly || !!activeWatch} title={activeWatch ? t('watch.noSign') : undefined} onClick={() => navigate({ name: 'send', assetId: supported.id })}>
+                  <IconUp size={17} sw={2.2} /> {t('common.send')}
+                </CoinPill>
+                <CoinPill c={c} onClick={() => navigate({ name: 'receive', family: supported.family })}>
+                  <IconDown size={17} sw={2.2} /> {t('common.receive')}
+                </CoinPill>
+                {address && supported.family !== 'ada' && (
+                  <CoinRound c={c} aria-label={t('portfolio.qrCode')} title={t('portfolio.qrCode')} onClick={() => navigate({ name: 'receive', family: supported.family })}>
+                    <IconQr size={18} sw={2} />
+                  </CoinRound>
+                )}
+                {isBtc && (
+                  <CoinRound c={c} aria-label={t('lock.title')} title={t('lock.title')} onClick={() => navigate({ name: 'btcLocks' })}>
+                    <IconLock size={17} />
+                  </CoinRound>
+                )}
+                {supported.kind === 'native' && stakeChain && (
+                  <CoinRound
+                    c={c}
+                    aria-label="Staking"
+                    disabled={stakeBlocked}
+                    title={activeWatch ? t('watch.noSign') : stakeBlocked ? t('portfolio.stakingNoHw') : 'Staking'}
+                    onClick={() => navigate({ name: 'staking', chain: stakeChain })}
+                  >
+                    <IconStake size={17} />
+                  </CoinRound>
+                )}
+              </div>
+            </>
+          ) : (
+            <Badge tone="ice" className="mt-3 h-6 px-2">
+              {t('portfolio.unsupported')}
+            </Badge>
+          )}
+        </div>
+
+        <section className="mx-8 mt-auto flex flex-col pt-6 pb-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+            <span className={LABEL} title={t('portfolio.priceOf', { symbol, currency: cur })}>
+              {t('portfolio.priceLabel')}
+            </span>
+            {price ? <SplitFiat value={price.price} currency={cur} tick className="fade-in text-[19px] leading-none" style={{ ...DISPLAY, fontWeight: 400, letterSpacing: '-0.03em' }} restClass="text-[13px] text-mute" /> : <Skeleton className="h-5 w-32 self-center" />}
+            {changeAbs !== null && change !== null && (
+              <span key={period} title={`${changeAbs >= 0 ? '+' : '−'}${fmtFiat(Math.abs(changeAbs), cur)}`} className={cn('fade-in figure text-[12.5px] font-medium', trendColor(change))}>
+                {fmtPct(change)} {t(`portfolio.periodLabel${shown}`)}
+              </span>
+            )}
+            <span className="ml-auto self-center">
+              <Segmented label={t('portfolio.period')} value={shown} onChange={setPeriod} accent={c} items={coinPeriods(coinId).map((p) => ({ id: p, label: t(`portfolio.period${p}`) }))} />
+            </span>
           </div>
-          <div className="mt-auto flex min-h-0 flex-1 flex-col justify-end">
+          <div className="mt-1 flex h-[170px] flex-col justify-end">
             {values.length > 1 ? (
               <SmoothChart
                 key={period}
                 revealKey={chart.partial ? 'partial' : 'full'}
                 values={values}
-                height={250}
-                fit
-                defaultPoint="max"
-                defaultLabel={t('portfolio.highest')}
+                times={times}
+                height={170}
+                stroke={c}
+                glow
+                defaultPoint="none"
                 ariaLabel={t('portfolio.priceChartAria', { name })}
                 padTop={70}
+                padBottom={4}
                 renderTooltip={(i) => ({ label: fmtChartTime(points[i]?.[0] ?? Date.now(), Date.now(), spanMs), value: fmtFiat(values[i] ?? 0, cur) })}
               />
             ) : chart.error ? (
@@ -201,147 +305,151 @@ export function AssetDetail({ id }: { id: string }) {
                 {t('portfolio.chartError', { error: chart.error.message })}
               </ErrorLine>
             ) : (
-              <div className="pb-8">
-                <Skeleton className="h-[180px] w-full" />
-              </div>
+              <Skeleton className="h-[150px] w-full" />
             )}
           </div>
         </section>
+      </section>
 
-        <aside className="rise flex w-[clamp(280px,34%,360px)] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-6 py-6">
-          {supported ? (
-            <>
-              <span className="eyebrow">{t('portfolio.yourBalance')}</span>
-              <span className="figure text-[36px] leading-none tracking-[-0.035em]">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
-              <span className="text-[14px] text-text2">
-                {hideBalances ? HIDDEN : holding?.value !== null && holding?.value !== undefined ? t('portfolio.valueShare', { value: fmtFiat(holding.value, cur), share: fmtNumber(holding.share * 100, 0) }) : t('portfolio.priceUnavailable')}
-              </span>
-              <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
-                <div className="h-full origin-left rounded-full bg-ice transition-[width] duration-500" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
+      <div className="relative mx-8 mt-6 mb-10 flex flex-col gap-5">
+        {tokenFamily && tokenAddress && <ReceivedTokens family={tokenFamily} address={tokenAddress} hidden={hideBalances} />}
+        <div className="flex gap-5 max-[1100px]:flex-col">
+          {/* Price-only assets have no account here: no activity card. */}
+          {supported && (
+            <Glass className="rise flex min-w-0 flex-1 flex-col self-start overflow-hidden rounded-[20px] max-[1100px]:self-stretch" style={idx(1)}>
+              <div className="flex h-12 shrink-0 items-center justify-between px-5">
+                <span className={LABEL}>{t('portfolio.activityOf', { symbol })}</span>
+                <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[12.5px] font-medium text-ice hover:underline">
+                  {t('portfolio.seeAll')}
+                </button>
               </div>
-              {supported.family === 'btc' && supported.kind === 'native' && <LockedLine className="border-t border-line pt-3" />}
-              <AssetGains gains={gains.byAsset.get(supported.id)} symbol={supported.symbol} />
-              {accountRows.length > 1 && (
-                <div className="mt-2 flex flex-col">
-                  <span className="eyebrow pb-2">{t('portfolio.perAccount')}</span>
-                  {accountRows.map((h) => {
-                    const active = h.account?.index === selectedAccounts[supported.family];
-                    return (
-                      <button
-                        key={h.key}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => h.account && selectChainAccount(h.account.family, h.account.index)}
-                        className="flex h-9 items-center justify-between gap-3 border-t border-line text-left text-[13px] hover:text-text"
-                      >
-                        <span className={cn('flex min-w-0 items-center gap-2', active ? 'text-text' : 'text-text2')}>
-                          <span className={cn('size-1.5 shrink-0 rounded-full', active ? 'bg-ice' : 'bg-faint')} />
-                          <span className="truncate">{h.account?.name}</span>
-                        </span>
-                        <span className={h.amount > 0n ? 'font-medium' : 'text-mute'}>{hideBalances ? HIDDEN : fmtCrypto(h.amount, supported.decimals)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {perNetwork.length > 0 && (
-                <div className="mt-2 flex flex-col">
-                  <span className="eyebrow pb-2">{t('portfolio.perNetwork')}</span>
-                  {perNetwork.map(({ chain, asset: a, amount }) => (
-                    <div key={chain.key} className="flex h-9 items-center justify-between border-t border-line text-[13px]">
-                      <span className="flex items-center gap-2 text-text2">
-                        <span className={cn('size-1.5 rounded-full', a && amount && amount > 0n ? 'bg-ice' : 'bg-faint')} />
-                        {chain.name}
-                      </span>
-                      <span className={a && amount && amount > 0n ? 'font-medium' : 'text-mute'}>{!a ? t('portfolio.notListed') : amount === null ? '—' : hideBalances ? HIDDEN : `${fmtCrypto(amount, a.decimals)}${chain.phase === 2 ? ` · ${t('portfolio.phase2')}` : ''}`}</span>
-                    </div>
-                  ))}
-                  {network === 'testnet' && <span className="pt-2 text-[12px] text-faint">{t('portfolio.l2OnMainnet')}</span>}
-                </div>
-              )}
-              {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
-              {supported.family === 'hbar' && hbarAccount.data && (
-                <div className="mt-2 flex flex-col gap-1 border-t border-line pt-3 text-[13px]">
-                  <span className="eyebrow">{t('portfolio.hbarAccount')}</span>
-                  {hbarAccount.data.exists ? (
-                    <span className="font-mono text-text2">{hbarAccount.data.accountIdChecksum ?? hbarAccount.data.accountId}</span>
-                  ) : (
-                    <span className="text-[12px] text-warn">{t('portfolio.hbarNoAccount')}</span>
-                  )}
-                  {hbarAccount.data.hollow && <span className="text-[12px] text-mute">{t('portfolio.hbarHollow')}</span>}
-                </div>
-              )}
-              {supported.family === 'xmr' && (
-                <div className="mt-2 flex flex-col gap-2">
-                  <XmrLockedNote status={xmr.status} hidden={hideBalances} />
-                  <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />
-                </div>
-              )}
-              <div className="flex-1" />
-              {address && supported.family !== 'ada' && (
-                <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-                  <AddressShort address={address} />
-                  <Button size="sm" onClick={() => navigate({ name: 'receive', family: supported.family })}>
-                    {t('portfolio.qrCode')}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <EmptyState title={t('portfolio.assetUnsupported')}>
-              {t('portfolio.unsupportedHint')}
-            </EmptyState>
+              <div>
+                {activity.length === 0 && supported.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
+                  <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
+                ) : activity.length === 0 && chainPending && !chainKnown ? (
+                  // No answer yet: a neutral line, never « No activity » before the first answer.
+                  <div className="flex items-center gap-2 px-5 py-5 text-[12.5px] text-mute" role="status">
+                    {spinWindow && <Spinner className="size-3.5 text-mute" />}
+                    {t('portfolio.loadingActivity')}
+                  </div>
+                ) : activity.length === 0 ? (
+                  <EmptyState title={t('portfolio.noActivity')}>{t('portfolio.noActivityHint')}</EmptyState>
+                ) : (
+                  <div className="stagger">{activity.map((e, i) => <HistoryRow key={e.id} i={i} e={e} compact price={price?.price ?? null} currency={cur} hidden={hideBalances} />)}</div>
+                )}
+              </div>
+            </Glass>
           )}
-        </aside>
-      </div>
 
-      {tokenFamily && tokenAddress && <ReceivedTokens family={tokenFamily} address={tokenAddress} hidden={hideBalances} />}
-      <div className="flex min-h-0 flex-1 gap-5">
-        {/* Price-only assets have no account here: no activity card. */}
-        {supported && (
-        <section className="rise flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card" style={idx(1)}>
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-6">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.activityOf', { symbol })}</span>
-            <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[13px] font-medium text-ice hover:underline">
-              {t('portfolio.seeAll')}
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-            {activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
-              <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
-            ) : activity.length === 0 && chainPending && !chainKnown ? (
-              // No answer yet: a neutral line, never « No activity » before the first answer.
-              <div className="flex items-center gap-2 px-6 py-5 text-[12.5px] text-mute" role="status">
-                {spinWindow && <Spinner className="size-3.5 text-mute" />}
-                {t('portfolio.loadingActivity')}
+          <div className={cn('rise flex shrink-0 flex-col gap-5', supported ? 'w-[clamp(280px,34%,360px)] max-[1100px]:w-full' : 'flex-1')} style={idx(2)}>
+            <Glass className="flex flex-col gap-2 rounded-[20px] px-5 py-4">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pb-1">
+                <button type="button" aria-label={t('common.back')} title={t('common.back')} onClick={back} className="press -ml-1 grid size-7 place-items-center rounded-ctl text-faint hover:text-text">
+                  <IconBack size={14} />
+                </button>
+                <span className={LABEL}>{supported ? t('portfolio.yourBalance') : name}</span>
+                <span className="text-[11px] font-medium tracking-[0.12em] text-faint">{symbol}</span>
+                {coin?.rank && <span className="figure text-[11px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
+                <button type="button" aria-label={fav ? t('portfolio.removeFavorite') : t('portfolio.addFavorite')} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press ml-auto flex size-7 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
+                  <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
+                    <IconStar size={15} filled={fav} />
+                  </span>
+                </button>
               </div>
-            ) : activity.length === 0 ? (
-              <EmptyState title={t('portfolio.noActivity')}>
-                {t('portfolio.noActivityHint')}
-              </EmptyState>
-            ) : (
-              <div className="stagger">{activity.map((e, i) => <HistoryRow key={e.id} i={i} e={e} compact price={price?.price ?? null} currency={cur} hidden={hideBalances} />)}</div>
-            )}
+              {supported && <AccountPicker family={supported.family} />}
+              {supported ? (
+                <>
+                  <div className={ROW}>
+                    <span className="text-mute">{t('portfolio.available')}</span>
+                    <span className="figure font-medium" style={hideBalances || !holding || available === 0n ? undefined : GLOW(c)}>
+                      {hideBalances ? HIDDEN : holding ? fmtCrypto(available, supported.decimals, supported.symbol) : '—'}
+                    </span>
+                  </div>
+                  <div className={ROW}>
+                    <span className="text-mute">{t('portfolio.balanceDetails')}</span>
+                    <span className="figure text-text2">
+                      {hideBalances ? HIDDEN : holding?.value !== null && holding?.value !== undefined ? t('portfolio.valueShare', { value: fmtFiat(holding.value, cur), share: fmtNumber(holding.share * 100, 0) }) : t('portfolio.priceUnavailable')}
+                    </span>
+                  </div>
+                  {isBtc && <LockedLine className="border-t border-white/[.06] pt-2.5" />}
+                  <AssetGains gains={gains.byAsset.get(supported.id)} symbol={supported.symbol} />
+                  {accountRows.length > 1 && (
+                    <div className="mt-2 flex flex-col">
+                      <span className={cn(LABEL, 'pb-2')}>{t('portfolio.perAccount')}</span>
+                      {accountRows.map((h) => {
+                        const active = h.account?.index === selectedAccounts[supported.family];
+                        return (
+                          <button key={h.key} type="button" aria-pressed={active} onClick={() => h.account && selectChainAccount(h.account.family, h.account.index)} className={cn(ROW, 'text-left hover:text-text')}>
+                            <span className={cn('flex min-w-0 items-center gap-2', active ? 'text-text' : 'text-text2')}>
+                              <span className={cn('size-[5px] shrink-0', active ? 'bg-ice shadow-[0_0_8px_#7cc4ff]' : 'bg-faint')} />
+                              <span className="truncate">{h.account?.name}</span>
+                            </span>
+                            <span className={cn('figure', h.amount > 0n ? 'font-medium' : 'text-mute')}>{hideBalances ? HIDDEN : fmtCrypto(h.amount, supported.decimals)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {perNetwork.length > 0 && (
+                    <div className="mt-2 flex flex-col">
+                      <span className={cn(LABEL, 'pb-2')}>{t('portfolio.perNetwork')}</span>
+                      {perNetwork.map(({ chain, asset: a, amount }) => (
+                        <div key={chain.key} className={ROW}>
+                          <span className="flex items-center gap-2 text-text2">
+                            <span className={cn('size-[5px]', a && amount && amount > 0n ? 'bg-ice shadow-[0_0_8px_#7cc4ff]' : 'bg-faint')} />
+                            {chain.name}
+                          </span>
+                          <span className={cn('figure', a && amount && amount > 0n ? 'font-medium' : 'text-mute')}>{!a ? t('portfolio.notListed') : amount === null ? '—' : hideBalances ? HIDDEN : `${fmtCrypto(amount, a.decimals)}${chain.phase === 2 ? ` · ${t('portfolio.phase2')}` : ''}`}</span>
+                        </div>
+                      ))}
+                      {network === 'testnet' && <span className="pt-2 text-[12px] text-faint">{t('portfolio.l2OnMainnet')}</span>}
+                    </div>
+                  )}
+                  {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
+                  {supported.family === 'hbar' && hbarAccount.data && (
+                    <div className="mt-2 flex flex-col gap-1 border-t border-white/[.06] pt-3 text-[13px]">
+                      <span className={LABEL}>{t('portfolio.hbarAccount')}</span>
+                      {hbarAccount.data.exists ? <span className="font-mono text-text2">{hbarAccount.data.accountIdChecksum ?? hbarAccount.data.accountId}</span> : <span className="text-[12px] text-warn">{t('portfolio.hbarNoAccount')}</span>}
+                      {hbarAccount.data.hollow && <span className="text-[12px] text-mute">{t('portfolio.hbarHollow')}</span>}
+                    </div>
+                  )}
+                  {supported.family === 'xmr' && (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <XmrLockedNote status={xmr.status} hidden={hideBalances} />
+                      <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />
+                    </div>
+                  )}
+                  {address && supported.family !== 'ada' && (
+                    <div className="mt-1 flex items-center justify-between gap-2 border-t border-white/[.06] pt-3">
+                      <AddressShort address={address} />
+                      <GlassButton className="h-8 rounded-[10px] px-3 text-[12px] font-medium" onClick={() => navigate({ name: 'receive', family: supported.family })}>
+                        {t('portfolio.qrCode')}
+                      </GlassButton>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <EmptyState title={t('portfolio.assetUnsupported')}>{t('portfolio.unsupportedHint')}</EmptyState>
+              )}
+            </Glass>
+
+            <Glass className="flex flex-col rounded-[20px] px-5 py-4">
+              <span className={cn(LABEL, 'pb-3')}>{t('portfolio.market')}</span>
+              {[
+                [t('portfolio.high24h'), coin?.high24h !== null && coin?.high24h !== undefined ? fmtFiat(coin.high24h, cur) : '—', ''],
+                [t('portfolio.low24h'), coin?.low24h !== null && coin?.low24h !== undefined ? fmtFiat(coin.low24h, cur) : '—', ''],
+                [t('portfolio.change7d'), fmtPct(coin?.change7d), (coin?.change7d ?? 0) >= 0 ? 'text-up' : 'text-down'],
+                [t('portfolio.change30d'), fmtPct(change30), (change30 ?? 0) >= 0 ? 'text-up' : 'text-down'],
+              ].map(([k, v, tone]) => (
+                <div key={k} className={ROW}>
+                  <span className="text-mute">{k}</span>
+                  <span className={cn('figure font-medium', v === '—' ? 'text-mute' : tone)}>{v}</span>
+                </div>
+              ))}
+              {supported && findChain(network, supported.chainKey)?.network === 'testnet' && <p className="m-0 pt-3 text-[12px] leading-[1.5] text-faint">{t('portfolio.testnetPricesNote')}</p>}
+            </Glass>
           </div>
-        </section>
-        )}
-        <section className={cn('rise flex shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5', supported ? 'w-[clamp(280px,34%,360px)]' : 'flex-1')} style={idx(2)}>
-          <div className="flex items-baseline justify-between pb-3">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.market')}</span>
-          </div>
-          {[
-            [t('portfolio.high24h'), coin?.high24h !== null && coin?.high24h !== undefined ? fmtFiat(coin.high24h, cur) : '—', ''],
-            [t('portfolio.low24h'), coin?.low24h !== null && coin?.low24h !== undefined ? fmtFiat(coin.low24h, cur) : '—', ''],
-            [t('portfolio.change7d'), fmtPct(coin?.change7d), (coin?.change7d ?? 0) >= 0 ? 'text-up' : 'text-down'],
-            [t('portfolio.change30d'), fmtPct(change30), (change30 ?? 0) >= 0 ? 'text-up' : 'text-down'],
-          ].map(([k, v, c]) => (
-            <div key={k} className="flex h-10 items-center justify-between border-t border-line text-[13.5px]">
-              <span className="text-mute">{k}</span>
-              <span className={cn('font-medium', v === '—' ? 'text-mute' : c)}>{v}</span>
-            </div>
-          ))}
-          {supported && findChain(network, supported.chainKey)?.network === 'testnet' && <p className="mt-auto pt-3 text-[12px] leading-[1.5] text-faint">{t('portfolio.testnetPricesNote')}</p>}
-        </section>
+        </div>
       </div>
     </div>
   );

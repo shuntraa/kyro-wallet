@@ -5,8 +5,7 @@
 // EIP-681 / Solana Pay / monero: / ton://transfer URI; none for TRON, XRP, Cardano, Stellar, NEAR,
 // Sui, Hedera, Polkadot, Algorand, Cosmos), network warning.
 
-import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
 import { aptosChain, isHiddenFamily, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
 import { AlgoTokens } from '../components/AlgoSend';
@@ -17,10 +16,11 @@ import { cn } from '../lib/cn';
 import { fmtCrypto, sanitizeDecimalInput } from '../lib/format';
 import { useT } from '../i18n';
 import { rt } from '../i18n/rich';
-import { AddressBlocks, CoinIcon, CopyButton } from '../components/kit';
-import { QrCode } from '../components/QrCode';
-import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
-import { IconBack, IconCheck, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
+import { CoinIcon } from '../components/kit';
+import { Menu } from '../components/ui/menu';
+import { IconCheck, IconChevronDown, IconCopy, IconRefresh, IconUsbKey } from '../components/icons';
+import { BIG, CoinGlow, Frost, GLASS_ROW, GLOW, GlassButton, LABEL, Segmented as KSegmented, THIN, VaultRing } from '../components/kyro';
+import { CoinAddress, InfoLine, QrTile, coinColor, useCopy } from '../components/CoinLight';
 import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
@@ -29,6 +29,30 @@ import { StellarTrustPanel } from '../components/StellarSend';
 
 type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'zec' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
 const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'zec', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
+const FAMILY_META = [
+  ['btc', 'Bitcoin', '₿', '#F7931A'],
+  ['evm', 'Ethereum', 'Ξ', '#627EEA'],
+  ['sol', 'Solana', 'S', '#35D0BA'],
+  ['ltc', 'Litecoin', 'Ł', '#345D9D'],
+  ['doge', 'Dogecoin', 'Ð', '#C2A633'],
+  ['bch', 'Bitcoin Cash', 'Ƀ', '#0AC18E'],
+  ['dash', 'Dash', 'Đ', '#008DE4'],
+  ['zec', 'Zcash', 'ⓩ', '#F4B728'],
+  ['tron', 'TRON', 'T', '#EB0029'],
+  ['xrp', 'XRP', 'X', '#3A3F48'],
+  ['ada', 'Cardano', 'A', '#3468D1'],
+  ['xlm', 'Stellar', '✦', '#7D00FF'],
+  ['near', 'NEAR', 'N', '#00C08B'],
+  ['sui', 'Sui', 'S', '#4DA2FF'],
+  ['hbar', 'Hedera', 'ħ', '#2D2D2D'],
+  ['kas', 'Kaspa', 'K', '#49C3B1'],
+  ['dot', 'Polkadot', 'P', '#E6007A'],
+  ['algo', 'Algorand', 'A', '#2B2B2F'],
+  ['xmr', 'Monero', 'ɱ', '#FF6600'],
+  ['ton', 'TON', '◇', '#0098EA'],
+  ['cosmos', 'Cosmos', '⚛', '#2E3148'],
+  ['apt', 'Aptos', 'A', '#1C1C1C'],
+] as const satisfies ReadonlyArray<readonly [Family, string, string, string]>;
 const VAULT_ONLY: readonly Family[] = ['near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
 const UTXO_RECEIVE = ['ltc', 'doge', 'zec', 'bch', 'dash'] as const;
 type UtxoReceive = (typeof UTXO_RECEIVE)[number];
@@ -36,7 +60,7 @@ const isUtxoReceive = (f: Family): f is UtxoReceive => (UTXO_RECEIVE as readonly
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { t, lang } = useT();
-  const { back, network, settings, navigate, selectedAccounts, hideBalances } = useApp();
+  const { network, settings, navigate, selectedAccounts, hideBalances } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, zec: !!accounts.zec, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near, sui: !!accounts.sui, hbar: !!accounts.hbar, kas: !!accounts.kas, dot: !!accounts.polkadot, algo: !!accounts.algo, xmr: !!accounts.xmr && !activeHw, ton: !!accounts.ton, cosmos: !!accounts.cosmos, apt: !!accounts.aptos };
@@ -326,331 +350,294 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                     ? t('receive.descApt')
                   : t('receive.descSol');
 
+  const meta = FAMILY_META.find(([f]) => f === family) ?? FAMILY_META[0];
+  const color = coinColor({ id: family === 'evm' ? 'ethereum' : family, glyph: meta[2], color: meta[3] });
+  const avail = FAMILY_META.filter(([f]) => !isHiddenFamily(f) && has[f]);
+  const at = avail.findIndex(([f]) => f === family);
+  const prev = avail.length > 1 ? avail[(at - 1 + avail.length) % avail.length] : undefined;
+  const next = avail.length > 1 ? avail[(at + 1) % avail.length] : undefined;
+  const pick = (f: Family) => {
+    setFamily(f);
+    setAmount('');
+    setAskAmount(false);
+  };
+  const addrChain = { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: t('receive.chainZec'), bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? t('receive.chainHbarId') : activeHw ? t('receive.chainHbarKey') : t('receive.chainHbarEvm'), sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family];
+  const netLabel = `${chainName}${network === 'testnet' && !/testnet/i.test(chainName) ? ' (testnet)' : ''}`;
+  const warning = `${t('receive.networkWarning', { chain: chainName })}${network === 'testnet' ? t('receive.testTokens') : ''}`;
+  const canNew = family === 'btc' || isUtxoReceive(family);
+  const S = 360;
+  const tile = 146;
+  const [copied, copy] = useCopy();
+  const [copiedUri, copyUri] = useCopy();
+  const single = family === 'btc' || family === 'ltc' || family === 'doge' || family === 'bch' || family === 'dash' || family === 'zec' || family === 'kas' || family === 'xmr';
+  const coinName = meta[1];
+  const onlyTitle = single ? t(/^[aeiouyh]/i.test(coinName) ? 'receive.onlyCoinVowel' : 'receive.onlyCoin', { coin: coinName }) : t('receive.onlyNetwork', { chain: netLabel });
+  const onlyBody = single ? t('receive.onlyCoinBody', { symbol, chain: netLabel }) : warning;
+  const rightTitle = askAmount && amountBase ? t('receive.qrWithAmount') : canNew ? t('receive.freshTitle') : t('receive.addressFormat');
+  const rightBody = canNew ? t('receive.freshBody') : desc;
+  const b = (c: ReactNode) => <strong className="font-semibold text-text">{c}</strong>;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <IconButton label={t('receive.backToWallet')} onClick={back} className="size-9">
-            <IconBack size={16} />
-          </IconButton>
-          <h1 className="screen-title">{t('receive.title')}</h1>
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto scroll-thin">
+      <CoinGlow color={color} top={-20} />
+      <div className="relative flex flex-col items-center pb-10">
+        <div className="relative mt-4 w-full" style={{ height: S + 12 }}>
+          {prev && (
+            <button type="button" onClick={() => pick(prev[0])} className="press absolute left-8 flex items-center gap-2 text-[12.5px] text-faint transition-colors hover:text-text2" style={{ top: S / 2 + 6, transform: 'translateY(-50%)' }}>
+              <span aria-hidden="true" className="text-[15px]">‹</span> {prev[1]}
+            </button>
+          )}
+          {next && (
+            <button type="button" onClick={() => pick(next[0])} className="press absolute right-8 flex items-center gap-2 text-[12.5px] text-faint transition-colors hover:text-text2" style={{ top: S / 2 + 6, transform: 'translateY(-50%)' }}>
+              {next[1]} <span aria-hidden="true" className="text-[15px]">›</span>
+            </button>
+          )}
+          <div key={family} className="pop-in absolute" style={{ left: `calc(50% - ${S / 2}px)`, top: 6 }}>
+            <VaultRing size={S} segs={[{ color, part: 1 }]} halo={color}>
+              <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
+                <QrTile value={uri} size={tile} color={color} />
+              </div>
+            </VaultRing>
+          </div>
+          <span className="absolute hidden items-center gap-3 xl:flex" style={{ right: `calc(50% + ${S / 2 + 14}px)`, top: S / 2 + 6, transform: 'translateY(-50%)' }}>
+            <span className="flex max-w-[220px] flex-col items-end gap-0.5 text-right text-[12.5px] leading-snug text-mute">
+              <span className="text-[13px] font-semibold text-text">{onlyTitle}</span>
+              {onlyBody}
+            </span>
+            <span className="h-px w-12 bg-white/[.18]" />
+            <span className="size-[6px] bg-[#cfe7ff]" />
+          </span>
+          <span className="absolute hidden items-center xl:flex" style={{ left: `calc(50% + ${tile / 2 + 8}px)`, top: S / 2 + 6, transform: 'translateY(-50%)' }}>
+            <span className="size-[6px] bg-[#cfe7ff]" />
+            <span className="h-px bg-white/[.22]" style={{ width: S / 2 - tile / 2 + 56 }} />
+            <span className="flex max-w-[230px] flex-col gap-0.5 pl-3 text-[12.5px] leading-snug text-mute">
+              <span className="text-[13px] font-semibold text-text">{rightTitle}</span>
+              {rightBody}
+            </span>
+          </span>
+        </div>
+
+        <div className="mt-3 flex flex-col items-center">
+          <span className={LABEL}>{t('receive.yourAddress', { chain: addrChain })}</span>
+          <span className={cn('mt-3.5 max-w-[640px] text-center', blocked && 'pointer-events-none opacity-30 blur-[3px]')} aria-hidden={blocked || undefined}>
+            <CoinAddress key={address} address={address} color={color} className="fade-in text-[17px] leading-[1.7]" />
+          </span>
+          <span className="mt-2 max-w-[560px] text-center text-[12.5px] leading-[1.5] text-mute xl:hidden">
+            <span className="font-semibold text-text2">{onlyTitle}</span> · {onlyBody} {rightBody}
+          </span>
+        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+          {activeHw ? (
+            <>
+              <Frost className="w-[230px]" disabled={blocked || verify.state === 'running' || !address} onClick={() => void verifyOnDevice()}>
+                <IconUsbKey size={16} /> {t('receive.verifyOnDevice')}
+              </Frost>
+              <GlassButton className={cn('h-12 w-[190px]', blocked && 'pointer-events-none opacity-40')} onClick={() => copy(address)}>
+                {copied ? <IconCheck size={16} className="text-up" /> : <IconCopy size={16} sw={2.1} />} {copied === null ? t('receive.copyAddress') : copied ? t('common.copied') : t('shell.copyFailed')}
+              </GlassButton>
+            </>
+          ) : (
+            <Frost className="w-[210px]" disabled={!address} onClick={() => copy(address)}>
+              {copied ? <IconCheck size={16} className="text-up" /> : <IconCopy size={16} sw={2.1} />} {copied === null ? t('receive.copyAddress') : copied ? t('common.copied') : t('shell.copyFailed')}
+            </Frost>
+          )}
+          {canNew && (
+            <GlassButton className="h-12 w-[180px]" title={t('receive.newAddressTitle')} onClick={() => void newAddress()}>
+              <IconRefresh size={16} sw={2.1} /> {t('receive.newAddress')}
+            </GlassButton>
+          )}
+          {amountLink && (
+            <GlassButton
+              className="h-12 w-[180px]"
+              aria-pressed={askAmount}
+              onClick={() => {
+                if (askAmount) setAmount('');
+                setAskAmount(!askAmount);
+              }}
+              style={askAmount ? { color, boxShadow: `inset 0 0 0 1.5px ${color}aa, 0 0 18px ${color}26`, background: `${color}14` } : undefined}
+            >
+              {t('receive.askAmount')}
+            </GlassButton>
+          )}
+        </div>
+
+        </div>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+            <Menu
+              value={family}
+              onSelect={(f) => pick(f)}
+              label={t('receive.network')}
+              className="w-[300px]"
+              items={FAMILY_META.filter(([f]) => !isHiddenFamily(f)).map(([f, label, glyph, c]) => ({
+                value: f,
+                label,
+                disabled: !has[f],
+                ...(has[f] ? {} : { hint: VAULT_ONLY.includes(f) ? t('receive.vaultOnlyTitle') : t('receive.noKeysTitle') }),
+                icon: <CoinIcon glyph={glyph} color={c} id={f === 'evm' ? 'ethereum' : f} size={22} />,
+              }))}
+              trigger={
+                <button type="button" className={cn('press flex h-10 items-center gap-2.5 rounded-[13px] pr-3 pl-1.5 text-[13.5px] font-semibold hover:bg-white/[.08]', GLASS_ROW)}>
+                  <CoinIcon glyph={meta[2]} color={meta[3]} id={family === 'evm' ? 'ethereum' : family} size={28} />
+                  {meta[1]}
+                  <IconChevronDown size={14} className="text-faint" />
+                </button>
+              }
+            />
           <AccountPicker family={family} />
           <NewAccountButton family={family} />
-        </div>
-        <div role="group" aria-label={t('receive.network')} className="flex min-w-0 gap-0.5 overflow-x-auto rounded-[8px] border border-line bg-bg p-[3px] scroll-thin">
-          {(
-            [
-              ['btc', 'Bitcoin', '₿', '#F7931A'],
-              ['evm', 'Ethereum', 'Ξ', '#627EEA'],
-              ['sol', 'Solana', 'S', '#35D0BA'],
-              ['ltc', 'Litecoin', 'Ł', '#345D9D'],
-              ['doge', 'Dogecoin', 'Ð', '#C2A633'],
-              ['bch', 'Bitcoin Cash', 'Ƀ', '#0AC18E'],
-              ['dash', 'Dash', 'Đ', '#008DE4'],
-              ['zec', 'Zcash', 'ⓩ', '#F4B728'],
-              ['tron', 'TRON', 'T', '#EB0029'],
-              ['xrp', 'XRP', 'X', '#3A3F48'],
-              ['ada', 'Cardano', 'A', '#3468D1'],
-              ['xlm', 'Stellar', '✦', '#7D00FF'],
-              ['near', 'NEAR', 'N', '#00C08B'],
-              ['sui', 'Sui', 'S', '#4DA2FF'],
-              ['hbar', 'Hedera', 'ħ', '#2D2D2D'],
-              ['kas', 'Kaspa', 'K', '#49C3B1'],
-              ['dot', 'Polkadot', 'P', '#E6007A'],
-              ['algo', 'Algorand', 'A', '#2B2B2F'],
-              ['xmr', 'Monero', 'ɱ', '#FF6600'],
-              ['ton', 'TON', '◇', '#0098EA'],
-              ['cosmos', 'Cosmos', '⚛', '#2E3148'],
-              ['apt', 'Aptos', 'A', '#1C1C1C'],
-            ] as const
-          ).filter(([f]) => !isHiddenFamily(f)).map(([f, label, glyph, color]) => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={family === f}
-              disabled={!has[f]}
-              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? t('receive.vaultOnlyTitle') : t('receive.noKeysTitle')}
-              onClick={() => {
-                setFamily(f);
-                setAmount('');
-                setAskAmount(false);
-              }}
-              className={cn('relative flex h-8 shrink-0 items-center gap-2 rounded-[5px] pr-3 pl-1.5 text-[12.5px] transition-colors duration-150 disabled:opacity-35', family === f ? 'font-medium text-text' : 'text-mute hover:text-text2')}
-            >
-              {family === f && <motion.span layoutId="receive-family" aria-hidden="true" className="absolute inset-0 rounded-[5px] border border-line-3 bg-control-2" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />}
-              <CoinIcon glyph={glyph} color={color} id={f === 'evm' ? 'ethereum' : f} size={20} className="relative z-10" />
-              <span className="relative z-10">{label}</span>
-            </button>
-          ))}
-        </div>
-      </header>
-      {activeHw && (
-        <span className="-mt-2 self-end text-[12px] text-faint">{t('receive.hwUnsupported')}</span>
-      )}
-
-      <section className="relative flex min-h-0 flex-1 items-center-safe justify-center gap-14 overflow-y-auto rounded-panel border border-line bg-card p-8 scroll-thin">
-        <div className="relative flex flex-col items-center gap-3">
-          <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
-            <QrCode value={uri} size={300} />
-          </div>
-          {askAmount && amountBase && <span className="eyebrow">{t('receive.qrWithAmount')}</span>}
-        </div>
-
-        <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: t('receive.chainZec'), bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? t('receive.chainHbarId') : activeHw ? t('receive.chainHbarKey') : t('receive.chainHbarEvm'), sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
-            <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
-          </div>
-          {isUtxoReceive(family) && (
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title={t('receive.newAddressTitle')}>
-                <IconRefresh size={14} /> {t('receive.newAddress')}
-              </Button>
+          {(family === 'btc' || (family === 'hbar' && hbarId && hbarEvmOk)) && (
+            <div>
+              {family === 'btc' ? (
+                <KSegmented
+                  label={t('receive.addressType')}
+                  accent={color}
+                  value={kind}
+                  onChange={(k) => {
+                    setKind(k);
+                    setIndex(0);
+                    setVerify({ state: 'idle' });
+                  }}
+                  items={[
+                    { id: 'segwit', label: 'SegWit' },
+                    { id: 'taproot', label: 'Taproot' },
+                  ]}
+                />
+              ) : (
+                <KSegmented label="Format" accent={color} value={hbarView} onChange={setHbarView} items={[{ id: 'id', label: t('receive.hbarFormatId', { id: hbarId ?? '' }) }, { id: 'evm', label: t('receive.hbarFormatEvm') }]} />
+              )}
             </div>
           )}
+        </div>
+        <span className="mt-2 font-mono text-[11px] text-faint">{path}</span>
+        {activeHw && <span className="mt-2 max-w-[640px] text-center text-[12px] leading-[1.5] text-faint">{t('receive.hwUnsupported')}</span>}
+
+        <div className="mt-5 flex w-full max-w-[560px] flex-col gap-3">
+          {askAmount && amountLink && (
+            <div className="pop-in flex flex-col items-center gap-2.5">
+              <label className={cn('flex h-14 w-full items-center gap-3 rounded-[16px] px-5 focus-within:ring-white/[.18]', GLASS_ROW)}>
+                <span className={LABEL}>{t('receive.requestedAmount')}</span>
+                <input autoFocus value={amount} inputMode="decimal" placeholder="0" aria-label={t('receive.requestedAmount')} onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="min-w-0 flex-1 bg-transparent text-right text-[24px] leading-none" style={{ ...THIN, ...BIG(color) }} />
+                <span className="text-[14px] font-semibold" style={GLOW(color)}>{symbol}</span>
+              </label>
+              {amountBase !== null && amountBase > 0n && (
+                <div className={cn('flex w-full items-center gap-3 rounded-[14px] py-1.5 pr-1.5 pl-4', GLASS_ROW)}>
+                  <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-mute">{uri}</span>
+                  <button type="button" onClick={() => copyUri(uri)} className="press flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[12.5px] font-semibold text-text hover:bg-white/[.08]">
+                    {copiedUri ? <IconCheck size={14} className="text-up" /> : <IconCopy size={14} />} {copiedUri === null ? t('receive.copyLink') : copiedUri ? t('common.copied') : t('shell.copyFailed')}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {verify.state === 'running' && activeHw && (
+            <HwWaiting deviceId={verify.deviceId} idle={t('receive.connecting', { device: BRAND[activeHw.device] })} confirm={{ title: t('receive.compareTitle'), detail: t('receive.compareDetail') }} />
+          )}
+          {activeHw && !verifiedHere && !blocked && verify.state !== 'running' && (
+            <span className="flex items-center justify-center gap-2 text-center text-[12.5px] text-mute">
+              <DeviceBadge device={activeHw.device} model={activeHw.model} />
+              {t('receive.hwCheckFirst')}
+            </span>
+          )}
+          {verifiedHere && <InfoLine tone="success">{t('receive.verified')}</InfoLine>}
+          {verify.state === 'error' && !isAddressMismatch(verify.error) && verify.address === address && <HwErrorNotice error={verify.error} onRetry={() => void verifyOnDevice()} />}
+          {blocked && <InfoLine tone="error">{rt('receive.blocked', { b })}</InfoLine>}
+          {deriveError && <InfoLine tone="error">{deriveError}</InfoLine>}
           {(family === 'doge' || family === 'dash') && dogeInfo.data && !dogeInfo.data.available && (
-            <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              {rt('receive.dogeNoServer', { b: (c) => <strong className="font-semibold">{c}</strong> }, { coin: family === 'dash' ? 'Dash' : 'Dogecoin' })}
+            <InfoLine tone="warn">
+              {rt('receive.dogeNoServer', { b }, { coin: family === 'dash' ? 'Dash' : 'Dogecoin' })}
               <button type="button" onClick={() => navigate({ name: 'settings', section: 'networks' })} className="mt-1 block font-semibold text-ice hover:underline">
                 {t('receive.dogeConfigure', { coin: family === 'dash' ? 'Dash' : 'Dogecoin' })}
               </button>
-            </Notice>
-          )}
-          {family === 'hbar' && hbarId && hbarEvmOk && (
-            <Segmented
-              label="Format"
-              value={hbarView}
-              onChange={setHbarView}
-              options={[
-                { value: 'id', label: t('receive.hbarFormatId', { id: hbarId }) },
-                { value: 'evm', label: t('receive.hbarFormatEvm') },
-              ]}
-            />
-          )}
-          {family === 'btc' && (
-            <div className="flex items-center gap-2">
-              <Segmented
-                label={t('receive.addressType')}
-                value={kind}
-                onChange={(k) => {
-                  setKind(k);
-                  setIndex(0);
-                  setVerify({ state: 'idle' });
-                }}
-                options={[
-                  { value: 'segwit', label: 'SegWit' },
-                  { value: 'taproot', label: 'Taproot' },
-                ]}
-              />
-              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title={t('receive.newAddressTitle')}>
-                <IconRefresh size={14} /> {t('receive.newAddress')}
-              </Button>
-            </div>
-          )}
-          <div className={cn(blocked && 'pointer-events-none opacity-30 blur-[3px]')} aria-hidden={blocked || undefined}>
-            <AddressBlocks address={address} size="xl" />
-          </div>
-          {activeHw ? (
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center gap-2 text-[12px] text-mute">
-                <DeviceBadge device={activeHw.device} model={activeHw.model} />
-                <span>{t('receive.hwCheckFirst')}</span>
-              </div>
-              <Button variant="primary" size="xl" disabled={blocked || verify.state === 'running' || !address} onClick={() => void verifyOnDevice()}>
-                <IconUsbKey size={16} /> {t('receive.verifyOnDevice')}
-              </Button>
-              {verify.state === 'running' && (
-                <HwWaiting
-                  deviceId={verify.deviceId}
-                  idle={t('receive.connecting', { device: BRAND[activeHw.device] })}
-                  confirm={{ title: t('receive.compareTitle'), detail: t('receive.compareDetail') }}
-                />
-              )}
-              {verifiedHere && (
-                <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />}>
-                  {t('receive.verified')}
-                </Notice>
-              )}
-              {verify.state === 'error' && !isAddressMismatch(verify.error) && verify.address === address && <HwErrorNotice error={verify.error} onRetry={() => void verifyOnDevice()} />}
-              {blocked && (
-                <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-                  {rt('receive.blocked', { b: (c) => <strong className="font-semibold">{c}</strong> })}
-                </Notice>
-              )}
-              <CopyButton text={address} size="xl" className={cn(blocked && 'pointer-events-none opacity-40')} />
-            </div>
-          ) : (
-            <div className="flex gap-2.5">
-              <CopyButton text={address} variant="primary" size="xl" className="flex-1" />
-            </div>
-          )}
-          {deriveError && <Notice tone="error">{deriveError}</Notice>}
-          <dl className="m-0 flex flex-col overflow-hidden rounded-box border border-line text-[13px]">
-            <div className="flex h-11 items-center justify-between border-b border-line px-4">
-              <dt className="text-mute">{t('receive.network')}</dt>
-              <dd className="m-0">
-                {chainName}
-                {network === 'testnet' && !/testnet/i.test(chainName) ? ' (testnet)' : ''}
-              </dd>
-            </div>
-            <div className="flex h-11 items-center justify-between border-b border-line px-4">
-              <dt className="text-mute">{t('receive.derivationPath')}</dt>
-              <dd className="m-0 font-mono text-[12px]">{path}</dd>
-            </div>
-            <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-1.5">
-              <dt className="text-mute">{t('receive.requestedAmount')}</dt>
-              <dd className="m-0">
-                {!amountLink ? (
-                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : family === 'apt' ? 'Aptos' : family === 'cosmos' ? 'Cosmos Hub' : family === 'algo' ? 'Algorand' : family === 'dot' ? 'Polkadot' : family === 'kas' ? 'Kaspa' : family === 'hbar' ? 'Hedera' : family === 'sui' ? 'Sui' : family === 'xlm' ? 'Stellar' : family === 'near' ? 'NEAR' : 'TRON' })}</span>
-                ) : askAmount ? (
-                  <span className="flex items-center gap-2">
-                    <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
-                    <span className="text-mute">{symbol}</span>
-                    <button type="button" onClick={() => { setAskAmount(false); setAmount(''); }} className="text-[12px] text-mute hover:text-text">
-                      {t('common.remove')}
-                    </button>
-                  </span>
-                ) : (
-                  <button type="button" onClick={() => setAskAmount(true)} className="font-semibold text-ice hover:underline">
-                    {t('receive.addAmount')}
-                  </button>
-                )}
-              </dd>
-            </div>
-          </dl>
-          {askAmount && amountBase !== null && amountBase > 0n && (
-            <div className="flex items-center justify-between gap-2 rounded-ctl bg-raised py-1.5 pr-1.5 pl-3">
-              <span className="truncate font-mono text-[12px] text-mute">{uri}</span>
-              <CopyButton text={uri} label={t('receive.copyLink')} />
-            </div>
+            </InfoLine>
           )}
           {family === 'zec' && (
-            <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              {rt('receive.zecNote', { b: (c) => <strong className="font-semibold">{c}</strong>, t: (c) => <strong>{c}</strong> })}
+            <InfoLine tone="warn">
+              {rt('receive.zecNote', { b, t: (c) => <strong>{c}</strong> })}
               {zecInfo.data && !zecInfo.data.available && <span className="mt-1 block font-semibold">{t('receive.zecTestnetNoServer')}</span>}
-            </Notice>
+            </InfoLine>
           )}
-          {family === 'tron' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.tronNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
-          {family === 'ada' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.adaNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
-          {family === 'kas' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.kasNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
+          {family === 'tron' && <InfoLine>{rt('receive.tronNote', { b })}</InfoLine>}
+          {family === 'ada' && <InfoLine>{rt('receive.adaNote', { b })}</InfoLine>}
+          {family === 'kas' && <InfoLine>{rt('receive.kasNote', { b })}</InfoLine>}
           {family === 'xmr' && adapters.xmr && <XmrReceivePanel adapter={adapters.xmr} hidden={hideBalances} />}
-          {family === 'xmr' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.xmrNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
+          {family === 'xmr' && <InfoLine>{rt('receive.xmrNote', { b })}</InfoLine>}
           {family === 'ton' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.tonNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+            <InfoLine>
+              {rt('receive.tonNote', { b })}
               {network === 'testnet' ? t('receive.tonTestnetId') : ''}
-              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.tonJettonNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
-            </Notice>
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.tonJettonNote', { b })}</span>}
+            </InfoLine>
           )}
           {family === 'xrp' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.xrpNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+            <InfoLine>
+              {rt('receive.xrpNote', { b })}
               {xrpAccount.data && !xrpAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.xrpNotActivated')}</span>}
-            </Notice>
+            </InfoLine>
           )}
           {family === 'xlm' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.xlmReserve', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+            <InfoLine>
+              {rt('receive.xlmReserve', { b })}
               {xlmAccount.data && !xlmAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.xlmNotCreated')}</span>}
               {xlmAccount.data?.exists && <span className="mt-1 block text-text2">{t('receive.xlmExists', { reserve: fmtCrypto(BigInt(xlmAccount.data.reserve), 7, 'XLM', 7) })}</span>}
-            </Notice>
+            </InfoLine>
           )}
           {family === 'xlm' && adapters.stellar && <StellarTrustPanel adapter={adapters.stellar} hidden={hideBalances} />}
           {family === 'near' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.nearNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+            <InfoLine>
+              {rt('receive.nearNote', { b })}
               {nearAccount.data && !nearAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.nearNotCreated')}</span>}
-              {nearTokens.data && nearTokens.data.length > 0 && <span className="mt-1 block">{rt('receive.nearTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { status: nearTokens.data.map((x) => `${x.symbol} ${x.registered ? t('receive.nearRegistered') : t('receive.nearNotRegistered')}`).join(' · ') })}</span>}
-            </Notice>
+              {nearTokens.data && nearTokens.data.length > 0 && <span className="mt-1 block">{rt('receive.nearTokenNote', { b }, { status: nearTokens.data.map((x) => `${x.symbol} ${x.registered ? t('receive.nearRegistered') : t('receive.nearNotRegistered')}`).join(' · ') })}</span>}
+            </InfoLine>
           )}
           {family === 'sui' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.suiNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.suiTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
-            </Notice>
+            <InfoLine>
+              {rt('receive.suiNote', { b })}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.suiTokenNote', { b })}</span>}
+            </InfoLine>
           )}
           {family === 'hbar' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+            <InfoLine tone={!activeHw && !(hbarAccount.data && !hbarAccount.data.exists) && !hbarEvmOk ? 'warn' : 'info'}>
               {activeHw && hbarAccount.data && !hbarAccount.data.exists ? (
-                <>{rt('receive.hbarHwNotCreated', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</>
+                <>{rt('receive.hbarHwNotCreated', { b })}</>
               ) : activeHw ? (
-                <>{rt('receive.hbarHwNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}</>
+                <>{rt('receive.hbarHwNote', { b }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}</>
               ) : hbarAccount.data && !hbarAccount.data.exists ? (
-                <>
-                  {rt('receive.hbarNotCreated', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-                </>
+                <>{rt('receive.hbarNotCreated', { b })}</>
               ) : !hbarEvmOk ? (
                 <span className="font-semibold text-warn">{t('receive.hbarFoundByKey', { id: hbarId ?? '' })}</span>
               ) : (
-                <>
-                  {rt('receive.hbarNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}
-                </>
+                <>{rt('receive.hbarNote', { b }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}</>
               )}
-            </Notice>
+            </InfoLine>
           )}
           {family === 'hbar' && adapters.hbar && hbarAccount.data && <HbarTokens adapter={adapters.hbar} account={hbarAccount.data} />}
           {family === 'dot' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.dotNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, {
+            <InfoLine>
+              {rt('receive.dotNote', { b }, {
                 amount: `${(dotAccount.data ? String(Number(dotAccount.data.existentialDeposit) / 10 ** dot.nativeDecimals) : '0.01').replace('.', lang === 'fr' ? ',' : '.')} ${dot.nativeSymbol}`,
               })}
               {dotAccount.data && !dotAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.dotNotCreated', { symbol: dot.nativeSymbol })}</span>}
-              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.dotTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
-            </Notice>
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.dotTokenNote', { b })}</span>}
+            </InfoLine>
           )}
           {family === 'algo' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.algoNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+            <InfoLine>
+              {rt('receive.algoNote', { b })}
               <span className="mt-1 block">{t('receive.algoLedgerPath')}</span>
               {algoAccount.data && !algoAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.algoNotCreated')}</span>}
               {algoAccount.data?.authAddr && <span className="mt-1 block font-semibold text-down">{t('receive.algoRekeyed', { addr: algoAccount.data.authAddr })}</span>}
-            </Notice>
+            </InfoLine>
           )}
           {family === 'algo' && adapters.algo && <AlgoTokens adapter={adapters.algo} />}
-          {family === 'cosmos' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.cosmosNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
+          {family === 'cosmos' && <InfoLine>{rt('receive.cosmosNote', { b })}</InfoLine>}
           {family === 'apt' && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.aptNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.aptTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
-            </Notice>
+            <InfoLine>
+              {rt('receive.aptNote', { b })}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.aptTokenNote', { b })}</span>}
+            </InfoLine>
           )}
-          {family === 'btc' && cbfMode && (
-            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {rt('receive.cbfNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
-            </Notice>
-          )}
-          <div className="flex items-center gap-2.5 rounded-box border border-line bg-control px-3.5 py-2.5 text-[12.5px] leading-[1.5] text-mute">
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line-2 bg-card py-0.5 pr-2 pl-0.5 text-[11.5px] font-medium text-text">
-              <CoinIcon id={family === 'evm' ? 'ethereum' : family} size={16} />
-              {chainName}
-            </span>
-            <span className="min-w-0">
-              {t('receive.networkWarning', { chain: chainName })}
-              {network === 'testnet' ? t('receive.testTokens') : ''}
-            </span>
-          </div>
+          {family === 'btc' && cbfMode && <InfoLine>{rt('receive.cbfNote', { b })}</InfoLine>}
         </div>
-      </section>
+      </div>
       {mismatch !== null && <AddressMismatchStop error={mismatch} onClose={() => setMismatch(null)} />}
     </div>
   );

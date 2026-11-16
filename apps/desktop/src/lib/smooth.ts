@@ -24,9 +24,11 @@ export function smoothPath(points: Pt[], opts: { clamp?: boolean } = {}): string
     const p1 = pts[i] as Pt;
     const p2 = pts[i + 1] as Pt;
     const p3 = pts[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
+    // Control points stay inside their segment: with uneven gaps (weekly then daily points) the
+    // curve would otherwise loop backwards in time.
+    const c1x = Math.min(p2.x, Math.max(p1.x, p1.x + (p2.x - p0.x) / 6));
     const c1y = cy(p1.y + (p2.y - p0.y) / 6);
-    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2x = Math.min(p2.x, Math.max(p1.x, p2.x - (p3.x - p1.x) / 6));
     const c2y = cy(p2.y - (p3.y - p1.y) / 6);
     d += ` C${r(c1x)},${r(c1y)} ${r(c2x)},${r(c2y)} ${r(p2.x)},${r(p2.y)}`;
   }
@@ -46,12 +48,15 @@ export interface FitOptions {
   height: number;
   padTop?: number;
   padBottom?: number;
+  /** Horizontal position of each value (a time, say); default: evenly spaced. */
+  xs?: number[];
 }
 
 /** Map values onto a width × height box (y grows downwards). Flat series sit in the middle. */
 export function fitSeries(values: number[], o: FitOptions): Pt[] {
-  const vals = values.filter((v) => Number.isFinite(v));
-  if (vals.length === 0) return [];
+  const keep = values.map((_, i) => i).filter((i) => Number.isFinite(values[i]) && (!o.xs || Number.isFinite(o.xs[i])));
+  if (keep.length === 0) return [];
+  const vals = keep.map((i) => values[i] as number);
   const top = o.padTop ?? 0;
   const bottom = o.padBottom ?? 0;
   const min = Math.min(...vals);
@@ -59,10 +64,40 @@ export function fitSeries(values: number[], o: FitOptions): Pt[] {
   const span = max - min;
   const h = o.height - top - bottom;
   const n = vals.length;
+  const xs = o.xs ? keep.map((i) => o.xs![i] as number) : null;
+  const x0 = xs ? (xs[0] as number) : 0;
+  const xSpan = xs ? (xs[n - 1] as number) - x0 : 0;
   return vals.map((v, i) => ({
-    x: n === 1 ? o.width / 2 : (i / (n - 1)) * o.width,
+    x: n === 1 ? o.width / 2 : xs && xSpan > 0 ? (((xs[i] as number) - x0) / xSpan) * o.width : (i / (n - 1)) * o.width,
     y: span === 0 ? top + h / 2 : top + (1 - (v - min) / span) * h,
   }));
+}
+
+/**
+ * Which points a chart draws: at most `max` indices, in order. The x range (`xs`, else the index) is
+ * cut into equal buckets and each keeps its lowest and highest point; first and last are always
+ * kept. Real points only, never averages: the dot, the tooltip and « highest » show a true price.
+ */
+export function pickPoints(values: number[], max: number, xs?: number[]): number[] {
+  const ok = values.map((_, i) => i).filter((i) => Number.isFinite(values[i]) && (!xs || Number.isFinite(xs[i])));
+  if (ok.length <= max || max < 4) return ok;
+  const at = (i: number) => (xs ? (xs[i] as number) : i);
+  const first = ok[0] as number;
+  const last = ok[ok.length - 1] as number;
+  const x0 = at(first);
+  const span = at(last) - x0;
+  const buckets = Math.max(1, Math.floor((max - 2) / 2));
+  const lo = new Map<number, number>();
+  const hi = new Map<number, number>();
+  for (const i of ok.slice(1, -1)) {
+    const b = span > 0 ? Math.min(buckets - 1, Math.floor(((at(i) - x0) / span) * buckets)) : 0;
+    const l = lo.get(b);
+    const h = hi.get(b);
+    if (l === undefined || (values[i] as number) < (values[l] as number)) lo.set(b, i);
+    if (h === undefined || (values[i] as number) > (values[h] as number)) hi.set(b, i);
+  }
+  const picked = new Set<number>([first, last, ...lo.values(), ...hi.values()]);
+  return [...picked].sort((a, b) => a - b);
 }
 
 /** Reduce a long series to at most `max` points (keeps first, last and local extremes per bucket). */

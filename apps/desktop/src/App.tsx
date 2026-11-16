@@ -3,12 +3,12 @@ import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { MotionConfig, motion } from 'motion/react';
 import { coinSearch } from './lib/coinSearch';
 import { fmtNumber, shortAddress } from './lib/format';
-import { AppProvider, useApp, useVault, type Route } from './state/app';
+import { AppProvider, useApp, useVault } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
-import { NavRail } from './shell/NavRail';
+import { KyroBar } from './shell/KyroBar';
+import { BG, IceLight } from './components/kyro';
 import { useEarnRatesInBackground } from './state/earnRates';
-import { StatusFrame } from './shell/StatusBar';
 import { Welcome } from './screens/Welcome';
 import { Unlock } from './screens/Unlock';
 import { Portfolio } from './screens/Portfolio';
@@ -97,36 +97,8 @@ function Frame({ children }: { children: React.ReactNode }) {
     <div className="app-backdrop flex h-full flex-col text-text">
       <TitleBar bordered={false} />
       {children}
-      <StatusFrame left={<span className="text-mute">Kyro Wallet</span>} />
     </div>
   );
-}
-
-function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
-  switch (r.name) {
-    case 'portfolio':
-      return [];
-    case 'assets':
-      return [t('shell.assets')];
-    case 'asset':
-      return [t('shell.assets'), assetName(r.id)];
-    case 'send':
-      return [t('common.send')];
-    case 'receive':
-      return [t('common.receive')];
-    case 'swap':
-      return ['Swap'];
-    case 'tidy':
-      return [t('shell.assets'), t('tidy.title')];
-    case 'btcLocks':
-      return [t('shell.assets'), t('lock.title')];
-    case 'history':
-      return [t('common.history')];
-    case 'staking':
-      return r.chain ? [t('shell.earn'), { sol: 'Solana', ada: 'Cardano', tron: 'TRON', near: 'NEAR', sui: 'Sui', apt: 'Aptos' }[r.chain]] : [t('shell.earn')];
-    case 'settings':
-      return [t('common.settings')];
-  }
 }
 
 function Unlocked() {
@@ -139,14 +111,6 @@ function Unlocked() {
   useLongHistoryWarmup();
   useGainsWarmup();
   useAlerts();
-
-  const assetName = useCallback(
-    (id: string) => {
-      if (id.startsWith('cg:')) return pf.marketById.get(id.slice(3))?.name ?? id.slice(3);
-      return pf.holdings.find((h) => h.asset.id === id)?.asset.name ?? id;
-    },
-    [pf.holdings, pf.marketById],
-  );
 
   const search = useCallback(
     (q: string): SearchResult[] => {
@@ -219,10 +183,10 @@ function Unlocked() {
 
 
   return (
-    <div className="app-backdrop flex h-full flex-col text-text">
-      <TitleBar crumbs={crumbsOf(route, assetName)} search={search} account={<AccountSwitcher />} />
-      <div className="flex min-h-0 flex-1">
-        <NavRail />
+    <div className="relative flex h-full flex-col overflow-hidden text-text" style={{ background: BG }}>
+      <IceLight x="50%" y="28%" size={900} strength={0.18} id="app" />
+      <KyroBar search={search} account={<AccountSwitcher />} />
+      <div className="relative z-10 flex min-h-0 flex-1">
         {/*
          * Enter-only transition: the next screen mounts at once (an exit animation would block
          * navigation while the window is hidden and rAF is paused).

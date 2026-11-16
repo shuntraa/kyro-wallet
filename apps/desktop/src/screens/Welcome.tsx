@@ -1,55 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Onboarding: create a vault (phrase shown once in a native window, 3-word check by Rust) or import
-// a BIP39 phrase (wordlist autocomplete).
+// a BIP39 phrase (wordlist autocomplete). Same look as the unlock screen: the Kyro object in ice
+// light, the frosted button, glass.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
-import { call, toIpcError, type XmrRestoreFrom } from '@kyro/shared';
+import { call, isDemoMode, toIpcError, type XmrRestoreFrom } from '@kyro/shared';
 import { outgoingHosts } from '@kyro/chains';
 import { useApp } from '../state/app';
 import { setBackupState } from '../lib/storage';
 import { cn } from '../lib/cn';
-import { TitleBar } from '../shell/TitleBar';
-import { StatusFrame } from '../shell/StatusBar';
-import { KyroMark, PasswordField } from '../components/kit';
-import { Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
+import { PasswordField } from '../components/kit';
+import { Input, Notice, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { WatchAddForm } from '../components/WatchOnly';
-import { IconBack, IconChevronRight, IconEye, IconImport, IconPlus, IconUsbKey } from '../components/icons';
+import { IconCheck, IconChevronRight, IconUsbKey } from '../components/icons';
+import { DISPLAY, Frost, GLASS_ROW, IceDot, KyroObject, NoteRow, NoteSide } from '../components/kyro';
 import { demoPasswordHint } from './demoHint';
 import { NetworkSwitchDialog, useNetworkInfo } from '../components/NetworkSwitch';
 import { idx } from '../components/motion';
 import { t, useT } from '../i18n';
+import { GlassBig, OnboardingFrame, SquareChoice, StepHead } from './onboardingParts';
 
-function BrandPanel() {
-  return (
-    <section aria-hidden="true" className="flex w-[40%] max-w-[560px] min-w-[360px] shrink-0 flex-col items-center justify-center gap-5 border-r border-rail bg-panel">
-      <KyroMark size={88} />
-      <span className="text-[22px] font-semibold tracking-[-0.02em]">Kyro</span>
-    </section>
-  );
-}
-
-export function OnboardingFrame({ children, status }: { children: ReactNode; status?: ReactNode }) {
-  const { t } = useT();
-  return (
-    <div className="flex h-full flex-col bg-bg text-text">
-      <TitleBar bordered={false} />
-      <div className="flex min-h-0 flex-1">
-        <BrandPanel />
-        <main className="flex min-w-0 flex-1 flex-col justify-center overflow-y-auto px-[min(88px,6.5vw)] py-8 scroll-thin">{children}</main>
-      </div>
-      <StatusFrame left={status ?? <span className="text-mute">{t('welcome.noVaultHere')}</span>} />
-    </div>
-  );
-}
+export { OnboardingFrame } from './onboardingParts';
 
 type Mode = 'home' | 'create' | 'import' | 'hw' | 'watch';
+const MODES: Mode[] = ['home', 'create', 'import', 'hw', 'watch'];
+
+/** Demo only (browser review, never the desktop app): `?welcome=import` opens that flow. */
+function demoMode(): Mode {
+  if (!isDemoMode() || typeof window === 'undefined') return 'home';
+  const m = new URLSearchParams(window.location.search).get('welcome');
+  return MODES.find((x) => x === m) ?? 'home';
+}
 
 export function Welcome() {
-  const [mode, setMode] = useState<Mode>('home');
+  const [mode, setMode] = useState<Mode>(demoMode);
   const [info, setInfo] = useState<null | 'threat' | 'code' | 'network'>(null);
   const { network, enterVault, status, cancelAddWallet } = useApp();
   const adding = status?.creating ?? null;
@@ -61,12 +49,12 @@ export function Welcome() {
   if (mode === 'import') return <ImportFlow onCancel={() => setMode('home')} />;
   if (mode === 'hw') {
     return (
-      <OnboardingFrame status={<span className="text-mute">{t('welcome.hwOnlyStatus')}</span>}>
-        <div className="flex max-w-[600px] flex-col gap-6">
-          <StepHeader step={1} total={1} title={t('welcome.hwTitle')} onBack={() => setMode('home')}>
-            {t('welcome.hwIntro')}
-          </StepHeader>
-          <HwSetup onCancel={() => setMode('home')} onDone={() => void enterVault()} />
+      <OnboardingFrame onBack={() => setMode('home')}>
+        <div className="mt-12 flex w-[600px] max-w-full flex-col gap-8">
+          <StepHead title={t('welcome.hwTitle')}>{t('welcome.hwIntro')}</StepHead>
+          <div className={cn('rounded-[20px] px-6 py-5', GLASS_ROW)}>
+            <HwSetup onCancel={() => setMode('home')} onDone={() => void enterVault()} />
+          </div>
         </div>
       </OnboardingFrame>
     );
@@ -74,62 +62,69 @@ export function Welcome() {
 
   if (mode === 'watch') {
     return (
-      <OnboardingFrame status={<span className="text-mute">{t('watch.welcomeStatus')}</span>}>
-        <div className="flex max-w-[600px] flex-col gap-6">
-          <StepHeader step={1} total={1} title={t('watch.add')} onBack={() => setMode('home')}>
-            {t('watch.intro')}
-          </StepHeader>
-          <WatchAddForm onAdded={() => enterVault()} />
+      <OnboardingFrame onBack={() => setMode('home')}>
+        <div className="mt-12 flex w-[600px] max-w-full flex-col gap-8">
+          <StepHead title={t('watch.add')}>{t('watch.intro')}</StepHead>
+          <div className={cn('rounded-[20px] px-6 py-5', GLASS_ROW)}>
+            <WatchAddForm onAdded={() => enterVault()} />
+          </div>
         </div>
       </OnboardingFrame>
     );
   }
 
+  const links: Array<[string, () => void]> = [
+    [t('welcome.threatModel'), () => setInfo('threat')],
+    [t('welcome.sourceCode'), () => setInfo('code')],
+    [t('welcome.networkRequests'), () => setInfo('network')],
+  ];
+  if (netInfo.data && !adding) links.push([network === 'testnet' ? t('welcome.switchToMainnet') : t('welcome.switchToTestnet'), () => setSwitchTo(network === 'testnet' ? 'mainnet' : 'testnet')]);
+
   return (
-    <OnboardingFrame>
-      <div className="flex max-w-[560px] flex-col gap-10">
-        <div className="flex flex-col gap-3">
-          <h1 className="rise m-0 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]" style={idx(0)}>
-            {adding ? t('wallets.addTitle', { name: adding }) : t('welcome.title')}
-          </h1>
-          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{adding ? t('wallets.addBody') : t('welcome.subtitle')}</p>
-          {adding && (
-            <button type="button" onClick={() => void cancelAddWallet()} className="self-start text-[13px] font-semibold text-ice hover:underline">
-              {t('wallets.addCancel')}
-            </button>
-          )}
-        </div>
-
-        <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(2)}>
-          {!adding && (
-            <ChoiceCard
-              icon={<IconUsbKey size={20} />}
-              iconClass="text-ice"
-              title={t('welcome.choiceHw')}
-              subtitle={t('welcome.choiceHwSub')}
-              onClick={() => setMode('hw')}
-            />
-          )}
-          <ChoiceCard icon={<IconPlus size={20} />} title={t('welcome.choiceCreate')} subtitle={t('welcome.choiceCreateSub')} onClick={() => setMode('create')} />
-          <ChoiceCard icon={<IconImport size={20} />} title={t('welcome.choiceImport')} subtitle={t('welcome.choiceImportSub')} onClick={() => setMode('import')} />
-          {!adding && <ChoiceCard icon={<IconEye size={20} />} title={t('watch.welcomeChoice')} subtitle={t('watch.welcomeChoiceSub')} onClick={() => setMode('watch')} />}
-        </div>
-
-
-        <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
-          {(
-            [
-              ['threat', t('welcome.threatModel')],
-              ['code', t('welcome.sourceCode')],
-              ['network', t('welcome.networkRequests')],
-            ] as const
-          ).map(([k, label]) => (
-            <button key={k} type="button" className="text-mute underline decoration-line-3 underline-offset-[5px] transition-colors hover:text-text hover:decoration-ice" onClick={() => setInfo(k)}>
-              {label}
-            </button>
-          ))}
-        </div>
+    <OnboardingFrame home>
+      <div className="rise" style={idx(0)}>
+        <KyroObject size={190} />
       </div>
+      <h1 className="rise m-0 mt-12 text-[34px] leading-none" style={{ ...DISPLAY, fontWeight: 600, ...idx(1) }}>
+        Kyro
+      </h1>
+      <p className="rise m-0 mt-4 max-w-[520px] text-center text-[14px] leading-[1.5] text-mute" style={idx(2)}>
+        {adding ? t('wallets.addTitle', { name: adding }) : t('welcome.tagline')}
+      </p>
+      {network === 'testnet' && !adding && (
+        <p className="m-0 mt-2 flex items-center gap-2 text-[12.5px] text-warn">
+          <IceDot size={5} className="bg-warn shadow-none" /> {t('welcome.onTestnet')}
+        </p>
+      )}
+
+      <div className="rise mt-10 flex w-[380px] max-w-full flex-col gap-3" style={idx(3)}>
+        <Frost className="h-[52px] rounded-[16px] text-[15px]" onClick={() => setMode('create')}>
+          {t('welcome.createWallet')}
+        </Frost>
+        <GlassBig onClick={() => setMode('import')}>{t('welcome.havePhrase')}</GlassBig>
+        {!adding && (
+          <GlassBig onClick={() => setMode('hw')}>
+            <IconUsbKey size={17} className="text-ice" /> {t('welcome.choiceHw')}
+          </GlassBig>
+        )}
+        {adding ? (
+          <button type="button" onClick={() => void cancelAddWallet()} className="mt-2 text-center text-[12.5px] text-faint transition-colors hover:text-text2">
+            {t('wallets.addCancel')}
+          </button>
+        ) : (
+          <button type="button" onClick={() => setMode('watch')} className="mt-2 text-center text-[12.5px] text-faint transition-colors hover:text-text2">
+            {t('welcome.watchLink')}
+          </button>
+        )}
+      </div>
+
+      <nav aria-label={t('welcome.aboutLinks')} className="rise mt-auto flex flex-wrap justify-center gap-x-5 gap-y-1 pt-8 text-[11.5px] text-faint/80" style={idx(4)}>
+        {links.map(([label, onClick]) => (
+          <button key={label} type="button" onClick={onClick} className="transition-colors hover:text-text2">
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {netInfo.data && <NetworkSwitchDialog info={netInfo.data} target={switchTo} hasVault={false} onClose={() => setSwitchTo(null)} />}
       <Dialog open={info === 'threat'} onOpenChange={() => setInfo(null)} title={t('welcome.threatModel')}>
@@ -154,49 +149,6 @@ export function Welcome() {
         </ul>
       </Dialog>
     </OnboardingFrame>
-  );
-}
-
-function ChoiceCard({ icon, title, subtitle, onClick, disabled, iconClass }: { icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn('group relative flex items-center gap-4 border-b border-line py-[18px] pr-2 pl-1 text-left transition-colors duration-150', disabled ? 'opacity-70' : 'hover:bg-raised/40')}
-    >
-      <span className={cn('flex shrink-0 items-center justify-center text-mute transition-colors group-hover:text-text', iconClass)}>{icon}</span>
-      <span className="flex flex-1 flex-col gap-[3px]">
-        <span className="flex items-center gap-2.5 text-[16px] font-medium tracking-[-0.01em]">{title}</span>
-        <span className="text-[13px] text-mute">{subtitle}</span>
-      </span>
-      {!disabled && <IconChevronRight size={18} className="nudge text-faint group-hover:text-text" />}
-    </button>
-  );
-}
-
-function StepHeader({ step, total, title, onBack, children }: { step: number; total: number; title: string; onBack?: () => void; children?: ReactNode }) {
-  const { t } = useT();
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        {onBack && (
-          <button type="button" aria-label={t('common.back')} onClick={onBack} className="press flex size-9 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text">
-            <IconBack size={16} />
-          </button>
-        )}
-        <span className="eyebrow">
-          {t('welcome.stepOf', { step, total })}
-        </span>
-        <span aria-hidden="true" className="flex gap-1">
-          {Array.from({ length: total }, (_, i) => (
-            <span key={i} className={cn('h-[3px] w-5 rounded-full transition-colors duration-300', i < step ? 'bg-ice' : 'bg-line-2')} />
-          ))}
-        </span>
-      </div>
-      <h1 className="rise m-0 text-[28px] leading-[1.15] font-semibold tracking-[-0.02em]">{title}</h1>
-      {children && <p className="rise m-0 max-w-[520px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{children}</p>}
-    </div>
   );
 }
 
@@ -227,15 +179,15 @@ function PassphraseFields({ pp }: { pp: ReturnType<typeof usePassphrase> }) {
   const { t } = useT();
   return (
     <div className="flex flex-col gap-3">
-      <button type="button" aria-expanded={pp.open} onClick={pp.toggle} className="press inline-flex items-center gap-1 self-start text-[13px] text-mute hover:text-text">
+      <button type="button" aria-expanded={pp.open} onClick={pp.toggle} className="press inline-flex items-center gap-1 self-center text-[12.5px] text-faint hover:text-text2">
         <IconChevronRight size={13} className={cn('transition-transform', pp.open && 'rotate-90')} />
         {t('welcome.advanced')}
       </button>
       {pp.open && (
         <>
           <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('welcome.passphraseHelp')}</p>
-          <PasswordField id="pp-new" label={t('welcome.passphrase')} value={pp.first} onChange={pp.setFirst} autoComplete="off" />
-          <PasswordField id="pp-confirm" label={t('welcome.passphraseConfirm')} value={pp.second} onChange={pp.setSecond} autoComplete="off" invalid={!!pp.second && !pp.ready} />
+          <PasswordField id="pp-new" glass label={t('welcome.passphrase')} placeholder={t('welcome.passphrase')} value={pp.first} onChange={pp.setFirst} autoComplete="off" />
+          <PasswordField id="pp-confirm" glass label={t('welcome.passphraseConfirm')} placeholder={t('welcome.passphraseConfirm')} value={pp.second} onChange={pp.setSecond} autoComplete="off" invalid={!!pp.second && !pp.ready} />
           {pp.second && !pp.ready && <p className="m-0 text-[12px] text-down">{t('welcome.passphraseMismatch')}</p>}
           <Notice tone="warn">{t('welcome.passphraseWarn')}</Notice>
         </>
@@ -252,18 +204,28 @@ function PasswordStep({ busy, error, onSubmit, cta, extra, pp }: { busy: boolean
   const { t } = useT();
   const ok = !issue && confirm === pw && pw.length > 0 && pp.ready;
   return (
-    <div className="flex max-w-[460px] flex-col gap-4">
-      {extra}
-      <PasswordField id="pw-new" label={t('shell.vaultPassword')} value={pw} onChange={setPw} autoFocus autoComplete="new-password" />
-      <PasswordField id="pw-confirm" label={t('welcome.confirmPassword')} value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={!!confirm && confirm !== pw} onEnter={() => ok && onSubmit(pw)} />
-      <p className="m-0 text-[12px] leading-[1.5] text-mute">{issue ?? t('welcome.pwHelp')}</p>
-      {demo && <p className="m-0 text-[12px] text-ice-text2">{demoPasswordHint()}</p>}
-      <PassphraseFields pp={pp} />
-      {error && <Notice tone="error">{error}</Notice>}
-      <Button variant="primary" size="xl" disabled={!ok || busy} onClick={() => onSubmit(pw)} className="mt-1 self-start">
-        {busy && <Spinner />} {cta}
-      </Button>
-    </div>
+    <NoteRow
+      w={380}
+      className="mt-9"
+      left={
+        <NoteSide side="L" title={t('welcome.notePwTitle')}>
+          {t('welcome.pwHelp')}
+        </NoteSide>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {extra}
+        <PasswordField id="pw-new" glass label={t('shell.vaultPassword')} placeholder={t('shell.vaultPassword')} value={pw} onChange={setPw} autoFocus autoComplete="new-password" />
+        <PasswordField id="pw-confirm" glass label={t('welcome.confirmPassword')} placeholder={t('welcome.confirmPassword')} value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={!!confirm && confirm !== pw} onEnter={() => ok && onSubmit(pw)} />
+        <p className={cn('m-0 text-center text-[12px] leading-[1.5]', issue && pw ? 'text-mute' : 'text-faint')}>{issue ?? <span className="xl:hidden">{t('welcome.pwHelp')}</span>}</p>
+        {demo && <p className="m-0 text-center text-[12px] text-ice-text2">{demoPasswordHint()}</p>}
+        {error && <Notice tone="error">{error}</Notice>}
+        <Frost className="mt-1 h-[52px] rounded-[16px] text-[15px]" disabled={!ok || busy} onClick={() => onSubmit(pw)}>
+          {busy && <Spinner />} {cta}
+        </Frost>
+        <PassphraseFields pp={pp} />
+      </div>
+    </NoteRow>
   );
 }
 
@@ -278,6 +240,19 @@ function useCaptureProtection(active: boolean) {
       void call('set_capture_protection', { enabled: restore.current }).catch(() => undefined);
     };
   }, [active]);
+}
+
+/** Ice-square checkbox. */
+function Check({ checked, disabled, onChange, children }: { checked: boolean; disabled?: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+  return (
+    <label className={cn('flex cursor-pointer items-center gap-3 text-[13.5px]', disabled && 'cursor-not-allowed opacity-50')}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+      <span aria-hidden="true" className={cn('grid size-[18px] shrink-0 place-items-center rounded-[5px] ring-1 transition-colors peer-focus-visible:outline peer-focus-visible:outline-[1.5px] peer-focus-visible:outline-ice', checked ? 'bg-ice/80 text-[#06121f] ring-ice/60 shadow-[0_0_10px_#7cc4ff66]' : 'bg-white/[.05] ring-white/[.12]')}>
+        {checked && <IconCheck size={12} sw={2.6} />}
+      </span>
+      <span className="text-text2">{children}</span>
+    </label>
+  );
 }
 
 function CreateFlow({ onCancel }: { onCancel: () => void }) {
@@ -295,6 +270,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   const [giveUp, setGiveUp] = useState(false);
   const { t, tp } = useT();
   const pp = usePassphrase();
+  const steps = [t('welcome.stepPassword'), t('welcome.stepPhrase'), t('welcome.stepVerify')];
 
   const create = async (pw: string) => {
     setBusy(true);
@@ -361,25 +337,23 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
 
   if (step === 'password') {
     return (
-      <OnboardingFrame>
-        <div className="flex flex-col gap-7">
-          <StepHeader step={1} total={3} title={t('welcome.choosePassword')} onBack={onCancel}>
-            {t('welcome.choosePasswordIntro')}
-          </StepHeader>
-          <PasswordStep
-            busy={busy}
-            error={error}
-            onSubmit={create}
-            cta={t('welcome.createVault')}
-            pp={pp}
-            extra={
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-[13px] text-text2">{t('welcome.phraseLength')}</span>
-                <Segmented label={t('welcome.wordCount')} value={count} onChange={(v) => setCount(v)} options={[{ value: 24, label: t('welcome.words24') }, { value: 12, label: t('welcome.words12') }]} />
-              </div>
-            }
-          />
-        </div>
+      <OnboardingFrame onBack={onCancel}>
+        <StepHead steps={steps} at={0} title={t('welcome.choosePassword')}>
+          {t('welcome.choosePasswordIntro')}
+        </StepHead>
+        <PasswordStep
+          busy={busy}
+          error={error}
+          onSubmit={create}
+          cta={t('welcome.createVault')}
+          pp={pp}
+          extra={
+            <div className="mb-1 flex items-center justify-between gap-4">
+              <span className="text-[13px] text-text2">{t('welcome.phraseLength')}</span>
+              <SquareChoice label={t('welcome.wordCount')} value={count} onChange={(v) => setCount(v)} items={[{ id: 24, label: t('welcome.words24') }, { id: 12, label: t('welcome.words12') }]} />
+            </div>
+          }
+        />
       </OnboardingFrame>
     );
   }
@@ -387,61 +361,74 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   if (step === 'phrase') {
     return (
       <OnboardingFrame>
-        <div className="flex flex-col gap-6">
-          <StepHeader step={2} total={3} title={t('welcome.writeTitle')}>
-            {t('welcome.writeIntro', { count: wordCount })}
-          </StepHeader>
-          <p className="m-0 -mt-3 text-[13px] text-mute">{t('welcome.writeWarn')}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant={seen ? 'secondary' : 'primary'} size="xl" disabled={busy} onClick={() => void show()}>
-              {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : seen ? t('welcome.showAgain') : t('welcome.showPhrase')}
-            </Button>
+        <StepHead steps={steps} at={1} title={t('welcome.writeTitle')}>
+          {t('welcome.writeIntro', { count: wordCount })}
+        </StepHead>
+        <NoteRow
+          w={380}
+          className="mt-10"
+          left={
+            <NoteSide side="L" title={t('welcome.notePhotoTitle')}>
+              {t('welcome.notePhoto')}
+            </NoteSide>
+          }
+          right={
+            <NoteSide side="R" title={t('welcome.noteWindowTitle')}>
+              {t('welcome.noteWindow')}
+            </NoteSide>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <p className="m-0 flex items-center justify-center gap-2 text-[12.5px] text-mute">
+              <IceDot size={5} /> {t('welcome.writeWarn')}
+            </p>
+            {seen ? (
+              <GlassBig disabled={busy} onClick={() => void show()}>
+                {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : t('welcome.showAgain')}
+              </GlassBig>
+            ) : (
+              <Frost className="h-[52px] rounded-[16px] text-[15px]" disabled={busy} onClick={() => void show()}>
+                {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : t('welcome.showPhrase')}
+              </Frost>
+            )}
+            {error && <Notice tone="error">{error}</Notice>}
+            <div className={cn('rounded-[16px] px-4 py-3.5', GLASS_ROW)}>
+              <Check checked={written} disabled={!seen} onChange={setWritten}>
+                {t('welcome.wroteWords', { count: wordCount })}
+              </Check>
+            </div>
+            {seen && (
+              <Frost className="fade-in h-[52px] rounded-[16px] text-[15px]" disabled={!written || busy} onClick={goVerify}>
+                {t('welcome.verifyBackup')}
+              </Frost>
+            )}
           </div>
-          {error && <Notice tone="error">{error}</Notice>}
-          <label className="flex items-center gap-3 text-[14px]">
-            <input type="checkbox" checked={written} disabled={!seen} onChange={(e) => setWritten(e.target.checked)} className="size-4" />
-            {t('welcome.wroteWords', { count: wordCount })}
-          </label>
-          <Button variant="primary" size="xl" className="self-start" disabled={!seen || !written || busy} onClick={goVerify}>
-            {t('welcome.verifyBackup')}
-          </Button>
-        </div>
+        </NoteRow>
       </OnboardingFrame>
     );
   }
 
   return (
-    <OnboardingFrame>
-      <div className="flex flex-col gap-6">
-        <StepHeader step={3} total={3} title={t('welcome.verifyTitle')} onBack={() => setStep('phrase')}>
-          {t('welcome.verifyIntro')}
-        </StepHeader>
-        <div className="flex max-w-[520px] flex-col gap-3">
-          {checks.map((index, i) => (
-            <WordInput
-              key={index}
-              index={index}
-              value={answers[i] ?? ''}
-              onChange={(v) => setAnswers((a) => a.map((x, j) => (j === i ? v : x)))}
-              autoFocus={i === 0}
-              onEnter={() => void verify()}
-            />
-          ))}
-        </div>
+    <OnboardingFrame onBack={() => setStep('phrase')}>
+      <StepHead steps={steps} at={2} title={t('welcome.verifyTitle')}>
+        {t('welcome.verifyIntro')}
+      </StepHead>
+      <div className="mt-9 flex w-[380px] max-w-full flex-col gap-2.5">
+        {checks.map((index, i) => (
+          <WordInput key={index} index={index} value={answers[i] ?? ''} onChange={(v) => setAnswers((a) => a.map((x, j) => (j === i ? v : x)))} autoFocus={i === 0} onEnter={() => void verify()} />
+        ))}
         {verifyError && <Notice tone="error">{verifyError}</Notice>}
-        <div className="flex gap-2">
+        <div className="mt-3 flex flex-col gap-3">
           {giveUp ? (
-            <Button variant="primary" size="xl" onClick={() => void continueUnverified()}>
+            <Frost className="h-[52px] rounded-[16px] text-[15px]" onClick={() => void continueUnverified()}>
               {t('welcome.continueUnverified')}
-            </Button>
+            </Frost>
           ) : (
             <>
-              <Button variant="primary" size="xl" disabled={busy || answers.some((a) => !a.trim())} onClick={() => void verify()}>
+              <Frost className="h-[52px] rounded-[16px] text-[15px]" disabled={busy || answers.some((a) => !a.trim())} onClick={() => void verify()}>
                 {busy && <Spinner />} {t('welcome.finish')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="xl"
+              </Frost>
+              <GlassBig
                 onClick={() => {
                   setSeen(false);
                   setWritten(false);
@@ -449,7 +436,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
                 }}
               >
                 {t('welcome.reviewPhrase')}
-              </Button>
+              </GlassBig>
             </>
           )}
         </div>
@@ -458,7 +445,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   );
 }
 
-/** Word field with BIP39 autocomplete (English wordlist). */
+/** Word field with BIP39 autocomplete (English wordlist), glass like the mock's word tiles. */
 function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, compact }: { index: number; value: string; onChange: (v: string) => void; autoFocus?: boolean; onEnter?: () => void; onPasteMany?: (words: string[]) => void; compact?: boolean }) {
   const [focused, setFocused] = useState(false);
   const { t } = useT();
@@ -469,8 +456,8 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
   const show = focused && suggestions.length > 0 && !(suggestions.length === 1 && suggestions[0] === v);
   return (
     <div className="relative">
-      <label className={cn('flex items-center gap-2.5 rounded-ctl border bg-card px-3 transition-colors focus-within:border-ice-line', compact ? 'h-10' : 'h-12', invalid ? 'border-down/60' : 'border-line hover:border-line-2')}>
-        <span className="w-6 font-mono text-[12px] text-faint">{index + 1}</span>
+      <label className={cn('flex items-center gap-3 rounded-[12px] px-4 transition-shadow focus-within:ring-ice-line', GLASS_ROW, compact ? 'h-11' : 'h-[52px]', invalid && 'ring-down/60')}>
+        <span className="figure w-5 text-right text-[11.5px] text-faint">{index + 1}</span>
         <span className="sr-only">{t('welcome.wordN', { n: index + 1 })}</span>
         <input
           value={value}
@@ -496,14 +483,14 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
               onChange(suggestions[0]);
             } else if (e.key === 'Enter') onEnter?.();
           }}
-          className="min-w-0 flex-1 bg-transparent font-mono text-[15px]"
+          className="min-w-0 flex-1 bg-transparent font-mono text-[14px] text-text"
         />
-        {known && <span className="text-[12px] text-up">✓</span>}
+        {known && <span aria-hidden="true" className="size-[5px] bg-ice shadow-[0_0_8px_#7cc4ff]" />}
       </label>
       {show && (
-        <div className="pop-in absolute top-full right-0 left-0 z-20 mt-1 flex gap-1 rounded-ctl border border-line-2 bg-[#121418] p-1">
+        <div className="pop-in absolute top-full right-0 left-0 z-20 mt-1 flex gap-1 rounded-[12px] bg-[#0d1219]/95 p-1 ring-1 ring-white/[.09] backdrop-blur-xl">
           {suggestions.map((s) => (
-            <button key={s} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(s)} className="rounded-[7px] px-2 py-1 font-mono text-[12px] text-text2 hover:bg-control">
+            <button key={s} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(s)} className="rounded-[8px] px-2 py-1 font-mono text-[12px] text-text2 hover:bg-white/[.08]">
               {s}
             </button>
           ))}
@@ -525,6 +512,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [xmrDate, setXmrDate] = useState('');
   const { t } = useT();
   const pp = usePassphrase();
+  const steps = [t('welcome.stepPhrase'), t('welcome.stepPassword')];
   const xmrRestore = ((): XmrRestoreFrom | null => {
     if (!xmrLedger) return { kind: 'kyro' };
     if (xmrMode === 'genesis') return { kind: 'genesis' };
@@ -571,64 +559,78 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
 
   if (step === 'password') {
     return (
-      <OnboardingFrame>
-        <div className="flex flex-col gap-7">
-          <StepHeader step={2} total={2} title={t('welcome.protectTitle')} onBack={() => setStep('phrase')}>
-            {t('welcome.protectIntro')}
-          </StepHeader>
-          <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta={t('welcome.import')} pp={pp} />
-        </div>
+      <OnboardingFrame onBack={() => setStep('phrase')}>
+        <StepHead steps={steps} at={1} title={t('welcome.protectTitle')}>
+          {t('welcome.protectIntro')}
+        </StepHead>
+        <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta={t('welcome.import')} pp={pp} />
       </OnboardingFrame>
     );
   }
 
   return (
-    <OnboardingFrame status={<span className="text-warn">{t('welcome.captureBlocked')}</span>}>
-      <div className="flex flex-col gap-6">
-        <StepHeader step={1} total={2} title={t('welcome.importTitle')} onBack={onCancel}>
-          {t('welcome.importIntro')}
-        </StepHeader>
-        <Segmented className="self-start" label={t('welcome.wordCount')} value={count} onChange={resize} options={[{ value: 12, label: t('welcome.words12') }, { value: 24, label: t('welcome.words24') }]} />
-        <div className={cn('grid max-w-[680px] gap-2', count === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
+    <OnboardingFrame onBack={onCancel}>
+      <StepHead steps={steps} at={0} title={t('welcome.importTitle')}>
+        {t('welcome.importIntro')}
+      </StepHead>
+      <div className="mt-6">
+        <SquareChoice label={t('welcome.wordCount')} value={count} onChange={resize} items={[{ id: 12, label: t('welcome.words12') }, { id: 24, label: t('welcome.words24') }]} />
+      </div>
+      <NoteRow
+        w={count === 24 ? 760 : 600}
+        className="mt-6 w-full"
+        left={
+          <NoteSide side="L" title={t('welcome.notePhotoTitle')}>
+            {t('welcome.captureBlocked')}
+          </NoteSide>
+        }
+        right={
+          <NoteSide side="R" title={t('welcome.noteOfflineTitle')}>
+            {t('welcome.wordsStayHere')}
+          </NoteSide>
+        }
+      >
+        <div className={cn('grid gap-2.5', count === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
           {words.map((w, i) => (
             <WordInput key={`${count}-${i}`} compact index={i} value={w} autoFocus={i === 0} onChange={(v) => setWords((ws) => ws.map((x, j) => (j === i ? v : x)))} onPasteMany={(parts) => pasteMany(i, parts)} />
           ))}
         </div>
-        <div className="text-[13px]">
-          {unknown > 0 ? (
-            <span className="text-down">{t('welcome.unknownWords', { count: unknown })}</span>
-          ) : filled && !valid ? (
-            <span className="text-down">{t('welcome.badChecksum')}</span>
-          ) : valid ? (
-            <span className="text-up">{t('welcome.validPhrase')}</span>
-          ) : (
-            <span className="text-mute">{t('welcome.wordsStayHere')}</span>
-          )}
-        </div>
-        <div className="flex max-w-[680px] flex-col gap-2.5 rounded-box border border-line bg-raised px-4 py-3 text-[13px]">
-          <span className="text-mute">{t('welcome.xmrDefault')}</span>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={xmrLedger} onChange={(e) => setXmrLedger(e.target.checked)} className="size-4" />
-            {t('welcome.xmrLedger')}
-          </label>
-          {xmrLedger && (
-            <>
-              <Segmented className="self-start" label={t('welcome.xmrLedger')} value={xmrMode} onChange={setXmrMode} options={[{ value: 'date', label: t('welcome.xmrFromDate') }, { value: 'genesis', label: t('welcome.xmrFromGenesis') }]} />
-              {xmrMode === 'date' ? (
-                <label className="flex flex-col gap-1">
-                  <span className="text-mute">{t('welcome.xmrDateLabel')}</span>
-                  <Input type="date" value={xmrDate} onChange={(e) => setXmrDate(e.target.value)} min="2014-04-18" max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
-                </label>
-              ) : (
-                <Notice tone="warn">{t('welcome.xmrGenesisWarn')}</Notice>
-              )}
-            </>
-          )}
-        </div>
-        <Button variant="primary" size="xl" className="self-start" disabled={!valid || xmrRestore === null} onClick={() => setStep('password')}>
-          {t('common.continue')}
-        </Button>
+      </NoteRow>
+      <div className="mt-4 text-center text-[13px]" role="status">
+        {unknown > 0 ? (
+          <span className="text-down">{t('welcome.unknownWords', { count: unknown })}</span>
+        ) : filled && !valid ? (
+          <span className="text-down">{t('welcome.badChecksum')}</span>
+        ) : valid ? (
+          <span className="text-up">{t('welcome.validPhrase')}</span>
+        ) : (
+          <span className="text-faint xl:hidden">{t('welcome.wordsStayHere')}</span>
+        )}
       </div>
+      <div className={cn('mt-5 flex w-[600px] max-w-full flex-col gap-2.5 rounded-[16px] px-5 py-4 text-[13px]', GLASS_ROW)}>
+        <span className="text-mute">{t('welcome.xmrDefault')}</span>
+        <Check checked={xmrLedger} onChange={setXmrLedger}>
+          {t('welcome.xmrLedger')}
+        </Check>
+        {xmrLedger && (
+          <>
+            <div className="self-start">
+              <SquareChoice label={t('welcome.xmrLedger')} value={xmrMode} onChange={setXmrMode} items={[{ id: 'date', label: t('welcome.xmrFromDate') }, { id: 'genesis', label: t('welcome.xmrFromGenesis') }]} />
+            </div>
+            {xmrMode === 'date' ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-mute">{t('welcome.xmrDateLabel')}</span>
+                <Input type="date" value={xmrDate} onChange={(e) => setXmrDate(e.target.value)} min="2014-04-18" max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
+              </label>
+            ) : (
+              <Notice tone="warn">{t('welcome.xmrGenesisWarn')}</Notice>
+            )}
+          </>
+        )}
+      </div>
+      <Frost className="mt-6 h-[52px] w-[380px] max-w-full rounded-[16px] text-[15px]" disabled={!valid || xmrRestore === null} onClick={() => setStep('password')}>
+        {t('common.continue')}
+      </Frost>
     </OnboardingFrame>
   );
 }

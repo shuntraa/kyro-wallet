@@ -70,6 +70,56 @@ export function unlockUtc(t: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(t * 1000));
 }
 
+export function unlockShort(t: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(t * 1000));
+}
+
+/** The network's clock runs one to two hours behind: this is when a withdrawal should go through. */
+export const LOCK_CLOCK_LAG_SECS = 7_200;
+
+export const withdrawableAt = (t: number, locale: string) => unlockLocal(t + LOCK_CLOCK_LAG_SECS, locale);
+
+export interface TimelineMark {
+  t: number;
+  sats: number;
+  /** From 0 (today) to 100 (the last date). */
+  pos: number;
+  past: boolean;
+  draft: boolean;
+  labeled: boolean;
+}
+
+const LABEL_GAP = 13;
+
+/**
+ * Where each date sits on the line, and which ones keep their label. A square root keeps a week
+ * apart from today even next to a date years away. The last date and the one being chosen always
+ * keep their label; "today" goes first when space runs out.
+ */
+export function lockTimeline(locks: Array<{ t: number; sats: number }>, draft: { t: number; sats: number } | null, now: number): { marks: TimelineMark[]; today: boolean } {
+  const byDate = new Map<number, number>();
+  for (const l of [...locks, ...(draft ? [draft] : [])]) {
+    const key = l.t <= now ? 0 : l.t;
+    byDate.set(key, (byDate.get(key) ?? 0) + l.sats);
+  }
+  const end = Math.max(now + LOCK_DAY_SECS, ...byDate.keys());
+  const marks: TimelineMark[] = [...byDate.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([t, sats]) => ({ t, sats, pos: t === 0 ? 0 : Math.sqrt((t - now) / (end - now)) * 100, past: t === 0, draft: draft?.t === t, labeled: false }));
+  let nearest: TimelineMark | null = null;
+  for (const m of [...marks].reverse()) {
+    if (!nearest || nearest.pos - m.pos >= LABEL_GAP) {
+      m.labeled = true;
+      nearest = m;
+    } else if (m.draft) {
+      nearest.labeled = false;
+      m.labeled = true;
+      nearest = m;
+    }
+  }
+  return { marks, today: !marks[0]?.past && (!nearest || nearest.pos >= LABEL_GAP) };
+}
+
 /** Rust takes whole sat/vB. Fee estimates can have decimals, and the minimum is 1. */
 export const lockFeeRate = (rate: number) => (Number.isFinite(rate) && rate >= 1 ? Math.floor(rate) : 0);
 
@@ -120,4 +170,18 @@ export function lockTimeLeft(secs: number, units: { d: string; h: string; m: str
   if (days > 0) return `${days} ${units.d}${hours > 0 ? ` ${hours} ${units.h}` : ''}`;
   if (hours > 0) return `${hours} ${units.h} ${mins} ${units.m}`;
   return `${mins} ${units.m}`;
+}
+
+/** When a lock started, in ms: the funding's block time from the backend (`fundedAt`, seconds),
+ *  otherwise the earliest history entry sent to the lock's address (ms). `null` when neither. */
+export function lockStartMs(fundedAt: number | null | undefined, historyMs: number[]): number | null {
+  if (typeof fundedAt === 'number' && Number.isFinite(fundedAt) && fundedAt > 0) return fundedAt * 1000;
+  const ts = historyMs.filter((t) => Number.isFinite(t) && t > 0);
+  return ts.length ? Math.min(...ts) : null;
+}
+
+/** Part of the lock already behind us (0.02–0.98 so both arcs stay visible), or `null`. */
+export function lockElapsed(startMs: number | null, t: number, nowMs: number): number | null {
+  if (startMs === null || t * 1000 <= startMs) return null;
+  return Math.min(0.98, Math.max(0.02, (nowMs - startMs) / (t * 1000 - startMs)));
 }

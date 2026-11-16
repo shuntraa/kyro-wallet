@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { call, toIpcError, type AccountChain, type ApiKeyName, type Settings } from '@kyro/shared';
+// Settings: the wallet in its ice ring, then groups of rows on glass (two columns). Each longer
+// setting opens a sub-page in the same language.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { call, FIAT_CURRENCIES, isDemoMode, intlLocale, toIpcError, type AccountChain, type ApiKeyName, type Currency, type Settings } from '@kyro/shared';
 import { findLookalike, outgoingHosts, type KnownAddress } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
-import { shortAddress } from '../lib/format';
+import { fiatSymbol, fmtFiat, shortAddress } from '../lib/format';
 import { getBackupState, getContacts, saveContacts, type Contact, type ContactFamily } from '../lib/storage';
 import { PasswordField } from '../components/kit';
 import { CoinIcon } from '../components/coins/CoinIcon';
@@ -19,18 +20,19 @@ import { AccountsSection } from './settings/Accounts';
 import { ChangePassword } from './settings/ChangePassword';
 import { SecondPassword } from './settings/SecondPassword';
 import { Dialog } from '../components/ui/dialog';
-import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
-import { IconCheck, IconChevronRight, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
-import { TorIndicator } from '../components/Tor';
-import { torStore, useTor } from '../state/tor';
-import { useMedia } from '../components/motion';
+import { Badge, Button, Input, Notice, Spinner } from '../components/ui/primitives';
+import { Menu } from '../components/ui/menu';
+import { IconCheck, IconChevronRight, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
+import { DISPLAY, Frost, GlassButton, IceDot, IceSquare, Switch, VaultRing } from '../components/kyro';
+import { torIndicator, torStore, useTor } from '../state/tor';
 import { useT, type Key } from '../i18n';
 import { XmrWalletSection } from '../components/Monero';
-import { CurrencySelect } from '../components/CurrencySelect';
 import { AlertsSection } from './settings/Alerts';
 import { BackupSection } from './settings/Backup';
 import { TorBridges } from './settings/TorBridges';
 import { SpendLimitSection } from './settings/SpendLimit';
+import { Group, Pick, Row, RowAction, SubPage } from './settings/parts';
+import { PasswordGate, useContactGuard } from '../components/ContactsOnly';
 
 export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -46,15 +48,50 @@ export const SETTINGS_SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'backup', label: 'settings.sectionBackup' },
 ];
 
-export function SettingsScreen({ section: initial = 'security', family }: { section?: SettingsSection; family?: AccountChain }) {
-  const [section, setSection] = useState<SettingsSection>(initial);
-  const { settings, saveSettings } = useApp();
+/** Sub-pages. `security` and `display` live on the main page itself. */
+type Page = Exclude<SettingsSection, 'security' | 'display'> | 'protection' | 'monero';
+
+const PAGE_TITLE: Record<Page, Key> = {
+  privacy: 'settings.sectionPrivacy',
+  alerts: 'settings.sectionAlerts',
+  accounts: 'settings.sectionAccounts',
+  hardware: 'settings.sectionHardware',
+  networks: 'settings.sectionNetworks',
+  apikeys: 'settings.sectionApiKeys',
+  connections: 'settings.sectionConnections',
+  contacts: 'settings.sectionContacts',
+  backup: 'settings.sectionBackup',
+  protection: 'settings.groupProtection',
+  monero: 'settings.moneroWallet',
+};
+
+function pageOf(section: SettingsSection | undefined): Page | null {
+  return !section || section === 'security' || section === 'display' ? null : section;
+}
+
+/** Demo only (browser review, never the desktop app): `?settings=networks` opens that sub-page. */
+function demoPage(): Page | null {
+  if (!isDemoMode() || typeof window === 'undefined') return null;
+  const p = new URLSearchParams(window.location.search).get('settings');
+  return (Object.keys(PAGE_TITLE) as Page[]).find((x) => x === p) ?? null;
+}
+
+/** Same networks count as the welcome screen. */
+const NETWORKS = 36;
+
+export function SettingsScreen({ section, family }: { section?: SettingsSection; family?: AccountChain }) {
+  const { settings, saveSettings, route } = useApp();
+  const [page, setPage] = useState<Page | null>(() => pageOf(section) ?? demoPage());
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const { t } = useT();
-  // Below 1280 px the outgoing-connections summary moves under the section instead of squeezing it
-  // into a 300 px column.
-  const wide = useMedia('(min-width: 1280px)');
+  // A new route (Settings icon, a « Réglages › Réseaux » link) opens the page it names.
+  const shown = useRef(route);
+  useEffect(() => {
+    if (shown.current === route) return;
+    shown.current = route;
+    setPage(pageOf(section));
+  }, [route]);
 
   const save = async (patch: Partial<Settings>) => {
     setError(null);
@@ -67,60 +104,47 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
     }
   };
 
-  return (
-    <div className="flex min-h-0 flex-1">
-      <nav aria-label={t('settings.sectionsNav')} className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
-        <h1 className="screen-title px-2.5 pb-5">{t('common.settings')}</h1>
-        {SETTINGS_SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            aria-current={section === s.key ? 'page' : undefined}
-            onClick={() => setSection(s.key)}
-            className={cn('group relative flex h-10 items-center gap-3 rounded-ctl px-3 text-left text-[14px] transition-colors duration-150', section === s.key ? 'font-medium text-text' : 'text-mute hover:text-text2')}
-          >
-            {section === s.key && (
-              <motion.span layoutId="settings-section" aria-hidden="true" className="absolute inset-0 rounded-ctl border border-line-2 bg-raised" transition={{ type: 'spring', stiffness: 520, damping: 42 }}>
-                <span className="absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
-              </motion.span>
-            )}
-            <span className="relative z-10 truncate">{(t as (k: Key) => string)(s.label)}</span>
-          </button>
-        ))}
-        <div className="flex-1" />
-        <div className="border-t border-line px-2.5 pt-4 text-[12px] text-mute">Kyro {__APP_VERSION__}</div>
-      </nav>
+  const status = (
+    <>
+      {error && <Notice tone="error">{error}</Notice>}
+      {saved && (
+        <span role="status" className="fade-in flex items-center gap-2 text-[12px] text-mute">
+          <IceDot /> {t('settings.saved')}
+        </span>
+      )}
+    </>
+  );
 
-      <div className="flex min-w-0 flex-1 gap-6 px-8 pt-7 pb-6">
-        <div key={section} className="rise flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto scroll-thin">
-          {error && <Notice tone="error">{error}</Notice>}
-          {section === 'security' && <Security save={save} />}
-          {section === 'privacy' && <Privacy />}
-          {section === 'alerts' && <AlertsSection />}
-          {section === 'accounts' && <AccountsSection {...(family ? { family } : {})} />}
-          {section === 'hardware' && <Devices />}
-          {section === 'networks' && (
-            <>
-              <NetDiagnostics />
-              <ServersSection />
-            </>
-          )}
-          {section === 'display' && <Display save={save} />}
-          {section === 'apikeys' && <ApiKeys />}
-          {section === 'connections' && <Connections />}
-          {section === 'contacts' && <Contacts />}
-          {section === 'backup' && <BackupSection />}
-          {saved && <span className="fade-in text-[12px] text-up">✓ {t('settings.saved')}</span>}
-          {section !== 'connections' && section !== 'accounts' && !wide && (
-            <div className="shrink-0">
-              <Connections compact />
-            </div>
-          )}
-        </div>
-        {section !== 'connections' && section !== 'accounts' && wide && (
-          <aside className="w-[400px] shrink-0">
-            <Connections compact />
-          </aside>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-thin">
+      <div className="mx-auto mt-8 flex w-[min(1000px,calc(100%-48px))] flex-col pb-12">
+        {page ? (
+          <SubPage key={page} title={(t as (k: Key) => string)(PAGE_TITLE[page])} onBack={() => setPage(null)} aside={page === 'networks' || page === 'privacy' ? <Connections compact /> : undefined}>
+            {page === 'privacy' && <Privacy />}
+            {page === 'alerts' && <AlertsSection />}
+            {page === 'accounts' && <AccountsSection {...(family ? { family } : {})} />}
+            {page === 'hardware' && <Devices />}
+            {page === 'networks' && (
+              <>
+                <NetDiagnostics />
+                <ServersSection />
+              </>
+            )}
+            {page === 'apikeys' && <ApiKeys />}
+            {page === 'connections' && <Connections />}
+            {page === 'contacts' && <Contacts />}
+            {page === 'backup' && <BackupSection />}
+            {page === 'protection' && (
+              <>
+                <SpendLimitSection />
+                <SecondPassword />
+              </>
+            )}
+            {page === 'monero' && <MoneroWallet />}
+            {status}
+          </SubPage>
+        ) : (
+          <Overview save={save} open={setPage} status={status} />
         )}
       </div>
     </div>
@@ -129,25 +153,19 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
 
 type Save = (patch: Partial<Settings>) => Promise<void>;
 
-function Panel({ children, className, tone }: { children: ReactNode; className?: string; tone?: 'danger' }) {
-  return <section className={cn('flex flex-col rounded-panel border bg-card px-6 py-1.5', tone === 'danger' ? 'border-down/30' : 'border-line', className)}>{children}</section>;
+function currencyLabel(c: Currency): string {
+  const sym = fiatSymbol(c);
+  let name: string = c;
+  try {
+    const n = new Intl.DisplayNames([intlLocale()], { type: 'currency' }).of(c);
+    if (n) name = n.charAt(0).toUpperCase() + n.slice(1);
+  } catch {
+    /* name stays the code */
+  }
+  return sym && sym !== c ? `${name} (${sym})` : name;
 }
 
-function SettingRow({ title, desc, children, last }: { title: string; desc: string; children: ReactNode; last?: boolean }) {
-  return (
-    <div className={cn('flex items-center justify-between gap-6 py-4', !last && 'border-b border-line')}>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[14.5px] font-medium">{title}</span>
-        <span className="text-[13px] text-mute">{desc}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Security({ save }: { save: Save }) {
-  const { settings, config } = useApp();
-  const { t } = useT();
+function useUpdateStore(): boolean {
   // Microsoft Store (MSIX) install: the Store updates Kyro, its own updater is off.
   const [store, setStore] = useState(false);
   useEffect(() => {
@@ -159,73 +177,263 @@ function Security({ save }: { save: Save }) {
       alive = false;
     };
   }, []);
+  return store;
+}
+
+function Overview({ save, open, status }: { save: Save; open: (p: Page) => void; status: ReactNode }) {
+  const { settings, config, network, walletName, wallets, walletLabel, switchWallet, lock, hwOnly, adapters, saveSettings } = useApp();
+  const [contactsOff, setContactsOff] = useState(false);
+  const tor = useTor();
+  const { t, tp } = useT();
+  const store = useUpdateStore();
+  const [reveal, setReveal] = useState(false);
+  const backup = getBackupState();
+  const several = (wallets?.wallets.length ?? 1) > 1;
+  const hosts = outgoingHosts(network, settings.servers).length;
+
+  const facts = [
+    hwOnly ? t('settings.factHwOnly') : t('settings.factNetworks', { n: NETWORKS }),
+    several ? tp('settings.factWallets', wallets?.wallets.length ?? 1) : null,
+    hwOnly ? null : backup === 'confirmed' ? t('settings.factBackupOk') : backup === 'imported' ? t('settings.factImported') : t('settings.factBackupUnverified'),
+  ].filter(Boolean);
+
+  const kind = torIndicator(tor);
+  const torValue =
+    kind === 'ready' ? (
+      <>
+        <IceDot /> {t('settings.torConnected')}
+      </>
+    ) : kind === 'bootstrapping' ? (
+      <span className="tabular-nums">{t('settings.torConnecting', { p: Math.max(0, Math.min(99, Math.round(tor.status?.progress ?? 0))) })}</span>
+    ) : kind === 'failed' ? (
+      <span className="text-warn">{t('settings.torFailed')}</span>
+    ) : kind === 'direct' ? (
+      <span className="text-warn">{t('settings.torOff')}</span>
+    ) : (
+      <span className="text-faint">…</span>
+    );
+
+  const changeWallet = several ? (
+    <Menu
+      align="end"
+      onSelect={(v: string) => (v === '__manage' ? open('accounts') : void switchWallet(v))}
+      items={[
+        ...(wallets?.wallets ?? []).filter((w) => w.id !== wallets?.active).map((w) => ({ value: w.id, label: walletLabel(w.id), hint: t('wallets.switchHint') })),
+        { value: '__manage', label: t('settings.manageWallets') },
+      ]}
+      trigger={<GlassButton className="w-[200px]">{t('settings.changeWallet')}</GlassButton>}
+    />
+  ) : (
+    <GlassButton className="w-[200px]" onClick={() => open('accounts')}>
+      {t('settings.changeWallet')}
+    </GlassButton>
+  );
+
   return (
-    <>
-      <Panel>
-        <SettingRow title={t('settings.autoLock')} desc={t('settings.autoLockDesc')}>
-          <Segmented
-            label={t('settings.autoLockDelay')}
-            value={settings.autoLockSecs}
-            onChange={(v) => void save({ autoLockSecs: v })}
-            options={[300, 900, 1800, 3600].map((s) => ({ value: s, label: s === 3600 ? '1 h' : `${s / 60} min` }))}
-          />
-        </SettingRow>
-        <SettingRow title={t('settings.passwordEachTx')} desc={t('settings.passwordEachTxDesc')}>
-          <Switch label={t('settings.passwordEachTx')} checked disabled />
-        </SettingRow>
-        <SettingRow title={t('settings.captureProtection')} desc={t('settings.captureProtectionDesc')}>
-          <Switch
-            label={t('settings.captureProtection')}
-            checked={settings.captureProtection}
-            onCheckedChange={(v) => {
-              void save({ captureProtection: v });
-              void call('set_capture_protection', { enabled: v }).catch(() => undefined);
-            }}
-          />
-        </SettingRow>
-        <SettingRow title={t('settings.clipboardGuard')} desc={t('settings.clipboardGuardDesc')}>
-          <Switch label={t('settings.clipboardGuard')} checked={settings.clipboardGuard} onCheckedChange={(v) => void save({ clipboardGuard: v })} />
-        </SettingRow>
-        {config?.tray && (
-          <SettingRow title={t('settings.lockBeforeSleep')} desc={t('settings.lockBeforeSleepDesc')}>
-            <Switch label={t('settings.lockBeforeSleep')} checked={settings.lockBeforeSleep !== false} onCheckedChange={(v) => void save({ lockBeforeSleep: v })} />
-          </SettingRow>
-        )}
-        <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesSecurityDesc')} last>
-          <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
-        </SettingRow>
-      </Panel>
-      {config?.tray && (
-        <Panel>
-          <SettingRow title={t('settings.closeToTray')} desc={t('settings.closeToTrayDesc')}>
-            <Switch label={t('settings.closeToTray')} checked={settings.closeToTray} onCheckedChange={(v) => void save({ closeToTray: v })} />
-          </SettingRow>
-          <SettingRow title={t('settings.lockOnHide')} desc={t('settings.lockOnHideDesc')} last={!config.autostart}>
-            <Switch label={t('settings.lockOnHide')} checked={settings.lockOnHide} onCheckedChange={(v) => void save({ lockOnHide: v })} />
-          </SettingRow>
-          {config.autostart && (
-            <SettingRow title={t('settings.startMinimized')} desc={t('settings.startMinimizedDesc')} last>
-              <Switch label={t('settings.startMinimized')} checked={settings.startMinimized} onCheckedChange={(v) => void save({ startMinimized: v })} />
-            </SettingRow>
+    <div className="flex flex-col">
+      <div className="flex items-center gap-6">
+        <VaultRing size={86} segs={[{ color: '#ffffff', part: 1, ice: true }]}>
+          <IceSquare size={20} />
+        </VaultRing>
+        <span className="flex min-w-0 flex-col">
+          <h1 className="m-0 truncate text-[22px] leading-none font-normal" style={{ ...DISPLAY, fontWeight: 400, letterSpacing: '-0.03em' }}>
+            {walletName}
+          </h1>
+          <span className="mt-2.5 text-[12.5px] text-faint">{facts.join(' · ')}</span>
+        </span>
+        <span className="ml-auto flex shrink-0 gap-2.5">
+          {changeWallet}
+          {!hwOnly && (
+            <Frost className="h-11 w-[150px] rounded-[14px] text-[13.5px]" onClick={() => void lock()}>
+              {t('settings.lockNow')}
+            </Frost>
           )}
-        </Panel>
-      )}
-      <Panel>
-        {store ? (
-          <SettingRow title={t('update.title')} desc={t('update.store', { version: __APP_VERSION__ })} last>
-            {null}
-          </SettingRow>
-        ) : (
-          <SettingRow title={t('update.auto')} desc={t('update.autoDesc', { version: __APP_VERSION__ })} last>
-            <Switch label={t('update.auto')} checked={settings.autoUpdate} onCheckedChange={(v) => void save({ autoUpdate: v })} />
-          </SettingRow>
+        </span>
+      </div>
+
+      <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-6">
+        <Group title={t('settings.sectionSecurity')}>
+          <Row label={t('settings.autoLock')}>
+            <Pick
+              label={t('settings.autoLockDelay')}
+              value={String(settings.autoLockSecs)}
+              onSelect={(v) => void save({ autoLockSecs: Number(v) })}
+              items={[300, 900, 1800, 3600].map((s) => ({ value: String(s), label: s === 3600 ? t('settings.afterHour') : t('settings.afterMin', { n: s / 60 }) }))}
+            />
+          </Row>
+          {!hwOnly && (
+            <Row label={t('common.password')}>
+              <ChangePassword trigger={(go) => <RowAction onClick={go}>{t('settings.change')}</RowAction>} />
+            </Row>
+          )}
+          {!hwOnly && (
+            <Row label={t('settings.recoveryPhrase')} sub={backup === 'unknown' ? <span className="text-warn">{t('settings.backupUnverified')}</span> : undefined}>
+              <RowAction onClick={() => setReveal(true)}>{t('common.show')}</RowAction>
+            </Row>
+          )}
+        </Group>
+
+        <Group title={t('settings.sectionPrivacy')}>
+          <Row label="Tor" onClick={() => open('privacy')} chevron>
+            {torValue}
+          </Row>
+          <Row label={t('settings.hideBalances')}>
+            <Switch label={t('settings.hideBalances')} on={settings.hideBalancesOnStart} onChange={(v) => void save({ hideBalancesOnStart: v })} />
+          </Row>
+          <Row label={t('settings.cryptoPrices')} onClick={() => open('apikeys')} chevron>
+            CoinGecko
+          </Row>
+        </Group>
+
+        <Group title={t('settings.groupDisplay')}>
+          <Row label={t('settings.language')}>
+            <Pick
+              label={t('settings.language')}
+              value={settings.language}
+              onSelect={(v) => void save({ language: v })}
+              items={[
+                { value: 'auto', label: t('settings.languageAuto'), short: t('settings.languageAutoShort') },
+                { value: 'fr', label: t('settings.languageFr') },
+                { value: 'en', label: t('settings.languageEn') },
+              ]}
+            />
+          </Row>
+          <Row label={t('settings.currency')}>
+            <Pick label={t('settings.currency')} value={settings.currency} onSelect={(v) => void save({ currency: v })} className="w-[300px]" items={FIAT_CURRENCIES.map((c) => ({ value: c, label: currencyLabel(c), hint: c }))} />
+          </Row>
+          <Row label={t('settings.btcUnit')}>
+            <Pick
+              label={t('settings.btcUnit')}
+              value={settings.btcUnit ?? 'btc'}
+              onSelect={(v) => void save({ btcUnit: v })}
+              items={[
+                { value: 'btc', label: 'BTC', hint: t('settings.btcUnitBtcHint') },
+                { value: 'sats', label: 'sats', hint: t('settings.btcUnitSatsHint') },
+              ]}
+            />
+          </Row>
+          <Row label={t('settings.hideSmall')} sub={t('settings.hideSmallDesc')}>
+            <Pick
+              label={t('settings.hideSmall')}
+              value={settings.hideSmall ?? 'off'}
+              onSelect={(v) => void save({ hideSmall: v })}
+              className="w-[260px]"
+              items={[
+                { value: 'off', label: t('settings.hideSmallOff') },
+                { value: 'zero', label: t('settings.hideSmallZero') },
+                { value: 'under1', label: t('settings.hideSmallUnder', { amount: fmtFiat(1, settings.currency, { decimals: 0 }) }) },
+                { value: 'under10', label: t('settings.hideSmallUnder', { amount: fmtFiat(10, settings.currency, { decimals: 0 }) }) },
+              ]}
+            />
+          </Row>
+        </Group>
+
+        <Group title="Kyro">
+          <Row label={t('settings.version')}>{store ? t('settings.versionStore', { version: __APP_VERSION__ }) : __APP_VERSION__}</Row>
+          {!store && (
+            <Row label={t('update.auto')}>
+              <Switch label={t('update.auto')} on={settings.autoUpdate} onChange={(v) => void save({ autoUpdate: v })} />
+            </Row>
+          )}
+          <Row label={t('welcome.sourceCode')}>GPL-3.0 · GitHub</Row>
+        </Group>
+
+        <Group title={t('settings.groupProtection')}>
+          <Row label={t('settings.passwordEachTx')} sub={t('settings.passwordEachTxDesc')}>
+            <Switch label={t('settings.passwordEachTx')} on disabled onChange={() => undefined} />
+          </Row>
+          <Row label={t('settings.captureProtection')} sub={t('settings.captureProtectionDesc')}>
+            <Switch
+              label={t('settings.captureProtection')}
+              on={settings.captureProtection}
+              onChange={(v) => {
+                void save({ captureProtection: v });
+                void call('set_capture_protection', { enabled: v }).catch(() => undefined);
+              }}
+            />
+          </Row>
+          <Row label={t('settings.clipboardGuard')} sub={t('settings.clipboardGuardDesc')}>
+            <Switch label={t('settings.clipboardGuard')} on={settings.clipboardGuard} onChange={(v) => void save({ clipboardGuard: v })} />
+          </Row>
+          {config?.tray && (
+            <Row label={t('settings.lockBeforeSleep')}>
+              <Switch label={t('settings.lockBeforeSleep')} on={settings.lockBeforeSleep !== false} onChange={(v) => void save({ lockBeforeSleep: v })} />
+            </Row>
+          )}
+          {!hwOnly && (
+            <Row label={t('settings.contactsOnly')} sub={t('settings.contactsOnlyDesc')}>
+              <Switch label={t('settings.contactsOnly')} on={settings.contactsOnly === true} onChange={(v) => (v ? void save({ contactsOnly: true }) : setContactsOff(true))} />
+            </Row>
+          )}
+          <Row label={t('settings.spendAndSecond')} onClick={() => open('protection')} chevron />
+        </Group>
+
+        <Group title={t('settings.groupNetworks')}>
+          <Row label={t('settings.sectionNetworks')} onClick={() => open('networks')} chevron />
+          <Row label={t('settings.sectionConnections')} onClick={() => open('connections')} chevron>
+            {tp('settings.connServers', hosts)}
+          </Row>
+          <Row label={t('settings.sectionApiKeys')} onClick={() => open('apikeys')} chevron />
+        </Group>
+
+        <Group title={t('settings.sectionAccounts')}>
+          <Row label={t('settings.walletsAndAccounts')} onClick={() => open('accounts')} chevron />
+          <Row label={t('settings.sectionHardware')} onClick={() => open('hardware')} chevron>
+            Ledger · Trezor
+          </Row>
+          <Row label={t('settings.sectionContacts')} onClick={() => open('contacts')} chevron />
+          <Row label={t('settings.sectionAlerts')} onClick={() => open('alerts')} chevron />
+          <Row label={t('settings.sectionBackup')} onClick={() => open('backup')} chevron />
+          {adapters?.xmr && <Row label={t('settings.moneroWallet')} onClick={() => open('monero')} chevron />}
+        </Group>
+
+        {config?.tray && (
+          <Group title={t('settings.groupWindow')}>
+            <Row label={t('settings.closeToTray')} sub={t('settings.closeToTrayDesc')}>
+              <Switch label={t('settings.closeToTray')} on={settings.closeToTray} onChange={(v) => void save({ closeToTray: v })} />
+            </Row>
+            <Row label={t('settings.lockOnHide')} sub={t('settings.lockOnHideDesc')}>
+              <Switch label={t('settings.lockOnHide')} on={settings.lockOnHide} onChange={(v) => void save({ lockOnHide: v })} />
+            </Row>
+            {config.autostart && (
+              <Row label={t('settings.startMinimized')} sub={t('settings.startMinimizedDesc')}>
+                <Switch label={t('settings.startMinimized')} on={settings.startMinimized} onChange={(v) => void save({ startMinimized: v })} />
+              </Row>
+            )}
+          </Group>
         )}
-      </Panel>
-      <SpendLimitSection />
-      <RevealPhrase />
-      <SecondPassword />
-      <MoneroWallet />
-    </>
+      </div>
+      <div className="mt-4 flex flex-col gap-3">{status}</div>
+      <RevealPhrase open={reveal} onClose={() => setReveal(false)} />
+      {contactsOff && (
+        <PasswordGate
+          title={t('settings.contactsOnlyOffTitle')}
+          body={t('settings.contactsOnlyOffBody')}
+          action={t('settings.contactsOnlyOffAction')}
+          verify={async (password) => {
+            await saveSettings(await call('contacts_only_off', { password }));
+          }}
+          onDone={() => setContactsOff(false)}
+          onCancel={() => setContactsOff(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function Panel({ children, className, tone }: { children: ReactNode; className?: string; tone?: 'danger' }) {
+  return <section className={cn('flex flex-col rounded-[18px] px-6 py-1.5 ring-1 backdrop-blur-xl', tone === 'danger' ? 'bg-down/[.04] ring-down/30' : 'bg-white/[.045] ring-white/[.07]', className)}>{children}</section>;
+}
+
+function SettingRow({ title, desc, children, last }: { title: string; desc: string; children: ReactNode; last?: boolean }) {
+  return (
+    <div className={cn('flex items-center justify-between gap-6 py-4', !last && 'border-b border-white/[.05]')}>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[13.5px] font-medium">{title}</span>
+        <span className="text-[11.5px] text-faint">{desc}</span>
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -240,35 +448,45 @@ function Privacy() {
         <SettingRow title={t('settings.useTor')} desc={t('settings.useTorDesc')}>
           <Switch
             label={t('settings.useTor')}
-            checked={enabled}
+            on={enabled}
             disabled={tor.busy}
-            onCheckedChange={(v) => {
+            onChange={(v) => {
               if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { ...settings.tor, enabled: true } }));
               else torStore.requestDisable('settings');
             }}
           />
         </SettingRow>
         <SettingRow title={t('settings.weeklyCount')} desc={t('settings.weeklyCountDesc')} last>
-          <Switch label={t('settings.weeklyCount')} checked={settings.weeklyCount} onCheckedChange={(v) => void saveSettings({ ...settings, weeklyCount: v })} />
+          <Switch label={t('settings.weeklyCount')} on={settings.weeklyCount} onChange={(v) => void saveSettings({ ...settings, weeklyCount: v })} />
         </SettingRow>
       </Panel>
-      <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
+      <Panel className="gap-3.5 py-5">
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.01em]">
+          <span className="flex items-center gap-2 text-[13.5px] font-medium">
             <IconTor size={16} className="text-mute" /> {t('settings.connectionState')}
           </span>
-          <span className="font-mono text-[12px]">
-            <TorIndicator />
+          <span className="flex items-center gap-2 text-[13px] text-text2">
+            {torIndicator(tor) === 'ready' ? (
+              <>
+                <IceDot /> {t('settings.torConnected')}
+              </>
+            ) : torIndicator(tor) === 'direct' ? (
+              <span className="text-warn">{t('settings.torOff')}</span>
+            ) : torIndicator(tor) === 'failed' ? (
+              <span className="text-warn">{t('settings.torFailed')}</span>
+            ) : (
+              <span className="text-mute">{t('settings.torConnecting', { p: Math.max(0, Math.min(99, Math.round(tor.status?.progress ?? 0))) })}</span>
+            )}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
+          <div className="flex flex-col gap-1.5 rounded-[14px] bg-white/[.03] px-4 py-3.5 ring-1 ring-white/[.05]">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
               <IconCheck size={14} className="text-up" /> {t('settings.torHides')}
             </span>
             <span className="text-[12px] leading-[1.5] text-mute">{t('settings.torHidesDesc')}</span>
           </div>
-          <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
+          <div className="flex flex-col gap-1.5 rounded-[14px] bg-white/[.03] px-4 py-3.5 ring-1 ring-white/[.05]">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
               <IconX size={14} className="text-warn" /> {t('settings.torDoesNotHide')}
             </span>
@@ -282,7 +500,7 @@ function Privacy() {
           </Notice>
         )}
         {tor.actionError && tor.dialog === 'none' && <Notice tone="error">{tor.actionError}</Notice>}
-      </section>
+      </Panel>
       {enabled && <TorBridges />}
     </>
   );
@@ -293,24 +511,24 @@ function MoneroWallet() {
   return <XmrWalletSection adapter={adapters.xmr} />;
 }
 
-function RevealPhrase() {
-  const [open, setOpen] = useState(false);
+/**
+ * Rust checks the password, asks in a native window, then shows the words in another native
+ * window: they never reach this interface (a compromised page could not read them).
+ */
+function RevealPhrase({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState(false);
   const [wrong, setWrong] = useState(0);
   const { t } = useT();
-  const backup = getBackupState();
 
   const close = () => {
     setPw('');
     setError(null);
     setShown(false);
-    setOpen(false);
+    onClose();
   };
-  // Rust checks the password, asks in a native window, then shows the words in another native
-  // window: they never reach this interface (a compromised page could not read them).
   const reveal = async () => {
     setBusy(true);
     setError(null);
@@ -328,75 +546,33 @@ function RevealPhrase() {
   };
 
   return (
-    <section className="flex items-center gap-4 rounded-panel border border-down/30 bg-card px-[22px] py-[18px]">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-ctl bg-down/12 text-down">
-        <IconEye size={18} />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2 text-[14px] font-semibold">
-          {t('settings.recoveryPhrase')} {backup === 'unknown' && <Badge tone="warn">{t('settings.backupUnverified')}</Badge>}
-        </span>
-        <span className="text-[12px] leading-[1.5] text-mute">{t('settings.revealDesc')}</span>
-      </div>
-      <Button variant="dangerOutline" size="md" onClick={() => setOpen(true)}>
-        {t('common.show')}
-      </Button>
-      <ChangePassword />
-      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} title={t('settings.recoveryPhrase')} className="w-[620px]">
-        {!shown ? (
-          <>
-            <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              {t('settings.revealWarn')}
-            </Notice>
-            <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.revealHow')}</p>
-            <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus wrong={wrong} onEnter={() => pw && void reveal()} />
-            {error && <Notice tone="error">{error}</Notice>}
-            <div className="flex justify-end gap-2">
-              <Button onClick={close}>{t('common.cancel')}</Button>
-              <Button variant="danger" disabled={!pw || busy} onClick={() => void reveal()}>
-                {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : t('settings.revealButton')}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <Notice tone="info">{t('settings.revealClosed')}</Notice>
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={close}>
-                {t('common.close')}
-              </Button>
-            </div>
-          </>
-        )}
-      </Dialog>
-    </section>
-  );
-}
-
-function Display({ save }: { save: Save }) {
-  const { settings } = useApp();
-  const { t } = useT();
-  return (
-    <Panel>
-      <SettingRow title={t('settings.language')} desc={t('settings.languageDesc')}>
-        <Segmented
-          label={t('settings.language')}
-          value={settings.language}
-          onChange={(v) => void save({ language: v })}
-          options={[
-            { value: 'auto', label: t('settings.languageAuto') },
-            { value: 'fr', label: t('settings.languageFr') },
-            { value: 'en', label: t('settings.languageEn') },
-          ]}
-        />
-      </SettingRow>
-      <SettingRow title={t('settings.currency')} desc={t('settings.currencyDesc')}>
-        <CurrencySelect label={t('settings.currency')} value={settings.currency} onChange={(v) => void save({ currency: v })} />
-      </SettingRow>
-      <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesDisplayDesc')} last>
-        <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
-      </SettingRow>
-    </Panel>
+    <Dialog open={open} onOpenChange={(v) => (v ? undefined : close())} title={t('settings.recoveryPhrase')} className="w-[620px]">
+      {!shown ? (
+        <>
+          <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+            {t('settings.revealWarn')}
+          </Notice>
+          <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.revealHow')}</p>
+          <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus wrong={wrong} onEnter={() => pw && void reveal()} />
+          {error && <Notice tone="error">{error}</Notice>}
+          <div className="flex justify-end gap-2">
+            <Button onClick={close}>{t('common.cancel')}</Button>
+            <Button variant="danger" disabled={!pw || busy} onClick={() => void reveal()}>
+              {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : t('settings.revealButton')}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <Notice tone="info">{t('settings.revealClosed')}</Notice>
+          <div className="flex justify-end">
+            <Button variant="primary" onClick={close}>
+              {t('common.close')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Dialog>
   );
 }
 
@@ -613,8 +789,10 @@ function Contacts() {
   const [ack, setAck] = useState(false);
   useEffect(() => setAck(false), [address, family]);
   const canSave = valid && (!lookalike || ack);
+  const contactGuard = useContactGuard();
   return (
     <Panel className="gap-4 py-5">
+      {contactGuard.dialog}
       <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionContacts')}</span>
       <p className="m-0 -mt-2 text-[13px] text-mute">{t('settings.contactsIntro')}</p>
       <div className="flex flex-col gap-2">
@@ -642,10 +820,13 @@ function Contacts() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!canSave || !family) return;
-            persist([...list, { id: crypto.randomUUID(), name: name.trim() || shortAddress(address.trim()), address: address.trim(), family, sends: 0 }]);
-            setName('');
-            setAddress('');
-            setPick(null);
+            const entry: Contact = { id: crypto.randomUUID(), name: name.trim() || shortAddress(address.trim()), address: address.trim(), family, sends: 0 };
+            contactGuard.guard(() => {
+              persist([...getContacts(), entry]);
+              setName('');
+              setAddress('');
+              setPick(null);
+            });
           }}
         >
           <div className="flex items-center gap-2">

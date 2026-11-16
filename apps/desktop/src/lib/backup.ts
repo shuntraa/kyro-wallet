@@ -4,10 +4,11 @@
 // out. A merge adds, and changes an existing name only when asked.
 
 import { isLookalike, sameAddress } from '@kyro/chains';
-import type { BackupContact, BackupLocal, BackupPriceAlert, Currency } from '@kyro/shared';
+import type { BackupContact, BackupLocal, BackupNote, BackupPriceAlert, Currency } from '@kyro/shared';
 import { getAlertSettings, MAX_PRICE_ALERTS, saveAlertSettings, type PriceAlert } from './alerts';
 import { CONTACT_FAMILIES } from './contactDetect';
 import { getContacts, getFavorites, saveContacts, setFavorites, type Contact, type ContactFamily } from './storage';
+import { applyNotes, collectNotes, planNotes } from './txNotes';
 
 const COIN_ID = /^[a-z0-9._-]{1,100}$/;
 const ADDRESS = /^[\x21-\x7e]{1,200}$/;
@@ -20,7 +21,10 @@ const cleanName = (name: string): string => [...name.replace(UNSAFE, '').trim()]
 /** What this device has, in the shape Rust checks. An entry Rust would refuse stays out. */
 export function collectLocal(): BackupLocal {
   const alerts = getAlertSettings();
+  const notes = collectNotes();
   return {
+    // Left out when empty: an older Kyro still reads the file.
+    ...(notes.length > 0 ? { notes } : {}),
     contacts: getContacts()
       .map((c) => ({ name: cleanName(c.name), address: c.address, family: c.family, sends: Math.max(0, Math.trunc(c.sends ?? 0)) }))
       .filter((c) => c.name && ADDRESS.test(c.address)),
@@ -50,6 +54,8 @@ export interface LocalPlan {
   addAlerts: BackupPriceAlert[];
   /** The backup has « funds received » on and this device has it off. */
   turnOnReceived: boolean;
+  /** Transaction notes this device lacks (a note already here stays). */
+  addNotes: BackupNote[];
 }
 
 const sameRule = (a: BackupPriceAlert, b: BackupPriceAlert) => a.coinId === b.coinId && a.direction === b.direction && a.level === b.level && a.currency === b.currency;
@@ -95,6 +101,7 @@ export function planLocal(incoming: BackupLocal, isValid: (family: ContactFamily
     addFavorites: [...new Set(incoming.favorites)].filter((f) => !favorites.has(f)),
     addAlerts,
     turnOnReceived: incoming.alerts.received && !alerts.received,
+    addNotes: planNotes(incoming.notes),
   };
 }
 
@@ -103,6 +110,7 @@ export function applyLocal(plan: LocalPlan, choices: { add: boolean; replaceName
   const fresh: Contact[] = choices.add ? plan.addContacts.map((c) => ({ id: crypto.randomUUID(), name: c.name, address: c.address, family: c.family as ContactFamily, sends: c.sends })) : [];
   if (names.size > 0 || fresh.length > 0) saveContacts([...getContacts().map((c) => ({ ...c, name: names.get(c.id) ?? c.name })), ...fresh]);
   if (!choices.add) return;
+  if (plan.addNotes.length > 0) applyNotes(plan.addNotes);
   if (plan.addFavorites.length > 0) setFavorites([...getFavorites(), ...plan.addFavorites]);
   if (plan.addAlerts.length > 0 || plan.turnOnReceived) {
     const s = getAlertSettings();

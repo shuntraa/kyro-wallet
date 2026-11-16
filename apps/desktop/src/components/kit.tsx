@@ -122,6 +122,7 @@ export function PasswordField({
   autoComplete = 'current-password',
   invalid,
   wrong = 0,
+  glass = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -132,6 +133,8 @@ export function PasswordField({
   placeholder?: string;
   autoComplete?: string;
   invalid?: boolean;
+  /** Kyro glass look (unlock screen): label read by screen readers only, frosted field. */
+  glass?: boolean;
   /**
    * Bumped by the parent after each wrong password: a calm hint under the field and a gentle
    * shake, the text selected so it can be typed again (no error box).
@@ -158,10 +161,18 @@ export function PasswordField({
   }, [wrong]);
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="eyebrow">
+      <label htmlFor={id} className={glass ? 'sr-only' : 'eyebrow'}>
         {label ?? t('shell.vaultPassword')}
       </label>
-      <div ref={boxRef} onAnimationEnd={(e) => e.currentTarget.classList.remove('shake')} className={cn('flex h-12 items-center rounded-ctl border bg-black/30 pr-1.5 pl-4 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
+      <div
+        ref={boxRef}
+        onAnimationEnd={(e) => e.currentTarget.classList.remove('shake')}
+        className={cn(
+          'flex items-center border pr-1.5 pl-4 transition-colors focus-within:border-ice-line',
+          glass ? 'h-[52px] rounded-[16px] bg-white/[.05] backdrop-blur-xl' : 'h-12 rounded-ctl bg-black/30',
+          invalid ? 'border-down/60' : glass ? 'border-white/[.09] hover:border-white/[.16]' : 'border-line-2 hover:border-line-3',
+        )}
+      >
         <input
           ref={inputRef}
           id={id}

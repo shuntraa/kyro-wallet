@@ -16,9 +16,9 @@ export function railKeyOf(r: Route): RailKey {
     case 'assets':
     case 'tidy':
     case 'btcLocks':
-      return 'assets';
     case 'send':
     case 'receive':
+      return 'assets';
     case 'portfolio':
       return 'portfolio';
     default:

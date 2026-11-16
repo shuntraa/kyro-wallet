@@ -36,6 +36,9 @@ const COMMANDS: &[&str] = &[
     "net_fetch",
     "settings_get",
     "settings_set",
+    // « Send only to my contacts »: off and contact additions need the password.
+    "contacts_only_off",
+    "vault_password_check",
     "server_test",
     "electrum_fetch_cert",
     "btc_backend_info",

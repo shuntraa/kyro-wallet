@@ -2,7 +2,7 @@
 // Locale-aware formatting (current interface language, see ../i18n): amounts, fiat, percentages,
 // addresses in 4-char chunks, durations.
 
-import { getLang, intlLocale, type Currency } from '@kyro/shared';
+import { getLang, intlLocale, type BtcUnit, type Currency } from '@kyro/shared';
 import { t } from '../i18n';
 
 /** U+202F narrow no-break space (fr-FR group separator) and U+2212 minus sign. */
@@ -96,8 +96,46 @@ function groupInt(int: string): string {
   return int.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
 }
 
+/**
+ * Réglages › Affichage: Bitcoin in BTC or in sats. Set by the app state from the settings; read by
+ * `fmtCrypto` for any amount labelled « BTC » with 8 decimals (balances, fees, history, notes).
+ */
+let btcUnit: BtcUnit = 'btc';
+export function setBtcUnit(u: BtcUnit | undefined): void {
+  btcUnit = u === 'sats' ? 'sats' : 'btc';
+}
+export function getBtcUnit(): BtcUnit {
+  return btcUnit;
+}
+/** This asset's amounts are written (and typed) in sats. */
+export function inSats(asset: { symbol: string; decimals: number } | undefined): boolean {
+  return btcUnit === 'sats' && !!asset && asset.symbol === 'BTC' && asset.decimals === 8;
+}
+
+/** "12 345 sats", "1 sat": whole satoshis, grouped, never a float. */
+export function fmtSats(sats: bigint): string {
+  const neg = sats < 0n;
+  const v = neg ? -sats : sats;
+  return `${neg ? MINUS : ''}${groupInt(v.toString())}${NNBSP}${v === 1n ? 'sat' : 'sats'}`;
+}
+
+/** 21 million BTC in sats has 16 digits. */
+const MAX_SATS_DIGITS = 16;
+
+/** What the amount field keeps in sats: digits only, no leading zero, at most 16 of them. */
+export function sanitizeSatsInput(raw: string): string {
+  return raw.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, MAX_SATS_DIGITS);
+}
+
+/** A typed sats amount, exact (`null` when empty or not whole digits). */
+export function parseSatsInput(s: string): bigint | null {
+  const t = s.trim();
+  return /^\d{1,16}$/.test(t) ? BigInt(t) : null;
+}
+
 /** Crypto amount from base units, truncated (never rounded up). */
 export function fmtCrypto(amount: bigint, decimals: number, symbol?: string, maxFrac?: number): string {
+  if (symbol && inSats({ symbol, decimals })) return fmtSats(amount);
   const neg = amount < 0n;
   const v = neg ? -amount : amount;
   const base = 10n ** BigInt(decimals);

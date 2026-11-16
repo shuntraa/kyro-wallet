@@ -39,7 +39,7 @@ describe('BestPrice', () => {
   it('speaks French', () => {
     setLang('fr');
     const text = html([quote({})]);
-    for (const part of ['Minimum reçu', 'Frais Kyro', '0,78 %', 'Frais du fournisseur', 'Temps estimé']) expect(text).toContain(part);
+    for (const part of ['Minimum reçu', 'Frais Kyro', '0,78 %', 'Frais du fournisseur', 'Durée']) expect(text).toContain(part);
   });
 
   it('leaves out what the quote does not expose', () => {
