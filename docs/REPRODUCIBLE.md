@@ -11,7 +11,7 @@ published. This page says how, what is compared, and how far that has been check
 | Windows | NSIS installer (`Kyro-windows-x64-setup.exe`) | Same bytes from two directories on one machine, with the same WebView2 bootstrapper file |
 | Windows | MSI installer | Not stable (see below): compare the binary inside it |
 | Linux | `kyro-desktop` (raw) | Same bytes from a build on the runner and one in the pinned container (Reproducibility run of 2026-11-16 on `main`) |
-| macOS | `kyro-desktop` (universal) | Differed only in each slice's `LC_UUID` and the ad-hoc signature hash that covers it (64 bytes of 43.8 MB). Fixed in the next version with `-oso_prefix`; to be confirmed by the next run |
+| macOS | `kyro-desktop` (universal) | Same bytes from two target folders on one machine since `-oso_prefix` (run of 2026-11-16 on `main`); before it, each slice's `LC_UUID` and the ad-hoc signature hash over it differed (64 bytes of 43.8 MB). First release with it: the version after 1.1.1 |
 
 v1.1.0 and v1.1.1 were built with these settings. Until the Reproducibility workflow has passed on a
 tag for every platform and someone has rebuilt a tag elsewhere, treat this as work in progress.
