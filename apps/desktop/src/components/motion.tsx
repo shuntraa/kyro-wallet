@@ -11,9 +11,11 @@ export const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
 /** Screen entrance (App's <motion.main>). */
 export const screenEnter = {
   // Not from 0: if rAF is paused (hidden window) the screen must still be readable.
-  initial: { opacity: 0.25, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.24, ease: EASE_OUT },
+  // A short rise out of a soft blur, so moving from one section to another reads as a change of
+  // place, not a flicker.
+  initial: { opacity: 0.2, y: 16, scale: 0.988, filter: 'blur(5px)' },
+  animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+  transition: { duration: 0.42, ease: EASE_OUT },
 } as const;
 
 /**

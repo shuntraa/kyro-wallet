@@ -110,31 +110,45 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
             <stop offset="0.6" stopColor={stroke} stopOpacity="0.04" />
             <stop offset="1" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
+          <linearGradient id={`h${gid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={stroke} stopOpacity="0.34" />
+            <stop offset="0.7" stopColor={stroke} stopOpacity="0.07" />
+            <stop offset="1" stopColor={stroke} stopOpacity="0" />
+          </linearGradient>
+          {/* Under the pointer the curve is lit up to that point: the past you are reading stands out. */}
+          <clipPath id={`c${gid}`}>
+            <rect x="0" y="0" width={hover !== null && p ? p.x : 0} height={height} style={{ transition: 'width 140ms ease-out' }} />
+          </clipPath>
         </defs>
         <g key={revealKey} className={revealKey === undefined ? undefined : 'fade-in'}>
           {area && <path d={area} fill={`url(#g${gid})`} />}
-          {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={glow ? { filter: `drop-shadow(0 0 6px ${stroke}99)` } : undefined} />}
+          {area && <path d={area} fill={`url(#h${gid})`} clipPath={`url(#c${gid})`} style={{ opacity: hover !== null ? 1 : 0, transition: 'opacity 200ms ease-out' }} />}
+          {line && <path d={line} fill="none" stroke={stroke} strokeWidth={hover !== null ? 2.25 : 1.75} strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'stroke-width 200ms ease-out', ...(glow || hover !== null ? { filter: `drop-shadow(0 0 ${hover !== null ? 8 : 6}px ${stroke}99)` } : {}) }} />}
         </g>
       </svg>
       {p && (
         <>
-          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: 0, bottom: 0, borderLeft: '1px solid rgba(124,196,255,.22)' }} />
+          {/* The pointer line fades out toward the bottom, in the curve's colour. */}
+          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: 0, bottom: 0, width: 1, background: `linear-gradient(180deg, transparent, ${stroke}66 18%, ${stroke}1f 85%, transparent)`, opacity: hover !== null ? 1 : 0.55, transition: 'left 140ms ease-out, opacity 200ms ease-out' }} />
           <div
             aria-hidden="true"
             className="fade-in"
-            style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: p.y, width: 9, height: 9, margin: '-4.5px 0 0 -4.5px', borderRadius: 999, background: '#090a0c', border: `2px solid ${stroke}`, transition: 'top 120ms ease-out' }}
+            style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: p.y, width: 11, height: 11, margin: '-5.5px 0 0 -5.5px', borderRadius: 999, background: stroke, border: '2.5px solid #0b0e13', boxShadow: `0 0 0 ${hover !== null ? 5 : 3}px ${stroke}2e, 0 0 16px ${stroke}`, transition: 'left 140ms ease-out, top 140ms ease-out, box-shadow 200ms ease-out' }}
           />
           {tip && (
             <div
               style={{
                 position: 'absolute',
                 left: `clamp(110px, ${(p.x / vbW) * 100}%, calc(100% - 110px))`,
-                top: Math.max(0, p.y - 80),
+                top: Math.max(0, p.y - 84),
                 transform: 'translateX(-50%)',
+                transition: 'left 140ms ease-out, top 140ms ease-out',
+                boxShadow: `0 14px 34px -14px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px ${stroke}2e`,
               }}
-              className="pointer-events-none flex flex-col items-start gap-1 rounded-[12px] bg-[#1a1c21]/90 px-3.5 py-2.5 whitespace-nowrap shadow-[0_10px_30px_-10px_rgba(0,0,0,.75),inset_0_1px_0_rgba(255,255,255,.06)] ring-1 ring-white/[.05] backdrop-blur-md"
+              className="pointer-events-none flex flex-col items-start gap-1 rounded-[12px] bg-[#12161c]/92 px-3.5 py-2.5 whitespace-nowrap backdrop-blur-md"
             >
               <span className="flex items-center gap-1.5 text-[12px] leading-none text-mute">
+                <span aria-hidden="true" className="size-[5px]" style={{ background: stroke, boxShadow: `0 0 8px ${stroke}` }} />
                 {tip.label}
                 {hover === null && defaultLabel && <span className="rounded-full bg-ice/[.12] px-1.5 py-[3px] text-[11px] leading-none font-medium text-ice">{defaultLabel}</span>}
               </span>

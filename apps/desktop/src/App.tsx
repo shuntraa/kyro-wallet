@@ -184,7 +184,9 @@ function Unlocked() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden text-text" style={{ background: BG }}>
-      <IceLight x="50%" y="28%" size={900} strength={0.18} id="app" />
+      <IceLight x="50%" y="24%" size={1150} strength={0.5} veins={0.24} id="app" />
+      {/* Depth: a faint violet-blue light low on the left, ice low on the right, drifting very slowly. */}
+      <div aria-hidden="true" className="kyro-aurora pointer-events-none absolute -inset-[10%]" style={{ background: 'radial-gradient(38% 34% at 16% 86%, rgba(139,124,255,.075), transparent 70%), radial-gradient(34% 30% at 88% 78%, rgba(124,196,255,.06), transparent 70%)' }} />
       <KyroBar search={search} account={<AccountSwitcher />} />
       <div className="relative z-10 flex min-h-0 flex-1">
         {/*

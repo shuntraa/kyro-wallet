@@ -3,6 +3,7 @@
 // hide balances, settings, lock, window controls. Replaces the left rail and the bottom bar.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { KyroMark } from '../components/kit';
 import { IconEye, IconEyeOff, IconLock, IconSearch, IconSliders } from '../components/icons';
 import { TorIndicator } from '../components/Tor';
@@ -17,7 +18,10 @@ import { onBarMouseDown, SearchBox, WindowControls, type SearchResult } from './
 function Section({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} aria-current={on ? 'page' : undefined} className={cn('flex h-9 items-center gap-2 text-[13px] font-medium transition-colors duration-150', on ? 'text-text' : 'text-mute hover:text-text2')}>
-      <span aria-hidden="true" className={cn('size-[5px] transition-[background,box-shadow] duration-200', on ? 'bg-ice shadow-[0_0_8px_#7cc4ff]' : 'bg-transparent')} />
+      {/* One ice square for the whole bar: it glides to the section you open. */}
+      <span aria-hidden="true" className="relative size-[5px]">
+        {on && <motion.span layoutId="kyro-nav-square" transition={{ type: 'spring', stiffness: 520, damping: 38 }} className="absolute inset-0 bg-ice shadow-[0_0_10px_#7cc4ff]" />}
+      </span>
       {label}
     </button>
   );

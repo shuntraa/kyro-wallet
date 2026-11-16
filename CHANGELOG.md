@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1
+
+- Moving between sections: the next screen rises out of a soft blur, and the ice square in the
+  header glides to the section you open.
+- Brighter: the ice light behind every screen is stronger, a faint violet and ice light adds depth
+  low on the screen, the ice veins drift very slowly, and cards are a little lighter.
+- Assets: an asset you don't hold keeps its colour instead of turning grey, so a new wallet is no
+  longer a grey page. On hover a tile lifts and its rim lights up in the coin's colour.
+- Charts (Portfolio, asset pages, Earn calculator): under the pointer the curve is lit up to that
+  point, the point and its label take the curve's colour, and they follow the pointer smoothly.
+
 ## 1.1.0
 
 - New look: every screen is redrawn. Each coin has its ring and its own light, one header bar

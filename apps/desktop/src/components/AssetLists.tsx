@@ -298,7 +298,7 @@ function MineTiles({ sort, query }: { sort: Sort; query: string }) {
           const open = () => navigate({ name: 'asset', id: h.asset.id });
           const head = (
             <span className="pointer-events-none relative flex items-center gap-3">
-              <VaultRing size={46} segs={[{ color: h.asset.color ?? '#8fcaff', part: 1, mute: !held }]} halo={held ? h.asset.color ?? '#7cc4ff' : '#000000'} glow={held}>
+              <VaultRing size={46} segs={[{ color: h.asset.color ?? '#8fcaff', part: 1 }]} halo={h.asset.color ?? '#7cc4ff'} glow={held}>
                 <CoinIcon asset={h.asset} size={21} />
               </VaultRing>
               <span className="flex min-w-0 flex-col leading-tight">
@@ -314,7 +314,9 @@ function MineTiles({ sort, query }: { sort: Sort; query: string }) {
           );
           if (!held) {
             return (
-              <div key={h.key} style={idx(n)} className={cn('relative flex min-h-[172px] flex-col rounded-[22px] p-4 opacity-60 transition-opacity duration-150 hover:opacity-90', GLASS_ROW)}>
+              <div key={h.key} style={{ ...idx(n), ['--c' as string]: h.asset.color ?? '#7cc4ff' }} className={cn('coin-tile relative flex min-h-[172px] flex-col overflow-hidden rounded-[22px] p-4', GLASS_ROW)}>
+                {/* An empty asset keeps its colour (a new wallet is not a grey page); only its figure is faint. */}
+                <span aria-hidden="true" className="pointer-events-none absolute -top-16 -left-10 size-48 rounded-full" style={{ background: `radial-gradient(circle, ${h.asset.color ?? '#7cc4ff'}1c, transparent 70%)` }} />
                 <button type="button" onClick={open} aria-label={h.asset.name} className="absolute inset-0 rounded-[22px]" />
                 {head}
                 <span className="pointer-events-none relative mt-3.5 text-[20px] leading-none text-faint" style={THIN}>
@@ -332,7 +334,7 @@ function MineTiles({ sort, query }: { sort: Sort; query: string }) {
             );
           }
           return (
-            <Glass key={h.key} className="relative flex min-h-[172px] flex-col overflow-hidden rounded-[22px] p-4 transition-[filter] duration-150 hover:brightness-110" style={idx(n)}>
+            <Glass key={h.key} className="coin-tile relative flex min-h-[172px] flex-col overflow-hidden rounded-[22px] p-4" style={{ ...idx(n), ['--c' as string]: h.asset.color ?? '#7cc4ff' }}>
               <span aria-hidden="true" className="pointer-events-none absolute -top-16 -left-10 size-48 rounded-full" style={{ background: `radial-gradient(circle, ${h.asset.color ?? '#7cc4ff'}30, transparent 70%)` }} />
               <button type="button" onClick={open} aria-label={h.asset.name} className="absolute inset-0 rounded-[22px]" />
               {head}

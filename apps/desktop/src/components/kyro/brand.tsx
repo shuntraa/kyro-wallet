@@ -11,9 +11,9 @@ export const THIN: CSSProperties = { ...DISPLAY, fontWeight: 300, letterSpacing:
 /** Small spaced capitals used for section labels. */
 export const LABEL = 'text-[11px] font-medium uppercase tracking-[0.16em] text-faint';
 /** Glass surface used by rows, fields and secondary buttons. */
-export const GLASS_ROW = 'bg-white/[.045] ring-1 ring-white/[.07] backdrop-blur-xl';
+export const GLASS_ROW = 'bg-white/[.055] ring-1 ring-white/[.08] backdrop-blur-xl';
 /** App background: a cold top, near-black bottom. */
-export const BG = 'linear-gradient(180deg, #0a111c 0%, #070a0f 50%, #06070a 100%)';
+export const BG = 'linear-gradient(180deg, #0e1826 0%, #0a0f16 48%, #07090d 100%)';
 
 /** A coin colour pulled toward the cool grey of the UI, for lines and large areas. */
 export function soft(hex: string, a = 0.78): string {
@@ -29,13 +29,15 @@ export const GLOW = (c: string): CSSProperties => ({ color: c, textShadow: `0 0 
 export const BIG = (c: string): CSSProperties => ({ color: c, textShadow: `0 0 34px ${c}66, 0 0 3px ${c}44` });
 
 /** Light through ice: a cold light pool and caustic veins, strongest at (x, y). Drawn once. */
-export function IceLight({ x = '50%', y = '30%', size = 900, strength = 1, id = 'ice' }: { x?: string; y?: string; size?: number; strength?: number; id?: string }) {
+/** Cold light behind a screen. `veins` sets the ice veins apart from the light (default: same as `strength`). */
+export function IceLight({ x = '50%', y = '30%', size = 900, strength = 1, veins, id = 'ice' }: { x?: string; y?: string; size?: number; strength?: number; veins?: number; id?: string }) {
   const mask = `radial-gradient(${size}px ${size * 0.62}px at ${x} ${y}, #000 0%, rgba(0,0,0,.55) 38%, transparent 72%)`;
   const f = `caustic-${id}`;
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       <div className="absolute inset-0" style={{ background: `radial-gradient(${size * 0.9}px ${size * 0.55}px at ${x} ${y}, rgba(124,196,255,${0.16 * strength}), rgba(124,196,255,${0.04 * strength}) 45%, transparent 75%)` }} />
-      <svg className="absolute inset-0 h-full w-full" style={{ WebkitMaskImage: mask, maskImage: mask, opacity: 0.32 * strength, mixBlendMode: 'screen' }}>
+      {/* The ice veins drift very slowly (kyro-drift, off under reduced motion), so the light feels alive. */}
+      <svg className="kyro-drift absolute -inset-[6%] h-[112%] w-[112%]" style={{ WebkitMaskImage: mask, maskImage: mask, opacity: 0.32 * (veins ?? strength), mixBlendMode: 'screen' }}>
         <filter id={f} x="0" y="0" width="100%" height="100%">
           <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="2" seed="4" />
           <feComponentTransfer>
@@ -49,7 +51,7 @@ export function IceLight({ x = '50%', y = '30%', size = 900, strength = 1, id = 
         </filter>
         <rect width="100%" height="100%" filter={`url(#${f})`} />
       </svg>
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(1400px 900px at 50% 40%, transparent 55%, rgba(0,0,0,.55))' }} />
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(1400px 900px at 50% 40%, transparent 60%, rgba(0,0,0,.38))' }} />
     </div>
   );
 }
@@ -99,7 +101,7 @@ export function Glass({ children, className, style }: { children?: ReactNode; cl
     <div
       className={className}
       style={{
-        background: 'linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025))',
+        background: 'linear-gradient(180deg, rgba(255,255,255,.068), rgba(255,255,255,.032))',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(255,255,255,.06), 0 24px 60px -30px rgba(0,0,0,.8)',
         backdropFilter: 'blur(22px) saturate(1.2)',
         ...style,
