@@ -208,7 +208,7 @@ function MineList({ sort, query }: { sort: Sort; query: string }) {
           </span>
           <span className="flex items-center gap-1.5 text-[12px] text-mute">
             {issue && (
-              <span title={issue} aria-label={issue} className="text-faint">
+              <span data-tip={issue} aria-label={issue} className="kyro-tip text-warn/75 hover:text-warn">
                 <IconInfo size={13} />
               </span>
             )}
@@ -344,7 +344,7 @@ function MineTiles({ sort, query }: { sort: Sort; query: string }) {
               <span className="figure pointer-events-none relative mt-1.5 flex items-center gap-1.5 text-[12.5px] text-text2">
                 {hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}
                 {issue && (
-                  <span title={issue} aria-label={issue} className="pointer-events-auto text-faint">
+                  <span data-tip={issue} aria-label={issue} className="kyro-tip pointer-events-auto text-warn/75 hover:text-warn">
                     <IconInfo size={13} />
                   </span>
                 )}
