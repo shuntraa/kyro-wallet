@@ -9,7 +9,8 @@
 - Assets: an asset you don't hold keeps its colour instead of turning grey, so a new wallet is no
   longer a grey page. On hover a tile lifts and its rim lights up in the coin's colour.
 - Charts (Portfolio, asset pages, Earn calculator): under the pointer the curve is lit up to that
-  point, the point and its label take the curve's colour, and they follow the pointer smoothly.
+  point, and the point glides along the curve with the pointer (no more jumping from one data point
+  to the next), its label in the curve's colour.
 
 ## 1.1.0
 

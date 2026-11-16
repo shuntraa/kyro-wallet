@@ -34,6 +34,8 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
   const gid = useId().replace(/:/g, '');
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
+  // The pointer's x on the curve (chart units): the marker glides with it, between the data points.
+  const [hoverX, setHoverX] = useState<number | null>(null);
   // Draw in real pixels: a stretched viewBox squeezed the curve sideways in a narrow window and
   // parts of the stroke went missing. One point per ~2 px, re-measured on every resize.
   // Width and height both followed (`fit`): a smaller window recomputes the y scale too, so the
@@ -80,7 +82,19 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
     return m;
   }, [defaultPoint, pts.length, data]);
   const idx = hover ?? fallback;
-  const p = idx !== null ? pts[idx] : undefined;
+  const p = useMemo(() => {
+    if (hover !== null && hoverX !== null && pts.length > 1) {
+      // On the drawn curve at the pointer: the points are ~2 px apart, so a straight step between
+      // the two around it follows the smooth line.
+      let i = 1;
+      while (i < pts.length - 1 && (pts[i] as { x: number }).x < hoverX) i++;
+      const a = pts[i - 1] as { x: number; y: number };
+      const b = pts[i] as { x: number; y: number };
+      const k = b.x === a.x ? 0 : Math.min(1, Math.max(0, (hoverX - a.x) / (b.x - a.x)));
+      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+    }
+    return idx !== null ? pts[idx] : undefined;
+  }, [hover, hoverX, idx, pts]);
   const tip = idx !== null && renderTooltip && kept[idx] !== undefined ? renderTooltip(kept[idx]) : null;
 
   const onMove = (e: React.PointerEvent) => {
@@ -99,10 +113,11 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
     const prev = lo > 0 ? lo - 1 : lo;
     const best = Math.abs((pts[prev] as { x: number }).x - x) <= Math.abs((pts[lo] as { x: number }).x - x) ? prev : lo;
     setHover(best);
+    setHoverX(Math.min(Math.max(x, (pts[0] as { x: number }).x), (pts[pts.length - 1] as { x: number }).x));
   };
 
   return (
-    <div ref={ref} className={className} style={fit ? { position: 'relative', flex: '1 1 0', minHeight: 0, maxHeight: maxH } : { position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
+    <div ref={ref} className={className} style={fit ? { position: 'relative', flex: '1 1 0', minHeight: 0, maxHeight: maxH } : { position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => { setHover(null); setHoverX(null); }}>
       <svg width="100%" height={height} style={{ display: 'block' }} viewBox={`0 0 ${vbW} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
         <defs>
           <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
@@ -117,7 +132,7 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
           </linearGradient>
           {/* Under the pointer the curve is lit up to that point: the past you are reading stands out. */}
           <clipPath id={`c${gid}`}>
-            <rect x="0" y="0" width={hover !== null && p ? p.x : 0} height={height} style={{ transition: 'width 140ms ease-out' }} />
+            <rect x="0" y="0" width={hover !== null && p ? p.x : 0} height={height} />
           </clipPath>
         </defs>
         <g key={revealKey} className={revealKey === undefined ? undefined : 'fade-in'}>
@@ -129,11 +144,11 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
       {p && (
         <>
           {/* The pointer line fades out toward the bottom, in the curve's colour. */}
-          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: 0, bottom: 0, width: 1, background: `linear-gradient(180deg, transparent, ${stroke}66 18%, ${stroke}1f 85%, transparent)`, opacity: hover !== null ? 1 : 0.55, transition: 'left 140ms ease-out, opacity 200ms ease-out' }} />
+          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: 0, bottom: 0, width: 1, background: `linear-gradient(180deg, transparent, ${stroke}66 18%, ${stroke}1f 85%, transparent)`, opacity: hover !== null ? 1 : 0.55, transition: 'opacity 200ms ease-out' }} />
           <div
             aria-hidden="true"
             className="fade-in"
-            style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: p.y, width: 11, height: 11, margin: '-5.5px 0 0 -5.5px', borderRadius: 999, background: stroke, border: '2.5px solid #0b0e13', boxShadow: `0 0 0 ${hover !== null ? 5 : 3}px ${stroke}2e, 0 0 16px ${stroke}`, transition: 'left 140ms ease-out, top 140ms ease-out, box-shadow 200ms ease-out' }}
+            style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: p.y, width: 11, height: 11, margin: '-5.5px 0 0 -5.5px', borderRadius: 999, background: stroke, border: '2.5px solid #0b0e13', boxShadow: `0 0 0 ${hover !== null ? 5 : 3}px ${stroke}2e, 0 0 16px ${stroke}`, transition: 'box-shadow 200ms ease-out' }}
           />
           {tip && (
             <div
@@ -142,7 +157,6 @@ export function SmoothChart({ values, times, height: maxH, fit = false, revealKe
                 left: `clamp(110px, ${(p.x / vbW) * 100}%, calc(100% - 110px))`,
                 top: Math.max(0, p.y - 84),
                 transform: 'translateX(-50%)',
-                transition: 'left 140ms ease-out, top 140ms ease-out',
                 boxShadow: `0 14px 34px -14px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07), 0 0 0 1px ${stroke}2e`,
               }}
               className="pointer-events-none flex flex-col items-start gap-1 rounded-[12px] bg-[#12161c]/92 px-3.5 py-2.5 whitespace-nowrap backdrop-blur-md"
