@@ -102,7 +102,7 @@ export const earnRow = ([f, name, type, apy, lock, min]) => `
           </div>`;
 
 const heroShot = (name, i) => `
-        <div class="kw-screen${i === 0 ? ' is-on' : ''}" data-screen="${i}"><picture><source media="(max-width: 640px)" srcset="/img/hero-${name}-m-720.webp 720w, /img/hero-${name}-m.webp 1080w" sizes="calc(100vw - 32px)" width="1080" height="1080"><img src="/img/hero-${name}.webp" srcset="/img/hero-${name}-1200.webp 1200w, /img/hero-${name}.webp 1800w" sizes="(min-width: 900px) 66vw, calc(100vw - 32px)" width="1800" height="1125" alt=""${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} decoding="async"></picture></div>`;
+        <div class="kw-screen${i === 0 ? ' is-on' : ''}" data-screen="${i}"><picture><source media="(max-width: 640px)" srcset="/img/hero-${name}-m-720.webp 720w, /img/hero-${name}-m.webp 1080w" sizes="calc(100vw - 32px)" width="1080" height="1200"><img src="/img/hero-${name}.webp" srcset="/img/hero-${name}-1200.webp 1200w, /img/hero-${name}.webp 1800w" sizes="(min-width: 900px) 66vw, calc(100vw - 32px)" width="1800" height="1125" alt=""${i === 0 ? ' fetchpriority="high"' : ' loading="lazy"'} decoding="async"></picture></div>`;
 
 /** The Kyro window: captures of the app itself. The text alternative lives on the wrapper. */
 export const appWindow = () => `
