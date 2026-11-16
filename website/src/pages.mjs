@@ -1350,7 +1350,7 @@ export function donatePage() {
       trail,
       eyebrow: 'Donate',
       h1: 'Support <em>Kyro</em>',
-      lead: 'Kyro is free and open source, with no ads and no account. Donations fund the work on it and keep it free.',
+      lead: 'Kyro is free and open source, with no ads, no account and no investors. Donations fund the work on it and keep it free.',
       extra: `<div class="hero-cta"><a class="btn btn-primary btn-xl" href="https://github.com/sponsors/shuntraa">Sponsor on GitHub</a><a class="btn btn-ghost btn-xl" href="#addresses">Send crypto</a></div>`
     })}
 
@@ -1360,7 +1360,7 @@ export function donatePage() {
         <div class="don-grid">${donateRows.map(card).join('')}
         </div>
         <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
-        <p class="don-foot">Send each coin only on its own network. These are Kyro's own addresses, the same as in the <a href="${REPO}#support-the-project">README</a>.</p>
+        <p class="don-foot">Send each coin only on its own network. These are Kyro's own addresses, the same as in the <a href="${REPO}#support-the-project">README</a>. The app itself never asks for a donation.</p>
       </div>
     </section>`;
 

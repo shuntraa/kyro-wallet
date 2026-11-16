@@ -966,7 +966,7 @@ Donate
 
 # Support Kyro
 
-Kyro is free and open source, with no ads and no account. Donations fund the work on it and keep it free.
+Kyro is free and open source, with no ads, no account and no investors. Donations fund the work on it and keep it free.
 
 Sponsor on GitHubSend crypto
 
@@ -1004,7 +1004,7 @@ TRX or USDT on TRON.
 
 addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3
 
-Send each coin only on its own network. These are Kyro's own addresses, the same as in the README.
+Send each coin only on its own network. These are Kyro's own addresses, the same as in the README. The app itself never asks for a donation.
 
 ================================================================
 Bitcoin wallet for Windows, macOS and Linux | Kyro
