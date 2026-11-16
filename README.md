@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/hero.webp" width="860" alt="Kyro Wallet portfolio screen">
+  <img src="docs/assets/hero.webp" width="860" alt="Kyro Wallet portfolio screen: the portfolio as a ring of coins, total value, Send, Receive and Swap, and the value chart">
 </p>
 
 ---
@@ -37,7 +37,12 @@ Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your r
 - **Send, receive and swap** from the same window. Swaps carry a service fee from 0.7%, included in the rate — see [fees](https://kyrowallet.com/fees/).
 - **Dust protection**: tiny coins from strangers stay out of your sends, so they can't link your addresses. You see the amount set aside, and you can include it.
 - **Optional passphrase** (the BIP39 "25th word") when you create or import a wallet, under Advanced.
-- **Earn**: staking on SOL, ADA, TRX, NEAR, SUI and APT from accounts that stay in your name (SOL and ADA also from Ledger and Trezor, NEAR from Ledger), ETH liquid staking with Lido, and USDT, USDC, DAI and WETH lending on Aave v3. Rates are estimates.
+- **Earn**: staking on SOL, ADA, TRX, NEAR, SUI and APT from accounts that stay in your name (SOL and ADA also from Ledger and Trezor, NEAR from Ledger), ETH liquid staking with Lido, and USDT, USDC, DAI and WETH lending on Aave v3. Each option shows its risk level and your position, and a calculator shows what an amount could earn. Rates are estimates.
+- **Bitcoin time lock**: lock bitcoins until a day you choose. The Bitcoin network itself refuses to spend them before that date, even with the phrase, and nobody can cancel a confirmed lock. Withdrawing also works with Bitcoin Core alone: [docs/BTC_TIMELOCK.md](docs/BTC_TIMELOCK.md).
+- **Second password** (optional): typed on the normal unlock screen, it opens a separate wallet with its own phrase and a small balance, for when someone forces you to open Kyro.
+- **Daily spending limit** (optional): above the amount you choose per 24 hours, a send waits 1 or 24 hours and then asks for your password. Enforced in Rust before the key signs.
+- **Missing network fees**: when a token send lacks the coin that pays the fee, Kyro offers to swap a little of another coin for it. **Tidy** turns small leftover balances into one coin.
+- **Privacy options**: a private note on each transaction (kept on your device, in the CSV export and the backup), a warning before a first send to an unknown address, "send only to my contacts", hide small balances, Bitcoin in BTC or sats.
 - **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
 - **Simulation before signing** on EVM swaps and contract calls, through your own RPC node, no third-party service.
 - **Several wallets** on one device, each with its own recovery phrase, password, accounts and history.
@@ -69,7 +74,7 @@ Tokens include ERC-20 and other EVM standards, SPL (Solana), TRC-20 (TRON), Card
 
 **Keys never leave the Rust core.** The interface is a sandboxed web view that never sees a secret. Encryption, key derivation and signing happen in `wallet-core`, a pure Rust crate with no network and no file access. Private keys are derived for each signature, then wiped from memory.
 
-**No blind signing.** Every signature needs your password *and* a confirmation in a native system window, drawn by the app shell rather than the web view. It shows what Rust itself decoded from the transaction, not what the interface claims. Unusual transactions get a second, reinforced confirmation.
+**No blind signing.** Every signature needs your password *and* a confirmation in Kyro's own native signing window, opened by the Rust shell outside the web view, which can neither read nor change it. It shows what Rust itself decoded from the transaction ("What Kyro read in the transaction"), not what the interface claims, and Sign becomes active only after a short moment. Unusual transactions get a second, reinforced confirmation.
 
 **Private by default.** All traffic goes through an embedded Tor client, with a separate circuit per blockchain. Kyro contacts only the servers listed in [docs/NETWORK.md](docs/NETWORK.md), and you can point most chains at your own node.
 
@@ -81,9 +86,13 @@ Tokens include ERC-20 and other EVM standards, SPL (Solana), TRC-20 (TRON), Card
 
 ## Screenshots
 
-| Portfolio | Swap | Send |
+Demo mode, sample balances.
+
+| Swap | Earn | Bitcoin time lock |
 |:-:|:-:|:-:|
-| <img src="docs/assets/portfolio.webp" width="280" alt="Portfolio screen"> | <img src="docs/assets/swap.webp" width="280" alt="Swap screen"> | <img src="docs/assets/send.webp" width="280" alt="Send screen"> |
+| <img src="docs/assets/swap.webp" width="280" alt="Swap screen: Bitcoin to Ethereum, both coins as rings, route and fees"> | <img src="docs/assets/earn.webp" width="280" alt="Earn screen: estimated yearly gain and the staking and lending options with their risk"> | <img src="docs/assets/timelock.webp" width="280" alt="Bitcoin time lock screen: locked amount, unlock date and timeline"> |
+| **Send** | **Receive** | **History** |
+| <img src="docs/assets/send.webp" width="280" alt="Send screen with fee choice and notes on what is checked"> | <img src="docs/assets/receive.webp" width="280" alt="Receive screen: QR code inside the coin ring and the address in blocks"> | <img src="docs/assets/history.webp" width="280" alt="History screen: sends and receives across chains"> |
 
 ## Hardware wallets
 
@@ -126,7 +135,7 @@ kyro-wallet/
 │  ├─ chains/              Chain adapters (build unsigned transactions)
 │  ├─ market/              Prices and charts (CoinGecko)
 │  └─ swap/                Swap providers and fee logic
-└─ docs/                   ARCHITECTURE, IPC, NETWORK, SWAP_FEES
+└─ docs/                   ARCHITECTURE, IPC, NETWORK, SWAP_FEES, BTC_TIMELOCK, REPRODUCIBLE, RELEASING
 ```
 
 ```mermaid
@@ -228,6 +237,10 @@ pnpm typecheck  # TypeScript, every package
 pnpm lint       # ESLint + cargo clippy (warnings are errors)
 pnpm audit      # pnpm audit --prod + cargo audit
 ```
+
+### Rebuild a release
+
+Each release lists the SHA-256 of the app binaries in `SHA256SUMS-binaries`, with the tool versions in `BUILDINFO-<os>.txt`. To rebuild a release yourself and compare, see [docs/REPRODUCIBLE.md](docs/REPRODUCIBLE.md).
 
 ## Contributing
 
