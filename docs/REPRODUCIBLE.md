@@ -10,10 +10,11 @@ published. This page says how, what is compared, and how far that has been check
 | Windows | `kyro-desktop.exe` (raw, and inside the NSIS and MSI installers) | Same bytes from two directories on one machine. Not yet checked between two machines |
 | Windows | NSIS installer (`Kyro-windows-x64-setup.exe`) | Same bytes from two directories on one machine, with the same WebView2 bootstrapper file |
 | Windows | MSI installer | Not stable (see below): compare the binary inside it |
-| Linux, macOS | all | Not tested yet. The flags are in place; `.github/workflows/reproducibility.yml` is the first real test |
+| Linux | `kyro-desktop` (raw) | Same bytes from a build on the runner and one in the pinned container (Reproducibility run of 2026-11-16 on `main`) |
+| macOS | `kyro-desktop` (universal) | Differed only in each slice's `LC_UUID` and the ad-hoc signature hash that covers it (64 bytes of 43.8 MB). Fixed in the next version with `-oso_prefix`; to be confirmed by the next run |
 
-No published release has been built with these settings yet. Until the Reproducibility workflow
-has passed on a tag and someone has rebuilt that tag elsewhere, treat this as work in progress.
+v1.1.0 and v1.1.1 were built with these settings. Until the Reproducibility workflow has passed on a
+tag for every platform and someone has rebuilt a tag elsewhere, treat this as work in progress.
 
 ## What is compared
 
@@ -92,6 +93,7 @@ the verify script.
 | Source file dates inside the NSIS installer | `SetDateSave off` in `installer/installer.nsi`. Installed files carry the install date |
 | Clock-based dates in tools | `SOURCE_DATE_EPOCH` = the commit's date, `TZ=UTC`, `LC_ALL=C` |
 | Archive dates on macOS | `ZERO_AR_DATE=1` |
+| macOS `LC_UUID`: Apple's linker hashes the object paths it records (N_OSO), which name the target folder; `strip` then drops the paths but keeps the UUID | `-Wl,-oso_prefix,<target folder>/`: the paths are recorded relative to it |
 | Tool versions | `rust-toolchain.toml`, `pnpm-lock.yaml`, `Cargo.lock`, exact Node and pnpm, `BUILDINFO-<os>.txt` |
 
 The release profile (`codegen-units = 1`, fat LTO, `opt-level = "s"`, `panic = "abort"`, `strip`)

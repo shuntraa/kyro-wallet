@@ -46,6 +46,13 @@ if [ "$os" = windows ]; then
   # PE header timestamp and import tables: a hash of the content instead of the link time.
   flags+=("-Clink-arg=/Brepro")
 fi
+if [ "$os" = macos ]; then
+  # Apple's linker hashes the object paths it records (N_OSO) into the binary's LC_UUID, then the
+  # release strip removes those paths but keeps the UUID: two builds in different target dirs
+  # differed only there (and in the ad-hoc signature hash that covers it). Record them relative to
+  # the target dir instead.
+  flags+=("-Clink-arg=-Wl,-oso_prefix,$target/")
+fi
 
 # CARGO_ENCODED_RUSTFLAGS, not RUSTFLAGS: a path may contain spaces. Separator: 0x1f.
 encoded="$(IFS=$'\x1f'; printf '%s' "${flags[*]}")"
