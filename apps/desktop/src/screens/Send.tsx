@@ -836,15 +836,17 @@ export function Send({ assetId, to: initialTo, amount: initialAmount, memo: init
                     setAmountStr('');
                     setMax(false);
                   }}
-                  className="press grid size-7 place-items-center rounded-[8px] bg-white/[.06] text-mute transition-colors hover:bg-white/[.1] hover:text-text disabled:opacity-40"
+                  className="press flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-semibold text-mute ring-1 ring-white/[.1] transition-[color,box-shadow] hover:text-text hover:ring-ice/40 disabled:opacity-40"
                 >
-                  <IconSwap size={13} sw={2.2} className="rotate-90" />
+                  {/* Says which unit you switch to, instead of a bare icon in a dark square. */}
+                  <IconSwap size={12} sw={2.2} className="rotate-90" />
+                  {fiatMode ? coinUnit : cur}
                 </button>
                 <button
                   type="button"
                   aria-pressed={max}
                   onClick={() => setMax(true)}
-                  className={cn('press rounded-[8px] px-2 py-1 text-[11px] font-semibold tracking-[0.1em] uppercase transition-colors', !max && 'bg-white/[.06] text-mute hover:bg-white/[.1] hover:text-text')}
+                  className={cn('press flex h-7 items-center rounded-full px-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase transition-[color,box-shadow]', !max && 'text-mute ring-1 ring-white/[.1] hover:text-text hover:ring-ice/40')}
                   style={max ? { color, background: `${color}1c`, boxShadow: `inset 0 0 0 1px ${color}66, 0 0 14px ${color}22` } : undefined}
                 >
                   {t('swap.maxButton')}

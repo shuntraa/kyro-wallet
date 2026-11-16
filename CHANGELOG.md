@@ -5,6 +5,8 @@
 - Smoother scrolling: cards, asset tiles and lists no longer blur what is behind them (a tinted
   surface gives the same look). That blur was recomputed under every card on each frame: scrolling
   ran at about half the frame rate, and hovering could leave odd squares on screen.
+- Send: the switch between the coin and your currency is now a labelled pill ("⇅ USD" / "⇅ BTC"),
+  like MAX, instead of a bare icon in a dark square.
 - macOS builds record their object paths relative to the build folder, so two builds of the same
   version are the same bytes (docs/REPRODUCIBLE.md).
 
