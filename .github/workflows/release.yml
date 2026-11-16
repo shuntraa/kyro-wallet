@@ -150,8 +150,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # sha256sum where it exists (Linux, Git Bash on Windows), shasum on macOS. The hash is
+          # checked before printing: a failing $(...) inside printf would write an empty line.
           hash() { # hash <file> <name in SHA256SUMS-binaries>
-            printf '%s  %s\n' "$(shasum -b -a 256 < "$1" | cut -d' ' -f1)" "$2"
+            local h
+            if command -v sha256sum > /dev/null; then h=$(sha256sum -b < "$1" | cut -d' ' -f1)
+            else h=$(shasum -b -a 256 < "$1" | cut -d' ' -f1); fi
+            [[ "$h" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::no SHA-256 for $2"; exit 1; }
+            printf '%s  %s\n' "$h" "$2"
           }
           packaged() { # packaged <raw binary> <marker> <name>
             node scripts/patch-bundle-type.mjs "$1" "$2" "$RUNNER_TEMP/packaged"

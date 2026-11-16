@@ -10,7 +10,9 @@ ARG PNPM_VERSION=11.0.9
 ENV DEBIAN_FRONTEND=noninteractive
 
 # snapshot.ubuntu.com only answers over https: ca-certificates comes first, from the image's mirror.
-RUN apt-get update \
+# It sometimes answers 503 under load: apt retries each download (does not change what is installed).
+RUN printf 'Acquire::Retries "8";\nAcquire::Retries::Delay::Maximum "60";\n' > /etc/apt/apt.conf.d/80-retries \
+ && apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && printf 'deb https://snapshot.ubuntu.com/ubuntu/%s jammy main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s jammy-updates main universe\ndeb https://snapshot.ubuntu.com/ubuntu/%s jammy-security main universe\n' \
       "$SNAPSHOT" "$SNAPSHOT" "$SNAPSHOT" > /etc/apt/sources.list \
