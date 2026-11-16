@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.1.0
+
+- New look: every screen is redrawn. Each coin has its ring and its own light, one header bar
+  replaces the side rail and the status bar, figures use the Unbounded face, and the main button is
+  tinted ice. Everything is in English and French.
+- Signing window: Kyro now draws its own native window to confirm a transaction. It shows what
+  Kyro read in the transaction, the amount in the coin's colour, the recipient in blocks, then
+  Cancel and Sign. Sign becomes active after a short moment. If the window can't open, the system
+  dialog is used as before. The recovery phrase window has the same look.
+- Bitcoin time lock: lock bitcoins until a day you choose. The Bitcoin network refuses to spend
+  them before that date, even with the phrase. A timeline shows when each lock opens, withdrawal
+  works after that date, and a scan finds your locks again after a restore. Nobody can cancel a
+  lock once it is confirmed. How to withdraw with Bitcoin Core alone: docs/BTC_TIMELOCK.md.
+- Second password (Settings › Security, off by default): typed on the normal unlock screen, it
+  opens a separate wallet with its own phrase and a small balance, for when someone forces you to
+  open Kyro.
+- Daily spending limit (optional): above the amount you choose per 24 hours, a send waits 1 or 24
+  hours and then asks for the password. Raising or turning off the limit waits the same way.
+- Missing network fees: when a token send lacks the coin that pays the fee, Kyro offers to swap a
+  little of another coin for it. Tidy turns small leftover balances into one coin.
+- Earn: rates load in the background, each option shows its risk level and your positions, and a
+  calculator shows what an amount could earn with the best option of each risk level. Rates are
+  estimates.
+- Private note on each transaction, in History, in the CSV export and in the backup.
+- Warning before a first send to an address you never used and that is not in your contacts.
+- Bitcoin amounts in BTC or in sats (Settings › Display).
+- Hide small balances: off, empty ones, under 1 or under 10 in your currency.
+- Send only to my contacts (optional). Turning it off and adding a contact ask for the password.
+- Charts: points are placed by their real time, so "All" is no longer squashed and the highest
+  price and the tooltip show real prices.
+- Rebuilding a release: tools and steps to rebuild Kyro yourself and compare the binaries' hashes,
+  in docs/REPRODUCIBLE.md.
+
 ## 1.0.7
 
 - Dust protection: tiny coins from strangers on an address already in use stay out of your sends,

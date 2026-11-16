@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 export const SITE = 'https://kyrowallet.com';
 /** public/boot.js, inlined in every head (it must run before the first paint); its hash goes in the CSP. */
 export const BOOT = readFileSync(new URL('../public/boot.js', import.meta.url), 'utf8').replace(/^\s*\/\/.*$/gm, '').replace(/\s*\n\s*/g, '').trim();
-export const VERSION = '1.0.7';
+export const VERSION = '1.1.0';
 export const REPO = 'https://github.com/shuntraa/kyro-wallet';
 export const DL = `${REPO}/releases/latest/download/`;
 export const FILES = {
