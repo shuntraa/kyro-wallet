@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Changelog: every Kyro release up to 1.1.1 | Kyro Wallet</title>
-  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
+  <title>Changelog: every Kyro release up to 1.1.2 | Kyro Wallet</title>
+  <meta name="description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.2. Generated from the CHANGELOG.md file in the repository.">
   <link rel="canonical" href="https://kyrowallet.com/changelog/">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#000000">
@@ -17,8 +17,8 @@
   <link rel="stylesheet" href="/site.css">
   <meta property="og:site_name" content="Kyro Wallet">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Changelog: every Kyro release up to 1.1.1 | Kyro Wallet">
-  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
+  <meta property="og:title" content="Changelog: every Kyro release up to 1.1.2 | Kyro Wallet">
+  <meta property="og:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.2. Generated from the CHANGELOG.md file in the repository.">
   <meta property="og:url" content="https://kyrowallet.com/changelog/">
   <meta property="og:image" content="https://kyrowallet.com/img/og.jpg?v=2">
   <meta property="og:image:width" content="1200">
@@ -26,10 +26,10 @@
   <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window on blue satin.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.1.1 | Kyro Wallet">
-  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.">
+  <meta name="twitter:title" content="Changelog: every Kyro release up to 1.1.2 | Kyro Wallet">
+  <meta name="twitter:description" content="What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.2. Generated from the CHANGELOG.md file in the repository.">
   <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg?v=2">
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.1. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/changelog/#page","url":"https://kyrowallet.com/changelog/","name":"Kyro changelog","description":"What changed in each version of Kyro Wallet, from 1.0.0 to 1.1.2. Generated from the CHANGELOG.md file in the repository.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Changelog","item":"https://kyrowallet.com/changelog/"}]}]}</script>
   <script>(function () {var m = window.matchMedia;document.documentElement.classList.add('ui');if (m && !m('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) document.documentElement.classList.add('js');})();</script>
   <script src="/motion.js" defer></script>
   <script src="/silk.js" defer></script>
@@ -96,8 +96,12 @@
       <div class="wrap">
         <div class="prose" data-reveal>
           
+          <section class="log-entry" id="v1-1-2" aria-label="Version 1.1.2">
+            <h2>1.1.2<span class="latest">Latest</span></h2>
+            <ul><li>BNB Chain: ETH and BTC withdrawn from an exchange &quot;via BNB Smart Chain&quot; now show up (Binance-Peg ETH and BTCB tokens, priced as ETH and BTC). They were received but not listed.</li><li>After a send, the window no longer stays shifted up with the top bar out of sight: opening the send review scrolled the whole app frame, not only the page.</li><li>Smoother scrolling: cards, asset tiles and lists no longer blur what is behind them (a tinted surface gives the same look). That blur was recomputed under every card on each frame: scrolling ran at about half the frame rate, and hovering could leave odd squares on screen.</li><li>The &quot;i&quot; next to an asset whose balance could not be read (for example a Bitcoin server that did not answer) is now a round ice badge left of the balance, centred on its two lines, and its explanation opens in a Kyro tooltip instead of the grey system box that appeared on hover.</li><li>Send: the switch between the coin and your currency is now a labelled pill (&quot;⇅ USD&quot; / &quot;⇅ BTC&quot;), like MAX, instead of a bare icon in a dark square.</li><li>macOS builds record their object paths relative to the build folder, so two builds of the same version are the same bytes (docs/REPRODUCIBLE.md).</li><li>Asset page: hover the ring and click it to refresh the balance now (an ice refresh icon takes the coin&#39;s place and spins until the fresh balance is in).</li><li>A short &quot;cha-ching&quot; when funds arrive (coins, then a small bell), while Kyro is open. It is made by the app itself (no sound file); switch it off or listen to it in Settings › Alerts.</li><li>Swap: LI.FI quotes work again. LI.FI moved the contract that pays integrator fees to a new address on every chain; Kyro now knows the new one (and still accepts the previous one), instead of refusing every LI.FI quote with &quot;Kyro fees missing&quot;.</li><li>Swap: MAX on a native coin keeps exactly what the swap&#39;s network fee can cost (estimated now), instead of a flat 3 %, so a MAX swap does not fail for lack of gas.</li><li>History: loaded once when the wallet opens and kept on this device; opening the screen right after asks nothing again, and the quiet refresh runs every 5 minutes instead of every minute. &quot;Updating…&quot; only shows after a Retry, and &quot;Couldn&#39;t reach&quot; only names networks where you have funds or past activity.</li><li>History: click a transaction to open it: amount, value at the time and today (the old price is looked up once and kept on this device), fee, sender and recipient, transaction ID, each with a copy button.</li><li>Portfolio: an empty wallet has no curve, so the asset lists move up into its place instead of leaving an empty band.</li><li>The signing window matches the rest of Kyro: the same blue-night background, addresses and details on glass panels, rounded buttons. A plain send (&quot;Sending 0.5 ETH&quot;) now shows its amount in large type at the top, as Bitcoin sends already did.</li><li>Send: the &quot;first send to this address&quot; note is an ice note instead of a yellow alert box.</li></ul>
+          </section>
           <section class="log-entry" id="v1-1-1" aria-label="Version 1.1.1">
-            <h2>1.1.1<span class="latest">Latest</span></h2>
+            <h2>1.1.1</h2>
             <ul><li>Moving between sections: the next screen rises out of a soft blur, and the ice square in the header glides to the section you open.</li><li>Brighter: the ice light behind every screen is stronger, a faint violet and ice light adds depth low on the screen, the ice veins drift very slowly, and cards are a little lighter.</li><li>Assets: an asset you don&#39;t hold keeps its colour instead of turning grey, so a new wallet is no longer a grey page. On hover a tile lifts and its rim lights up in the coin&#39;s colour.</li><li>Charts (Portfolio, asset pages, Earn calculator): under the pointer the curve is lit up to that point, and the point glides along the curve with the pointer (no more jumping from one data point to the next), its label in the curve&#39;s colour.</li></ul>
           </section>
           <section class="log-entry" id="v1-1-0" aria-label="Version 1.1.0">
@@ -145,7 +149,7 @@
       <div class="wrap">
         <div class="cta-panel spot" data-reveal>
           <h2 id="cta-title">Get <em>Kyro</em></h2>
-          <p class="dl-sub">Version 1.1.1 · Free · Windows, macOS and Linux</p>
+          <p class="dl-sub">Version 1.1.2 · Free · Windows, macOS and Linux</p>
           
           <div class="os-cards">
             <a class="os-card os-row spot" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
@@ -208,7 +212,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <span>Kyro 1.1.1 · GPL-3.0-or-later</span>
+        <span>Kyro 1.1.2 · GPL-3.0-or-later</span>
         <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>), Unbounded (<a href="/fonts/OFL-Unbounded.txt">OFL</a>), Archivo (<a href="/fonts/OFL-Archivo.txt">OFL</a>)</span>
       </div>
     </div>
