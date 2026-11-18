@@ -1608,6 +1608,24 @@
     {
       "network": "mainnet",
       "chain": "evm:56",
+      "contract": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+      "symbol": "ETH",
+      "name": "Binance-Peg Ethereum",
+      "decimals": 18,
+      "coingeckoId": "ethereum"
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+      "symbol": "BTCB",
+      "name": "Binance-Peg Bitcoin",
+      "decimals": 18,
+      "coingeckoId": "bitcoin"
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
       "contract": "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d",
       "symbol": "USD1",
       "name": "USD1",

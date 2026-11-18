@@ -704,6 +704,9 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
   bsc: [
     USDT('0x55d398326f99059fF775485246999027B3197955', 18), // Binance-Peg (already listed)
     USDC('0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', 18), // Binance-Peg (already listed)
+    // ETH and BTC withdrawn from Binance "via BNB Smart Chain" arrive as these tokens (priced as ETH / BTC).
+    tok('ETH', 'Binance-Peg Ethereum', 18, 'ethereum', '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', '#627EEA', 'Ξ'),
+    tok('BTCB', 'Binance-Peg Bitcoin', 18, 'bitcoin', '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', '#F7931A', '₿'),
     tok('USD1', 'USD1', 18, 'usd1-wlfi', '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d', '#7A5E4F'),
     tok('ASTER', 'Aster', 18, 'aster-2', '0x000Ae314E2A2172a039B26378814C252734f556A', '#5E7A4F'),
     tok('BTW', 'Bitway', 18, 'bitway', '0x444045B0EE1ee319A660a5E3d604CA0ffA35ACaA', '#8C7F4F'),

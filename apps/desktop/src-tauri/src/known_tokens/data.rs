@@ -190,6 +190,8 @@ pub(super) const TOKENS: &[E] = &[
     E { network: M, chain: Evm(137), contract: "0xB7b31a6BC18e48888545CE79e83E06003bE70930", token: K { symbol: "APE", name: "ApeCoin", decimals: 18, coingecko: "apecoin" } },
     E { network: M, chain: Evm(56), contract: "0x55d398326f99059fF775485246999027B3197955", token: K { symbol: "USDT", name: "Tether", decimals: 18, coingecko: "tether" } },
     E { network: M, chain: Evm(56), contract: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", token: K { symbol: "USDC", name: "USD Coin", decimals: 18, coingecko: "usd-coin" } },
+    E { network: M, chain: Evm(56), contract: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", token: K { symbol: "ETH", name: "Binance-Peg Ethereum", decimals: 18, coingecko: "ethereum" } },
+    E { network: M, chain: Evm(56), contract: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", token: K { symbol: "BTCB", name: "Binance-Peg Bitcoin", decimals: 18, coingecko: "bitcoin" } },
     E { network: M, chain: Evm(56), contract: "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d", token: K { symbol: "USD1", name: "USD1", decimals: 18, coingecko: "usd1-wlfi" } },
     E { network: M, chain: Evm(56), contract: "0x000Ae314E2A2172a039B26378814C252734f556A", token: K { symbol: "ASTER", name: "Aster", decimals: 18, coingecko: "aster-2" } },
     E { network: M, chain: Evm(56), contract: "0x444045B0EE1ee319A660a5E3d604CA0ffA35ACaA", token: K { symbol: "BTW", name: "Bitway", decimals: 18, coingecko: "bitway" } },
