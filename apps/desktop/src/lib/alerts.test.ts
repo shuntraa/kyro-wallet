@@ -90,8 +90,8 @@ describe('alert settings', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('are off by default and drop damaged rules', () => {
-    expect(getAlertSettings()).toEqual({ received: false, prices: [] });
-    saveAlertSettings({ received: true, prices: [rule(), { ...rule(), level: -1 }, { nope: 1 } as unknown as PriceAlert] });
+    expect(getAlertSettings()).toEqual({ received: false, sound: true, prices: [] });
+    saveAlertSettings({ received: true, sound: true, prices: [rule(), { ...rule(), level: -1 }, { nope: 1 } as unknown as PriceAlert] });
     const s = getAlertSettings();
     expect(s.received).toBe(true);
     expect(s.prices).toHaveLength(1);

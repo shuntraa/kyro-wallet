@@ -54,6 +54,8 @@ type Slip = 10 | 50 | 100 | 'custom';
 type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'checking' | 'swapping' | 'done';
 
 const MAX_SLIPPAGE_BPS = 1_500;
+/** Gas kept by MAX on a native EVM sale: above any 0x / LI.FI single-chain swap seen. */
+const SWAP_GAS_RESERVE = 450_000n;
 
 async function simulateSwap(ad: EvmAdapter, tx: { to: string; data: `0x${string}`; value: bigint } | null, buy: AssetDef | null): Promise<{ ok: true; received: bigint | null } | { ok: false; reason: string }> {
   if (!tx) return { ok: false, reason: tr('swap.simNoTx') };
@@ -201,6 +203,24 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
   const swapGas = shown?.tx.kind === 'evm' && shown.tx.gas ? (shown.tx.gas * 12n) / 10n : null;
   const swapMaxFee = dialogFee?.family === 'evm' && swapGas !== null ? swapGas * dialogFee.maxFeePerGas : null;
   const approvalMaxFee = dialogFee?.family === 'evm' && needsApproval ? 120_000n * dialogFee.maxFeePerGas : 0n;
+
+  // MAX: a token sale sells it all; a native sale keeps what the swap's gas can cost at most (an
+  // EVM swap: 450 000 gas at the current max fee, plus the L1 data fee on OP-stack chains), so the
+  // quote never asks for more than the wallet can pay. Without a fee estimate: 97 % as before.
+  const fillMax = async () => {
+    if (!sell) return;
+    if (sell.kind !== 'native') return setAmountStr(toInputDecimal(balance, sell.decimals));
+    let keep = (balance * 3n) / 100n;
+    if (evmAdapter) {
+      try {
+        const fee = (await evmAdapter.estimateFees()).options.normal.params;
+        if (fee.family === 'evm') keep = SWAP_GAS_RESERVE * fee.maxFeePerGas + (await evmAdapter.l1DataFeeMargin()) * 5n;
+      } catch {
+        /* no estimate: keep the 3 % */
+      }
+    }
+    setAmountStr(toInputDecimal(balance > keep ? balance - keep : 0n, sell.decimals));
+  };
 
   const buildDeposit = (plan: DepositPlan): Promise<PreparedDeposit> => {
     if (!sell) throw new Error(t('swap.errNothingToSell'));
@@ -547,7 +567,7 @@ export function SwapVault({ sellAssetId, buyAssetId, amount, returnTo, onOutcome
             <CoinChooser className="mt-4" title={t('swap.pickGive')} asset={sell} chain={t('swap.networkOf', { chain: chain.name })} items={sellItems} onSelect={selectSell} />
             <span className="figure mt-2.5 text-[11.5px] text-faint">
               {t('swap.available', { amount: fmtCrypto(balance, sell.decimals, sell.symbol) })}
-              <button type="button" className="ml-2 font-semibold tracking-[0.08em] text-mute uppercase hover:text-text" onClick={() => setAmountStr(toInputDecimal(sell.kind === 'native' ? (balance * 97n) / 100n : balance, sell.decimals))}>
+              <button type="button" className="ml-2 font-semibold tracking-[0.08em] text-mute uppercase hover:text-text" onClick={() => void fillMax()}>
                 {t('swap.maxButton')}
               </button>
             </span>

@@ -10,6 +10,7 @@ import { usePortfolio } from './portfolio';
 import { cachedHistory, sourcesFingerprint } from './history';
 import { emptyReceived, evaluatePrices, evaluateReceived, getAlertSettings, saveAlertSettings, type ReceivedState } from '../lib/alerts';
 import { fmtCrypto } from '../lib/format';
+import { playReceived } from '../lib/sound';
 import { readJson, writeJson } from '../lib/storage';
 
 const RECEIVED_EVERY_MS = 60_000;
@@ -58,7 +59,8 @@ export function useAlerts(): void {
   useEffect(() => {
     const key = `alerts.received.${network}.${fp}`;
     const look = () => {
-      if (!getAlertSettings().received) {
+      const s = getAlertSettings();
+      if (!s.received && !s.sound) {
         // Switched on later = a new baseline, not a catch-up on everything since.
         writeJson(key, null);
         return;
@@ -67,6 +69,8 @@ export function useAlerts(): void {
       if (!data) return;
       const { state, hits } = evaluateReceived(data.entries, data.known, readJson<ReceivedState | null>(key, null) ?? emptyReceived(), Date.now());
       writeJson(key, state);
+      if (s.sound && hits.some((e) => e.asset)) playReceived();
+      if (!s.received) return;
       for (const e of hits) {
         if (!e.asset) continue;
         show({ kind: 'received', symbol: safeSymbol(e.asset.symbol), amount: live.current.hideBalances ? null : fmtCrypto(e.amount, e.asset.decimals) });

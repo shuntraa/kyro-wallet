@@ -27,7 +27,7 @@ import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
 import { Badge, Skeleton, Spinner } from '../components/ui/primitives';
-import { IconBack, IconDown, IconLock, IconQr, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
+import { IconBack, IconDown, IconLock, IconQr, IconRefresh, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
 
@@ -96,6 +96,20 @@ export function AssetDetail({ id }: { id: string }) {
     const tm = window.setTimeout(() => setSpinWindow(false), 4000);
     return () => window.clearTimeout(tm);
   }, [supported?.id]);
+  // Refresh on demand (the C is the button): spins until a fresh balance round has finished.
+  const [refreshing, setRefreshing] = useState<number | null>(null);
+  const refreshNow = () => {
+    if (refreshing !== null) return;
+    setRefreshing(pf.updatedAt ?? 0);
+    pf.refresh();
+    history.reload();
+  };
+  useEffect(() => {
+    if (refreshing === null) return;
+    const done = (pf.updatedAt ?? 0) !== refreshing && !pf.balancesLoading;
+    const tm = window.setTimeout(() => setRefreshing(null), done ? 450 : 25_000);
+    return () => window.clearTimeout(tm);
+  }, [refreshing, pf.updatedAt, pf.balancesLoading]);
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
   const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address, kas: accounts.kas?.address, dot: accounts.polkadot?.address, algo: accounts.algo?.address, xmr: accounts.xmr?.address, ton: accounts.ton?.address, cosmos: accounts.cosmos?.address, apt: accounts.aptos?.address, zec: accounts.zec?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
@@ -200,7 +214,18 @@ export function AssetDetail({ id }: { id: string }) {
         <div ref={stageRef} className="mt-5 w-full">
           {W > 0 && (
             <Annotated W={W} H={300} size={ringSize} segs={segs} notes={W >= 960 ? notes : []} halo={color ?? '#7cc4ff'}>
-              <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={Math.round(ringSize * 0.25)} />
+              {supported ? (
+                <button type="button" aria-label={t('portfolio.refreshBalance')} title={t('portfolio.refreshBalance')} aria-busy={refreshing !== null} onClick={refreshNow} className="group relative grid size-full place-items-center rounded-full outline-none">
+                  <span className={cn('transition-[opacity,transform] duration-200 ease-out group-hover:scale-90 group-hover:opacity-0 group-focus-visible:scale-90 group-focus-visible:opacity-0', refreshing !== null && 'scale-90 opacity-0')}>
+                    <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported.id} chain={supported.chainKey} size={Math.round(ringSize * 0.25)} />
+                  </span>
+                  <span aria-hidden="true" className={cn('absolute grid scale-75 place-items-center rounded-full text-ice opacity-0 ring-1 ring-ice/45 transition-[opacity,transform] duration-200 ease-out group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100 group-active:scale-95', refreshing !== null && 'scale-100 opacity-100')} style={{ width: Math.round(ringSize * 0.25), height: Math.round(ringSize * 0.25), background: 'radial-gradient(circle at 50% 30%, rgba(124,196,255,.30), rgba(124,196,255,.08) 70%)', boxShadow: '0 0 26px rgba(124,196,255,.45), inset 0 1px 0 rgba(255,255,255,.25)' }}>
+                    <IconRefresh size={Math.round(ringSize * 0.11)} sw={2.2} className={cn(refreshing !== null && 'animate-spin motion-reduce:animate-none')} />
+                  </span>
+                </button>
+              ) : (
+                <CoinIcon glyph={glyph} color={color} symbol={symbol} id={`cg:${coinId}`} size={Math.round(ringSize * 0.25)} />
+              )}
             </Annotated>
           )}
         </div>

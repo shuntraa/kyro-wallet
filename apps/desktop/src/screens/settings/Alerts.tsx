@@ -7,6 +7,7 @@ import { toIpcError } from '@kyro/shared';
 import { useApp } from '../../state/app';
 import { usePortfolio } from '../../state/portfolio';
 import { sendTestAlert } from '../../state/alerts';
+import { playReceived } from '../../lib/sound';
 import { getAlertSettings, MAX_PRICE_ALERTS, parseLevel, saveAlertSettings, type AlertDirection, type AlertSettings, type PriceAlert } from '../../lib/alerts';
 import { fmtFiat } from '../../lib/format';
 import { Menu } from '../../components/ui/menu';
@@ -63,6 +64,26 @@ export function AlertsSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      <section className="flex items-center justify-between gap-6 rounded-panel border border-line bg-card px-6 py-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <button
+            type="button"
+            onClick={playReceived}
+            aria-label={t('settings.alertSoundListen')}
+            title={t('settings.alertSoundListen')}
+            className="press grid size-10 shrink-0 place-items-center rounded-full bg-[rgba(124,196,255,.1)] text-ice ring-1 ring-[rgba(124,196,255,.35)] shadow-[0_0_18px_-4px_rgba(124,196,255,.6)] hover:bg-[rgba(124,196,255,.18)]"
+          >
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" />
+            </svg>
+          </button>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[14.5px] font-medium">{t('settings.alertSound')}</span>
+            <span className="text-[13px] text-mute">{t('settings.alertSoundDesc')}</span>
+          </div>
+        </div>
+        <Switch label={t('settings.alertSound')} checked={state.sound} onCheckedChange={(v) => update({ ...state, sound: v })} />
+      </section>
       <section className="flex flex-col rounded-panel border border-line bg-card px-6 py-1.5">
         <div className="flex items-center justify-between gap-6 border-b border-line py-4">
           <div className="flex min-w-0 flex-col gap-0.5">

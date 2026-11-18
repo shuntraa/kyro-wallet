@@ -88,9 +88,11 @@ export function Portfolio() {
   const W = Math.min(1200, Math.max(stageW, 0));
   const ring = W >= 1000 ? 250 : 220;
 
+  // An empty wallet has no curve to show: the asset lists move up into its place (no empty band).
+  const noChart = pf.balancesLoaded && pf.total === 0 && !values.some((v) => v > 0);
   return (
     <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-      <section aria-label={t('portfolio.valueAria')} className="flex min-h-full flex-col">
+      <section aria-label={t('portfolio.valueAria')} className={cn('flex flex-col', !noChart && 'min-h-full')}>
         <div ref={stageRef} className="mt-4 w-full">
           {W > 0 && (
             <Annotated W={W} H={300} size={ring} segs={segs} notes={W >= 960 ? notes : []}>
@@ -143,39 +145,41 @@ export function Portfolio() {
           </div>
         </div>
 
-        <section className="mx-8 mt-auto flex flex-col pt-6 pb-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={LABEL}>{t('portfolio.evolution')}</span>
-            {delta !== null && pf.total > 0 && (
-              <span key={period} className="fade-in figure text-[12.5px] text-mute">
-                <span title={hideBalances ? undefined : `${delta >= 0 ? '+' : '−'}${fmtFiat(Math.abs(delta), cur)}`}>{fmtPct(deltaPct)}</span> {periodLabel}
+        {!noChart && (
+          <section className="mx-8 mt-auto flex flex-col pt-6 pb-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={LABEL}>{t('portfolio.evolution')}</span>
+              {delta !== null && pf.total > 0 && (
+                <span key={period} className="fade-in figure text-[12.5px] text-mute">
+                  <span title={hideBalances ? undefined : `${delta >= 0 ? '+' : '−'}${fmtFiat(Math.abs(delta), cur)}`}>{fmtPct(deltaPct)}</span> {periodLabel}
+                </span>
+              )}
+              <span className="ml-auto">
+                <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} items={PERIODS.map((p) => ({ id: p, label: t(`portfolio.period${p}`) }))} />
               </span>
-            )}
-            <span className="ml-auto">
-              <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} items={PERIODS.map((p) => ({ id: p, label: t(`portfolio.period${p}`) }))} />
-            </span>
-          </div>
-          <div className="mt-1 h-[170px]">
-            {values.length > 1 ? (
-              <SmoothChart
-                key={period}
-                values={values}
-                times={times}
-                height={170}
-                stroke="#8fcaff"
-                glow
-                defaultPoint="none"
-                padTop={36}
-                padBottom={4}
-                ariaLabel={t('portfolio.chartAria', { period: periodLabel })}
-                renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now(), Date.now(), (series[series.length - 1]?.[0] ?? 0) - (series[0]?.[0] ?? 0)), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
-              />
-            ) : null}
-          </div>
-        </section>
+            </div>
+            <div className="mt-1 h-[170px]">
+              {values.length > 1 ? (
+                <SmoothChart
+                  key={period}
+                  values={values}
+                  times={times}
+                  height={170}
+                  stroke="#8fcaff"
+                  glow
+                  defaultPoint="none"
+                  padTop={36}
+                  padBottom={4}
+                  ariaLabel={t('portfolio.chartAria', { period: periodLabel })}
+                  renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now(), Date.now(), (series[series.length - 1]?.[0] ?? 0) - (series[0]?.[0] ?? 0)), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
+                />
+              ) : null}
+            </div>
+          </section>
+        )}
       </section>
 
-      <div className="mx-8 mt-6 mb-10 flex gap-6 max-[1180px]:flex-col">
+      <div className={cn('mx-8 mb-10 flex gap-6 max-[1180px]:flex-col', noChart ? 'mt-10' : 'mt-6')}>
         <AssetListsCard className="rise min-w-0 flex-1" />
         <div className="rise flex w-[340px] shrink-0 flex-col gap-4 pt-[52px] max-[1180px]:w-full max-[1180px]:pt-0" style={idx(1)}>
           <Glass className="rounded-[20px]">

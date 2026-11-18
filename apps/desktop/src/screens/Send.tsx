@@ -125,6 +125,7 @@ import { ACCOUNT_CHAIN_LABEL, accountAddress, defaultAccountName, otherOwnAccoun
 import { Menu } from '../components/ui/menu';
 import { Button, Notice, Spinner } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconShield, IconSwap, IconWarn } from '../components/icons';
+import { scrollToTop } from '../lib/scroll';
 
 type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; sol: SolTxSummary | null; key: string };
 
@@ -669,7 +670,7 @@ export function Send({ assetId, to: initialTo, amount: initialAmount, memo: init
   const [destFocus, setDestFocus] = useState(false);
   const reviewRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (reviewOpen) reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (reviewOpen) scrollToTop(reviewRef.current);
   }, [reviewOpen]);
 
   if (!asset || !adapter || !chain) {
@@ -1349,9 +1350,10 @@ export function Send({ assetId, to: initialTo, amount: initialAmount, memo: init
                 </span>
               </div>
               {firstSend && (
-                <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+                <p className="m-0 flex items-center gap-3 rounded-[12px] bg-[rgba(124,196,255,.06)] px-3.5 py-2.5 text-[12.5px] leading-snug text-text2 ring-1 ring-[rgba(124,196,255,.2)]">
+                  <span aria-hidden="true" className="block size-[7px] shrink-0 rounded-[1.5px] bg-ice shadow-[0_0_10px_rgba(124,196,255,.9)]" />
                   {t('send.firstSend')}
-                </Notice>
+                </p>
               )}
               <dl className="m-0 flex flex-col text-[13px]">
                 {ens.status === 'ok' && <div className="border-b border-white/[.06] py-2"><EnsLine ens={ens} /></div>}

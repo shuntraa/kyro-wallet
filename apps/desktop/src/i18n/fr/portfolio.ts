@@ -95,6 +95,7 @@ export const portfolio = {
   'portfolio.notListed': 'non listé',
   'portfolio.phase2': 'phase 2',
   'portfolio.l2OnMainnet': 'Arbitrum, Base, Optimism, Polygon, BNB et Avalanche : en mainnet.',
+  'portfolio.refreshBalance': 'Actualiser le solde',
   'portfolio.qrCode': 'QR code',
   'portfolio.assetUnsupported': 'Actif non pris en charge',
   'portfolio.unsupportedHint': 'Cours seulement.',

@@ -20,12 +20,14 @@ import { GlassSearch, coinTint } from '../components/kyroParts';
 import { TronNoHistoryLine, tronNoHistory } from '../components/ServerDown';
 import { HistoryRow, LoadingLine, entryTitle } from '../components/HistoryRow';
 import { ReplaceDialog } from '../components/ReplaceTx';
+import { TxDetails } from '../components/TxDetails';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconImport } from '../components/icons';
 import { idx } from '../components/motion';
 import { getLanguage, useT } from '../i18n';
 import { rt } from '../i18n/rich';
+import { scrollToTop } from '../lib/scroll';
 
 function csvAmount(s: string): string {
   return getLanguage() === 'fr' ? s.replace(/\u202f/g, '') : s.replace(/,/g, '');
@@ -71,7 +73,20 @@ export function History() {
     const id = window.setTimeout(() => setGrace(false), 3000);
     return () => window.clearTimeout(id);
   }, []);
-  const down = history.data ? unreachable(history.data, tronNoHistory) : null;
+  // « Couldn't reach » only names networks that matter here: some balance or some past activity on them.
+  const used = useMemo(() => new Set([...pf.holdings.filter((h) => h.amount > 0n).map((h) => h.asset.chainKey), ...(history.data?.entries ?? []).map((e) => e.chainKey)]), [pf.holdings, history.data]);
+  const rawDown = history.data ? unreachable(history.data, tronNoHistory) : null;
+  const down = rawDown ? { ...rawDown, keys: rawDown.keys.filter((k) => used.has(k)) } : null;
+  // The small « Updating… » line: only while a Retry asked by the user runs (background refreshes stay silent).
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    if (!history.loading) setRetrying(false);
+  }, [history.loading]);
+  const retry = () => {
+    setRetrying(true);
+    history.reload();
+  };
+  const [open, setOpen] = useState<HistoryEntry | null>(null);
   const entries = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (history.data?.entries ?? []).filter((e) => matches(e, filter) && (!q || [entryTitle(e), e.asset?.symbol, e.asset?.name, e.chainLabel, e.counterparty, e.id, e.note, noteOf(e)].some((x) => x?.toLowerCase().includes(q))));
@@ -127,7 +142,7 @@ export function History() {
 
   const pending = (history.data?.entries ?? []).filter((e) => e.status === 'pending').length;
   const [approvalCount, setApprovalCount] = useState<{ all: number; risky: number }>({ all: 0, risky: 0 });
-  const toApprovals = () => document.getElementById('history-approvals')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const toApprovals = () => scrollToTop(document.getElementById('history-approvals'));
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
@@ -156,7 +171,7 @@ export function History() {
         </header>
 
         <div key={`${filter}:${history.data ? 'data' : 'loading'}`} className="flex flex-col">
-          {history.loading && !(grace && groups.length === 0) && (
+          {history.loading && retrying && groups.length > 0 && (
             <p role="status" className="m-0 flex items-center gap-2 pb-2 text-[12px] text-faint">
               <Spinner className="size-3" />
               {t('history.updating')}
@@ -197,6 +212,7 @@ export function History() {
                           price={priceOf(e)}
                           currency={cur}
                           hidden={hideBalances}
+                          onOpen={() => setOpen(e)}
                           extra={
                             editing === `${e.chainKey}:${e.id}` ? (
                               <NoteInput initial={noteOf(e) ?? ''} onSave={(text) => saveNote(e, text)} onCancel={() => setEditing(null)} />
@@ -234,14 +250,14 @@ export function History() {
             {history.data && Object.entries(history.data.errors).some(([, v]) => tronNoHistory(v)) && <TronNoHistoryLine />}
             {down && down.keys.length > 0 &&
               (down.all ? (
-                <ErrorLine onRetry={history.reload} error={Object.values(history.data?.errors ?? {}).join(' ')}>
+                <ErrorLine onRetry={retry} error={Object.values(history.data?.errors ?? {}).join(' ')}>
                   {t('history.partial')}
                 </ErrorLine>
               ) : (
                 <p role="status" className="m-0 text-faint">
                   {t('history.unreachable', { networks: down.keys.map((k) => findChain(network, k)?.label ?? k).join(', ') })}
                   {' · '}
-                  <button type="button" onClick={history.reload} className="text-mute underline-offset-2 hover:text-text hover:underline">
+                  <button type="button" onClick={retry} className="text-mute underline-offset-2 hover:text-text hover:underline">
                     {t('history.retry')}
                   </button>
                 </p>
@@ -280,6 +296,7 @@ export function History() {
 
         <Approvals onCount={setApprovalCount} />
       </div>
+      {open && <TxDetails e={open} note={noteOf(open)} onClose={() => setOpen(null)} />}
       {replacing && (
         <ReplaceDialog
           entry={replacing.entry}

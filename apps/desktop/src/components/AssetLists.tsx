@@ -202,17 +202,17 @@ function MineList({ sort, query }: { sort: Sort; query: string }) {
           </span>
         )}
         {sub ? <span /> : h.spark.length > 1 ? <Sparkline values={h.spark} color={c} glow /> : <span className="text-[12px] text-faint">—</span>}
-        <span className="figure flex flex-col items-end leading-tight">
-          <span key={hideBalances ? 'h' : h.amount.toString()} className={cn('fade-in', sub ? 'text-[13px]' : 'text-[14px] font-medium', h.amount === 0n && 'text-mute')} style={h.amount > 0n && !hideBalances ? GLOW(c) : undefined}>
-            {hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}
-          </span>
-          <span className="flex items-center gap-1.5 text-[12px] text-mute">
-            {issue && (
-              <span data-tip={issue} aria-label={issue} className="kyro-tip text-warn/75 hover:text-warn">
-                <IconInfo size={13} />
-              </span>
-            )}
-            {hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}
+        <span className="figure flex items-center justify-end gap-2.5">
+          {issue && (
+            <span data-tip={issue} aria-label={issue} className="kyro-tip size-[22px] place-items-center rounded-full bg-[rgba(124,196,255,.1)] text-ice/85 shadow-[0_0_10px_rgba(124,196,255,.3)] ring-1 ring-[rgba(124,196,255,.35)] transition-[color,box-shadow] hover:text-ice hover:shadow-[0_0_14px_rgba(124,196,255,.55)]">
+              <IconInfo size={12} />
+            </span>
+          )}
+          <span className="flex flex-col items-end leading-tight">
+            <span key={hideBalances ? 'h' : h.amount.toString()} className={cn('fade-in', sub ? 'text-[13px]' : 'text-[14px] font-medium', h.amount === 0n && 'text-mute')} style={h.amount > 0n && !hideBalances ? GLOW(c) : undefined}>
+              {hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}
+            </span>
+            <span className="text-[12px] text-mute">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
           </span>
         </span>
         <span className="flex items-center gap-2.5">
@@ -344,8 +344,8 @@ function MineTiles({ sort, query }: { sort: Sort; query: string }) {
               <span className="figure pointer-events-none relative mt-1.5 flex items-center gap-1.5 text-[12.5px] text-text2">
                 {hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}
                 {issue && (
-                  <span data-tip={issue} aria-label={issue} className="kyro-tip pointer-events-auto text-warn/75 hover:text-warn">
-                    <IconInfo size={13} />
+                  <span data-tip={issue} aria-label={issue} className="kyro-tip pointer-events-auto size-[18px] place-items-center rounded-full bg-[rgba(124,196,255,.1)] text-ice/85 shadow-[0_0_10px_rgba(124,196,255,.3)] ring-1 ring-[rgba(124,196,255,.35)] transition-[color,box-shadow] hover:text-ice hover:shadow-[0_0_14px_rgba(124,196,255,.55)]">
+                    <IconInfo size={11} />
                   </span>
                 )}
               </span>

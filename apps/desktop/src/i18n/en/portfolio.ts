@@ -91,6 +91,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.notListed': 'not listed',
   'portfolio.phase2': 'phase 2',
   'portfolio.l2OnMainnet': 'Arbitrum, Base, Optimism, Polygon, BNB and Avalanche: on mainnet.',
+  'portfolio.refreshBalance': 'Refresh the balance',
   'portfolio.qrCode': 'QR code',
   'portfolio.assetUnsupported': 'Asset not supported',
   'portfolio.unsupportedHint': 'Price only.',

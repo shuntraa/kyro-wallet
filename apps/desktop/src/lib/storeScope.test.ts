@@ -56,7 +56,7 @@ describe('store scope', () => {
     real.storage.setFavorites(['bitcoin']);
     real.storage.addLocalTx(tx('real-tx'));
     real.storage.setBackupState('confirmed');
-    real.alerts.saveAlertSettings({ received: true, prices: [] });
+    real.alerts.saveAlertSettings({ received: true, sound: true, prices: [] });
     real.storage.writeJson('accountSelection.testnet', { btc: 3 });
     real.storage.writeJson('cache.async.staking', ['real pool']);
     real.balances.saveBalances('testnet', 'fp', new Map());
@@ -82,7 +82,7 @@ describe('store scope', () => {
     other.storage.setFavorites(['monero']);
     other.storage.addLocalTx(tx('own-tx'));
     other.storage.setBackupState('imported');
-    other.alerts.saveAlertSettings({ received: false, prices: [] });
+    other.alerts.saveAlertSettings({ received: false, sound: true, prices: [] });
     other.charts.saveChart('eur', 'monero', '1S' as never, [
       [1, 1],
       [2, 2],

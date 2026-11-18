@@ -100,16 +100,20 @@ function assemble(jobs: Job[], remoteByJob: HistoryCache, errors: Record<string,
   return { entries, errors, known, pending: pendingChains, chains: [...new Set(jobs.map((j) => j.a.chain.key))], btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
 }
 
-const REFRESH_MS = 60_000;
+/** A screen showing history asks again this often (quietly), and not at all on opening when the list is this fresh. */
+const REFRESH_MS = 5 * 60_000;
+const FRESH_MS = 3 * 60_000;
 /** Background warm-up: a few seconds after unlock (balances first), then this often. */
 const WARM_DELAY_MS = 8_000;
 const WARM_EVERY_MS = 5 * 60_000;
+/** When each wallet's history was last fetched in full (warm-up or a screen), by `network|fingerprint`. */
+const lastFull = new Map<string, number>();
 /** A chain's history request: joined while in flight, its answer reused this long by other screens. */
 const HISTORY_REUSE_MS = 20_000;
 /** Past this, a chain's round ends without it (its request keeps running and is merged next time). */
 const CHAIN_TIMEOUT_MS = 25_000;
 /** After a round with unreachable networks, they are asked again this soon (quietly). */
-const RETRY_MS = 20_000;
+const RETRY_MS = 2 * 60_000;
 const historyRequests = new Dedupe(HISTORY_REUSE_MS);
 
 const sourcesKeyOf = (sources: readonly Source[]): string => sources.map((x) => `${x.family}:${x.index}:${x.name}:${x.addresses.join(',')}`).join('|');
@@ -149,6 +153,7 @@ export async function warmHistory(network: string, sources: readonly Source[], a
   const fp = fingerprint(sourcesKeyOf(sources));
   const jobs = jobsOf(sources);
   let next = 0;
+  let failed = false;
   const worker = async (): Promise<void> => {
     while (alive() && next < jobs.length) {
       const j = jobs[next++];
@@ -157,11 +162,12 @@ export async function warmHistory(network: string, sources: readonly Source[], a
         const fresh = await historyRequests.run(requestKey(network, j), () => j.a.getHistory());
         if (alive()) persistMerged(network, fp, new Map([[j.key, fresh]]));
       } catch {
-        /* the screen shows (and retries) unreachable networks itself */
+        failed = true; // the screen shows (and retries) unreachable networks itself
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(WARM_CONCURRENCY, jobs.length) }, worker));
+  if (alive() && !failed) lastFull.set(`${network}|${fp}`, Date.now());
 }
 
 /**
@@ -213,6 +219,17 @@ export function useHistory(): AsyncState<HistoryData> {
       lastErrors.current = {};
       setState({ id, data: fromCache() });
     }
+    // Opening a screen right after the warm-up (or another screen) fetched everything: the cached
+    // list is the answer, nothing is asked again. A Retry, Tor coming back or the timer still ask.
+    if (tick === 0 && cache.size > 0 && Date.now() - (lastFull.get(id) ?? 0) < FRESH_MS) {
+      pending.clear();
+      publish({});
+      setLoading(false);
+      setUpdatedAt(lastFull.get(id) ?? Date.now());
+      return () => {
+        alive = false;
+      };
+    }
     setLoading(true);
     // Every chain in parallel, each merged in as it answers; requests are shared by every screen
     // showing history (and reused for a few seconds). The round ends at `CHAIN_TIMEOUT_MS` even if
@@ -236,6 +253,7 @@ export function useHistory(): AsyncState<HistoryData> {
       persist();
       recordNetErrors('history', errors);
       lastErrors.current = errors;
+      if (Object.keys(errors).length === 0) lastFull.set(id, Date.now());
       publish(errors);
       setLoading(false);
       setUpdatedAt(Date.now());

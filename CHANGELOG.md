@@ -1,17 +1,43 @@
 # Changelog
 
-## 1.1.2 (not released yet)
+## 1.1.2
 
+- BNB Chain: ETH and BTC withdrawn from an exchange "via BNB Smart Chain" now show up (Binance-Peg
+  ETH and BTCB tokens, priced as ETH and BTC). They were received but not listed.
+- After a send, the window no longer stays shifted up with the top bar out of sight: opening the
+  send review scrolled the whole app frame, not only the page.
 - Smoother scrolling: cards, asset tiles and lists no longer blur what is behind them (a tinted
   surface gives the same look). That blur was recomputed under every card on each frame: scrolling
   ran at about half the frame rate, and hovering could leave odd squares on screen.
 - The "i" next to an asset whose balance could not be read (for example a Bitcoin server that
-  did not answer) is now amber, and its explanation opens in a Kyro tooltip instead of the grey
-  system box that appeared on hover.
+  did not answer) is now a round ice badge left of the balance, centred on its two lines, and its
+  explanation opens in a Kyro tooltip instead of the grey system box that appeared on hover.
 - Send: the switch between the coin and your currency is now a labelled pill ("⇅ USD" / "⇅ BTC"),
   like MAX, instead of a bare icon in a dark square.
 - macOS builds record their object paths relative to the build folder, so two builds of the same
   version are the same bytes (docs/REPRODUCIBLE.md).
+- Asset page: hover the ring and click it to refresh the balance now (an ice refresh icon takes
+  the coin's place and spins until the fresh balance is in).
+- A short "cha-ching" when funds arrive (coins, then a small bell), while Kyro is open. It is made
+  by the app itself (no sound file); switch it off or listen to it in Settings › Alerts.
+- Swap: LI.FI quotes work again. LI.FI moved the contract that pays integrator fees to a new
+  address on every chain; Kyro now knows the new one (and still accepts the previous one), instead
+  of refusing every LI.FI quote with "Kyro fees missing".
+- Swap: MAX on a native coin keeps exactly what the swap's network fee can cost (estimated now),
+  instead of a flat 3 %, so a MAX swap does not fail for lack of gas.
+- History: loaded once when the wallet opens and kept on this device; opening the screen right
+  after asks nothing again, and the quiet refresh runs every 5 minutes instead of every minute.
+  "Updating…" only shows after a Retry, and "Couldn't reach" only names networks where you have
+  funds or past activity.
+- History: click a transaction to open it: amount, value at the time and today (the old price is
+  looked up once and kept on this device), fee, sender and recipient, transaction ID, each with a
+  copy button.
+- Portfolio: an empty wallet has no curve, so the asset lists move up into its place instead of
+  leaving an empty band.
+- The signing window matches the rest of Kyro: the same blue-night background, addresses and
+  details on glass panels, rounded buttons. A plain send ("Sending 0.5 ETH") now shows its amount
+  in large type at the top, as Bitcoin sends already did.
+- Send: the "first send to this address" note is an ice note instead of a yellow alert box.
 
 ## 1.1.1
 

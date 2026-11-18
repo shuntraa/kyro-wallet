@@ -115,6 +115,6 @@ export function applyLocal(plan: LocalPlan, choices: { add: boolean; replaceName
   if (plan.addAlerts.length > 0 || plan.turnOnReceived) {
     const s = getAlertSettings();
     const rules: PriceAlert[] = plan.addAlerts.map((a, i) => ({ ...a, id: `${now}-b${i}`, currency: a.currency as Currency, armed: true }));
-    saveAlertSettings({ received: s.received || plan.turnOnReceived, prices: [...s.prices, ...rules].slice(0, MAX_PRICE_ALERTS) });
+    saveAlertSettings({ ...s, received: s.received || plan.turnOnReceived, prices: [...s.prices, ...rules].slice(0, MAX_PRICE_ALERTS) });
   }
 }

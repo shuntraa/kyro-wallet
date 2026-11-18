@@ -22,6 +22,8 @@ export interface PriceAlert {
 
 export interface AlertSettings {
   received: boolean;
+  /** A short chime when funds arrive (on unless switched off). */
+  sound: boolean;
   prices: PriceAlert[];
 }
 
@@ -41,7 +43,7 @@ function isPriceAlert(x: unknown): x is PriceAlert {
 
 export function getAlertSettings(): AlertSettings {
   const v = readJson<Partial<AlertSettings> | null>(KEY, null);
-  return { received: v?.received === true, prices: Array.isArray(v?.prices) ? v.prices.filter(isPriceAlert).slice(0, MAX_PRICE_ALERTS) : [] };
+  return { received: v?.received === true, sound: v?.sound !== false, prices: Array.isArray(v?.prices) ? v.prices.filter(isPriceAlert).slice(0, MAX_PRICE_ALERTS) : [] };
 }
 
 export function saveAlertSettings(s: AlertSettings): void {

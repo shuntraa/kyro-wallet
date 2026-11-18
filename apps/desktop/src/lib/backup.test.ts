@@ -29,7 +29,7 @@ describe('what goes in', () => {
   it('takes the address book, the favorites and the alerts, without local ids or states', () => {
     saveContacts([contact()]);
     setFavorites(['bitcoin']);
-    saveAlertSettings({ received: true, prices: [rule()] });
+    saveAlertSettings({ received: true, sound: true, prices: [rule()] });
     expect(collectLocal()).toEqual({
       contacts: [{ name: 'Alice', address: A, family: 'evm', sends: 2 }],
       favorites: ['bitcoin'],
@@ -73,7 +73,7 @@ describe('merging', () => {
     applyLocal(plan, { add: false, replaceNames: false });
     expect(getContacts()).toHaveLength(1);
     expect(getFavorites()).toEqual([]);
-    expect(getAlertSettings()).toEqual({ received: false, prices: [] });
+    expect(getAlertSettings()).toEqual({ received: false, sound: true, prices: [] });
   });
 
   it('importing twice adds nothing the second time', () => {
@@ -102,7 +102,7 @@ describe('merging', () => {
   });
 
   it('keeps within the alert limit', () => {
-    saveAlertSettings({ received: false, prices: Array.from({ length: 49 }, (_, i) => rule({ id: `r${i}`, level: i + 1 })) });
+    saveAlertSettings({ received: false, sound: true, prices: Array.from({ length: 49 }, (_, i) => rule({ id: `r${i}`, level: i + 1 })) });
     const prices = [200, 201].map((level) => ({ coinId: 'bitcoin', symbol: 'BTC', direction: 'above' as const, level, currency: 'USD' }));
     expect(planLocal(local({ alerts: { received: false, prices } }), valid).addAlerts).toHaveLength(1);
   });

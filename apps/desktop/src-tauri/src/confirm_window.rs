@@ -123,9 +123,9 @@ const STYLE: &str = r#"
 :root{color-scheme:dark;--bg:#0b0e13;--bar:#0e1218;--text:#f1f4f7;--text2:#c6ccd4;--mute:#8d949f;--faint:#636a75;--ice:#7cc4ff;--btc:#f7931a;--warm:#f5b74f}
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 ::selection{background:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.5 'Geist','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
-body{display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.1)}
-.bar{flex:none;display:flex;align-items:center;gap:8px;height:36px;padding:0 6px 0 14px;background:var(--bar);border-bottom:1px solid rgba(255,255,255,.06);color:var(--mute);font-size:12px;app-region:drag;-webkit-app-region:drag}
+html,body{margin:0;height:100%;background:#07090d;color:var(--text);font:13px/1.5 'Geist','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;flex-direction:column;border:1px solid rgba(170,220,255,.13);background:radial-gradient(90% 46% at 50% -6%,rgba(124,196,255,.15),transparent 72%),radial-gradient(60% 40% at 100% 100%,rgba(139,124,255,.07),transparent 70%),linear-gradient(180deg,#0e1826 0%,#0a0f16 48%,#07090d 100%)}
+.bar{flex:none;display:flex;align-items:center;gap:8px;height:36px;padding:0 6px 0 14px;background:transparent;border-bottom:1px solid rgba(255,255,255,.06);color:var(--text2);font-size:12px;app-region:drag;-webkit-app-region:drag}
 .bar svg{width:14px;height:14px;flex:none}
 .bar .t{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .x{app-region:no-drag;-webkit-app-region:no-drag;display:grid;place-items:center;width:28px;height:26px;border-radius:6px;color:var(--faint);text-decoration:none}
@@ -140,14 +140,15 @@ main{flex:1;min-height:0;overflow-y:auto;padding:22px 28px 0;display:flex;flex-d
 .big small{margin-left:10px;font-size:18px;letter-spacing:-.02em}
 .big.btc{color:var(--btc);text-shadow:0 0 34px rgba(247,147,26,.4),0 0 3px rgba(247,147,26,.27)}
 .btcv{color:var(--btc);text-shadow:0 0 16px rgba(247,147,26,.5),0 0 2px rgba(247,147,26,.33)}
-.alabel{margin:18px 0 0;color:var(--faint);font-size:11.5px}
-.addr{margin:6px 0 0;font:14px/1.7 'Geist Mono',ui-monospace,Consolas,monospace;letter-spacing:.03em;color:var(--mute);display:flex;flex-wrap:wrap;column-gap:7px}
-.addr .hi{color:var(--text)}
-.addr.sub{margin:2px 0 0;font-size:12px;line-height:1.6;justify-content:flex-end;column-gap:5px}
-.rows{margin:16px 0 0;display:flex;flex-direction:column;border-top:1px solid rgba(255,255,255,.06)}
+.alabel{margin:18px 0 0;color:var(--mute);font-size:12px}
+.addr{margin:7px 0 0;padding:10px 13px;border-radius:12px;background:rgba(22,27,35,.72);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),inset 0 1px 0 rgba(170,220,255,.06);font:14px/1.7 'Geist Mono',ui-monospace,Consolas,monospace;letter-spacing:.03em;color:var(--mute);display:flex;flex-wrap:wrap;column-gap:7px}
+.addr .hi{color:#eaf5ff;font-weight:600;text-shadow:0 0 14px rgba(124,196,255,.35)}
+.addr.sub{margin:2px 0 0;padding:0;background:none;box-shadow:none;font-size:12px;line-height:1.6;justify-content:flex-end;column-gap:5px}
+.rows{margin:16px 0 0;display:flex;flex-direction:column;padding:2px 13px;border-radius:12px;background:rgba(22,27,35,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .row{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.row:last-child{border-bottom:0}
 .kv{display:flex;gap:16px;align-items:baseline}
-.k{flex:none;max-width:48%;color:var(--faint)}
+.k{flex:none;max-width:48%;color:var(--mute)}
 .v{margin-left:auto;text-align:right;color:var(--text2);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .v.strong{color:var(--text);font-weight:600}
 .subt{margin:2px 0 0;text-align:right;color:var(--mute);font-size:12px;overflow-wrap:anywhere}
@@ -155,9 +156,9 @@ p.para{margin:14px 0 0;color:var(--text2);overflow-wrap:anywhere}
 p.bullet{margin:8px 0 0;padding-left:14px;position:relative;color:var(--text2);overflow-wrap:anywhere}
 p.bullet::before{content:'';position:absolute;left:2px;top:.62em;width:4px;height:4px;background:var(--warm)}
 footer{flex:none;display:flex;gap:10px;padding:20px 28px 24px}
-.btn{display:flex;align-items:center;justify-content:center;height:48px;border-radius:14px;font-weight:600;text-decoration:none;font-size:14px;padding:0 14px;text-align:center}
-.cancel{flex:1;background:rgba(255,255,255,.045);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);color:var(--text)}
-.cancel:hover{background:rgba(255,255,255,.08)}
+.btn{display:flex;align-items:center;justify-content:center;height:46px;border-radius:999px;font-weight:600;text-decoration:none;font-size:14px;padding:0 14px;text-align:center}
+.cancel{flex:1;background:rgba(22,27,35,.72);box-shadow:inset 0 0 0 1px rgba(124,196,255,.22);color:var(--text)}
+.cancel:hover{background:rgba(30,38,50,.8);box-shadow:inset 0 0 0 1px rgba(124,196,255,.4)}
 .sign{flex:1.6;background:linear-gradient(180deg,#e6f3ff,#c2e0fa);color:#061423;font-size:14.5px;box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(53,119,180,.35),inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px -12px rgba(124,196,255,.85);animation:arm .7s step-end both}
 .sign:hover{background:linear-gradient(180deg,#fff,#e6f3ff)}
 @keyframes arm{from{pointer-events:none}to{pointer-events:auto}}
@@ -313,7 +314,11 @@ fn headline(blocks: &[Block]) -> Option<(String, String)> {
         return None;
     }
     let mut it = value.splitn(3, ' ');
-    let (num, unit) = (it.next()?, it.next()?);
+    amount_parts(it.next()?, it.next()?)
+}
+
+/// `<number> <UNIT>`, both plain (digits and separators; a short ticker).
+fn amount_parts(num: &str, unit: &str) -> Option<(String, String)> {
     let numeric = num.chars().any(|c| c.is_ascii_digit())
         && num
             .chars()
@@ -323,6 +328,30 @@ fn headline(blocks: &[Block]) -> Option<(String, String)> {
             .chars()
             .all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_' | '$'));
     (numeric && unit_ok).then(|| (num.to_string(), unit.to_string()))
+}
+
+/// A plain native send has no « Amount » row but Rust's own line « Sending 1.5 ETH » /
+/// « Envoi de 1,5 ETH » (exactly that, nothing else on the line): it becomes the headline.
+/// Returns the block's index, the verb shown above the figure, the number and the unit.
+fn sending_head(blocks: &[Block]) -> Option<(usize, &'static str, String, String)> {
+    let mut found = blocks.iter().enumerate().filter_map(|(i, b)| match b {
+        Block::Para(p) => {
+            let (verb, rest) = if let Some(r) = p.strip_prefix("Sending ") {
+                ("Sending", r)
+            } else {
+                ("Envoi", p.strip_prefix("Envoi de ")?)
+            };
+            let mut it = rest.split(' ');
+            let (num, unit) = (it.next()?, it.next()?);
+            if it.next().is_some() {
+                return None;
+            }
+            amount_parts(num, unit).map(|(n, u)| (i, verb, n, u))
+        }
+        _ => None,
+    });
+    let one = found.next()?;
+    found.next().is_none().then_some(one)
 }
 
 fn push_addr(out: &mut String, addr: &str, class: &str) {
@@ -351,7 +380,17 @@ pub struct ConfirmView<'a> {
 pub fn render(lang: Lang, view: &ConfirmView<'_>, nonce: &str) -> String {
     let body = crate::dialog_text::body(view.body);
     let blocks = parse(&body);
-    let head = headline(&blocks);
+    let mut head = headline(&blocks);
+    // Without an « Amount » row, Rust's « Sending 1.5 ETH » line is the headline (and leaves the body).
+    let mut skip: Option<usize> = None;
+    let mut verb: Option<&str> = None;
+    if head.is_none() {
+        if let Some((i, v, n, u)) = sending_head(&blocks) {
+            head = Some((n, u));
+            skip = Some(i);
+            verb = Some(v);
+        }
+    }
     let is_tx = blocks
         .iter()
         .any(|b| matches!(b, Block::Row { .. } | Block::Addr { .. }));
@@ -369,12 +408,15 @@ pub fn render(lang: Lang, view: &ConfirmView<'_>, nonce: &str) -> String {
         escape(view.cancel),
     ));
     let mut rest = &blocks[..];
+    let mut at = 0usize;
     if let Some(Block::Signer(s)) = rest.first() {
         out.push_str(&format!("<p class=\"signer\">{}</p>", escape(s)));
         rest = &rest[1..];
+        at += 1;
     }
     while matches!(rest.first(), Some(Block::Gap)) {
         rest = &rest[1..];
+        at += 1;
     }
     out.push_str(&format!(
         "<div class=\"label\"><i></i>{}</div>",
@@ -390,10 +432,13 @@ pub fn render(lang: Lang, view: &ConfirmView<'_>, nonce: &str) -> String {
     let btc = head.as_ref().is_some_and(|(_, u)| u == "BTC");
     if let Some((num, unit)) = &head {
         // The short line that opens the body (« Envoi Bitcoin ») goes above the figure.
-        if let Some(Block::Para(p)) = rest.first() {
+        if let Some(v) = verb {
+            out.push_str(&format!("<p class=\"intro\">{}</p>", escape(v)));
+        } else if let Some(Block::Para(p)) = rest.first() {
             if p.chars().count() <= 48 {
                 out.push_str(&format!("<p class=\"intro\">{}</p>", escape(p)));
                 rest = &rest[1..];
+                at += 1;
             }
         }
         out.push_str(&format!(
@@ -404,9 +449,9 @@ pub fn render(lang: Lang, view: &ConfirmView<'_>, nonce: &str) -> String {
         ));
     }
     let mut in_rows = false;
-    for b in rest {
+    for (i, b) in rest.iter().enumerate() {
         // A blank line between rows keeps them in one list (no double rule).
-        if matches!(b, Block::Gap) {
+        if matches!(b, Block::Gap) || skip == Some(at + i) {
             continue;
         }
         let is_row = matches!(b, Block::Row { .. });
@@ -473,6 +518,8 @@ fn estimate_height(body: &str) -> f64 {
     let mut h = 36.0 + 22.0 + 18.0 + 92.0 + 8.0;
     if headline(&blocks).is_some() {
         h += 80.0;
+    } else if sending_head(&blocks).is_some() {
+        h += 80.0 - 34.0;
     }
     let mut in_rows = false;
     for b in &blocks {
@@ -487,7 +534,7 @@ fn estimate_height(body: &str) -> f64 {
             Block::Para(s) => 14.0 + 20.0 * lines(s, 66),
             Block::Bullet(s) => 8.0 + 20.0 * lines(s, 64),
             Block::Addr { label, addr } => {
-                (if label.is_empty() { 6.0 } else { 42.0 })
+                (if label.is_empty() { 26.0 } else { 62.0 })
                     + 24.0 * (addr.chars().count().div_ceil(4) as f64 / 11.0).ceil()
             }
             Block::Row { value, subs, .. } => {
@@ -740,6 +787,35 @@ mod tests {
             },
             "00ff",
         )
+    }
+
+    const EN_ETH: &str = "Signing account: « Ethereum 1 » — m/44'/60'/0'/0/0
+
+        From: 0x4f0dc8132131534caAc4a7a76EA3954F9b3b7f1D
+Network: Ethereum
+
+        Sending 0.014580233794 ETH
+To: 0xc3CF480C3542ed41B8F4CC8A02aFf8677FFA712a
+
+        Maximum fee: 0.000004242403578 ETH";
+
+    #[test]
+    fn native_send_line_becomes_the_headline() {
+        let b = parse(&crate::dialog_text::body(EN_ETH));
+        assert_eq!(headline(&b), None);
+        assert!(
+            matches!(sending_head(&b), Some((_, "Sending", ref n, ref u)) if n == "0.014580233794" && u == "ETH")
+        );
+        let p = page(Lang::En, "Confirm the transaction", EN_ETH);
+        assert!(p.contains("<p class=\"intro\">Sending</p><div class=\"big\">0.014580233794<small>ETH</small></div>"), "{p}");
+        assert!(
+            !p.contains("Sending 0.014580233794 ETH"),
+            "the line is not shown twice"
+        );
+        let fr = parse("Envoi de 1,5 POL\nÀ : 0xc3CF480C3542ed41B8F4CC8A02aFf8677FFA712a");
+        assert!(matches!(sending_head(&fr), Some((0, "Envoi", ref n, _)) if n == "1,5"));
+        assert_eq!(sending_head(&parse("Sending 1.5 ETH to Bob")), None);
+        assert_eq!(sending_head(&parse("Sending 1 ETH\n\nSending 2 ETH")), None);
     }
 
     #[test]

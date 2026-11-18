@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import type { ReactNode } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type { Currency } from '@kyro/shared';
 import { isTinyLure } from '@kyro/chains';
 import { cn } from '../lib/cn';
@@ -49,7 +49,7 @@ export function PendingBar({ label }: { label: string }) {
   );
 }
 
-export function HistoryRow({ e, price, currency, hidden, compact, timeline, i = 0, action, extra }: { e: HistoryEntry; price: number | null; currency: Currency; hidden: boolean; compact?: boolean; /** In the History timeline: the time sits in its own column. */ timeline?: boolean; /** Buttons of a pending transaction (History). */ action?: ReactNode; /** Row index, for the staggered entrance. */ i?: number; /** A line under the details (History: the private note). */ extra?: ReactNode }) {
+export function HistoryRow({ e, price, currency, hidden, compact, timeline, i = 0, action, extra, onOpen }: { e: HistoryEntry; price: number | null; currency: Currency; hidden: boolean; compact?: boolean; /** In the History timeline: the time sits in its own column. */ timeline?: boolean; /** Buttons of a pending transaction (History). */ action?: ReactNode; /** Row index, for the staggered entrance. */ i?: number; /** A line under the details (History: the private note). */ extra?: ReactNode; /** Click on the row (outside its own buttons): opens the transaction's details. */ onOpen?: () => void }) {
   const icon = e.kind === 'swap' ? <IconSwap size={15} sw={2.1} /> : e.kind === 'approval' ? <IconCheck size={15} /> : e.direction === 'in' ? <IconDown size={15} sw={2.2} /> : <IconUp size={15} sw={2.2} />;
   const incoming = e.direction === 'in' && e.kind === 'transfer';
   const decimals = e.asset?.decimals ?? 18;
@@ -63,7 +63,27 @@ export function HistoryRow({ e, price, currency, hidden, compact, timeline, i = 
   const lit = !hidden && c && e.direction !== 'out' && e.kind !== 'approval' && !tiny && !e.suspect && e.status !== 'failed';
   const warn = e.suspect || tiny || e.status === 'failed';
   return (
-    <div style={idx(i)} className={cn('group flex items-center gap-3.5 border-b border-white/[.04] transition-colors duration-150', compact ? 'min-h-[58px] px-5 py-2' : 'py-2.5')}>
+    <div
+      style={idx(i)}
+      className={cn('group flex items-center gap-3.5 border-b border-white/[.04] transition-colors duration-150', compact ? 'min-h-[58px] px-5 py-2' : 'py-2.5', onOpen && '-mx-2 cursor-pointer rounded-[12px] px-2 hover:bg-white/[.03] focus-visible:bg-white/[.04] focus-visible:outline-none')}
+      {...(onOpen
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            'aria-haspopup': 'dialog',
+            title: t('history.openDetails'),
+            onClick: (ev: ReactMouseEvent) => {
+              if (!(ev.target as HTMLElement).closest('button,input,textarea,a')) onOpen();
+            },
+            onKeyDown: (ev: ReactKeyboardEvent) => {
+              if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === ev.currentTarget) {
+                ev.preventDefault();
+                onOpen();
+              }
+            },
+          }
+        : {})}
+    >
       <span className={cn('grid size-9 shrink-0 place-items-center rounded-full', incoming ? 'bg-up/[.1] text-up' : 'bg-white/[.06] text-text2')}>{icon}</span>
       {e.asset && <CoinIcon asset={{ ...e.asset, chainKey: undefined }} size={22} />}
       <span className="flex min-w-0 flex-1 flex-col leading-tight">
