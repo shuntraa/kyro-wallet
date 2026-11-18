@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, type Hex } from 'viem';
 import { setBackend, type NetRequest, type NetResponse } from '@kyro/shared';
 import { createMockBackend } from '@kyro/shared/mock';
-import { compareFreshQuote, createProviders, fetchQuotes, isCurrentZeroExSettler, LIFI_DIAMOND, LifiProvider, NATIVE_EVM, providerFee, verifyEvmSwap, ZEROX_ALLOWANCE_HOLDER, ZeroExProvider, type EvmSwapCheckInput } from '../src';
+import { compareFreshQuote, createProviders, fetchQuotes, isCurrentZeroExSettler, LIFI_DIAMOND, LIFI_FEE_FORWARDER_LEGACY, LifiProvider, NATIVE_EVM, providerFee, verifyEvmSwap, ZEROX_ALLOWANCE_HOLDER, ZeroExProvider, type EvmSwapCheckInput } from '../src';
 import { lifiData, SETTLER, zeroExData } from './calldata';
 
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
@@ -98,6 +98,12 @@ describe('0x: AllowanceHolder.exec → Settler.execute', () => {
 });
 
 describe('LI.FI: GenericSwapFacetV3 + FeeForwarder', () => {
+  it('takes the fee step from the current FeeForwarder and from the previous one, never from another contract', () => {
+    expect(verifyEvmSwap(lifi()).kyroFee).toBe(7_000_000n);
+    expect(verifyEvmSwap(lifi({}, { forwarder: LIFI_FEE_FORWARDER_LEGACY })).kyroFee).toBe(7_000_000n);
+    expect(() => verifyEvmSwap(lifi({}, { forwarder: THIEF }))).toThrow(/Kyro fees missing|frais Kyro absents/);
+  });
+
   it('accepts a well-formed answer', () => {
     expect(verifyEvmSwap(lifi())).toMatchObject({ contract: LIFI_DIAMOND, recipient: TAKER, minBuyAmount: min, kyroFee: 7_000_000n });
   });

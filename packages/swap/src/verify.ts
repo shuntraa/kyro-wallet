@@ -20,15 +20,21 @@ export const ZEROX_SETTLER_REGISTRY = '0x00000000000004533Fe15556B1E086BB1A72cEa
 export const ZEROX_TAKER_SETTLER_FEATURE = 2n;
 /** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json) on the chains of {@link LIFI_CHECKED_CHAINS}, except {@link LIFI_OTHER_DEPLOYMENTS}. */
 export const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE';
-/** LI.FI FeeForwarder (`FeeForwarder` in deployments/<chain>.json): pays `distributionFees`. Mantle has its own. */
-export const LIFI_FEE_FORWARDER = '0xCE40449B773a3E6E5e769ADb4e567179d4828cbd';
+/**
+ * LI.FI FeeForwarder (`FeeForwarder` in deployments/<chain>.json): pays `distributionFees`. Mantle has its own.
+ * LI.FI redeployed it in November 2026; the previous one stays accepted (`legacyFeeForwarder`) for quotes
+ * still routed through it. Both are LI.FI's, same functions.
+ */
+export const LIFI_FEE_FORWARDER = '0xDe2b920506EE931a6A2ABDF566526220214FBbAE';
+export const LIFI_FEE_FORWARDER_LEGACY = '0xCE40449B773a3E6E5e769ADb4e567179d4828cbd';
 /** LI.FI FeeForwarder on Mantle (deployments/mantle.json; the default address has no code there). */
-export const LIFI_FEE_FORWARDER_MANTLE = '0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF';
+export const LIFI_FEE_FORWARDER_MANTLE = '0x315042693AC6007EFF9ca86989cCd6160A2515b8';
+const LIFI_FEE_FORWARDER_MANTLE_LEGACY = '0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF';
 /** LI.FI chains where the Diamond and FeeForwarder are other addresses (same code, checked via `eth_getCode`). */
-export const LIFI_OTHER_DEPLOYMENTS: Readonly<Record<number, { diamond: string; feeForwarder: string }>> = {
-  14: { diamond: '0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b', feeForwarder: '0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25' },
-  999: { diamond: '0x0a0758d937d1059c356D4714e57F5df0239bce1A', feeForwarder: '0xba072Bf218314E51d5c3d254800d799840ae6a25' },
-  8_217: { diamond: '0x1255d17c1BC2f764d087536410879F2d0D8772fD', feeForwarder: '0x5161370f81b3054f43361644Ad332625f5E0804F' },
+export const LIFI_OTHER_DEPLOYMENTS: Readonly<Record<number, { diamond: string; feeForwarder: string; legacyFeeForwarder?: string }>> = {
+  14: { diamond: '0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b', feeForwarder: '0x735cCB84BCdeABF820c69adA959f7C7C41F54f86', legacyFeeForwarder: '0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25' },
+  999: { diamond: '0x0a0758d937d1059c356D4714e57F5df0239bce1A', feeForwarder: '0x960413AF34CF1e428E9A157Cd4aABab78134d865', legacyFeeForwarder: '0xba072Bf218314E51d5c3d254800d799840ae6a25' },
+  8_217: { diamond: '0x1255d17c1BC2f764d087536410879F2d0D8772fD', feeForwarder: '0xd66fc63B89D7c9dcC2D69dfe86C7511b2bf4C655', legacyFeeForwarder: '0x5161370f81b3054f43361644Ad332625f5E0804F' },
 };
 
 // Mainnet chains where those addresses were checked; anything else is refused. 0x is not offered on
@@ -38,13 +44,13 @@ const LIFI_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 25, 5_000, 1
 
 export interface SwapContracts {
   zerox?: { allowanceHolder: string };
-  lifi?: { diamond: string; feeForwarder: string };
+  lifi?: { diamond: string; feeForwarder: string; legacyFeeForwarder?: string };
 }
 
 export const SWAP_CONTRACTS: Readonly<Record<number, SwapContracts>> = (() => {
   const t: Record<number, SwapContracts> = {};
   for (const id of ZEROX_CHECKED_CHAINS) t[id] = { ...t[id], zerox: { allowanceHolder: ZEROX_ALLOWANCE_HOLDER } };
-  for (const id of LIFI_CHECKED_CHAINS) t[id] = { ...t[id], lifi: LIFI_OTHER_DEPLOYMENTS[id] ?? { diamond: LIFI_DIAMOND, feeForwarder: id === 5_000 ? LIFI_FEE_FORWARDER_MANTLE : LIFI_FEE_FORWARDER } };
+  for (const id of LIFI_CHECKED_CHAINS) t[id] = { ...t[id], lifi: LIFI_OTHER_DEPLOYMENTS[id] ?? (id === 5_000 ? { diamond: LIFI_DIAMOND, feeForwarder: LIFI_FEE_FORWARDER_MANTLE, legacyFeeForwarder: LIFI_FEE_FORWARDER_MANTLE_LEGACY } : { diamond: LIFI_DIAMOND, feeForwarder: LIFI_FEE_FORWARDER, legacyFeeForwarder: LIFI_FEE_FORWARDER_LEGACY }) };
   return t;
 })();
 
@@ -271,8 +277,8 @@ function checkLifi(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCh
 
 /** FeeForwarder steps of a LI.FI call: Kyro's share (null when the fee is off), total capped. */
 function lifiFees(i: EvmSwapCheckInput, steps: readonly SwapData[], name: string): bigint | null {
-  const forwarder = SWAP_CONTRACTS[i.chainId]?.lifi?.feeForwarder ?? '';
-  const feeSteps = steps.filter((s) => same(s.callTo, forwarder));
+  const lifi = SWAP_CONTRACTS[i.chainId]?.lifi;
+  const feeSteps = steps.filter((s) => same(s.callTo, lifi?.feeForwarder) || same(s.callTo, lifi?.legacyFeeForwarder));
   let kyro = 0n;
   let total = 0n;
   for (const s of feeSteps) {

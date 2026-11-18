@@ -133,9 +133,9 @@ describe('providers', () => {
     expect(knownSwapContract('lifi', 14)).toBe('0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b');
     expect(knownSwapContract('lifi', 999)).toBe('0x0a0758d937d1059c356D4714e57F5df0239bce1A');
     expect(knownSwapContract('lifi', 8_217)).toBe('0x1255d17c1BC2f764d087536410879F2d0D8772fD');
-    expect(SWAP_CONTRACTS[14]?.lifi?.feeForwarder).toBe('0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25');
-    expect(SWAP_CONTRACTS[999]?.lifi?.feeForwarder).toBe('0xba072Bf218314E51d5c3d254800d799840ae6a25');
-    expect(SWAP_CONTRACTS[8_217]?.lifi?.feeForwarder).toBe('0x5161370f81b3054f43361644Ad332625f5E0804F');
+    expect(SWAP_CONTRACTS[14]?.lifi?.feeForwarder).toBe('0x735cCB84BCdeABF820c69adA959f7C7C41F54f86');
+    expect(SWAP_CONTRACTS[999]?.lifi?.feeForwarder).toBe('0x960413AF34CF1e428E9A157Cd4aABab78134d865');
+    expect(SWAP_CONTRACTS[8_217]?.lifi?.feeForwarder).toBe('0xd66fc63B89D7c9dcC2D69dfe86C7511b2bf4C655');
     expect(knownSwapContract('zerox', 5_000)).toBeNull();
     expect(knownSwapContract('lifi', 1_030)).toBeNull();
     expect(knownSwapContract('zerox', 14)).toBeNull();
